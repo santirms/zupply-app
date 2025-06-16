@@ -7,24 +7,29 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.9/html5-qrcode.min.js"></script>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
-    #reader { width: 100%; max-width: 400px; margin: auto; }
+    #reader { width: 100%; max-width: 400px; margin: 1rem auto; display: none; }
     ul { list-style: none; padding: 0; }
     li { background: #eee; margin: 5px 0; padding: 10px; border-radius: 5px; }
-    button { margin-top: 10px; }
+    button { margin: 10px 5px 0 0; padding: 10px; }
+    #status { margin-top: 1rem; color: red; font-weight: bold; }
   </style>
 </head>
 <body>
   <h2>Escáner de Paquetes - Versión Inicial</h2>
+  <button onclick="startScanner()">Iniciar Escáner</button>
+  <button onclick="exportCSV()">Exportar CSV</button>
+
   <div id="reader"></div>
   <h3>Paquetes escaneados:</h3>
   <ul id="scanList"></ul>
-  <button onclick="exportCSV()">Exportar CSV</button>
+  <div id="status"></div>
 
   <script>
     const scanList = document.getElementById('scanList');
     const scannedCodes = new Set();
+    const statusText = document.getElementById('status');
 
-    function onScanSuccess(decodedText, decodedResult) {
+    function onScanSuccess(decodedText) {
       if (!scannedCodes.has(decodedText)) {
         scannedCodes.add(decodedText);
         const li = document.createElement('li');
@@ -45,11 +50,31 @@
       document.body.removeChild(link);
     }
 
-    new Html5Qrcode("reader").start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      onScanSuccess
-    );
+    function startScanner() {
+      const reader = document.getElementById("reader");
+      reader.style.display = "block";
+      statusText.textContent = "";
+
+      Html5Qrcode.getCameras().then(devices => {
+        if (devices && devices.length) {
+          const cameraId = devices[0].id;
+          const html5QrCode = new Html5Qrcode("reader");
+
+          html5QrCode.start(
+            cameraId,
+            { fps: 10, qrbox: 250 },
+            onScanSuccess
+          ).catch(err => {
+            statusText.textContent = "Error al iniciar la cámara: " + err;
+          });
+        } else {
+          statusText.textContent = "No se encontró ninguna cámara.";
+        }
+      }).catch(err => {
+        statusText.textContent = "Error al acceder a la cámara: " + err;
+      });
+    }
   </script>
 </body>
 </html>
+
