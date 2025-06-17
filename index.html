@@ -58,12 +58,20 @@
       statusText.textContent = "Iniciando cámara...";
       try {
         await html5QrCode.start(
-          { facingMode: "environment" },
+          { facingMode: { exact: "environment" } },
           { fps: 10, qrbox: 250 },
           onScanSuccess
         );
         scanning = true;
         statusText.textContent = "Escáner activo. Apuntá al código.";
+
+        // iOS fix: forzar playsinline
+        setTimeout(() => {
+          const video = document.querySelector("#reader video");
+          if (video) {
+            video.setAttribute("playsinline", true);
+          }
+        }, 500);
       } catch (err) {
         console.error("Error al iniciar la cámara:", err);
         statusText.textContent = "No se pudo acceder a la cámara. Asegurate de dar permiso en Safari o Chrome.";
