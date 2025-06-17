@@ -7,7 +7,7 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.9/html5-qrcode.min.js"></script>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
-    #reader { width: 100%; max-width: 400px; margin: 1rem auto; display: none; }
+    #reader { width: 100%; max-width: 400px; margin: 1rem auto; }
     ul { list-style: none; padding: 0; }
     li { background: #eee; margin: 5px 0; padding: 10px; border-radius: 5px; }
     button { margin: 10px 5px 0 0; padding: 10px; }
@@ -30,6 +30,7 @@
     const statusText = document.getElementById('status');
     const readerElement = document.getElementById("reader");
     let html5QrCode = new Html5Qrcode("reader");
+    let scanning = false;
 
     function onScanSuccess(decodedText) {
       if (!scannedCodes.has(decodedText)) {
@@ -53,21 +54,21 @@
     }
 
     document.getElementById('startBtn').addEventListener('click', async () => {
-      readerElement.style.display = "block";
-      statusText.textContent = "";
-
+      if (scanning) return;
+      statusText.textContent = "Iniciando cámara...";
       try {
         await html5QrCode.start(
           { facingMode: "environment" },
           { fps: 10, qrbox: 250 },
           onScanSuccess
         );
+        scanning = true;
+        statusText.textContent = "Escáner activo. Apuntá al código.";
       } catch (err) {
         console.error("Error al iniciar la cámara:", err);
-        statusText.textContent = "No se pudo acceder a la cámara. Asegurate de haber dado permiso en Safari o Chrome.";
+        statusText.textContent = "No se pudo acceder a la cámara. Asegurate de dar permiso en Safari o Chrome.";
       }
     });
   </script>
 </body>
 </html>
-
