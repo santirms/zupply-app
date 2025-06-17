@@ -28,6 +28,8 @@
     const scanList = document.getElementById('scanList');
     const scannedCodes = new Set();
     const statusText = document.getElementById('status');
+    const readerElement = document.getElementById("reader");
+    let html5QrCode = null;
 
     function onScanSuccess(decodedText) {
       if (!scannedCodes.has(decodedText)) {
@@ -51,15 +53,27 @@
     }
 
     function startScanner() {
-      const reader = document.getElementById("reader");
-      reader.style.display = "block";
+      readerElement.style.display = "block";
       statusText.textContent = "";
 
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("reader");
+      } else {
+        html5QrCode.stop().catch(() => {}).then(() => {
+          html5QrCode.clear().then(() => {
+            initCamera();
+          });
+        });
+        return;
+      }
+
+      initCamera();
+    }
+
+    function initCamera() {
       Html5Qrcode.getCameras().then(devices => {
         if (devices && devices.length) {
           const cameraId = devices[0].id;
-          const html5QrCode = new Html5Qrcode("reader");
-
           html5QrCode.start(
             cameraId,
             { fps: 10, qrbox: 250 },
