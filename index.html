@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Escáner de Paquetes</title>
-  <script src="https://unpkg.com/html5-qrcode@2.3.9/html5-qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
     #reader { width: 100%; max-width: 400px; margin: 1rem auto; }
@@ -65,7 +65,7 @@
         scanning = true;
         statusText.textContent = "Escáner activo. Apuntá al código.";
 
-        // iOS fix: forzar playsinline
+        // Fix para iOS: forzar que el video funcione inline
         setTimeout(() => {
           const video = document.querySelector("#reader video");
           if (video) {
