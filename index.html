@@ -16,7 +16,7 @@
 </head>
 <body>
   <h2>Escáner de Paquetes - Versión Inicial</h2>
-  <button onclick="startScanner()">Iniciar Escáner</button>
+  <button id="startBtn">Iniciar Escáner</button>
   <button onclick="exportCSV()">Exportar CSV</button>
 
   <div id="reader"></div>
@@ -29,7 +29,7 @@
     const scannedCodes = new Set();
     const statusText = document.getElementById('status');
     const readerElement = document.getElementById("reader");
-    let html5QrCode = null;
+    let html5QrCode = new Html5Qrcode("reader");
 
     function onScanSuccess(decodedText) {
       if (!scannedCodes.has(decodedText)) {
@@ -52,37 +52,21 @@
       document.body.removeChild(link);
     }
 
-    function startScanner() {
+    document.getElementById('startBtn').addEventListener('click', async () => {
       readerElement.style.display = "block";
       statusText.textContent = "";
 
-      if (!html5QrCode) {
-        html5QrCode = new Html5Qrcode("reader");
-      } else {
-        html5QrCode.stop().catch(() => {}).then(() => {
-          html5QrCode.clear().then(() => {
-            initCamera();
-          });
-        });
-        return;
-      }
-
-      initCamera();
-    }
-
-    function initCamera() {
-      const config = { fps: 10, qrbox: 250 };
-      const facingMode = { facingMode: "environment" };
-
-      html5QrCode.start(
-        facingMode,
-        config,
-        onScanSuccess
-      ).catch(err => {
+      try {
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 250 },
+          onScanSuccess
+        );
+      } catch (err) {
         console.error("Error al iniciar la cámara:", err);
-        statusText.textContent = "Error al iniciar la cámara: " + err + ". Asegurate de permitir el acceso en el navegador y usar Chrome o Safari.";
-      });
-    }
+        statusText.textContent = "No se pudo acceder a la cámara. Asegurate de haber dado permiso en Safari o Chrome.";
+      }
+    });
   </script>
 </body>
 </html>
