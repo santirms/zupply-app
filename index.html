@@ -71,21 +71,16 @@
     }
 
     function initCamera() {
-      Html5Qrcode.getCameras().then(devices => {
-        if (devices && devices.length) {
-          const cameraId = devices[0].id;
-          html5QrCode.start(
-            cameraId,
-            { fps: 10, qrbox: 250 },
-            onScanSuccess
-          ).catch(err => {
-            statusText.textContent = "Error al iniciar la cámara: " + err;
-          });
-        } else {
-          statusText.textContent = "No se encontró ninguna cámara.";
-        }
-      }).catch(err => {
-        statusText.textContent = "Error al acceder a la cámara: " + err;
+      const config = { fps: 10, qrbox: 250 };
+      const facingMode = { facingMode: "environment" };
+
+      html5QrCode.start(
+        facingMode,
+        config,
+        onScanSuccess
+      ).catch(err => {
+        console.error("Error al iniciar la cámara:", err);
+        statusText.textContent = "Error al iniciar la cámara: " + err + ". Asegurate de permitir el acceso en el navegador y usar Chrome o Safari.";
       });
     }
   </script>
