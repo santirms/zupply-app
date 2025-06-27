@@ -1,7 +1,7 @@
 const Cliente = require('../models/cliente');
 const express = require('express');
 const router = express.Router();
-const Envio = require('../models/envio');
+const Envio = require('../models/Envio');
 
 // Obtener todos los envíos con filtros opcionales
 router.get('/', async (req, res) => {
