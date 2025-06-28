@@ -28,6 +28,9 @@ app.use('/escanear', escaneoRoutes);
 const enviosRoutes = require('./routes/envios');
 app.use('/envios', enviosRoutes);
 
+const meliRoutes = require('./routes/meli');
+app.use('/auth/meli', meliRoutes);
+
 // Ruta por defecto para cualquier archivo HTML
 // app.get('/', (req, res) => {
 //  res.sendFile(path.join(__dirname, '../zupply-app/index.html'));
