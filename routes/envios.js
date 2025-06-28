@@ -1,4 +1,4 @@
-const Cliente = require('../models/cliente');
+const Cliente = require('../models/Cliente');
 const express = require('express');
 const router = express.Router();
 const Envio = require('../models/Envio');
