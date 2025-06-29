@@ -49,3 +49,5 @@ router.get('/callback', async (req, res) => {
     res.status(500).send('Error al procesar el token.');
   }
 });
+
+module.exports = router;
