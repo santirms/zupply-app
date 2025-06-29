@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const Token = require('../models/Token');
 
 const CLIENT_ID = process.env.MERCADOLIBRE_CLIENT_ID;
 const REDIRECT_URI = 'https://zupply-backend.onrender.com/auth/meli/callback';
@@ -30,16 +31,21 @@ router.get('/callback', async (req, res) => {
 
     const { access_token, refresh_token, user_id, expires_in } = response.data;
 
-    // Por ahora solo logueamos. Después lo guardamos en Mongo.
-    console.log('✅ TOKEN:', access_token);
-    console.log('🔁 REFRESH:', refresh_token);
-    console.log('🆔 USER_ID:', user_id);
+    await Token.findOneAndUpdate(
+      { user_id },
+      {
+        access_token,
+        refresh_token,
+        expires_in,
+        fecha_creacion: new Date()
+      },
+      { upsert: true, new: true }
+    );
 
-    res.send('¡Autenticación exitosa! Tokens recibidos y listos para guardar.');
+    console.log('✅ TOKEN:', access_token);
+    res.send('¡Autenticación exitosa! Tokens recibidos y guardados en Mongo.');
   } catch (error) {
     console.error('❌ Error en OAuth callback:', error.response?.data || error.message);
     res.status(500).send('Error al procesar el token.');
   }
 });
-
-module.exports = router;
