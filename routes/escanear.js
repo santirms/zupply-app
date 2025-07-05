@@ -5,7 +5,7 @@ const router = express.Router();
 const Envio = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const detectarZona = require('../utils/detectarZona');
-const { getValidToken } = require('../utils/meliutils');
+const { getValidToken } = require('../utils/meliUtils');
 const axios = require('axios');
 
 // 🔹 Ruta para escaneo manual (cliente no vinculado a MeLi)
