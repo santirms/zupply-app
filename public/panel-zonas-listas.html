@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestión de Zonas y Listas de Precios</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-4">
+  <div class="max-w-6xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6 text-center">Zonas y Listas de Precios</h1>
+
+    <!-- Tabs -->
+    <div class="mb-6">
+      <button onclick="mostrarTab('zonas', this)" class="tab-btn bg-blue-600 text-white px-4 py-2 mr-2 rounded">Zonas</button>
+      <button onclick="mostrarTab('listas', this)" class="tab-btn bg-gray-300 px-4 py-2 rounded">Listas de Precios</button>
+    </div>
+
+    <!-- Sección Zonas -->
+    <div id="tab-zonas" class="tab">
+      <h2 class="text-xl font-semibold mb-2">Crear Zona</h2>
+      <form id="formZona" class="bg-white p-4 rounded shadow mb-6">
+        <input type="text" name="nombre" placeholder="Nombre de la zona" class="w-full mb-2 p-2 border rounded" required />
+        <label class="block mb-1 font-medium">Seleccionar partidos:</label>
+        <select multiple id="partidosSelect" name="partidos" class="w-full p-2 border rounded h-40 mb-4"></select>
+        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded">Guardar Zona</button>
+      </form>
+      <div id="zonasLista" class="space-y-2"></div>
+    </div>
+
+    <!-- Sección Listas de Precios -->
+    <div id="tab-listas" class="tab hidden">
+      <h2 class="text-xl font-semibold mb-2">Crear Lista de Precios</h2>
+      <form id="formLista" class="bg-white p-4 rounded shadow mb-6">
+        <input type="text" name="nombre" placeholder="Nombre de la lista" class="w-full mb-2 p-2 border rounded" required />
+        <div id="zonasPrecios" class="space-y-2"></div>
+        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded">Guardar Lista</button>
+      </form>
+      <div id="listasPrecios" class="space-y-2"></div>
+    </div>
+  </div>
+
+  <!-- Carga el JS corregido -->
+  <script src="/js/zonas-listas.js" defer></script>
+</body>
+</html>

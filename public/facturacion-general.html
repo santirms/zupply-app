@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Facturación General</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script src="/js/facturacion-general.js" defer></script>
+</head>
+<body class="bg-gray-50 p-6">
+  <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow">
+    <h2 class="text-2xl font-bold mb-4">Panel de Facturación General</h2>
+
+    <!-- Controles de filtro -->
+    <div class="flex flex-wrap items-end gap-4 mb-6">
+      <div>
+        <label class="block text-sm font-medium">Cliente</label>
+        <select id="filtroCliente" class="mt-1 block w-48 border-gray-300 rounded-md shadow-sm">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Desde</label>
+        <input type="date" id="desde" class="mt-1 block border-gray-300 rounded-md shadow-sm"/>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Hasta</label>
+        <input type="date" id="hasta" class="mt-1 block border-gray-300 rounded-md shadow-sm"/>
+      </div>
+      <button onclick="filtrar()" 
+        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+        Filtrar
+      </button>
+      <button onclick="exportarExcel()"
+        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+        Exportar Excel
+      </button>
+    </div>
+
+    <!-- Tabla de envíos -->
+    <div class="overflow-x-auto">
+      <table class="min-w-full table-auto divide-y divide-gray-200">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Tracking #</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Cliente</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Código Interno</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Sender ID</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Partido</th>
+            <th class="px-4 py-2 text-right text-sm font-medium text-gray-700">Precio</th>
+            <th class="px-4 py-2 text-left text-sm font-medium text-gray-700">Fecha</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-body" class="bg-white divide-y divide-gray-200">
+          <!-- Filas generadas por JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+ <script src="/js/facturacion-general.js" defer></script>
+</body>
+</html>

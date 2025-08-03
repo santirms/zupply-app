@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ingreso Manual</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-6">
+  <div class="container mx-auto bg-white p-6 rounded-lg shadow-lg max-w-3xl">
+    <h1 class="text-2xl font-bold mb-6">Ingreso Manual de Envíos</h1>
+
+    <!-- Cliente y Código Interno -->
+    <div class="grid grid-cols-2 gap-4 mb-4">
+      <label class="block">
+        Cliente:
+        <select id="cliente" name="cliente_id" required
+          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+        </select>
+      </label>
+      <label class="block">
+        Código Interno:
+        <input id="codigo_interno" type="text" readonly
+          class="mt-1 block w-full border-gray-300 rounded-md bg-gray-100"/>
+      </label>
+    </div>
+
+    <!-- Referencia general -->
+    <label class="block mb-6">
+      Referencia:
+      <input id="referencia" name="referencia" type="text" placeholder="Ej: Entrega urgente" required
+        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"/>
+    </label>
+
+    <!-- Aquí van los paquetes -->
+    <div id="paquetes" class="space-y-4 mb-6"></div>
+
+    <!-- Botones de acción -->
+    <div class="flex space-x-2">
+      <button type="button" onclick="agregarPaquete()"
+        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+        + Agregar Paquete
+      </button>
+      <button type="button" onclick="guardar()"
+        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+        Guardar Todos
+      </button>
+    </div>
+  </div>
+
+  <!-- Código JS -->
+  <script src="/js/ingreso-manual.js" defer></script>
+</body>
+</html>

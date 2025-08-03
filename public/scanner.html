@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Escáner de Paquetes — Zupply</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- versión 2.x de html5-qrcode desde unpkg -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="/js/escanear.js" defer></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col items-center p-6">
+  <h1 class="text-3xl font-bold mb-6">📦 Escáner de Paquetes</h1>
+
+  <!-- Selección de modo -->
+  <div class="mb-6">
+    <label class="inline-flex items-center mr-4">
+      <input type="radio" name="modoScan" value="camara" checked class="form-radio"/>
+      <span class="ml-2">Usar cámara</span>
+    </label>
+    <label class="inline-flex items-center">
+      <input type="radio" name="modoScan" value="teclado" class="form-radio"/>
+      <span class="ml-2">Usar lector USB / teclado</span>
+    </label>
+  </div>
+
+  <!-- Contenedor de cámara -->
+  <div id="camaraContainer" class="w-full max-w-md bg-white p-4 rounded-lg shadow mb-6">
+    <div class="flex justify-between mb-4">
+      <button id="startBtn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+        Iniciar Cámara
+      </button>
+      <button id="stopBtn" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50" disabled>
+        Detener Cámara
+      </button>
+    </div>
+    <div id="reader" class="w-full h-64 border rounded-lg overflow-hidden"></div>
+    <p id="status" class="mt-4 text-center text-gray-600"></p>
+  </div>
+
+  <!-- Contenedor de lector USB -->
+  <div id="tecladoContainer" class="hidden w-full max-w-md bg-white p-4 rounded-lg shadow mb-6">
+    <label class="block mb-2 text-gray-700">Escaneá aquí con tu lector USB / teclado:</label>
+    <input id="scannerInput" type="text" autofocus placeholder="Escanea el código y presioná Enter"
+           class="w-full border rounded px-3 py-2 focus:outline-none focus:ring"/>
+  </div>
+
+  <h2 class="text-2xl font-semibold mt-8">Paquetes escaneados</h2>
+  <div id="scanList" class="w-full max-w-md mt-4 space-y-2"></div>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel General - Zupply</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-900 font-sans">
+
+  <div class="max-w-7xl mx-auto p-6">
+
+    <!-- 📊 Contador Diario -->
+    <div id="resumen-diario" class="bg-white p-4 rounded-lg shadow mb-6">
+      <h2 class="text-xl font-semibold mb-2">Resumen del Día</h2>
+      <p><strong>Total de envíos del día:</strong> <span id="total-paquetes">...</span></p>
+    </div>
+
+    <h1 class="text-3xl font-bold mb-6 text-center">📦 Panel de Envíos</h1>
+
+    <!-- 🔍 Filtros -->
+    <div class="bg-white p-4 rounded-lg shadow mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <input type="text" id="filtroCliente" placeholder="Cliente ID o Nombre"
+               class="border p-2 rounded w-full" />
+
+        <input type="date" id="filtroDesde"
+               class="border p-2 rounded w-full" />
+
+        <input type="date" id="filtroHasta"
+               class="border p-2 rounded w-full" />
+
+        <select id="filtroPartido" class="border p-2 rounded w-full">
+          <option value="">— Todos los partidos —</option>
+        </select>
+
+        <select id="filtroEstado" class="border p-2 rounded w-full">
+          <option value="">— Todos los estados —</option>
+          <option value="pending">Pendiente</option>
+          <option value="shipped">En camino</option>
+          <option value="delivered">Entregado</option>
+        </select>
+
+        <button onclick="aplicarFiltro()"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow">
+          🔍 Filtrar
+        </button>
+      </div>
+    </div>
+
+    <!-- 📋 Tabla y Paginación -->
+    <div class="bg-white rounded-lg shadow overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="px-4 py-2 text-left font-semibold">Tracking Number</th>
+            <th class="px-4 py-2 text-left font-semibold">Cliente</th>
+            <th class="px-4 py-2 text-left font-semibold">Fecha</th>
+            <th class="px-4 py-2 text-left font-semibold">Zona de entrega</th>
+            <th class="px-4 py-2 text-left font-semibold">Chofer</th>
+            <th class="px-4 py-2 text-left font-semibold">Estado</th>
+          </tr>
+        </thead>
+        <tbody id="tablaEnvios" class="divide-y divide-gray-200"></tbody>
+      </table>
+    </div>
+    <div class="mt-4 flex justify-between items-center">
+      <button id="prevBtn" onclick="cambiarPagina(-1)"
+              class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Anterior</button>
+      <span class="text-sm" id="infoPagina">Página 1 de 1</span>
+      <button id="nextBtn" onclick="cambiarPagina(1)"
+              class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Siguiente</button>
+    </div>
+  </div>
+<div id="modalDetalle" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+  <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 p-6 relative">
+    <button onclick="cerrarModal()" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700">✕</button>
+    <h2 class="text-2xl font-semibold mb-4">Detalle del Envío</h2>
+    <div id="contenidoDetalle"></div>
+    <div id="mapa" class="h-64 mt-4 rounded"></div>
+  </div>
+</div>
+
+  <script>
+    let enviosCargados = [];
+    let enviosFiltrados = [];
+    let currentPage = 1;
+    const pageSize = 10;
+
+    // Carga contador diario
+    async function cargarResumenDiario() {
+      try {
+        const res = await fetch('http://localhost:4000/envios/del-dia');
+        const data = await res.json();
+        document.getElementById('total-paquetes').textContent = data.total;
+      } catch (e) {
+        console.error('Error al cargar resumen diario:', e);
+      }
+    }
+
+    // Carga partidos para el dropdown
+    async function cargarPartidos() {
+      try {
+        const res = await fetch('http://localhost:4000/partidos');
+        const lista = await res.json();
+        const select = document.getElementById('filtroPartido');
+        lista.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.nombre;
+          opt.textContent = p.nombre;
+          select.appendChild(opt);
+        });
+      } catch (e) {
+        console.error('No se pudo cargar partidos:', e);
+      }
+    }
+
+  function initMapa(lat, lng) {
+    const map = L.map('mapa').setView([lat, lng], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    L.marker([lat, lng]).addTo(map);
+  }
+
+    // Aplica todos los filtros y muestra página 1
+    async function aplicarFiltro() {
+      const cli = document.getElementById('filtroCliente').value.toLowerCase();
+      const desde = document.getElementById('filtroDesde').value;
+      const hasta = document.getElementById('filtroHasta').value;
+      const partido = document.getElementById('filtroPartido').value;
+      const estado = document.getElementById('filtroEstado').value;
+
+      if (!enviosCargados.length) {
+        const res = await fetch('http://localhost:4000/envios');
+        enviosCargados = await res.json();
+      }
+
+      enviosFiltrados = enviosCargados.filter(e => {
+        // Cliente
+        const nom = e.cliente_id?.nombre?.toLowerCase() || '';
+        const matchCli = !cli || nom.includes(cli) || e.sender_id.includes(cli);
+
+        // Fecha
+        const fecha = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
+        const afterDesde = !desde || fecha >= desde;
+        const beforeHasta = !hasta || fecha <= hasta;
+
+        // Partido (antes zona)
+        const matchPartido = !partido || e.zona === partido;
+
+        // Estado
+        const matchEstado = !estado || e.estado === estado || e.status === estado;
+
+        return matchCli && afterDesde && beforeHasta && matchPartido && matchEstado;
+      });
+
+      currentPage = 1;
+      renderTabla();
+      renderPaginacion();
+    }
+
+    function renderTabla() {
+      const tbody = document.getElementById('tablaEnvios');
+      tbody.innerHTML = '';
+      const start = (currentPage - 1) * pageSize;
+      const page = enviosFiltrados.slice(start, start + pageSize);
+
+      page.forEach(e => {
+        const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
+        const estado = {
+          pending: 'Pendiente',
+          shipped: 'En camino',
+          delivered: 'Entregado'
+        }[e.estado || e.status] || '-';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="px-4 py-2">
+  <button
+    class="text-indigo-600 hover:underline"
+    data-id="${e._id}"
+    onclick="mostrarDetalle(this.dataset.id)"
+  >
+    ${e.meli_id || ''}
+  </button>
+</td>
+          <td class="px-4 py-2">${e.cliente_id?.nombre || 'ID:' + e.sender_id}</td>
+          <td class="px-4 py-2">${fecha}</td>
+          <td class="px-4 py-2">${e.zona || '-'}</td>
+          <td class="px-4 py-2"></td>
+          <td class="px-4 py-2">${estado}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+  async function mostrarDetalle(envioId) {
+  // 1) Traer datos desde tu API /detalles/:id
+  const res = await fetch(`http://localhost:4000/envios/${envioId}`);
+  const data = await res.json();
+
+  // 2) Ponerlos en el modal
+  const cd = document.getElementById('contenidoDetalle');
+  cd.innerHTML = `
+    <p><strong>Cliente:</strong> ${data.cliente_id.nombre}</p>
+    <p><strong>Dirección:</strong> ${data.direccion}</p>
+    <p><strong>Tracking:</strong> ${data.meli_id}</p>
+    <p><strong>Estado:</strong> ${data.estado || data.status}</p>
+    <!-- más campos según venga de MercadoLibre -->
+  `;
+
+  // 3) Mostrar modal
+  document.getElementById('modalDetalle').classList.remove('hidden');
+
+  // 4) Inicializar mapa con la geolocalización
+  initMapa(data.latitud, data.longitud);
+}
+
+function cerrarModal() {
+  document.getElementById('modalDetalle').classList.add('hidden');
+}
+
+    function renderPaginacion() {
+      const totalPages = Math.max(1, Math.ceil(enviosFiltrados.length / pageSize));
+      document.getElementById('infoPagina').textContent = `Página ${currentPage} de ${totalPages}`;
+      document.getElementById('prevBtn').disabled = currentPage === 1;
+      document.getElementById('nextBtn').disabled = currentPage === totalPages;
+    }
+
+    function cambiarPagina(dir) {
+      const totalPages = Math.max(1, Math.ceil(enviosFiltrados.length / pageSize));
+      currentPage = Math.min(totalPages, Math.max(1, currentPage + dir));
+      renderTabla();
+      renderPaginacion();
+    }
+
+    // Al cargar
+    document.addEventListener('DOMContentLoaded', () => {
+      cargarResumenDiario();
+      cargarPartidos();
+      aplicarFiltro(); 
+    });
+
+  </script>
+</body>
+</html>
+
+
