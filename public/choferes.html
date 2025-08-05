@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Panel de Choferes</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-4">
+  <div class="max-w-6xl mx-auto bg-white p-6 rounded shadow">
+    <h1 class="text-2xl font-bold mb-4 text-center">Gestión de Choferes</h1>
+
+    <!-- Tabs -->
+    <div class="flex space-x-4 mb-6">
+      <button onclick="mostrarTab('qr')" class="tab-btn bg-blue-600 text-white px-4 py-2 rounded">Asignación por QR</button>
+      <button onclick="mostrarTab('mapa')" class="tab-btn bg-gray-300 px-4 py-2 rounded">Asignación desde el mapa</button>
+    </div>
+
+    <!-- Asignación por QR -->
+
+    <div id="tab-qr" class="tab">
+    <select id="selectChoferQR"></select>
+    <select id="selectListaQR"></select>
+    <button id="btnStartScan" class="w-16 h-16 bg-gray-200 rounded shadow mb-4">📷</button>
+    <div id="qr-reader" class="w-full max-w-xs mx-auto hidden"></div>
+
+
+      <button class="bg-green-600 text-white px-4 py-2 rounded">Asignar Envíos</button>
+    </div>
+
+    <!-- Asignación desde el mapa -->
+    <div id="tab-mapa" class="tab hidden">
+    <select id="selectChoferMapa"></select>
+    <select id="selectListaMapa"></select>
+    <div id="mapaEnvios" class="w-full h-96 bg-gray-200 rounded mb-4"></div>
+     <button class="bg-green-600 text-white px-4 py-2 rounded">Asignar Envíos Seleccionados</button>
+    </div>
+
+    <!-- Botones para abrir modales -->
+    <div class="flex justify-between mt-6">
+      <button onclick="abrirModal('modalChofer')" class="bg-indigo-600 text-white px-4 py-2 rounded">Agregar Chofer</button>
+      <button onclick="abrirModal('modalTarifa')" class="bg-indigo-600 text-white px-4 py-2 rounded">Tarifas Choferes</button>
+    </div>
+  </div>
+
+  <!-- Modal Agregar Chofer -->
+<div id="modalChofer" class="modal hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <form id="formAddChofer" class="bg-white p-6 rounded shadow w-96">
+    <h2 class="text-lg font-bold mb-4">Agregar Chofer</h2>
+    <label>Nombre:</label>
+    <input name="nombre" type="text" class="w-full border p-2 mb-2 rounded" required />
+    <label>Número de Teléfono:</label>
+    <input name="telefono" type="text" class="w-full border p-2 mb-4 rounded" required />
+    <div class="text-right">
+      <button type="button" onclick="cerrarModal('modalChofer')" class="mr-2 px-4 py-2 rounded bg-gray-400 text-white">
+        Cancelar
+      </button>
+      <button type="submit" class="px-4 py-2 rounded bg-blue-600 text-white">Guardar</button>
+    </div>
+  </form>
+</div>
+  </div>
+
+  <!-- Modal Tarifas -->
+  <div id="modalTarifa" class="modal hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded shadow w-96">
+      <h2 class="text-lg font-bold mb-4">Tarifa de Chofer</h2>
+      <label>Nombre:</label>
+      <input type="text" class="w-full border p-2 mb-2 rounded" />
+      <label>Precio:</label>
+      <input type="number" class="w-full border p-2 mb-4 rounded" />
+      <div class="text-right">
+        <button onclick="cerrarModal('modalTarifa')" class="mr-2 px-4 py-2 rounded bg-gray-400 text-white">Cancelar</button>
+        <button class="px-4 py-2 rounded bg-blue-600 text-white">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function mostrarTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.add('hidden'));
+      document.getElementById(`tab-${tab}`).classList.remove('hidden');
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.replace('bg-blue-600', 'bg-gray-300'));
+      event.target.classList.replace('bg-gray-300', 'bg-blue-600');
+    }
+
+    function abrirModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+
+    function cerrarModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+  </script>
+<!-- html5-qrcode -->
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+  // Carga dropdowns
+async function cargarDropdowns() {
+  const [choferRes, listaRes] = await Promise.all([
+    fetch('/api/choferes'),
+    fetch('/api/listas-de-precios?prefix=Choferes')
+  ]);
+  const [choferes, listas] = await Promise.all([choferRes.json(), listaRes.json()]);
+
+  // Opciones de chofer
+  const optsChofer = choferes
+    .map(c => `<option value="${c._id}">${c.nombre}</option>`)
+    .join('');
+
+  // Opciones de lista *sin* mostrar precio
+  const optsLista = listas
+    .map(l => `<option value="${l._id}">${l.nombre}</option>`)
+    .join('');
+
+  // Inyectar en ambos selects
+  document.querySelectorAll('#selectChoferQR, #selectChoferMapa')
+    .forEach(sel => sel.innerHTML = optsChofer);
+  document.querySelectorAll('#selectListaQR, #selectListaMapa')
+    .forEach(sel => sel.innerHTML = optsLista);
+}
+
+
+
+  // Escaneo QR
+  function initQrScanner() {
+    const readerDiv = document.getElementById('qr-reader');
+    const html5QrCode = new Html5Qrcode("qr-reader");
+
+    document.getElementById('btnStartScan').addEventListener('click', () => {
+      readerDiv.classList.toggle('hidden');
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        async qrMessage => {
+          // Al leer, detenemos el escáner
+          await html5QrCode.stop();
+          readerDiv.classList.add('hidden');
+
+          // Llamamos al endpoint para traer datos del envío
+          const envioRes = await fetch(`/api/envios/${qrMessage}`);
+          if (!envioRes.ok) {
+            return alert('Envío no encontrado');
+          }
+          const envio = await envioRes.json();
+          console.log('Envio:', envio);
+          // Acá podés mostrar datos en el UI o guardarlos en una variable
+        },
+        err => {
+          console.warn('QR error:', err);
+        }
+      ).catch(err => console.error('No se pudo iniciar QR:', err));
+    });
+  }
+
+  // Inicialización al cargar la página
+  document.addEventListener('DOMContentLoaded', () => {
+    cargarDropdowns();
+    initQrScanner();
+  });
+</script>
+<script>
+  // 1) Capturo el submit del form y disparo el POST
+  document.getElementById('formAddChofer').addEventListener('submit', async e => {
+    e.preventDefault();
+    const form = e.target;
+    const nombre   = form.nombre.value.trim();
+    const telefono = form.telefono.value.trim();
+
+    if (!nombre || !telefono) {
+      return alert('Por favor completá nombre y teléfono');
+    }
+
+    try {
+      const res = await fetch('/api/choferes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, telefono })
+      });
+
+      if (!res.ok) {
+        const errTxt = await res.text();
+        throw new Error(errTxt || res.statusText);
+      }
+
+      // Limpiar el form y cerrar modal
+      form.reset();
+      cerrarModal('modalChofer');
+
+      // Volver a cargar el dropdown de choferes
+      await cargarDropdowns();
+
+      alert('Chofer creado correctamente');
+    } catch (err) {
+      console.error('Error al crear chofer:', err);
+      alert('No se pudo crear el chofer');
+    }
+  });
+</script>
+
+
+</body>
+</html>

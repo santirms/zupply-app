@@ -1,5 +1,6 @@
 // models/Envio.js
 const mongoose = require('mongoose');
+const { Schema } = mongoose;   // <<– agrega esto
 
 const envioSchema = new mongoose.Schema({
   sender_id:      { type: String, required: true },  // ahora contendrá el código interno
@@ -13,7 +14,11 @@ const envioSchema = new mongoose.Schema({
   destinatario:   { type: String, required: true },
   direccion:      { type: String, required: true },
   referencia:     { type: String },
-  precio: { type: Number, default: 0 }
+  precio: { type: Number, default: 0 },
+    // campos para asignaciones:
+  chofer:         { type: Schema.Types.ObjectId, ref: 'Chofer', default: null },
+  zonaAsignada:  { type: Schema.Types.ObjectId, ref: 'Zona',   default: null },
+  estado:         { type: String, enum: ['pendiente','asignado'], default: 'pendiente' },
 
 });
 

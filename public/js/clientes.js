@@ -111,13 +111,30 @@ function agregarSenderInput(value = '') {
     </button>
   `;
   // Vincular
-  div.querySelector('.btn-vincular')?.addEventListener('click', () => {
-    const clientId = qs('input[name="id"]').value;
-    const sid = div.querySelector('input[name="sender_id"]').value;
-    if (clientId && sid) {
-      window.location = `${API}/${clientId}/meli-oauth?sender_id=${sid}`;
+// Dentro de agregarSenderInput, reemplaza el listener de .btn-vincular por esto:
+div.querySelector('.btn-vincular')?.addEventListener('click', async () => {
+  const clientId = qs('input[name="id"]').value;
+  const sid      = div.querySelector('input[name="sender_id"]').value;
+  if (clientId && sid) {
+    try {
+      // Llamo al nuevo endpoint que devuelve { url }
+      const res = await fetch(`${API}/${clientId}/meli-link?sender_id=${sid}`);
+      if (!res.ok) throw new Error(await res.text());
+      const { url } = await res.json();
+
+      // Muestro un prompt para que el usuario copie el enlace
+      prompt(
+        'Aquí está tu enlace de vinculación a Mercado Libre.\n\n' +
+        'Cópialo y envíaselo al cliente para que autorice la app:\n',
+        url
+      );
+    } catch (err) {
+      console.error('Error al generar link de vinculación:', err);
+      alert('No se pudo generar el enlace de vinculación:\n' + err.message);
     }
-  });
+  }
+});
+
   // Eliminar
   div.querySelector('.btn-remove')?.addEventListener('click', () => div.remove());
   cont.appendChild(div);

@@ -84,6 +84,19 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+router.get('/:id/meli-link', (req, res) => {
+  const { id }       = req.params;
+  const { sender_id }= req.query;
+  const state        = `${id}|${sender_id}`;
+  const url = 
+    `https://auth.mercadolibre.com.ar/authorization` +
+    `?response_type=code` +
+    `&client_id=${process.env.MERCADOLIBRE_CLIENT_ID}` +
+    `&redirect_uri=${encodeURIComponent(process.env.MERCADOLIBRE_REDIRECT_URI)}` +
+    `&state=${state}`;
+  res.json({ url });
+});
+
 // Borrar
 router.delete('/:id', async (req, res) => {
   await Cliente.findByIdAndDelete(req.params.id);
