@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const Zona = require('../models/zona');
+const Zona = require('../models/Zona');
 const Partido = require('../models/partidos'); // asumimos que ya cargaste los códigos postales
 
 router.get('/:codigoPostal', async (req, res) => {
