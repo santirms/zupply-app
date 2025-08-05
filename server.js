@@ -52,6 +52,7 @@ app.use('/envios', enviosRoutes);
 
 const meliRoutes = require('./routes/meli');
 app.use('/api/auth/meli', meliRoutes);
+app.use('/auth/meli', meliRoutes);
 
 const leerEtiquetas = require('./routes/leerEtiquetas');
 app.use('/leer-etiquetas', leerEtiquetas);
