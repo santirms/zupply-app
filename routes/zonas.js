@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const Zona = require('../models/zona');
+const Zona = require('../models/Zona');
 
 // Obtener todas las zonas
 router.get('/', async (req, res) => {
