@@ -92,7 +92,7 @@
     // Carga contador diario
     async function cargarResumenDiario() {
       try {
-        const res = await fetch('http://localhost:4000/envios/del-dia');
+        const res = await fetch('/envios/del-dia');
         const data = await res.json();
         document.getElementById('total-paquetes').textContent = data.total;
       } catch (e) {
@@ -103,7 +103,7 @@
     // Carga partidos para el dropdown
     async function cargarPartidos() {
       try {
-        const res = await fetch('http://localhost:4000/partidos');
+        const res = await fetch('/partidos');
         const lista = await res.json();
         const select = document.getElementById('filtroPartido');
         lista.forEach(p => {
@@ -198,7 +198,7 @@
     }
   async function mostrarDetalle(envioId) {
   // 1) Traer datos desde tu API /detalles/:id
-  const res = await fetch(`http://localhost:4000/envios/${envioId}`);
+  const res = await fetch(/envios/${envioId}`);
   const data = await res.json();
 
   // 2) Ponerlos en el modal
