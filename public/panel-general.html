@@ -134,7 +134,7 @@
       const estado = document.getElementById('filtroEstado').value;
 
       if (!enviosCargados.length) {
-        const res = await fetch('http://localhost:4000/envios');
+        const res = await fetch('/envios');
         enviosCargados = await res.json();
       }
 
