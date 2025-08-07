@@ -198,7 +198,7 @@
     }
   async function mostrarDetalle(envioId) {
   // 1) Traer datos desde tu API /detalles/:id
-  const res = await fetch(/api/envios/${envioId}`);
+  const res = await fetch('/api/envios/${envioId}`');
   const data = await res.json();
 
   // 2) Ponerlos en el modal
