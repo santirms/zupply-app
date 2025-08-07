@@ -92,7 +92,7 @@
     // Carga contador diario
     async function cargarResumenDiario() {
       try {
-        const res = await fetch('https://zupply-backend.onrender.com/envios/del-dia');
+        const res = await fetch('/api/envios/del-dia');
         const data = await res.json();
         document.getElementById('total-paquetes').textContent = data.total;
       } catch (e) {
@@ -103,7 +103,7 @@
     // Carga partidos para el dropdown
     async function cargarPartidos() {
       try {
-        const res = await fetch('https://zupply-backend.onrender.com/partidos');
+        const res = await fetch('/api/partidos');
         const lista = await res.json();
         const select = document.getElementById('filtroPartido');
         lista.forEach(p => {
@@ -198,7 +198,7 @@
     }
   async function mostrarDetalle(envioId) {
   // 1) Traer datos desde tu API /detalles/:id
-  const res = await fetch(/envios/${envioId}`);
+  const res = await fetch(/api/envios/${envioId}`);
   const data = await res.json();
 
   // 2) Ponerlos en el modal
