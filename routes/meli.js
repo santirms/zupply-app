@@ -15,10 +15,21 @@ const CLIENT_ID     = process.env.MERCADOLIBRE_CLIENT_ID;
 const CLIENT_SECRET = process.env.MERCADOLIBRE_CLIENT_SECRET;
 const REDIRECT_URI  = process.env.MERCADOLIBRE_REDIRECT_URI;
 
-/**
- * CALLBACK OAUTH
- * Intercambia code -> tokens y vincula el cliente (state = "clienteId|senderId")
- */
+/* -------------------------------------------
+ * Helper: precio por lista/cliente y zona nombre
+ * ----------------------------------------- */
+async function precioPorZona(cliente, zonaNombre) {
+  if (!cliente?.lista_precios || !zonaNombre) return 0;
+  const zonaDoc = await Zona.findOne({ nombre: zonaNombre });
+  if (!zonaDoc) return 0;
+  const match = (cliente.lista_precios.zonas || [])
+    .find(zp => String(zp.zona) === String(zonaDoc._id));
+  return match?.precio ?? 0;
+}
+
+/* -------------------------------------------
+ * OAuth callback MeLi
+ * ----------------------------------------- */
 router.get('/callback', async (req, res) => {
   try {
     const { code, state } = req.query;
@@ -26,7 +37,7 @@ router.get('/callback', async (req, res) => {
       return res.status(400).send('Faltan parámetros en callback');
     }
 
-    // 1) Intercambio code -> tokens
+    // Intercambio code -> tokens
     const body = new URLSearchParams({
       grant_type:    'authorization_code',
       client_id:     CLIENT_ID,
@@ -43,7 +54,7 @@ router.get('/callback', async (req, res) => {
 
     const { access_token, refresh_token, user_id, expires_in } = tokenRes.data;
 
-    // 2) Guardar tokens
+    // Guardar/actualizar tokens
     await Token.findOneAndUpdate(
       { user_id },
       {
@@ -56,11 +67,11 @@ router.get('/callback', async (req, res) => {
       { upsert: true }
     );
 
-    // 3) Vincular cliente
+    // Vincular cliente (state = "clienteId|senderId")
     const [clienteId, senderId] = String(state).split('|');
     await Cliente.findByIdAndUpdate(clienteId, {
       user_id,
-      $addToSet: { sender_id: senderId } // agrega si no existe
+      $addToSet: { sender_id: senderId }
     });
 
     return res.send('✅ Autenticación exitosa y cliente vinculado.');
@@ -70,66 +81,15 @@ router.get('/callback', async (req, res) => {
   }
 });
 
-/**
- * WEBHOOK ML - INGESTA AUTOMÁTICA
- * Configurar en DevCenter: Notification URL -> https://TU_DOMINIO(/api)/auth/meli/webhook
- * Topic: shipments
- */
-router.post('/webhook', async (req, res) => {
-  try {
-    // ML envía JSON: { user_id, resource: "/shipments/123", topic: "shipments", ... }
-    const { user_id, resource, topic } = req.body || {};
-
-    // Respondemos rápido para que ML no reintente
-    res.status(200).json({ ok: true });
-
-    if (topic !== 'shipments' || !resource || !user_id) return;
-
-    // Cliente que corresponde a ese user_id
-    const cliente = await Cliente.findOne({ user_id }).populate('lista_precios');
-    if (!cliente) return;
-
-    // Si no está habilitada la auto-ingesta, salimos
-    if (!cliente.auto_ingesta) return;
-
-    // Token válido
-    const access_token = await getValidToken(user_id);
-
-    // ID de envío desde la resource
-    const shipmentId = String(resource.split('/').pop());
-
-    // Detalle del shipment
-    const { data: sh } = await axios.get(
-      `https://api.mercadolibre.com/shipments/${shipmentId}`,
-      { headers: { Authorization: `Bearer ${access_token}` } }
-    );
-
-    const cp        = sh?.receiver_address?.zip_code || '';
-    const destinat  = sh?.receiver_address?.receiver_name || '';
-    const street    = sh?.receiver_address?.street_name || '';
-    const number    = sh?.receiver_address?.street_number || '';
-    const address   = [street, number].filter(Boolean).join(' ');
-    const referencia = sh?.receiver_address?.comment || '';
-
-    // Resolver partido/zona usando tu util
-    const zInfo     = await detectarZona(cp); // { partido, zona }
-    const partido   = zInfo?.partido || '';
-    const zonaNom   = zInfo?.zona    || '';
-
-    // Calcular precio por lista de ese cliente + zona
-    let precio = 0;
-    if (cliente.lista_precios && zonaNom) {
-      const zonaDoc = await Zona.findOne({ nombre: zonaNom });
-      const zp = cliente.lista_precios?.zonas?.find(
-        z => String(z.zona) === String(zonaDoc?._id)
-      );
-      if (zp) precio = zp.precio;
-    }
-    router.get('/ping/:clienteId', async (req, res) => {
+/* -------------------------------------------
+ * Probar token (users/me)
+ * GET /api/auth/meli/ping/:clienteId
+ * ----------------------------------------- */
+router.get('/ping/:clienteId', async (req, res) => {
   try {
     const cliente = await Cliente.findById(req.params.clienteId);
     if (!cliente) return res.status(404).json({ ok:false, error:'Cliente no encontrado' });
-    if (!cliente.user_id) return res.status(400).json({ ok:false, error:'Cliente no vinculado (no tiene user_id)' });
+    if (!cliente.user_id) return res.status(400).json({ ok:false, error:'Cliente no vinculado (sin user_id)' });
 
     const access_token = await getValidToken(cliente.user_id);
     const r = await axios.get('https://api.mercadolibre.com/users/me', {
@@ -145,14 +105,61 @@ router.post('/webhook', async (req, res) => {
     console.error('Ping token error:', err.response?.data || err.message);
     return res.status(500).json({ ok:false, error: err.response?.data?.message || err.message });
   }
-    // Upsert por meli_id (idempotencia)
+});
+
+/* -------------------------------------------
+ * Webhook de notificaciones (topic: shipments)
+ * POST /api/auth/meli/webhook
+ * ----------------------------------------- */
+router.post('/webhook', async (req, res) => {
+  try {
+    // Mercado Libre envía { user_id, resource: "/shipments/123", topic: "shipments", ... }
+    const { user_id, resource, topic } = req.body || {};
+
+    // Responder rápido para evitar reintentos
+    res.status(200).json({ ok: true });
+
+    if (topic !== 'shipments' || !resource || !user_id) return;
+
+    // Cliente por user_id
+    const cliente = await Cliente.findOne({ user_id }).populate('lista_precios');
+    if (!cliente) return;
+    if (!cliente.auto_ingesta) return; // sólo si está habilitado
+
+    // Token válido
+    const access_token = await getValidToken(user_id);
+
+    // ID del envío
+    const shipmentId = String(resource.split('/').pop());
+
+    // Detalle del shipment
+    const { data: sh } = await axios.get(
+      `https://api.mercadolibre.com/shipments/${shipmentId}`,
+      { headers: { Authorization: `Bearer ${access_token}` } }
+    );
+
+    const cp         = sh?.receiver_address?.zip_code || '';
+    const destinat   = sh?.receiver_address?.receiver_name || '';
+    const street     = sh?.receiver_address?.street_name || '';
+    const number     = sh?.receiver_address?.street_number || '';
+    const address    = [street, number].filter(Boolean).join(' ').trim();
+    const referencia = sh?.receiver_address?.comment || '';
+
+    // Partido / zona
+    const zInfo    = await detectarZona(cp); // { partido, zona }
+    const partido  = zInfo?.partido || '';
+    const zonaNom  = zInfo?.zona    || '';
+
+    // Precio por lista del cliente
+    const precio   = await precioPorZona(cliente, zonaNom);
+
+    // Upsert por meli_id (idempotente)
     await Envio.updateOne(
       { meli_id: String(sh.id) },
       {
         $setOnInsert: { fecha: new Date() },
         $set: {
           meli_id:       String(sh.id),
-          // En tu app "sender_id" es el código interno del cliente:
           sender_id:     String(cliente.codigo_cliente || cliente.sender_id?.[0] || user_id),
           cliente_id:    cliente._id,
           codigo_postal: cp,
@@ -166,9 +173,9 @@ router.post('/webhook', async (req, res) => {
       },
       { upsert: true }
     );
-   catch (err) {
+  } catch (err) {
     console.error('Webhook ML error:', err.response?.data || err.message);
-    // ya respondimos 200 arriba; no relanzamos error
+    // Ya respondimos 200; no relanzamos error
   }
 });
 
