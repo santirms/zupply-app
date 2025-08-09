@@ -125,7 +125,26 @@ router.post('/webhook', async (req, res) => {
       );
       if (zp) precio = zp.precio;
     }
+    router.get('/ping/:clienteId', async (req, res) => {
+  try {
+    const cliente = await Cliente.findById(req.params.clienteId);
+    if (!cliente) return res.status(404).json({ ok:false, error:'Cliente no encontrado' });
+    if (!cliente.user_id) return res.status(400).json({ ok:false, error:'Cliente no vinculado (no tiene user_id)' });
 
+    const access_token = await getValidToken(cliente.user_id);
+    const r = await axios.get('https://api.mercadolibre.com/users/me', {
+      headers: { Authorization: `Bearer ${access_token}` }
+    });
+
+    return res.json({
+      ok: true,
+      user_id: r.data.id,
+      nickname: r.data.nickname,
+    });
+  } catch (err) {
+    console.error('Ping token error:', err.response?.data || err.message);
+    return res.status(500).json({ ok:false, error: err.response?.data?.message || err.message });
+  }
     // Upsert por meli_id (idempotencia)
     await Envio.updateOne(
       { meli_id: String(sh.id) },
