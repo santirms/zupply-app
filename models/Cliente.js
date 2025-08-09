@@ -5,6 +5,8 @@ const clienteSchema = new mongoose.Schema({
   nombre:          { type: String, required: true },
   codigo_cliente:  { type: String, unique: true },
   sender_id:       { type: [String], default: [] },
+  user_id:         { type: String },              // user_id de ML
+  auto_ingesta:    { type: Boolean, default: false },
   lista_precios:   {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ListaDePrecios',
