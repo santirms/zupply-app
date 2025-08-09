@@ -84,6 +84,19 @@
 
         <!-- Pestaña Cuentas -->
         <div id="tab-cuentas" class="hidden">
+          <!-- Controles de auto-ingesta y prueba de token -->
+       <div class="flex items-center justify-between bg-gray-50 p-3 rounded border mb-3">
+       <label for="chkAutoIngesta" class="font-medium">Ingreso Automatico de envíos </label>
+       <input id="chkAutoIngesta" type="checkbox" class="w-5 h-5">
+       </div>
+
+       <div class="flex items-center gap-3 mb-4">
+       <button type="button" id="btnProbarToken" class="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700">
+       Probar token MeLi
+       </button>
+       <span id="pingStatus" class="text-sm text-gray-600"></span>
+       </div>
+
           <div id="cuentasContainer" class="space-y-2"></div>
           <button type="button" id="btnAgregarCuenta"class="mt-2 bg-green-600 text-white px-3 py-1 rounded">Agregar cuenta</button>
           </button>
