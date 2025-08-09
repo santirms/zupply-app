@@ -20,6 +20,24 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// PATCH /api/clientes/:id/auto-ingesta
+router.patch('/:id/auto-ingesta', async (req, res) => {
+  try {
+    const { enabled } = req.body; // true/false
+    const upd = await Cliente.findByIdAndUpdate(
+      req.params.id,
+      { auto_ingesta: !!enabled },
+      { new: true }
+    );
+    if (!upd) return res.status(404).json({ error: 'Cliente no encontrado' });
+    res.json({ ok: true, auto_ingesta: upd.auto_ingesta });
+  } catch (e) {
+    console.error('Error toggling auto_ingesta:', e);
+    res.status(500).json({ error: 'No se pudo actualizar auto_ingesta' });
+  }
+});
+
+
 // Crear
 // routes/clientes.js
 router.post('/', async (req, res) => {
@@ -84,23 +102,41 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// GET /api/clientes/:id/meli-link
 router.get('/:id/meli-link', (req, res) => {
-  const { id }       = req.params;
-  const { sender_id }= req.query;
-  const state        = `${id}|${sender_id}`;
-  const url = 
-    `https://auth.mercadolibre.com.ar/authorization` +
-    `?response_type=code` +
-    `&client_id=${process.env.MERCADOLIBRE_CLIENT_ID}` +
-    `&redirect_uri=${encodeURIComponent(process.env.MERCADOLIBRE_REDIRECT_URI)}` +
-    `&state=${state}`;
-  res.json({ url });
-});
+  try {
+    const { id }        = req.params;
+    const { sender_id } = req.query;
 
-// Borrar
-router.delete('/:id', async (req, res) => {
-  await Cliente.findByIdAndDelete(req.params.id);
-  res.status(204).end();
+    if (!sender_id) {
+      return res.status(400).json({ error: 'Falta sender_id' });
+    }
+
+    const stateRaw  = `${id}|${sender_id}`;
+    const state     = encodeURIComponent(stateRaw);
+    const redirect  = process.env.MERCADOLIBRE_REDIRECT_URI;
+
+    // DEBUG rápido (podés quitarlo luego)
+    console.log('ML LINK -> redirect_uri:', redirect);
+    console.log('ML LINK -> state:', stateRaw);
+
+    if (!redirect) {
+      return res.status(500).json({ error: 'MERCADOLIBRE_REDIRECT_URI no seteado' });
+    }
+
+    // Usa el host global
+    const url =
+      `https://auth.mercadolibre.com/authorization` +
+      `?response_type=code` +
+      `&client_id=${process.env.MERCADOLIBRE_CLIENT_ID}` +
+      `&redirect_uri=${encodeURIComponent(redirect)}` +
+      `&state=${state}`;
+
+    return res.json({ url });
+  } catch (e) {
+    console.error('Error generando meli-link:', e);
+    res.status(500).json({ error: 'No se pudo generar el link de vinculación' });
+  }
 });
 
 module.exports = router;
