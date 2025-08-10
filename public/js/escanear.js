@@ -1,140 +1,239 @@
 // public/js/escanear.js
-const qs  = s => document.querySelector(s);
-const qsa = s => Array.from(document.querySelectorAll(s));
+// Requiere html5-qrcode ya cargado en el HTML
 
-let html5QrCode, scanning = false;
-const seen = new Set();
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Contenedores y controles
-  const camaraContainer  = qs('#camaraContainer');
-  const tecladoContainer = qs('#tecladoContainer');
-  const modoRadios       = qsa('input[name="modoScan"]');
-  const startBtn         = qs('#startBtn');
-  const stopBtn          = qs('#stopBtn');
-  const reader           = qs('#reader');
-  const statusText       = qs('#status');
-  const inputTeclado     = qs('#scannerInput');
-  const list             = qs('#scanList');
+let BASE = ''; // '' local, '/api' en Render
 
-  // Inicializar html5-qrcode (pero no iniciar aún)
-  html5QrCode = new Html5Qrcode(reader.id);
+async function detectBase() {
+  const tries = ['', '/api'];
+  for (const pre of tries) {
+    try {
+      const r = await fetch(`${pre}/clientes`, { method: 'GET' });
+      if (r.ok) { BASE = pre; return; }
+    } catch {}
+  }
+}
 
-  // Cambio de modo
-  modoRadios.forEach(radio => {
-    radio.addEventListener('change', () => {
-      if (radio.value === 'camara' && radio.checked) {
-        camaraContainer.classList.remove('hidden');
-        tecladoContainer.classList.add('hidden');
-      } else if (radio.value === 'teclado' && radio.checked) {
-        camaraContainer.classList.add('hidden');
-        tecladoContainer.classList.remove('hidden');
-        inputTeclado.focus();
-      }
-      // Siempre detenemos la cámara al cambiar de modo
-      if (scanning) stopScanner();
+const api = p => `${BASE}${p}`;
+
+// ---------------- parseo tolerante de QR ----------------
+function parseQR(raw) {
+  if (!raw) return {};
+  let txt = String(raw).trim();
+
+  // 1) ¿JSON?
+  try {
+    const j = JSON.parse(txt);
+    return normalizeKeys(j);
+  } catch {}
+
+  // 2) ¿URL con query?
+  try {
+    const u = new URL(txt);
+    const params = Object.fromEntries(u.searchParams.entries());
+    return normalizeKeys(params);
+  } catch {}
+
+  // 3) ¿query plano "a=1&b=2"?
+  if (txt.includes('=') && txt.includes('&')) {
+    const params = {};
+    txt.split('&').forEach(p => {
+      const [k,v] = p.split('=');
+      if (k) params[decodeURIComponent(k)] = decodeURIComponent(v||'');
     });
-  });
-
-  // Cámara: controles de inicio/parada
-  startBtn.addEventListener('click', startScanner);
-  stopBtn.addEventListener('click', stopScanner);
-
-  // Lector USB: al presionar Enter en el input
-  inputTeclado.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      const code = inputTeclado.value.trim();
-      inputTeclado.value = '';
-      if (code) onScanSuccess(code);
-    }
-  });
-
-  // Funciones de cámara
-  async function startScanner() {
-    statusText.textContent = 'Iniciando cámara…';
-    try {
-      await html5QrCode.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: 250 },
-        (decodedText) => onScanSuccess(decodedText)
-      );
-      scanning = true;
-      startBtn.disabled = true;
-      stopBtn.disabled  = false;
-      statusText.textContent = 'Escáner activo. Apunta al código.';
-    } catch (e) {
-      console.error('Error iniciando cámara:', e);
-      statusText.textContent = 'No se pudo iniciar cámara.';
-    }
+    return normalizeKeys(params);
   }
 
-  async function stopScanner() {
-    if (!scanning) return;
-    await html5QrCode.stop();
-    scanning = false;
-    startBtn.disabled = false;
-    stopBtn.disabled  = true;
-    statusText.textContent = 'Escáner detenido.';
+  // 4) heurística: números “grandes” en el texto
+  const nums = (txt.match(/\d{6,}/g) || []);
+  const guess = {};
+  if (nums.length) {
+    // primer número grande: probable tracking
+    guess.tracking_id = nums[0];
+    // segundo: probable sender
+    if (nums[1]) guess.sender_id = nums[1];
+  }
+  return guess;
+}
+
+// mapea alias comunes a las claves estándar
+function normalizeKeys(obj) {
+  if (!obj) return {};
+  const o = {};
+  const get = (...keys) => {
+    for (const k of keys) {
+      if (obj[k] != null && obj[k] !== '') return String(obj[k]);
+      // prueba case-insensitive
+      const hit = Object.keys(obj).find(x => x.toLowerCase() === k.toLowerCase());
+      if (hit && obj[hit] != null && obj[hit] !== '') return String(obj[hit]);
+    }
+    return undefined;
+  };
+
+  o.sender_id   = get('sender_id','seller_id','user_id','si','sid');
+  o.tracking_id = get('tracking_id','tid','ti','shipment_id','id','trackingId');
+
+  // a veces vienen útiles para mostrar
+  o.hash        = get('h','hash','token');
+
+  return o;
+}
+
+// ---------------- cámara / lector ----------------
+let html5QrCode = null;
+let scanning    = false;
+const scanned   = new Set();
+
+async function startCamera() {
+  if (scanning) return;
+  try {
+    if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      onScanSuccess,
+      onScanFail
+    );
+    scanning = true;
+    setStatus('Escáner activo. Apuntá al código.');
+  } catch (e) {
+    console.error('No se pudo iniciar cámara:', e);
+    setStatus('No se pudo iniciar la cámara. Revisá permisos/https.');
+  }
+}
+
+async function stopCamera() {
+  if (!html5QrCode || !scanning) return;
+  await html5QrCode.stop();
+  await html5QrCode.clear();
+  scanning = false;
+  setStatus('Cámara detenida.');
+}
+
+function onScanFail(_) { /* ignoramos frames fallidos */ }
+
+function setStatus(msg, ok=true) {
+  const el = $('#status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = ok ? 'green' : 'crimson';
+}
+
+// ---------------- UI ----------------
+function addCard(info) {
+  const wrap = $('#scanList');
+  const li = document.createElement('div');
+  li.className = 'tarjeta-etiqueta';
+  li.innerHTML = `
+    <p><strong>Sender ID:</strong> ${info.sender_id || '-'}</p>
+    <p><strong>Tracking ID:</strong> ${info.tracking_id || '-'}</p>
+    <p><strong>Destinatario:</strong> <span class="dest">-</span></p>
+    <p><strong>Dirección:</strong> <span class="addr">-</span></p>
+    <p><strong>Partido:</strong> <span class="partido">-</span></p>
+    <button class="btn-guardar">Guardar</button>
+    <span class="hint" style="margin-left:8px;color:#666"></span>
+    <hr/>
+  `;
+  wrap.appendChild(li);
+  return li;
+}
+
+// ---------------- integración backend ----------------
+async function guardarDesdeMeli(info, card) {
+  const btn  = card.querySelector('.btn-guardar');
+  const hint = card.querySelector('.hint');
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+  hint.textContent = '';
+
+  try {
+    const res = await fetch(api('/escanear/meli'), {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        meli_id:   info.tracking_id,
+        sender_id: info.sender_id
+      })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    // backend debería devolver datos del envío o mensaje
+    // si tu /escanear/meli ya responde con { zona, datos_envio }, usamos eso
+    const dest = data?.datos_envio?.receiver_address?.receiver_name || data?.destinatario || '-';
+    const dir  = (() => {
+      const ra = data?.datos_envio?.receiver_address;
+      if (ra?.address_line) return ra.address_line;
+      const a = [ra?.street_name, ra?.street_number].filter(Boolean).join(' ');
+      return a || data?.direccion || '-';
+    })();
+    const partido = data?.zona || data?.partido || '-';
+
+    card.querySelector('.dest').textContent = dest;
+    card.querySelector('.addr').textContent = dir;
+    card.querySelector('.partido').textContent = partido;
+
+    btn.textContent = 'Guardado';
+    hint.textContent = '✓';
+    setStatus('Envío guardado desde MeLi.', true);
+  } catch (e) {
+    console.error('Error guardando envío:', e);
+    btn.textContent = 'Guardar';
+    btn.disabled = false;
+    hint.textContent = 'Error';
+    setStatus('Error: ' + e.message, false);
+  }
+}
+
+// ---------------- handler de lectura ----------------
+async function onScanSuccess(decodedText) {
+  const info = parseQR(decodedText);
+
+  // si no tenemos tracking_id o sender_id, probamos heurística extra:
+  if (!info.tracking_id || !info.sender_id) {
+    console.warn('QR parcial:', decodedText, info);
   }
 
-  // Mismo workflow tras decodificar
-  async function onScanSuccess(decodedText) {
-    if (seen.has(decodedText)) return;
-    seen.add(decodedText);
+  // Evita duplicados por (sender_id + tracking_id) o por texto crudo
+  const key = `${info.sender_id || ''}|${info.tracking_id || decodedText}`;
+  if (scanned.has(key)) return;
+  scanned.add(key);
 
-    let data;
-    try {
-      data = JSON.parse(decodedText);
-    } catch {
-      console.warn('QR no es JSON:', decodedText);
+  const card = addCard(info);
+
+  // botón "Guardar"
+  card.querySelector('.btn-guardar').addEventListener('click', () => {
+    if (!info.tracking_id || !info.sender_id) {
+      setStatus('QR sin tracking_id o sender_id reconocibles.', false);
       return;
     }
+    guardarDesdeMeli(info, card);
+  });
 
-    const {
-      sender_id,
-      tracking_id: meli_id,
-      hashnumber,
-      direccion,
-      codigo_postal,
-      destinatario
-    } = data;
-
-    const card = document.createElement('div');
-    card.className = 'bg-white p-4 rounded-lg shadow flex flex-col gap-2';
-    card.innerHTML = `
-      <p><strong>Sender ID:</strong> ${sender_id}</p>
-      <p><strong>Tracking ID:</strong> ${meli_id}</p>
-      <p><strong>Destinatario:</strong> ${destinatario}</p>
-      <p><strong>Dirección:</strong> ${direccion} (${codigo_postal})</p>
-      <div class="mt-2 flex gap-2">
-        <button class="btn-save px-3 py-1 bg-blue-600 text-white rounded">Guardar</button>
-        <span class="text-sm text-gray-500 save-status"></span>
-      </div>
-    `;
-    list.appendChild(card);
-
-    const btnSave = card.querySelector('.btn-save');
-    const txt     = card.querySelector('.save-status');
-
-    btnSave.addEventListener('click', async () => {
-      btnSave.disabled = true;
-      txt.textContent  = 'Guardando…';
-      try {
-        const endpoint = hashnumber ? '/escanear/meli' : '/escanear/manual';
-        const payload  = { ...data };
-        const res = await fetch(endpoint, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error(await res.text());
-        txt.textContent = '✅ Guardado';
-      } catch (err) {
-        console.error('Error guardando envío:', err);
-        txt.textContent = '❌ Error';
-        btnSave.disabled = false;
-      }
-    });
+  // opcional: auto-guardar apenas escanea si ves que parseó bien
+  if (info.tracking_id && info.sender_id) {
+    guardarDesdeMeli(info, card);
   }
-});
+}
 
+// ---------------- init ----------------
+document.addEventListener('DOMContentLoaded', async () => {
+  await detectBase();
+
+  // radio: cámara vs lector USB
+  const rCam = $('#mCam');
+  const rUsb = $('#mUsb');
+  rCam?.addEventListener('change', () => {
+    $('#cameraControls').classList.toggle('hidden', !rCam.checked);
+    if (rCam.checked) setStatus('Modo cámara'); else setStatus('');
+  });
+  rUsb?.addEventListener('change', () => {
+    $('#cameraControls').classList.toggle('hidden', rUsb.checked);
+    setStatus(rUsb.checked ? 'Modo lector USB/teclado' : '');
+  });
+
+  $('#btnStart')?.addEventListener('click', startCamera);
+  $('#btnStop')?.addEventListener('click', stopCamera);
+});
