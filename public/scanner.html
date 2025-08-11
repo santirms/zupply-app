@@ -25,6 +25,17 @@
 
   <!-- Contenedor de cámara -->
   <div id="camaraContainer" class="w-full max-w-md bg-white p-4 rounded-lg shadow mb-6">
+    <style>
+  #reader {
+    width: 100%;
+    max-width: 420px;
+    margin: 12px auto;
+    background: #000;       /* para ver si pinta video encima */
+    min-height: 260px;      /* MUY importante en iOS */
+    border-radius: 8px;
+    overflow: hidden;
+  }
+</style>
     <div class="flex justify-between mb-4">
       <button id="startBtn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
         Iniciar Cámara
