@@ -83,43 +83,101 @@ function normalizeKeys(obj) {
 
 // ---------------- cámara / lector ----------------
 let html5QrCode = null;
-let scanning    = false;
-const scanned   = new Set();
+let cameraRunning = false;
+
+const debug = msg => {
+  const d = document.getElementById('debug');
+  if (d) d.textContent = msg;
+  console.log('[DEBUG]', msg);
+};
 
 async function startCamera() {
-  if (scanning) return;
   try {
-    if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+    if (!window.Html5Qrcode) {
+      debug('html5-qrcode no cargó');
+      return;
+    }
+    if (!html5QrCode) {
+      html5QrCode = new Html5Qrcode('reader', { verbose: false });
+    } else {
+      try { await html5QrCode.stop(); } catch {}
+      try { await html5QrCode.clear(); } catch {}
+    }
+
+    // Lista de cámaras y elegimos la trasera si existe
+    const devices = await Html5Qrcode.getCameras();
+    if (!devices.length) {
+      debug('No hay cámaras disponibles');
+      return;
+    }
+    const back = devices.find(d => /back|rear|trasera/i.test(d.label)) || devices[0];
+    debug('Usando cámara: ' + (back.label || back.id));
+
+    const config = {
+      fps: 10,
+      qrbox: 240,
+      // Estas 2 ayudan mucho en iPhone:
+      rememberLastUsedCamera: true,
+      videoConstraints: {
+        deviceId: { exact: back.id },
+        // Safari ignora varias cosas, pero no molesta:
+        focusMode: 'continuous',
+        aspectRatio: 1.777
+      }
+    };
+
     await html5QrCode.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
+      { deviceId: { exact: back.id } },
+      config,
       onScanSuccess,
-      onScanFail
+      // podemos ignorar onScanFailure para no spamear logs
     );
-    scanning = true;
-    setStatus('Escáner activo. Apuntá al código.');
-  } catch (e) {
-    console.error('No se pudo iniciar cámara:', e);
-    setStatus('No se pudo iniciar la cámara. Revisá permisos/https.');
+
+    // iOS: asegurar propiedades del <video> interno
+    setTimeout(() => {
+      const video = document.querySelector('#reader video');
+      if (video) {
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('autoplay', 'true');
+        video.muted = true;
+        video.style.objectFit = 'cover';
+      }
+    }, 200);
+
+    cameraRunning = true;
+    debug('Cámara iniciada');
+  } catch (err) {
+    debug(`Error al iniciar cámara: ${err.name} — ${err.message}`);
   }
 }
 
 async function stopCamera() {
-  if (!html5QrCode || !scanning) return;
-  await html5QrCode.stop();
-  await html5QrCode.clear();
-  scanning = false;
-  setStatus('Cámara detenida.');
+  if (!html5QrCode || !cameraRunning) return;
+  try { await html5QrCode.stop(); } catch {}
+  try { await html5QrCode.clear(); } catch {}
+  cameraRunning = false;
+  debug('Cámara detenida');
 }
 
-function onScanFail(_) { /* ignoramos frames fallidos */ }
-
-function setStatus(msg, ok=true) {
-  const el = $('#status');
-  if (!el) return;
-  el.textContent = msg;
-  el.style.color = ok ? 'green' : 'crimson';
+function onScanSuccess(decodedText) {
+  debug('QR leído');
+  // TODO: tu lógica para parsear el QR y guardar
+  // ...
 }
+
+// Preflight para que iOS pida permiso ANTES del start
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await navigator.mediaDevices.getUserMedia({ video: true });
+    debug('Permiso de cámara OK');
+  } catch (e) {
+    debug(`getUserMedia: ${e.name} — ${e.message}`);
+  }
+  // engancha botones
+  document.getElementById('btnStart').onclick  = startCamera;
+  document.getElementById('btnStop').onclick   = stopCamera;
+});
+
 
 // ---------------- UI ----------------
 function addCard(info) {
