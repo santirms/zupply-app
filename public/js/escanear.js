@@ -237,3 +237,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#btnStart')?.addEventListener('click', startCamera);
   $('#btnStop')?.addEventListener('click', stopCamera);
 });
+
+function showDebug(msg) {
+  const d = document.getElementById('debug');
+  if (d) d.textContent = msg;
+  console.log('[DEBUG]', msg);
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  if (typeof Html5Qrcode === 'undefined') {
+    showDebug('html5-qrcode no se cargó');
+    return;
+  }
+  // Test permisos de cámara
+  try {
+    await navigator.mediaDevices.getUserMedia({ video: true });
+    showDebug('Permiso de cámara OK');
+  } catch (err) {
+    showDebug(`getUserMedia error: ${err.name} — ${err.message}`);
+    // opcional: alert para verlo en iPhone rápido
+    // alert(`getUserMedia error: ${err.name}\n${err.message}`);
+  }
+});
