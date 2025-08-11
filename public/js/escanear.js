@@ -162,7 +162,42 @@ async function stopCamera() {
 function onScanSuccess(decodedText) {
   debug('QR leído');
   // TODO: tu lógica para parsear el QR y guardar
-  // ...
+  if (seen.has(decodedText)) return;
+    seen.add(decodedText);
+
+    let data;
+    try {
+      data = JSON.parse(decodedText);
+    } catch {
+      console.warn('QR no es JSON:', decodedText);
+      return;
+    }
+
+    const {
+      sender_id,
+      tracking_id: meli_id,
+      hashnumber,
+      direccion,
+      codigo_postal,
+      destinatario
+    } = data;
+	
+    const card = document.createElement('div');
+    card.className = 'bg-white p-4 rounded-lg shadow flex flex-col gap-2';
+    card.innerHTML = `
+      <p><strong>Sender ID:</strong> ${sender_id}</p>
+      <p><strong>Tracking ID:</strong> ${meli_id}</p>
+      <p><strong>Destinatario:</strong> ${destinatario}</p>
+      <p><strong>Dirección:</strong> ${direccion} (${codigo_postal})</p>
+      <div class="mt-2 flex gap-2">
+        <button class="btn-save px-3 py-1 bg-blue-600 text-white rounded">Guardar</button>
+        <span class="text-sm text-gray-500 save-status"></span>
+      </div>
+    `;
+    list.appendChild(card);
+
+    const btnSave = card.querySelector('.btn-save');
+    const txt     = card.querySelector('.save-status');
 }
 
 // Preflight para que iOS pida permiso ANTES del start
