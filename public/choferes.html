@@ -137,7 +137,8 @@ async function cargarDropdowns() {
           readerDiv.classList.add('hidden');
 
           // Llamamos al endpoint para traer datos del envío
-          const envioRes = await fetch(`/api/envios/${qrMessage}`);
+          // ahora — busca por tracking (meli_id / id_venta / tracking_id)
+          const envioRes = await fetch(`/api/envios/tracking/${encodeURIComponent(qrMessage)}`);
           if (!envioRes.ok) {
             return alert('Envío no encontrado');
           }
