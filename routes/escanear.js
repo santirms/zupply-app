@@ -17,103 +17,90 @@ router.post('/manual', async (req, res) => {
 // 🔹 Ruta para escaneo automático con integración MeLi
 router.post('/meli', async (req, res) => {
   try {
-    const body = req.body || {};
-
-    // Normalizamos campos del QR
-    const senderId = String(body.sender_id ?? '').trim();
-    const meliId   = String(
-      body.meli_id ?? body.tracking_id ?? body.id ?? ''
-    ).trim();
-
-    if (!senderId || !meliId) {
-      return res.status(400).json({
-        error: 'bad_request',
-        message: 'Faltan sender_id o tracking_id'
-      });
+    const { meli_id, sender_id } = req.body;
+    if (!meli_id || !sender_id) {
+      return res.status(400).json({ error: 'Faltan meli_id o sender_id' });
     }
 
-    // Busco el cliente por user_id o por el sender_id guardado (array)
-    const cliente = await Cliente.findOne({
-      $or: [{ user_id: senderId }, { sender_id: senderId }]
-    }).populate('lista_precios');
-
+    // 1) Cliente por sender_id (array)
+    const cliente = await Cliente.findOne({ sender_id: sender_id })
+                                 .populate('lista_precios');
     if (!cliente) {
-      return res.status(404).json({
-        error: 'client_not_found',
-        message: `No existe cliente con sender_id/user_id ${senderId}`
-      });
+      return res.status(404).json({ error: 'Cliente no encontrado para ese sender_id' });
+    }
+    if (!cliente.user_id) {
+      return res.status(400).json({ error: 'Cliente no vinculado a MeLi (sin user_id)' });
     }
 
-    // Token válido (se refresca si hace falta)
-    const accessToken = await getValidToken(cliente.user_id || senderId);
-
-    // Shipment de MeLi
+    // 2) Token válido y datos reales del shipment
+    const access_token = await getValidToken(cliente.user_id);
     const { data: sh } = await axios.get(
-      `https://api.mercadolibre.com/shipments/${meliId}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+      `https://api.mercadolibre.com/shipments/${meli_id}`,
+      { headers: { Authorization: `Bearer ${access_token}` } }
     );
 
-    // Datos de destino
-    const cp         = sh?.receiver_address?.zip_code || '';
-    const destinat   = sh?.receiver_address?.receiver_name || '';
-    const street     = sh?.receiver_address?.street_name || '';
-    const number     = sh?.receiver_address?.street_number || '';
-    const address    = [street, number].filter(Boolean).join(' ');
-    const referencia = sh?.receiver_address?.comment || '';
+    // 3) Campos básicos
+    const cp           = sh?.receiver_address?.zip_code || '';
+    const destinatario = sh?.receiver_address?.receiver_name || '';
+    const calle        = sh?.receiver_address?.street_name || '';
+    const numero       = sh?.receiver_address?.street_number || '';
+    const direccion    = [calle, numero].filter(Boolean).join(' ');
+    const referencia   = sh?.receiver_address?.comment || '';
 
-    // Partido / zona
-    const zInfo   = await detectarZona(cp);         // { partido, zona }
-    const partido = zInfo?.partido || '';
-    const zonaNom = zInfo?.zona    || '';
+    // 4) Resolver partido / zona a partir del CP
+    const zInfo     = await detectarZona(cp); // <- debe devolver { partido, zona }
+    const partido   = zInfo?.partido || '';
+    const zonaNom   = zInfo?.zona    || '';
 
-    // Precio por lista del cliente + zona
+    // 5) Precio desde lista del cliente
     let precio = 0;
-    if (cliente.lista_precios && zonaNom) {
+    if (zonaNom && cliente.lista_precios) {
       const zonaDoc = await Zona.findOne({ nombre: zonaNom });
-      const zp = cliente.lista_precios?.zonas?.find(
-        z => String(z.zona) === String(zonaDoc?._id)
-      );
-      if (zp) precio = zp.precio;
+      if (zonaDoc) {
+        const match = (cliente.lista_precios.zonas || [])
+          .find(z => String(z.zona) === String(zonaDoc._id));
+        if (match) precio = match.precio;
+      }
     }
 
-    // Upsert por meli_id (idempotente)
-    await Envio.updateOne(
-      { meli_id: meliId },
+    // Logs útiles (ver consola del server)
+    console.log('[/escanear/meli]',
+      { meli_id, cp, partido, zona: zonaNom, precio,
+        cliente: cliente.nombre, lista: cliente.lista_precios?.nombre });
+
+    // 6) Upsert por meli_id (idempotente)
+    const result = await Envio.updateOne(
+      { meli_id: String(meli_id) },
       {
         $setOnInsert: { fecha: new Date() },
         $set: {
-          meli_id:       meliId,
-          sender_id:     String(cliente.codigo_cliente || cliente.sender_id?.[0] || senderId),
+          meli_id:       String(meli_id),
+          sender_id:     String(cliente.codigo_cliente || cliente.sender_id?.[0] || ''), // tu “código interno”
           cliente_id:    cliente._id,
           codigo_postal: cp,
           partido,
           zona:          zonaNom,
-          destinatario:  destinat,
-          direccion:     address,
+          destinatario,
+          direccion,
           referencia,
-          precio
+          precio,
+          estado: 'pendiente'
         }
       },
       { upsert: true }
     );
 
-    return res.json({
+    return res.status(201).json({
       ok: true,
-      meli_id: meliId,
+      upserted: !!result.upsertedCount,
       partido,
       zona: zonaNom,
       precio
     });
 
   } catch (err) {
-    console.error('[/escanear/meli] error:',
-      err.response?.status, err.response?.data || err.message);
-
-    return res.status(500).json({
-      error: 'meli_fetch',
-      message: 'Error al obtener o guardar el envío desde MeLi',
-      details: err.response?.data || err.message
-    });
+    console.error('Error /escanear/meli:', err.response?.data || err.message);
+    return res.status(500).json({ error: 'Error al obtener o guardar el envío desde MeLi' });
   }
 });
 
