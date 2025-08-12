@@ -97,58 +97,75 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---- Parser robusto del QR ----
   function parseQR(decodedText) {
-    // 1) JSON puro
+  // 0) Intento: si parece base64, decodifico y reintento
+  const looksB64 = /^[A-Za-z0-9+/=]+$/.test(decodedText) && decodedText.length % 4 === 0;
+  if (looksB64) {
     try {
-      const obj = JSON.parse(decodedText);
-      return {
-        sender_id:     obj.sender_id || obj.sid || obj.si,
-        meli_id:       obj.tracking_id || obj.tid || obj.ti,
-        hashnumber:    obj.hashnumber || obj.hash || obj.hn,
-        destinatario:  obj.destinatario || obj.recipient,
-        direccion:     obj.direccion || obj.address,
-        codigo_postal: obj.codigo_postal || obj.cp || obj.zip
-      };
+      const dec = atob(decodedText);
+      const parsed = parseQR(dec);
+      if (parsed && (parsed.sender_id || parsed.meli_id || parsed.hashnumber)) return parsed;
     } catch {}
+  }
 
-    // 2) URL con querystring
-    try {
-      const url = new URL(decodedText);
-      const p = url.searchParams;
-      return {
-        sender_id:     p.get('sender_id') || p.get('sid') || p.get('si'),
-        meli_id:       p.get('tracking_id') || p.get('tid') || p.get('ti'),
-        hashnumber:    p.get('hashnumber') || p.get('hash') || p.get('hn'),
-        destinatario:  p.get('destinatario') || p.get('recipient'),
-        direccion:     p.get('direccion') || p.get('address'),
-        codigo_postal: p.get('codigo_postal') || p.get('cp') || p.get('zip')
-      };
-    } catch {}
-
-    // 3) Pares k=v separados (& o ;)
-    if (decodedText.includes('=')) {
-      const params = {};
-      decodedText.split(/[&;,\s]+/).forEach(part => {
-        const [k, v] = part.split('=');
-        if (k && v) params[k.trim()] = decodeURIComponent(v.trim());
-      });
-      return {
-        sender_id:     params.sender_id || params.sid || params.si,
-        meli_id:       params.tracking_id || params.tid || params.ti,
-        hashnumber:    params.hashnumber || params.hash || params.hn,
-        destinatario:  params.destinatario || params.recipient,
-        direccion:     params.direccion || params.address,
-        codigo_postal: params.codigo_postal || params.cp || params.zip
-      };
-    }
-
-    // 4) Respaldo por regex (último recurso)
-    const senderMatch = decodedText.match(/\b\d{6,12}\b/);     // ID numérico
-    const trackMatch  = decodedText.match(/\b(TN|TG|T|ML)\S{6,}\b/i);
+  // 1) JSON
+  try {
+    const obj = JSON.parse(decodedText);
     return {
-      sender_id: senderMatch?.[0],
-      meli_id:   trackMatch?.[0]
+      sender_id:     obj.sender_id || obj.sid || obj.si,
+      meli_id:       obj.tracking_id || obj.tid || obj.ti || obj.meli_id,
+      hashnumber:    obj.hashnumber || obj.hash || obj.hn,
+      destinatario:  obj.destinatario || obj.recipient,
+      direccion:     obj.direccion || obj.address,
+      codigo_postal: obj.codigo_postal || obj.cp || obj.zip
+    };
+  } catch {}
+
+  // 2) URL
+  try {
+    const url = new URL(decodedText);
+    const p = url.searchParams;
+    return {
+      sender_id:     p.get('sender_id') || p.get('sid') || p.get('si'),
+      meli_id:       p.get('tracking_id') || p.get('tid') || p.get('ti') || p.get('meli_id'),
+      hashnumber:    p.get('hashnumber') || p.get('hash') || p.get('hn'),
+      destinatario:  p.get('destinatario') || p.get('recipient'),
+      direccion:     p.get('direccion') || p.get('address'),
+      codigo_postal: p.get('codigo_postal') || p.get('cp') || p.get('zip')
+    };
+  } catch {}
+
+  // 3) Pares k=v con separadores
+  const dict = {};
+  decodedText.split(/[\n\r&;,\s]+/).forEach(pair => {
+    const [k, v] = pair.split('=');
+    if (k && v) dict[k.trim().toLowerCase()] = decodeURIComponent(v.trim());
+    const [k2, v2] = pair.split(':');
+    if (k2 && v2) dict[k2.trim().toLowerCase()] = v2.trim();
+  });
+  if (Object.keys(dict).length) {
+    return {
+      sender_id:     dict.sender_id || dict.sid || dict.si,
+      meli_id:       dict.tracking_id || dict.tid || dict.ti || dict.meli_id,
+      hashnumber:    dict.hashnumber || dict.hash || dict.hn,
+      destinatario:  dict.destinatario || dict.recipient,
+      direccion:     dict.direccion || dict.address,
+      codigo_postal: dict.codigo_postal || dict.cp || dict.zip
     };
   }
+
+  // 4) Regexs de respaldo
+  // - sender_id numérico de 6 a 12 dígitos
+  const sender = decodedText.match(/\b\d{6,12}\b/);
+  // - tracking: TN/TG/ML + guiones/letras/números
+  const track  = decodedText.match(/\b(?:TN|TG|ML|T)[-_A-Z0-9]{6,}\b/i);
+  // - hash (hex largo)
+  const hash   = decodedText.match(/\b[0-9a-f]{16,}\b/i);
+  return {
+    sender_id: sender?.[0],
+    meli_id:   track?.[0],
+    hashnumber: hash?.[0]
+  };
+}
 
   // ---- Al leer un QR ----
   async function onScanSuccess(decodedText) {
