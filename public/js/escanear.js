@@ -262,6 +262,5 @@ btnSave.addEventListener('click', async () => {
         txt.textContent = '❌ Error';
         btnSave.disabled = false;
       }
-    });
   }
 });
