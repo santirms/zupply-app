@@ -262,17 +262,6 @@ router.get('/:id', async (req, res) => {
     console.error('Error al obtener envío:', err);
     res.status(500).json({ error: 'Error al obtener envío' });
   }
-  // DELETE /envios/:id
-router.delete('/:id', async (req, res) => {
-  try {
-    const id = req.params.id;
-    const deleted = await Envio.findByIdAndDelete(id);
-    if (!deleted) return res.status(404).json({ error: 'Envío no encontrado' });
-    return res.json({ ok: true, id });
-  } catch (err) {
-    console.error('Error DELETE /envios/:id:', err);
-    return res.status(500).json({ error: 'Error al eliminar envío' });
-  }
 });
 
 module.exports = router;
