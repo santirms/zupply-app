@@ -1,6 +1,6 @@
 // routes/envios.js
 const router = require('express').Router();
-const ctrl   = require('../controllers/envioController');
+const ctrl   = require('./controllers/envioController');
 
 // existentes (mismo comportamiento)
 router.get('/',              ctrl.listar);
