@@ -2,8 +2,9 @@
 const qs  = s => document.querySelector(s);
 const qsa = s => Array.from(document.querySelectorAll(s));
 
-let html5QrCode, scanning = false;
-const seen = new Set();
+let html5QrCode = null;
+let scanning    = false;
+const seen      = new Set();
 
 document.addEventListener('DOMContentLoaded', () => {
   const camaraContainer  = qs('#camaraContainer');
@@ -11,32 +12,37 @@ document.addEventListener('DOMContentLoaded', () => {
   const modoRadios       = qsa('input[name="modoScan"]');
   const startBtn         = qs('#startBtn');
   const stopBtn          = qs('#stopBtn');
-  const reader           = qs('#reader');
+  const readerEl         = qs('#reader');
   const statusText       = qs('#status');
   const inputTeclado     = qs('#scannerInput');
   const list             = qs('#scanList');
 
-  html5QrCode = new Html5Qrcode(reader.id, { verbose: false });
+  // html5-qrcode instance
+  html5QrCode = new Html5Qrcode(readerEl.id);
 
-  // Cambiar modo
-  modoRadios.forEach(radio => {
-    radio.addEventListener('change', () => {
-      if (radio.value === 'camara') {
+  // Cambiar de modo
+  modoRadios.forEach(r => {
+    r.addEventListener('change', () => {
+      if (r.checked && r.value === 'camara') {
         camaraContainer.classList.remove('hidden');
         tecladoContainer.classList.add('hidden');
-      } else {
-        camaraContainer.classList.add('hidden');
-        tecladoContainer.classList.remove('hidden');
-        inputTeclado.focus();
+        if (scanning) stopScanner(); // para reiniciar si cambias
       }
-      if (scanning) stopScanner();
+      if (r.checked && r.value === 'teclado') {
+        tecladoContainer.classList.remove('hidden');
+        camaraContainer.classList.add('hidden');
+        if (scanning) stopScanner();
+        setTimeout(() => inputTeclado.focus(), 0);
+      }
     });
   });
 
+  // Controles cámara
   startBtn.addEventListener('click', startScanner);
-  stopBtn.addEventListener('click', stopScanner);
+  stopBtn .addEventListener('click', stopScanner);
 
-  inputTeclado.addEventListener('keydown', e => {
+  // Lector USB/teclado
+  inputTeclado.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       const code = inputTeclado.value.trim();
       inputTeclado.value = '';
@@ -44,36 +50,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  function qrBoxFn(w, h) {
-    // En móvil vertical: cuadro más alto y casi todo el ancho
-    const isPortrait = h > w;
-    if (isPortrait) {
-      const width  = Math.floor(w * 0.92);
-      const height = Math.floor(h * 0.55);
-      return { width, height };
-    } else {
-      const side = Math.floor(Math.min(w, h) * 0.8);
-      return { width: side, height: side };
-    }
-  }
-
   async function startScanner() {
     statusText.textContent = 'Iniciando cámara…';
     try {
-      const constraints = {
-        facingMode: { ideal: 'environment' },
-        aspectRatio: 4/3,              // iOS se lleva bien con 4:3
-        focusMode: 'continuous'        // hint
-      };
       await html5QrCode.start(
-        { facingMode: 'environment' },
+        // iOS a veces necesita esto para usar la trasera
+        { facingMode: { exact: "environment" } },
         {
-          fps: 12,
-          qrbox: qrBoxFn,
-          videoConstraints: constraints,
-          rememberLastUsedCamera: true
+          fps: 10,
+          qrbox: (vw, vh) => {
+            // caja proporcional centrada
+            const size = Math.min( Math.floor(vw * 0.8), 320 );
+            return { width: size, height: size };
+          },
+          aspectRatio: 1.777 // ayuda a centrar en móvil
         },
-        (decodedText) => onScanSuccess(decodedText)
+        (decodedText) => onScanSuccess(decodedText),
+        (errMsg) => { /* onScanFailure opcional */ }
       );
       scanning = true;
       startBtn.disabled = true;
@@ -87,180 +80,100 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function stopScanner() {
     if (!scanning) return;
-    try { await html5QrCode.stop(); }
-    catch {}
+    try {
+      await html5QrCode.stop();
+    } catch (_) {}
     scanning = false;
     startBtn.disabled = false;
     stopBtn.disabled  = true;
     statusText.textContent = 'Escáner detenido.';
   }
 
-  // ---- Parser robusto del QR ----
-  function parseQR(decodedText) {
-  // 0) Intento: si parece base64, decodifico y reintento
-  const looksB64 = /^[A-Za-z0-9+/=]+$/.test(decodedText) && decodedText.length % 4 === 0;
-  if (looksB64) {
-    try {
-      const dec = atob(decodedText);
-      const parsed = parseQR(dec);
-      if (parsed && (parsed.sender_id || parsed.meli_id || parsed.hashnumber)) return parsed;
-    } catch {}
-  }
-
-  // 1) JSON
-  let qr;
-try {
-  qr = JSON.parse(decodedText);
-} catch {
-  console.warn('QR no es JSON:', decodedText);
-  return;
-}
-
-// Mapeo tolerante a nombres internos
-const payload = {
-  sender_id:     String(qr.sender_id ?? ''),         // viene como number → a string
-  meli_id:       String(qr.id ?? qr.tracking_id ?? ''),  // en tu QR es "id"
-  hashnumber:    String(qr.hash_code ?? qr.hashnumber ?? qr.hash ?? ''), // en tu QR es "hash_code"
-  security_digit: String(qr.security_digit ?? '')
-};
-
-// si no tenemos lo mínimo, salimos
-if (!payload.sender_id || !payload.meli_id) {
-  console.warn('Faltan campos clave en QR:', qr);
-  return;
-}
-  // 2) URL
-  try {
-    const url = new URL(decodedText);
-    const p = url.searchParams;
-    return {
-      sender_id:     p.get('sender_id') || p.get('sid') || p.get('si'),
-      meli_id:       p.get('tracking_id') || p.get('tid') || p.get('ti') || p.get('meli_id'),
-      hashnumber:    p.get('hashnumber') || p.get('hash') || p.get('hn'),
-      destinatario:  p.get('destinatario') || p.get('recipient'),
-      direccion:     p.get('direccion') || p.get('address'),
-      codigo_postal: p.get('codigo_postal') || p.get('cp') || p.get('zip')
-    };
-  } catch {}
-
-  // 3) Pares k=v con separadores
-  const dict = {};
-  decodedText.split(/[\n\r&;,\s]+/).forEach(pair => {
-    const [k, v] = pair.split('=');
-    if (k && v) dict[k.trim().toLowerCase()] = decodeURIComponent(v.trim());
-    const [k2, v2] = pair.split(':');
-    if (k2 && v2) dict[k2.trim().toLowerCase()] = v2.trim();
-  });
-  if (Object.keys(dict).length) {
-    return {
-      sender_id:     dict.sender_id || dict.sid || dict.si,
-      meli_id:       dict.tracking_id || dict.tid || dict.ti || dict.meli_id,
-      hashnumber:    dict.hashnumber || dict.hash || dict.hn,
-      destinatario:  dict.destinatario || dict.recipient,
-      direccion:     dict.direccion || dict.address,
-      codigo_postal: dict.codigo_postal || dict.cp || dict.zip
-    };
-  }
-
-  // 4) Regexs de respaldo
-  // - sender_id numérico de 6 a 12 dígitos
-  const sender = decodedText.match(/\b\d{6,12}\b/);
-  // - tracking: TN/TG/ML + guiones/letras/números
-  const track  = decodedText.match(/\b(?:TN|TG|ML|T)[-_A-Z0-9]{6,}\b/i);
-  // - hash (hex largo)
-  const hash   = decodedText.match(/\b[0-9a-f]{16,}\b/i);
-  return {
-    sender_id: sender?.[0],
-    meli_id:   track?.[0],
-    hashnumber: hash?.[0]
-  };
-}
-
-  // ---- Al leer un QR ----
+  // --- PARSER + UI + GUARDADO ---
   async function onScanSuccess(decodedText) {
-    console.log('QR raw:', decodedText);
+    // Evitar duplicados exactos
     if (seen.has(decodedText)) return;
     seen.add(decodedText);
 
-    const parsed = parseQR(decodedText);
-    const {
-      sender_id='(?)',
-      meli_id='(?)',
-      hashnumber='',
-      destinatario='(?)',
-      direccion='(?)',
-      codigo_postal='(?)'
-    } = parsed;
+    // 1) Parsear JSON (tu QR real viene así)
+    let qr;
+    try {
+      qr = JSON.parse(decodedText);
+    } catch {
+      console.warn('QR no es JSON:', decodedText);
+      return;
+    }
 
+    // 2) Mapeo tolerante → payload para backend
+    const payload = {
+      sender_id:      String(qr.sender_id ?? ''),
+      meli_id:        String(qr.id ?? qr.tracking_id ?? ''),
+      hashnumber:     String(qr.hash_code ?? qr.hashnumber ?? qr.hash ?? ''),
+      security_digit: String(qr.security_digit ?? '')
+    };
+
+    if (!payload.sender_id || !payload.meli_id) {
+      console.warn('Faltan sender_id o meli_id en QR:', qr);
+      return;
+    }
+
+    // 3) Tarjeta visual
     const card = document.createElement('div');
     card.className = 'bg-white p-4 rounded-lg shadow flex flex-col gap-2';
     card.innerHTML = `
-  <p><strong>Sender ID:</strong> ${payload.sender_id}</p>
-  <p><strong>Tracking ID:</strong> ${payload.meli_id}</p>
-  <p><strong>Hash:</strong> ${payload.hashnumber || '(sin hash)'}</p>
-  <p style="font-size:12px;color:#666;word-break:break-all">
-    <strong>RAW:</strong> ${decodedText.slice(0,180)}${decodedText.length>180?'…':''}
-  </p>
-  <div class="mt-2 flex gap-2">
-    <button class="btn-save px-3 py-1 bg-blue-600 text-white rounded">Guardar</button>
-    <span class="text-sm text-gray-500 save-status"></span>
-  </div>
-`;
-    list.appendChild(card);
+      <p><strong>Sender ID:</strong> ${payload.sender_id}</p>
+      <p><strong>Tracking ID:</strong> ${payload.meli_id}</p>
+      <p><strong>Hash:</strong> ${payload.hashnumber || '(sin hash)'}</p>
+      <p class="text-xs text-gray-500 break-all"><strong>RAW:</strong> ${decodedText}</p>
+      <div class="mt-2 flex gap-2 items-center">
+        <button class="btn-save px-3 py-1 bg-blue-600 text-white rounded">Guardar</button>
+        <span class="text-sm text-gray-500 save-status"></span>
+      </div>
+    `;
+    list.prepend(card);
 
+    // 4) Guardar → /escanear/meli
     const btnSave = card.querySelector('.btn-save');
     const txt     = card.querySelector('.save-status');
 
-btnSave.addEventListener('click', async () => {
-  btnSave.disabled = true;
-  txt.textContent  = 'Guardando…';
-  try {
-    const res = await fetch('/escanear/meli', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) throw new Error(await res.text());
-    txt.textContent = '✅ Guardado';
-  } catch (err) {
-    console.error('Error guardando envío:', err);
-    txt.textContent = '❌ Error';
-    btnSave.disabled = false;
-  }
-});
-      // armamos payload
-      const payload = {
-        sender_id,
-        tracking_id: meli_id,
-        hashnumber,
-        destinatario,
-        direccion,
-        codigo_postal
-      };
-
-      const endpoint = (meli_id && meli_id !== '(?)') || hashnumber
-        ? '/escanear/meli'
-        : '/escanear/manual';
-
-      // fetch con timeout para no quedar colgado
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 12000);
-
+    btnSave.addEventListener('click', async () => {
+      btnSave.disabled = true;
+      txt.textContent  = 'Guardando…';
       try {
-        const res = await fetch(endpoint, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(payload),
-          signal:  ctrl.signal
+        const res = await fetch('/escanear/meli', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify(payload)
         });
-        clearTimeout(t);
         if (!res.ok) throw new Error(await res.text());
+        const j = await res.json().catch(() => ({}));
         txt.textContent = '✅ Guardado';
+        // si querés, mostrar partido/zona de la respuesta
+        if (j?.zona || j?.partido) {
+          txt.textContent += ` (${j.partido||''} ${j.zona?'- '+j.zona:''})`;
+        }
       } catch (err) {
-        clearTimeout(t);
         console.error('Error guardando envío:', err);
         txt.textContent = '❌ Error';
         btnSave.disabled = false;
       }
+    });
   }
+
+  // --- Panel de debug opcional (?debug=1) ---
+  try {
+    const params = new URLSearchParams(location.search);
+    if (params.get('debug') === '1') {
+      const dbg = document.createElement('div');
+      dbg.style.cssText = 'position:fixed;bottom:10px;left:10px;right:10px;max-height:40vh;overflow:auto;background:#111;color:#0f0;font:12px monospace;padding:8px;border-radius:8px;z-index:99999';
+      dbg.innerHTML = '<div style="color:#fff;margin-bottom:6px">DEBUG</div><div id="dbgLog"></div>';
+      document.body.appendChild(dbg);
+      const logEl = dbg.querySelector('#dbgLog');
+      const _log = console.log;
+      console.log = (...a) => { _log(...a); logEl.innerText += a.map(x => typeof x==='string'?x:JSON.stringify(x)).join(' ') + '\n'; };
+      const _err = console.error;
+      console.error = (...a) => { _err(...a); logEl.innerText += '[ERR] ' + a.map(x => typeof x==='string'?x:JSON.stringify(x)).join(' ') + '\n'; };
+      console.log('debug panel listo');
+    }
+  } catch {}
 });
