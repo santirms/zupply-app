@@ -1,6 +1,7 @@
 // routes/envios.js
 const router = require('express').Router();
 const ctrl   = require('../controllers/envioController');
+console.log('envioController keys:', Object.keys(ctrl));
 
 // existentes (mismo comportamiento)
 router.get('/',              ctrl.listar);
