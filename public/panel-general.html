@@ -22,15 +22,12 @@
 
     <!-- 🔍 Filtros -->
     <div class="bg-white p-4 rounded-lg shadow mb-6">
-      <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <input type="text" id="filtroCliente" placeholder="Cliente ID o Nombre"
+      <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4">
+        <input type="text" id="filtroCliente" placeholder="Cliente (nombre o sender_id)"
                class="border p-2 rounded w-full" />
 
-        <input type="date" id="filtroDesde"
-               class="border p-2 rounded w-full" />
-
-        <input type="date" id="filtroHasta"
-               class="border p-2 rounded w-full" />
+        <input type="date" id="filtroDesde" class="border p-2 rounded w-full" />
+        <input type="date" id="filtroHasta" class="border p-2 rounded w-full" />
 
         <select id="filtroPartido" class="border p-2 rounded w-full">
           <option value="">— Todos los partidos —</option>
@@ -38,14 +35,21 @@
 
         <select id="filtroEstado" class="border p-2 rounded w-full">
           <option value="">— Todos los estados —</option>
-          <option value="pending">Pendiente</option>
-          <option value="shipped">En camino</option>
-          <option value="delivered">Entregado</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="asignado">Asignado</option>
+          <option value="pending">Pendiente (ML)</option>
+          <option value="shipped">En camino (ML)</option>
+          <option value="delivered">Entregado (ML)</option>
         </select>
 
         <button onclick="aplicarFiltro()"
                 class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow">
           🔍 Filtrar
+        </button>
+
+        <button onclick="limpiarFiltros()"
+                class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded border">
+          Limpiar
         </button>
       </div>
     </div>
@@ -55,17 +59,19 @@
       <table class="min-w-full divide-y divide-gray-200 text-sm">
         <thead class="bg-gray-100">
           <tr>
-            <th class="px-4 py-2 text-left font-semibold">Tracking Number</th>
+            <th class="px-4 py-2 text-left font-semibold">Tracking</th>
             <th class="px-4 py-2 text-left font-semibold">Cliente</th>
             <th class="px-4 py-2 text-left font-semibold">Fecha</th>
-            <th class="px-4 py-2 text-left font-semibold">Zona de entrega</th>
+            <th class="px-4 py-2 text-left font-semibold">Zona/Partido</th>
             <th class="px-4 py-2 text-left font-semibold">Chofer</th>
             <th class="px-4 py-2 text-left font-semibold">Estado</th>
+            <th class="px-4 py-2 text-left font-semibold">Acciones</th>
           </tr>
         </thead>
         <tbody id="tablaEnvios" class="divide-y divide-gray-200"></tbody>
       </table>
     </div>
+
     <div class="mt-4 flex justify-between items-center">
       <button id="prevBtn" onclick="cambiarPagina(-1)"
               class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Anterior</button>
@@ -74,33 +80,79 @@
               class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Siguiente</button>
     </div>
   </div>
-<div id="modalDetalle" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
-  <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 p-6 relative">
-    <button onclick="cerrarModal()" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700">✕</button>
-    <h2 class="text-2xl font-semibold mb-4">Detalle del Envío</h2>
-    <div id="contenidoDetalle"></div>
-    <div id="mapa" class="h-64 mt-4 rounded"></div>
+
+  <!-- Modal Detalle -->
+  <div id="modalDetalle"
+       class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+    <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 p-6 relative">
+      <button onclick="cerrarModalDetalle()" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700">✕</button>
+      <h2 class="text-2xl font-semibold mb-4">Detalle del Envío</h2>
+      <div id="contenidoDetalle" class="space-y-1"></div>
+      <div id="mapa" class="h-64 mt-4 rounded bg-gray-100"></div>
+    </div>
   </div>
-</div>
+
+  <!-- Modal Eliminar -->
+  <div id="modalEliminar"
+       class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+    <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-1/3 p-6 relative">
+      <button onclick="cerrarModalEliminar()" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700">✕</button>
+      <h2 class="text-xl font-semibold mb-2">Eliminar envío</h2>
+      <p class="text-sm text-gray-600">¿Seguro que querés eliminar este envío? Esta acción no se puede deshacer.</p>
+      <div class="mt-4 flex justify-end gap-2">
+        <button onclick="cerrarModalEliminar()" class="px-4 py-2 rounded border">Cancelar</button>
+        <button id="btnConfirmEliminar" class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700">Eliminar</button>
+      </div>
+    </div>
+  </div>
 
   <script>
+    // Estado
     let enviosCargados = [];
     let enviosFiltrados = [];
     let currentPage = 1;
     const pageSize = 10;
 
-    // Carga contador diario
+    // Mapa (Leaflet)
+    let mapaInstancia = null;
+
+    function initMapa(lat, lng) {
+      const cont = document.getElementById('mapa');
+
+      // sin coords
+      if (!lat || !lng) {
+        cont.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">Sin coordenadas</div>';
+        return;
+      }
+
+      // destruir si existe
+      if (mapaInstancia) {
+        mapaInstancia.remove();
+        mapaInstancia = null;
+      }
+
+      mapaInstancia = L.map('mapa').setView([lat, lng], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(mapaInstancia);
+      L.marker([lat, lng]).addTo(mapaInstancia);
+
+      // forzar recalcular tamaño (modal venía oculto)
+      setTimeout(() => mapaInstancia.invalidateSize(), 0);
+    }
+
+    // Resumen del día
     async function cargarResumenDiario() {
       try {
         const res = await fetch('/api/envios/del-dia');
         const data = await res.json();
-        document.getElementById('total-paquetes').textContent = data.total;
+        document.getElementById('total-paquetes').textContent = data.total ?? 0;
       } catch (e) {
         console.error('Error al cargar resumen diario:', e);
       }
     }
 
-    // Carga partidos para el dropdown
+    // Partidos
     async function cargarPartidos() {
       try {
         const res = await fetch('/api/partidos');
@@ -117,51 +169,62 @@
       }
     }
 
-  function initMapa(lat, lng) {
-    const map = L.map('mapa').setView([lat, lng], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-    L.marker([lat, lng]).addTo(map);
-  }
-
-    // Aplica todos los filtros y muestra página 1
+    // Filtros
     async function aplicarFiltro() {
-      const cli = document.getElementById('filtroCliente').value.toLowerCase();
+      const cli = document.getElementById('filtroCliente').value.trim().toLowerCase();
       const desde = document.getElementById('filtroDesde').value;
       const hasta = document.getElementById('filtroHasta').value;
       const partido = document.getElementById('filtroPartido').value;
       const estado = document.getElementById('filtroEstado').value;
 
-      if (!enviosCargados.length) {
-        const res = await fetch('/envios');
-        enviosCargados = await res.json();
+      try {
+        if (!enviosCargados.length) {
+          const res = await fetch('/api/envios');
+          enviosCargados = await res.json();
+        }
+
+        enviosFiltrados = enviosCargados.filter(e => {
+          // Cliente
+          const nom = e.cliente_id?.nombre?.toLowerCase() || '';
+          const matchCli = !cli || nom.includes(cli) || (e.sender_id || '').toLowerCase().includes(cli);
+
+          // Fecha
+          const fechaISO = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
+          const afterDesde = !desde || fechaISO >= desde;
+          const beforeHasta = !hasta || fechaISO <= hasta;
+
+          // Partido/Zona
+          const zonaName = e.partido || e.zona || '';
+          const matchPartido = !partido || zonaName === partido;
+
+          // Estado (soporta tus enums + ML)
+          const est = (e.estado || e.status || '').toLowerCase();
+          const matchEstado = !estado || est === estado.toLowerCase();
+
+          return matchCli && afterDesde && beforeHasta && matchPartido && matchEstado;
+        });
+
+        currentPage = 1;
+        renderTabla();
+        renderPaginacion();
+      } catch (err) {
+        console.error('Error aplicando filtro:', err);
       }
+    }
 
-      enviosFiltrados = enviosCargados.filter(e => {
-        // Cliente
-        const nom = e.cliente_id?.nombre?.toLowerCase() || '';
-        const matchCli = !cli || nom.includes(cli) || e.sender_id.includes(cli);
-
-        // Fecha
-        const fecha = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
-        const afterDesde = !desde || fecha >= desde;
-        const beforeHasta = !hasta || fecha <= hasta;
-
-        // Partido (antes zona)
-        const matchPartido = !partido || e.zona === partido;
-
-        // Estado
-        const matchEstado = !estado || e.estado === estado || e.status === estado;
-
-        return matchCli && afterDesde && beforeHasta && matchPartido && matchEstado;
-      });
-
+    function limpiarFiltros() {
+      document.getElementById('filtroCliente').value = '';
+      document.getElementById('filtroDesde').value = '';
+      document.getElementById('filtroHasta').value = '';
+      document.getElementById('filtroPartido').value = '';
+      document.getElementById('filtroEstado').value = '';
+      enviosFiltrados = enviosCargados.slice();
       currentPage = 1;
       renderTabla();
       renderPaginacion();
     }
 
+    // Tabla
     function renderTabla() {
       const tbody = document.getElementById('tablaEnvios');
       tbody.innerHTML = '';
@@ -170,108 +233,43 @@
 
       page.forEach(e => {
         const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
-        const estado = {
+
+        // Etiqueta de estado
+        const estadoKey = (e.estado || e.status || '').toLowerCase();
+        const estadoLabel = {
+          pendiente: 'Pendiente',
+          asignado: 'Asignado',
           pending: 'Pendiente',
           shipped: 'En camino',
           delivered: 'Entregado'
-        }[e.estado || e.status] || '-';
+        }[estadoKey] || '-';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td class="px-4 py-2">
-  <button
-    class="text-indigo-600 hover:underline"
-    data-id="${e._id}"
-    onclick="mostrarDetalle(this.dataset.id)"
-  >
-    ${e.meli_id || ''}
-  </button>
-</td>
-          <td class="px-4 py-2">${e.cliente_id?.nombre || 'ID:' + e.sender_id}</td>
+            <button
+              class="text-indigo-600 hover:underline"
+              data-id="${e._id}"
+              onclick="mostrarDetalle(this.dataset.id)"
+              title="Ver detalle"
+            >
+              ${e.meli_id || e.id_venta || '(sin id)'}
+            </button>
+          </td>
+          <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
           <td class="px-4 py-2">${fecha}</td>
-          <td class="px-4 py-2">${e.zona || '-'}</td>
-          <td class="px-4 py-2"></td>
-          <td class="px-4 py-2">${estado}</td>
+          <td class="px-4 py-2">${e.partido || e.zona || '-'}</td>
+          <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
+          <td class="px-4 py-2">${estadoLabel}</td>
+          <td class="px-4 py-2">
+            <button class="text-red-600 hover:text-red-700" title="Eliminar"
+                    onclick="abrirModalEliminar('${e._id}')">🗑</button>
+          </td>
         `;
         tbody.appendChild(tr);
       });
     }
-  async function mostrarDetalle(envioId) {
-  // 1) Traer datos desde tu API /detalles/:id
-  const res = await fetch(`/api/envios/${envioId}`);
-  const data = await res.json();
 
-  // 2) Ponerlos en el modal
-  const cd = document.getElementById('contenidoDetalle');
-  cd.innerHTML = `
-    <p><strong>Cliente:</strong> ${data.cliente_id.nombre}</p>
-    <p><strong>Dirección:</strong> ${data.direccion}</p>
-    <p><strong>Tracking:</strong> ${data.meli_id}</p>
-    <p><strong>Estado:</strong> ${data.estado || data.status}</p>
-    <!-- más campos según venga de MercadoLibre -->
-  `;
-
-  // 3) Mostrar modal
-  document.getElementById('modalDetalle').classList.remove('hidden');
-    // Si ya existe, la removemos (evita el error del contenedor ya inicializado)
-    if (mapaInstancia) {
-      mapaInstancia.remove();
-      mapaInstancia = null;
-    }
-
-    mapaInstancia = L.map('mapa').setView([lat, lng], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(mapaInstancia);
-    L.marker([lat, lng]).addTo(mapaInstancia);
-
-    // Como el mapa se crea dentro de un modal que estaba oculto,
-    // forzamos recalcular tamaño:
-    setTimeout(() => mapaInstancia.invalidateSize(), 0);
-  }
-
-  function cerrarModal() {
-    document.getElementById('modalDetalle').classList.add('hidden');
-    document.body.classList.remove('overflow-hidden');
-    if (mapaInstancia) {
-      mapaInstancia.remove();
-      mapaInstancia = null;
-    }
-  }
-  // 4) Inicializar mapa con la geolocalización
-    
-  initMapa(data.latitud, data.longitud);
-        // Fallback si no hay coords
-    if (!lat || !lng) {
-      document.getElementById('mapa').innerHTML = 'Sin coordenadas';
-      return;
-  }
-    // Si ya existe, la removemos (evita el error del contenedor ya inicializado)
-    if (mapaInstancia) {
-      mapaInstancia.remove();
-      mapaInstancia = null;
-    }
-
-    mapaInstancia = L.map('mapa').setView([lat, lng], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(mapaInstancia);
-    L.marker([lat, lng]).addTo(mapaInstancia);
-
-    // Como el mapa se crea dentro de un modal que estaba oculto,
-    // forzamos recalcular tamaño:
-    setTimeout(() => mapaInstancia.invalidateSize(), 0);
-  }
-
-  function cerrarModal() {
-    document.getElementById('modalDetalle').classList.add('hidden');
-    document.body.classList.remove('overflow-hidden');
-    if (mapaInstancia) {
-      mapaInstancia.remove();
-      mapaInstancia = null;
-    }
-  }
-  
     function renderPaginacion() {
       const totalPages = Math.max(1, Math.ceil(enviosFiltrados.length / pageSize));
       document.getElementById('infoPagina').textContent = `Página ${currentPage} de ${totalPages}`;
@@ -286,15 +284,107 @@
       renderPaginacion();
     }
 
+    // Detalle
+    async function mostrarDetalle(envioId) {
+      try {
+        const res = await fetch(`/api/envios/${envioId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        const clienteNombre = data.cliente_id?.nombre || '— sin nombre —';
+
+        const cd = document.getElementById('contenidoDetalle');
+        cd.innerHTML = `
+          <p><strong>Cliente:</strong> ${clienteNombre}</p>
+          <p><strong>Dirección:</strong> ${data.direccion || '-'}</p>
+          <p><strong>Tracking:</strong> ${data.meli_id || data.id_venta || '-'}</p>
+          <p><strong>Estado:</strong> ${data.estado || data.status || '-'}</p>
+          <p><strong>CP:</strong> ${data.codigo_postal || '-'}</p>
+          <p><strong>Zona/Partido:</strong> ${data.partido || data.zona || '-'}</p>
+          <p><strong>Referencia:</strong> ${data.referencia || '-'}</p>
+          <p><strong>Precio:</strong> ${typeof data.precio === 'number' ? '$ ' + data.precio.toFixed(2) : '-'}</p>
+        `;
+
+        const modal = document.getElementById('modalDetalle');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
+
+        // mapa
+        initMapa(data.latitud, data.longitud);
+      } catch (e) {
+        console.error('Error mostrando detalle:', e);
+        alert('No se pudo cargar el detalle del envío.');
+      }
+    }
+
+    function cerrarModalDetalle() {
+      const modal = document.getElementById('modalDetalle');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      document.body.classList.remove('overflow-hidden');
+      if (mapaInstancia) {
+        mapaInstancia.remove();
+        mapaInstancia = null;
+      }
+    }
+
+    // Eliminar
+    let envioAEliminar = null;
+
+    function abrirModalEliminar(id) {
+      envioAEliminar = id;
+      const modal = document.getElementById('modalEliminar');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      document.body.classList.add('overflow-hidden');
+    }
+
+    function cerrarModalEliminar() {
+      envioAEliminar = null;
+      const modal = document.getElementById('modalEliminar');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      document.body.classList.remove('overflow-hidden');
+    }
+
+    document.getElementById('btnConfirmEliminar').addEventListener('click', async () => {
+      if (!envioAEliminar) return;
+      try {
+        const res = await fetch(`/api/envios/${envioAEliminar}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // actualizar arrays en memoria
+        enviosCargados = enviosCargados.filter(e => e._id !== envioAEliminar);
+        enviosFiltrados = enviosFiltrados.filter(e => e._id !== envioAEliminar);
+        cerrarModalEliminar();
+        renderTabla();
+        renderPaginacion();
+      } catch (e) {
+        console.error('Error eliminando envío:', e);
+        alert('No se pudo eliminar el envío.');
+      }
+    });
+
+    // UX: cerrar modales con click afuera y ESC
+    document.getElementById('modalDetalle').addEventListener('click', (e) => {
+      if (e.target.id === 'modalDetalle') cerrarModalDetalle();
+    });
+    document.getElementById('modalEliminar').addEventListener('click', (e) => {
+      if (e.target.id === 'modalEliminar') cerrarModalEliminar();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        cerrarModalDetalle();
+        cerrarModalEliminar();
+      }
+    });
+
     // Al cargar
     document.addEventListener('DOMContentLoaded', () => {
       cargarResumenDiario();
       cargarPartidos();
-      aplicarFiltro(); 
+      aplicarFiltro();
     });
-
   </script>
 </body>
 </html>
-
-
