@@ -89,3 +89,26 @@ exports.actualizarEnvio = async (req, res) => {
     res.status(500).json({ error: 'Error al actualizar envío' });
   }
 };
+
+exports.asignados = async (req, res) => {
+  try {
+    const { choferId, fecha } = req.query;
+    if (!choferId || !fecha) {
+      return res.status(400).json({ error: 'choferId y fecha son requeridos' });
+    }
+    const start = new Date(fecha); start.setHours(0,0,0,0);
+    const end   = new Date(fecha); end.setHours(23,59,59,999);
+
+    const Envio = require('../models/Envio');
+    const envios = await Envio.find({
+      chofer: choferId,
+      updatedAt: { $gte: start, $lte: end }
+    }).select('destinatario direccion codigo_postal partido lat lng meli_id id_venta');
+
+    res.json(envios);
+  } catch (err) {
+    console.error('Error /envios/asignados:', err);
+    res.status(500).json({ error: 'Error al obtener asignados' });
+  }
+};
+
