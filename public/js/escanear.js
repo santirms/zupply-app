@@ -108,18 +108,27 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // 1) JSON
-  try {
-    const obj = JSON.parse(decodedText);
-    return {
-      sender_id:     obj.sender_id || obj.sid || obj.si,
-      meli_id:       obj.tracking_id || obj.tid || obj.ti || obj.meli_id,
-      hashnumber:    obj.hashnumber || obj.hash || obj.hn,
-      destinatario:  obj.destinatario || obj.recipient,
-      direccion:     obj.direccion || obj.address,
-      codigo_postal: obj.codigo_postal || obj.cp || obj.zip
-    };
-  } catch {}
+  let qr;
+try {
+  qr = JSON.parse(decodedText);
+} catch {
+  console.warn('QR no es JSON:', decodedText);
+  return;
+}
 
+// Mapeo tolerante a nombres internos
+const payload = {
+  sender_id:     String(qr.sender_id ?? ''),         // viene como number → a string
+  meli_id:       String(qr.id ?? qr.tracking_id ?? ''),  // en tu QR es "id"
+  hashnumber:    String(qr.hash_code ?? qr.hashnumber ?? qr.hash ?? ''), // en tu QR es "hash_code"
+  security_digit: String(qr.security_digit ?? '')
+};
+
+// si no tenemos lo mínimo, salimos
+if (!payload.sender_id || !payload.meli_id) {
+  console.warn('Faltan campos clave en QR:', qr);
+  return;
+}
   // 2) URL
   try {
     const url = new URL(decodedText);
@@ -186,24 +195,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = document.createElement('div');
     card.className = 'bg-white p-4 rounded-lg shadow flex flex-col gap-2';
     card.innerHTML = `
-      <p><strong>Sender ID:</strong> ${sender_id}</p>
-      <p><strong>Tracking ID:</strong> ${meli_id}</p>
-      <p><strong>Destinatario:</strong> ${destinatario}</p>
-      <p><strong>Dirección:</strong> ${direccion} (${codigo_postal})</p>
-      <div class="mt-2 flex gap-2 items-center">
-        <button class="btn-save px-3 py-1 bg-blue-600 text-white rounded">Guardar</button>
-        <span class="text-sm text-gray-500 save-status"></span>
-      </div>
-    `;
+  <p><strong>Sender ID:</strong> ${payload.sender_id}</p>
+  <p><strong>Tracking ID:</strong> ${payload.meli_id}</p>
+  <p><strong>Hash:</strong> ${payload.hashnumber || '(sin hash)'}</p>
+  <p style="font-size:12px;color:#666;word-break:break-all">
+    <strong>RAW:</strong> ${decodedText.slice(0,180)}${decodedText.length>180?'…':''}
+  </p>
+  <div class="mt-2 flex gap-2">
+    <button class="btn-save px-3 py-1 bg-blue-600 text-white rounded">Guardar</button>
+    <span class="text-sm text-gray-500 save-status"></span>
+  </div>
+`;
     list.appendChild(card);
 
     const btnSave = card.querySelector('.btn-save');
     const txt     = card.querySelector('.save-status');
 
-    btnSave.addEventListener('click', async () => {
-      btnSave.disabled = true;
-      txt.textContent  = 'Guardando…';
-
+btnSave.addEventListener('click', async () => {
+  btnSave.disabled = true;
+  txt.textContent  = 'Guardando…';
+  try {
+    const res = await fetch('/escanear/meli', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    txt.textContent = '✅ Guardado';
+  } catch (err) {
+    console.error('Error guardando envío:', err);
+    txt.textContent = '❌ Error';
+    btnSave.disabled = false;
+  }
+});
       // armamos payload
       const payload = {
         sender_id,
