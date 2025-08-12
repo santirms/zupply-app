@@ -213,8 +213,33 @@
 
   // 3) Mostrar modal
   document.getElementById('modalDetalle').classList.remove('hidden');
+    // Si ya existe, la removemos (evita el error del contenedor ya inicializado)
+    if (mapaInstancia) {
+      mapaInstancia.remove();
+      mapaInstancia = null;
+    }
 
+    mapaInstancia = L.map('mapa').setView([lat, lng], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(mapaInstancia);
+    L.marker([lat, lng]).addTo(mapaInstancia);
+
+    // Como el mapa se crea dentro de un modal que estaba oculto,
+    // forzamos recalcular tamaño:
+    setTimeout(() => mapaInstancia.invalidateSize(), 0);
+  }
+
+  function cerrarModal() {
+    document.getElementById('modalDetalle').classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+    if (mapaInstancia) {
+      mapaInstancia.remove();
+      mapaInstancia = null;
+    }
+  }
   // 4) Inicializar mapa con la geolocalización
+    let mapaInstancia = null;
   initMapa(data.latitud, data.longitud);
         // Fallback si no hay coords
     if (!lat || !lng) {
