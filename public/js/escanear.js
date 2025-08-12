@@ -148,26 +148,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnSave = card.querySelector('.btn-save');
     const txt     = card.querySelector('.save-status');
 
-    btnSave.addEventListener('click', async () => {
-      btnSave.disabled = true;
-      txt.textContent  = 'Guardando…';
-      try {
-        const res = await fetch('/escanear/meli', {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const j = await res.json().catch(()=> ({}));
-        txt.textContent = '✅ Guardado';
-        if (j?.zona || j?.partido) {
-          txt.textContent += ` (${j.partido||''}${j.zona?' - '+j.zona:''})`;
-        }
-      } catch (err) {
-        console.error('Error guardando envío:', err);
-        txt.textContent = '❌ Error';
-        btnSave.disabled = false;
-      }
+btnSave.addEventListener('click', async () => {
+  btnSave.disabled = true;
+  txt.textContent  = 'Guardando…';
+  try {
+    const endpoint = hashnumber ? '/escanear/meli' : '/escanear/manual';
+    const payload  = { ...data };
+
+    const res  = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
     });
+
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.message || JSON.stringify(json) || res.statusText);
+
+    txt.textContent = '✅ Guardado';
+  } catch (err) {
+    console.error('Error guardando envío:', err);
+    txt.textContent = '❌ Error';
+    // si estás en debug, lo ves clarito
+  } finally {
+    btnSave.disabled = false;
+  }
+});
   }
 });
