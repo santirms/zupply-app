@@ -152,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---- Al leer un QR ----
   async function onScanSuccess(decodedText) {
+    console.log('QR raw:', decodedText);
     if (seen.has(decodedText)) return;
     seen.add(decodedText);
 
