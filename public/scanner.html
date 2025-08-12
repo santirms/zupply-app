@@ -5,10 +5,25 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>📦 Escáner de Paquetes</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Librería QR -->
- <script src="https://unpkg.com/html5-qrcode@2.3.9/minified/html5-qrcode.min.js"></script>
+
+  <!-- Intenta local y si falla usa CDN -->
+  <script>
+    (function () {
+      var s = document.createElement('script');
+      s.src = '/libs/html5-qrcode.min.js';
+      s.onload = function(){ console.log('html5-qrcode local OK'); };
+      s.onerror = function(){
+        console.warn('html5-qrcode local NO disponible, cargo CDN…');
+        var c = document.createElement('script');
+        c.src = 'https://unpkg.com/html5-qrcode@2.3.9/minified/html5-qrcode.min.js';
+        c.onload = function(){ console.log('html5-qrcode CDN OK'); };
+        document.head.appendChild(c);
+      };
+      document.head.appendChild(s);
+    })();
+  </script>
+
   <style>
-    /* Mantener el recuadro visible y centrado en móvil */
     #reader { width: 100%; max-width: 520px; margin: 0 auto; }
   </style>
 </head>
@@ -30,32 +45,53 @@
       </label>
     </div>
 
-    <!-- CONTENEDOR CÁMARA -->
+    <!-- Cámara -->
     <div id="camaraContainer" class="mt-4">
       <div class="bg-white rounded-lg shadow p-4">
         <div class="flex gap-2 mb-3">
-          <button id="startBtn" class="bg-green-600 text-white px-4 py-2 rounded">Iniciar Cámara</button>
-          <button id="stopBtn"  class="bg-red-600 text-white px-4 py-2 rounded" disabled>Detener Cámara</button>
+          <button id="startBtn" class="bg-green-600 text-white px-4 py-2 rounded">Iniciar cámara</button>
+          <button id="stopBtn"  class="bg-red-600 text-white px-4 py-2 rounded" disabled>Detener</button>
         </div>
         <div id="reader" class="rounded overflow-hidden border"></div>
         <p id="status" class="text-center text-sm text-gray-600 mt-2">Listo.</p>
       </div>
     </div>
 
-    <!-- CONTENEDOR TECLADO -->
+    <!-- Lector USB/teclado -->
     <div id="tecladoContainer" class="mt-4 hidden">
       <div class="bg-white rounded-lg shadow p-4">
-        <p class="text-sm text-gray-600 mb-2">Enfocá el input y escaneá con tu lector (o pega el texto del QR) y presioná Enter.</p>
-        <input id="scannerInput"
-               class="w-full border rounded px-3 py-2"
-               placeholder='Ej: {"id":"453...","sender_id":832118403,"hash_code":"..."}' />
+        <p class="text-sm text-gray-600 mb-2">
+          Enfocá el input y escaneá con tu lector (o pegá el texto del QR) y presioná Enter.
+        </p>
+        <input id="scannerInput" class="w-full border rounded px-3 py-2"
+          placeholder='{"id":"453...","sender_id":832118403,"hash_code":"..."}' />
       </div>
     </div>
 
-    <!-- Lista de resultados -->
+    <!-- Resultados -->
     <h2 class="text-xl font-semibold mt-8 mb-3 text-center">Paquetes escaneados</h2>
     <div id="scanList" class="grid gap-3"></div>
   </div>
+
+  <!-- DEBUG en pantalla: activar con ?debug=1 -->
+  <script>
+    (function () {
+      try {
+        const params = new URLSearchParams(location.search);
+        if (params.get('debug') !== '1') return;
+        document.addEventListener('DOMContentLoaded', () => {
+          const dbg = document.createElement('div');
+          dbg.style.cssText = 'position:fixed;bottom:10px;left:10px;right:10px;max-height:40vh;overflow:auto;background:#111;color:#0f0;font:12px monospace;padding:8px;border-radius:8px;z-index:99999';
+          dbg.innerHTML = '<div style="color:#fff;margin-bottom:6px">DEBUG</div><div id="dbgLog"></div>';
+          document.body.appendChild(dbg);
+          const logEl = dbg.querySelector('#dbgLog');
+          const _log = console.log; console.log = (...a)=>{_log(...a); logEl.innerText += a.map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' ')+'\n';};
+          const _err = console.error; console.error = (...a)=>{_err(...a); logEl.innerText += '[ERR] '+a.map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' ')+'\n';};
+          console.log('in-page debug ON');
+        });
+      } catch {}
+    })();
+  </script>
 
   <script src="/js/escanear.js" defer></script>
 </body>
