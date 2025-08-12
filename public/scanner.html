@@ -5,24 +5,27 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>📦 Escáner de Paquetes</title>
   <script src="https://cdn.tailwindcss.com"></script>
-
   <!-- Intenta local y si falla usa CDN -->
-  <script>
-    (function () {
-      var s = document.createElement('script');
-      s.src = '/libs/html5-qrcode.min.js';
-      s.onload = function(){ console.log('html5-qrcode local OK'); };
-      s.onerror = function(){
-        console.warn('html5-qrcode local NO disponible, cargo CDN…');
-        var c = document.createElement('script');
-        c.src = 'https://unpkg.com/html5-qrcode@2.3.9/minified/html5-qrcode.min.js';
-        c.onload = function(){ console.log('html5-qrcode CDN OK'); };
-        document.head.appendChild(c);
-      };
+<script>
+  (function loadHtml5QR() {
+    const urls = [
+      '/libs/html5-qrcode.min.js',
+      'https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js',
+      'https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js'
+    ];
+    function tryNext(i){
+      if (i >= urls.length) { console.warn('html5-qrcode NO disponible'); return; }
+      const s = document.createElement('script');
+      s.src = urls[i];
+      s.defer = true;
+      s.crossOrigin = 'anonymous';
+      s.onload = () => console.log('html5-qrcode OK ->', urls[i]);
+      s.onerror = () => { console.warn('falló', urls[i]); tryNext(i+1); };
       document.head.appendChild(s);
-    })();
-  </script>
-
+    }
+    tryNext(0);
+  })();
+</script>
   <style>
     #reader { width: 100%; max-width: 520px; margin: 0 auto; }
   </style>
