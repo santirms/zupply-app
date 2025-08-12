@@ -16,10 +16,13 @@ router.post('/manual', async (req, res) => {
 // 🔹 Ruta para escaneo automático con integración MeLi
 router.post('/meli', async (req, res) => {
   try {
-    const { meli_id, sender_id } = req.body;
+    // tolerante a distintos nombres
+    const sender_id  = String(req.body.sender_id || '');
+    const meli_id    = String(req.body.meli_id || req.body.id || '');
+    const hashnumber = String(req.body.hashnumber || req.body.hash_code || req.body.hash || '');
 
-    if (!meli_id || !sender_id) {
-      return res.status(400).json({ error: 'Faltan datos requeridos' });
+    if (!sender_id || !meli_id) {
+      return res.status(400).json({ error: 'Faltan sender_id o meli_id' });
     }
 
     const cliente = await Cliente.findOne({ sender_id });
