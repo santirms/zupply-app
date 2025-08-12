@@ -6,7 +6,6 @@ let html5QrCode, scanning = false;
 const seen = new Set();
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Contenedores y controles
   const camaraContainer  = qs('#camaraContainer');
   const tecladoContainer = qs('#tecladoContainer');
   const modoRadios       = qsa('input[name="modoScan"]');
@@ -17,10 +16,74 @@ document.addEventListener('DOMContentLoaded', () => {
   const inputTeclado     = qs('#scannerInput');
   const list             = qs('#scanList');
 
-  // Inicializar html5-qrcode (pero no iniciar aún)
   html5QrCode = new Html5Qrcode(reader.id);
 
-  // Cambio de modo
+  // --- helpers de parseo ---
+  function parseQR(text) {
+    // 1) JSON puro
+    try {
+      const o = JSON.parse(text);
+      if (o && (o.sender_id || o.tracking_id || o.hashnumber)) return o;
+    } catch {}
+
+    // 2) URL con querystring
+    try {
+      if (/^https?:\/\//i.test(text)) {
+        const u = new URL(text);
+        const p = u.searchParams;
+        return {
+          sender_id:   p.get('sender_id')   || p.get('user_id') || p.get('sid') || undefined,
+          tracking_id: p.get('tracking_id') || p.get('tid')     || p.get('shipment_id') || undefined,
+          hashnumber:  p.get('hashnumber')  || p.get('hash')    || undefined
+        };
+      }
+    } catch {}
+
+    // 3) querystring plano: a=1&b=2
+    if (text.includes('=') && text.includes('&')) {
+      const params = {};
+      text.split('&').forEach(kv => {
+        const [k, v] = kv.split('=');
+        if (k) params[k.trim()] = decodeURIComponent((v||'').trim());
+      });
+      if (params.sender_id || params.tracking_id || params.hashnumber) {
+        return {
+          sender_id:   params.sender_id || params.user_id || params.sid,
+          tracking_id: params.tracking_id || params.tid || params.shipment_id,
+          hashnumber:  params.hashnumber || params.hash
+        };
+      }
+    }
+
+    // 4) texto con "sender_id: 123 ..." etc.
+    const grab = (lbls) => {
+      const r = new RegExp(`(?:${lbls.join('|')})\\s*[:=]\\s*([A-Za-z0-9_\\-]+)`, 'i');
+      const m = text.match(r);
+      return m ? m[1] : undefined;
+    };
+    const maybe = {
+      sender_id:   grab(['sender_id','user_id','sid']),
+      tracking_id: grab(['tracking_id','tid','shipment_id']),
+      hashnumber:  grab(['hashnumber','hash'])
+    };
+    if (maybe.sender_id || maybe.tracking_id || maybe.hashnumber) return maybe;
+
+    // 5) base64 → JSON
+    try {
+      const decoded = atob(text);
+      const o = JSON.parse(decoded);
+      if (o && (o.sender_id || o.tracking_id || o.hashnumber)) return o;
+    } catch {}
+
+    return {}; // no se pudo
+  }
+
+  function qrBoxFn(w, h) {
+    const side = Math.floor(Math.min(w, h) * 0.80);
+    return { width: side, height: side };
+  }
+
+  // --- modos ---
   modoRadios.forEach(radio => {
     radio.addEventListener('change', () => {
       if (radio.value === 'camara' && radio.checked) {
@@ -31,16 +94,13 @@ document.addEventListener('DOMContentLoaded', () => {
         tecladoContainer.classList.remove('hidden');
         inputTeclado.focus();
       }
-      // Siempre detenemos la cámara al cambiar de modo
       if (scanning) stopScanner();
     });
   });
 
-  // Cámara: controles de inicio/parada
   startBtn.addEventListener('click', startScanner);
   stopBtn.addEventListener('click', stopScanner);
 
-  // Lector USB: al presionar Enter en el input
   inputTeclado.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       const code = inputTeclado.value.trim();
@@ -49,15 +109,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Funciones de cámara
+  // --- cámara ---
   async function startScanner() {
     statusText.textContent = 'Iniciando cámara…';
     try {
       await html5QrCode.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: 250 },
+        { facingMode: { exact: 'environment' } },
+        { fps: 10, qrbox: qrBoxFn, aspectRatio: 1.333 },
         (decodedText) => onScanSuccess(decodedText)
       );
+      // iOS: asegurar playsinline/autoplay/muted
+      setTimeout(() => {
+        const v = reader.querySelector('video');
+        if (v) {
+          v.setAttribute('playsinline', 'true');
+          v.setAttribute('autoplay', 'true');
+          v.muted = true;
+          v.style.objectFit = 'cover';
+        }
+      }, 250);
+
       scanning = true;
       startBtn.disabled = true;
       stopBtn.disabled  = false;
@@ -70,48 +141,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function stopScanner() {
     if (!scanning) return;
-    await html5QrCode.stop();
+    try { await html5QrCode.stop(); await html5QrCode.clear(); } catch {}
     scanning = false;
     startBtn.disabled = false;
     stopBtn.disabled  = true;
     statusText.textContent = 'Escáner detenido.';
   }
 
-  // Mismo workflow tras decodificar
+  // --- post-scan ---
   async function onScanSuccess(decodedText) {
     if (seen.has(decodedText)) return;
     seen.add(decodedText);
 
-    let data;
-    try {
-      data = JSON.parse(decodedText);
-    } catch {
-      console.warn('QR no es JSON:', decodedText);
-      return;
-    }
+    const data = parseQR(decodedText);
+    const sender_id   = data.sender_id   || '';
+    const tracking_id = data.tracking_id || '';
+    const hashnumber  = data.hashnumber  || '';
 
-    const {
-      sender_id,
-      tracking_id: meli_id,
-      hashnumber,
-      direccion,
-      codigo_postal,
-      destinatario
-    } = data;
-	
+    // Tarjeta en UI
     const card = document.createElement('div');
     card.className = 'bg-white p-4 rounded-lg shadow flex flex-col gap-2';
     card.innerHTML = `
-      <p><strong>Sender ID:</strong> ${sender_id}</p>
-      <p><strong>Tracking ID:</strong> ${meli_id}</p>
-      <p><strong>Destinatario:</strong> ${destinatario}</p>
-      <p><strong>Dirección:</strong> ${direccion} (${codigo_postal})</p>
-      <div class="mt-2 flex gap-2">
+      <p><strong>Sender ID:</strong> ${sender_id || '(?)'}</p>
+      <p><strong>Tracking ID:</strong> ${tracking_id || '(?)'}</p>
+      <p><strong>Hash:</strong> ${hashnumber || '(?)'}</p>
+      <div class="mt-2 flex gap-2 items-center">
         <button class="btn-save px-3 py-1 bg-blue-600 text-white rounded">Guardar</button>
         <span class="text-sm text-gray-500 save-status"></span>
       </div>
     `;
-    list.appendChild(card);
+    list.prepend(card);
 
     const btnSave = card.querySelector('.btn-save');
     const txt     = card.querySelector('.save-status');
@@ -120,8 +179,12 @@ document.addEventListener('DOMContentLoaded', () => {
       btnSave.disabled = true;
       txt.textContent  = 'Guardando…';
       try {
-        const endpoint = hashnumber ? '/escanear/meli' : '/escanear/manual';
-        const payload  = { ...data };
+        // si hay tracking_id, pedimos al back que complete con MeLi
+        const endpoint = tracking_id ? '/escanear/meli' : '/escanear/manual';
+        const payload  = tracking_id
+          ? { meli_id: tracking_id, sender_id, hashnumber }
+          : { sender_id, tracking_id, hashnumber };
+
         const res = await fetch(endpoint, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
