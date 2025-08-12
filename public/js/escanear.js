@@ -16,91 +16,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const inputTeclado     = qs('#scannerInput');
   const list             = qs('#scanList');
 
-  html5QrCode = new Html5Qrcode(reader.id);
+  html5QrCode = new Html5Qrcode(reader.id, { verbose: false });
 
-  // --- helpers de parseo ---
-  function parseQR(text) {
-    // 1) JSON puro
-    try {
-      const o = JSON.parse(text);
-      if (o && (o.sender_id || o.tracking_id || o.hashnumber)) return o;
-    } catch {}
-
-    // 2) URL con querystring
-    try {
-      if (/^https?:\/\//i.test(text)) {
-        const u = new URL(text);
-        const p = u.searchParams;
-        return {
-          sender_id:   p.get('sender_id')   || p.get('user_id') || p.get('sid') || undefined,
-          tracking_id: p.get('tracking_id') || p.get('tid')     || p.get('shipment_id') || undefined,
-          hashnumber:  p.get('hashnumber')  || p.get('hash')    || undefined
-        };
-      }
-    } catch {}
-
-    // 3) querystring plano: a=1&b=2
-    if (text.includes('=') && text.includes('&')) {
-      const params = {};
-      text.split('&').forEach(kv => {
-        const [k, v] = kv.split('=');
-        if (k) params[k.trim()] = decodeURIComponent((v||'').trim());
-      });
-      if (params.sender_id || params.tracking_id || params.hashnumber) {
-        return {
-          sender_id:   params.sender_id || params.user_id || params.sid,
-          tracking_id: params.tracking_id || params.tid || params.shipment_id,
-          hashnumber:  params.hashnumber || params.hash
-        };
-      }
-    }
-
-    // 4) texto con "sender_id: 123 ..." etc.
-    const grab = (lbls) => {
-      const r = new RegExp(`(?:${lbls.join('|')})\\s*[:=]\\s*([A-Za-z0-9_\\-]+)`, 'i');
-      const m = text.match(r);
-      return m ? m[1] : undefined;
-    };
-    const maybe = {
-      sender_id:   grab(['sender_id','user_id','sid']),
-      tracking_id: grab(['tracking_id','tid','shipment_id']),
-      hashnumber:  grab(['hashnumber','hash'])
-    };
-    if (maybe.sender_id || maybe.tracking_id || maybe.hashnumber) return maybe;
-
-    // 5) base64 → JSON
-    try {
-      const decoded = atob(text);
-      const o = JSON.parse(decoded);
-      if (o && (o.sender_id || o.tracking_id || o.hashnumber)) return o;
-    } catch {}
-
-    return {}; // no se pudo
-  }
-
-  function qrBoxFn(viewfinderWidth, viewfinderHeight) {
-  // Detectar orientación
-  const isPortrait = viewfinderHeight > viewfinderWidth;
-
-  if (isPortrait) {
-    // Más alto en móviles
-    const width = Math.floor(viewfinderWidth * 0.9);
-    const height = Math.floor(viewfinderHeight * 0.5);
-    return { width, height };
-  } else {
-    // Cuadrado grande en horizontal
-    const side = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.8);
-    return { width: side, height: side };
-  }
-}
-
-  // --- modos ---
+  // Cambiar modo
   modoRadios.forEach(radio => {
     radio.addEventListener('change', () => {
-      if (radio.value === 'camara' && radio.checked) {
+      if (radio.value === 'camara') {
         camaraContainer.classList.remove('hidden');
         tecladoContainer.classList.add('hidden');
-      } else if (radio.value === 'teclado' && radio.checked) {
+      } else {
         camaraContainer.classList.add('hidden');
         tecladoContainer.classList.remove('hidden');
         inputTeclado.focus();
@@ -120,26 +44,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // --- cámara ---
+  function qrBoxFn(w, h) {
+    // En móvil vertical: cuadro más alto y casi todo el ancho
+    const isPortrait = h > w;
+    if (isPortrait) {
+      const width  = Math.floor(w * 0.92);
+      const height = Math.floor(h * 0.55);
+      return { width, height };
+    } else {
+      const side = Math.floor(Math.min(w, h) * 0.8);
+      return { width: side, height: side };
+    }
+  }
+
   async function startScanner() {
     statusText.textContent = 'Iniciando cámara…';
     try {
+      const constraints = {
+        facingMode: { ideal: 'environment' },
+        aspectRatio: 4/3,              // iOS se lleva bien con 4:3
+        focusMode: 'continuous'        // hint
+      };
       await html5QrCode.start(
-        { facingMode: { exact: 'environment' } },
-        { fps: 10, qrbox: qrBoxFn, aspectRatio: 1.333 },
+        { facingMode: 'environment' },
+        {
+          fps: 12,
+          qrbox: qrBoxFn,
+          videoConstraints: constraints,
+          rememberLastUsedCamera: true
+        },
         (decodedText) => onScanSuccess(decodedText)
       );
-      // iOS: asegurar playsinline/autoplay/muted
-      setTimeout(() => {
-        const v = reader.querySelector('video');
-        if (v) {
-          v.setAttribute('playsinline', 'true');
-          v.setAttribute('autoplay', 'true');
-          v.muted = true;
-          v.style.objectFit = 'cover';
-        }
-      }, 250);
-
       scanning = true;
       startBtn.disabled = true;
       stopBtn.disabled  = false;
@@ -152,36 +87,97 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function stopScanner() {
     if (!scanning) return;
-    try { await html5QrCode.stop(); await html5QrCode.clear(); } catch {}
+    try { await html5QrCode.stop(); }
+    catch {}
     scanning = false;
     startBtn.disabled = false;
     stopBtn.disabled  = true;
     statusText.textContent = 'Escáner detenido.';
   }
 
-  // --- post-scan ---
+  // ---- Parser robusto del QR ----
+  function parseQR(decodedText) {
+    // 1) JSON puro
+    try {
+      const obj = JSON.parse(decodedText);
+      return {
+        sender_id:     obj.sender_id || obj.sid || obj.si,
+        meli_id:       obj.tracking_id || obj.tid || obj.ti,
+        hashnumber:    obj.hashnumber || obj.hash || obj.hn,
+        destinatario:  obj.destinatario || obj.recipient,
+        direccion:     obj.direccion || obj.address,
+        codigo_postal: obj.codigo_postal || obj.cp || obj.zip
+      };
+    } catch {}
+
+    // 2) URL con querystring
+    try {
+      const url = new URL(decodedText);
+      const p = url.searchParams;
+      return {
+        sender_id:     p.get('sender_id') || p.get('sid') || p.get('si'),
+        meli_id:       p.get('tracking_id') || p.get('tid') || p.get('ti'),
+        hashnumber:    p.get('hashnumber') || p.get('hash') || p.get('hn'),
+        destinatario:  p.get('destinatario') || p.get('recipient'),
+        direccion:     p.get('direccion') || p.get('address'),
+        codigo_postal: p.get('codigo_postal') || p.get('cp') || p.get('zip')
+      };
+    } catch {}
+
+    // 3) Pares k=v separados (& o ;)
+    if (decodedText.includes('=')) {
+      const params = {};
+      decodedText.split(/[&;,\s]+/).forEach(part => {
+        const [k, v] = part.split('=');
+        if (k && v) params[k.trim()] = decodeURIComponent(v.trim());
+      });
+      return {
+        sender_id:     params.sender_id || params.sid || params.si,
+        meli_id:       params.tracking_id || params.tid || params.ti,
+        hashnumber:    params.hashnumber || params.hash || params.hn,
+        destinatario:  params.destinatario || params.recipient,
+        direccion:     params.direccion || params.address,
+        codigo_postal: params.codigo_postal || params.cp || params.zip
+      };
+    }
+
+    // 4) Respaldo por regex (último recurso)
+    const senderMatch = decodedText.match(/\b\d{6,12}\b/);     // ID numérico
+    const trackMatch  = decodedText.match(/\b(TN|TG|T|ML)\S{6,}\b/i);
+    return {
+      sender_id: senderMatch?.[0],
+      meli_id:   trackMatch?.[0]
+    };
+  }
+
+  // ---- Al leer un QR ----
   async function onScanSuccess(decodedText) {
     if (seen.has(decodedText)) return;
     seen.add(decodedText);
 
-    const data = parseQR(decodedText);
-    const sender_id   = data.sender_id   || '';
-    const tracking_id = data.tracking_id || '';
-    const hashnumber  = data.hashnumber  || '';
+    const parsed = parseQR(decodedText);
+    const {
+      sender_id='(?)',
+      meli_id='(?)',
+      hashnumber='',
+      destinatario='(?)',
+      direccion='(?)',
+      codigo_postal='(?)'
+    } = parsed;
 
-    // Tarjeta en UI
     const card = document.createElement('div');
     card.className = 'bg-white p-4 rounded-lg shadow flex flex-col gap-2';
     card.innerHTML = `
-      <p><strong>Sender ID:</strong> ${sender_id || '(?)'}</p>
-      <p><strong>Tracking ID:</strong> ${tracking_id || '(?)'}</p>
-      <p><strong>Hash:</strong> ${hashnumber || '(?)'}</p>
+      <p><strong>Sender ID:</strong> ${sender_id}</p>
+      <p><strong>Tracking ID:</strong> ${meli_id}</p>
+      <p><strong>Destinatario:</strong> ${destinatario}</p>
+      <p><strong>Dirección:</strong> ${direccion} (${codigo_postal})</p>
       <div class="mt-2 flex gap-2 items-center">
         <button class="btn-save px-3 py-1 bg-blue-600 text-white rounded">Guardar</button>
         <span class="text-sm text-gray-500 save-status"></span>
       </div>
     `;
-    list.prepend(card);
+    list.appendChild(card);
 
     const btnSave = card.querySelector('.btn-save');
     const txt     = card.querySelector('.save-status');
@@ -189,21 +185,37 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSave.addEventListener('click', async () => {
       btnSave.disabled = true;
       txt.textContent  = 'Guardando…';
-      try {
-        // si hay tracking_id, pedimos al back que complete con MeLi
-        const endpoint = tracking_id ? '/escanear/meli' : '/escanear/manual';
-        const payload  = tracking_id
-          ? { meli_id: tracking_id, sender_id, hashnumber }
-          : { sender_id, tracking_id, hashnumber };
 
+      // armamos payload
+      const payload = {
+        sender_id,
+        tracking_id: meli_id,
+        hashnumber,
+        destinatario,
+        direccion,
+        codigo_postal
+      };
+
+      const endpoint = (meli_id && meli_id !== '(?)') || hashnumber
+        ? '/escanear/meli'
+        : '/escanear/manual';
+
+      // fetch con timeout para no quedar colgado
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 12000);
+
+      try {
         const res = await fetch(endpoint, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(payload)
+          body:    JSON.stringify(payload),
+          signal:  ctrl.signal
         });
+        clearTimeout(t);
         if (!res.ok) throw new Error(await res.text());
         txt.textContent = '✅ Guardado';
       } catch (err) {
+        clearTimeout(t);
         console.error('Error guardando envío:', err);
         txt.textContent = '❌ Error';
         btnSave.disabled = false;
