@@ -6,7 +6,19 @@
   <title>📦 Escáner de Paquetes</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Librería QR -->
-  <script src="/libs/html5-qrcode.min.js"></script>
+  (function(){
+  var s=document.createElement('script');
+  s.src='/libs/html5-qrcode.min.js';
+  s.onload=function(){ console.log('html5-qrcode local OK'); };
+  s.onerror=function(){
+    console.warn('html5-qrcode local NO disponible, cargo CDN…');
+    var c=document.createElement('script');
+    c.src='https://unpkg.com/html5-qrcode@2.3.9/minified/html5-qrcode.min.js';
+    c.onload=function(){ console.log('html5-qrcode CDN OK'); };
+    document.head.appendChild(c);
+  };
+  document.head.appendChild(s);
+   })();
   <style>
     /* Mantener el recuadro visible y centrado en móvil */
     #reader { width: 100%; max-width: 520px; margin: 0 auto; }
