@@ -7,6 +7,8 @@ let scanning    = false;
 const seen      = new Set();
 
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('escanear.js cargado');
+
   const camaraContainer  = qs('#camaraContainer');
   const tecladoContainer = qs('#tecladoContainer');
   const modoRadios       = qsa('input[name="modoScan"]');
@@ -17,29 +19,48 @@ document.addEventListener('DOMContentLoaded', () => {
   const inputTeclado     = qs('#scannerInput');
   const list             = qs('#scanList');
 
-  // html5-qrcode instance
-  html5QrCode = new Html5Qrcode(readerEl.id);
+  const hasHtml5 = typeof window.Html5Qrcode !== 'undefined';
+  console.log('Html5Qrcode disponible:', hasHtml5);
 
-  // Cambiar de modo
+  // SI hay lib, instancio; si no, dejo deshabilitada la cámara
+  if (hasHtml5) {
+    html5QrCode = new Html5Qrcode(readerEl.id);
+  } else {
+    camaraContainer.classList.add('hidden');
+    tecladoContainer.classList.remove('hidden');
+    startBtn?.setAttribute('disabled', 'true');
+    stopBtn?.setAttribute('disabled', 'true');
+    statusText.textContent = 'Modo cámara no disponible (lib no cargada). Usá lector USB.';
+  }
+
+  // Cambiar de modo siempre funciona (aunque no haya lib)
   modoRadios.forEach(r => {
     r.addEventListener('change', () => {
       if (r.checked && r.value === 'camara') {
+        if (!hasHtml5) {
+          alert('La cámara no está disponible. Usá el modo lector.');
+          // volvemos a teclado
+          qsa('input[name="modoScan"]').find(x=>x.value==='teclado').checked = true;
+          tecladoContainer.classList.remove('hidden');
+          camaraContainer.classList.add('hidden');
+          return;
+        }
         camaraContainer.classList.remove('hidden');
         tecladoContainer.classList.add('hidden');
-        if (scanning) stopScanner(); // para reiniciar si cambias
+        if (scanning) stopScanner();
       }
       if (r.checked && r.value === 'teclado') {
         tecladoContainer.classList.remove('hidden');
         camaraContainer.classList.add('hidden');
         if (scanning) stopScanner();
-        setTimeout(() => inputTeclado.focus(), 0);
+        setTimeout(()=>inputTeclado.focus(), 0);
       }
     });
   });
 
-  // Controles cámara
-  startBtn.addEventListener('click', startScanner);
-  stopBtn .addEventListener('click', stopScanner);
+  // Controles cámara (solo si hay lib)
+  startBtn?.addEventListener('click', () => hasHtml5 ? startScanner() : alert('Cámara no disponible.'));
+  stopBtn ?.addEventListener('click', () => hasHtml5 ? stopScanner()  : null);
 
   // Lector USB/teclado
   inputTeclado.addEventListener('keydown', (e) => {
@@ -54,24 +75,22 @@ document.addEventListener('DOMContentLoaded', () => {
     statusText.textContent = 'Iniciando cámara…';
     try {
       await html5QrCode.start(
-        // iOS a veces necesita esto para usar la trasera
         { facingMode: { exact: "environment" } },
         {
           fps: 10,
           qrbox: (vw, vh) => {
-            // caja proporcional centrada
-            const size = Math.min( Math.floor(vw * 0.8), 320 );
+            const size = Math.min(Math.floor(vw * 0.8), 320);
             return { width: size, height: size };
           },
-          aspectRatio: 1.777 // ayuda a centrar en móvil
+          aspectRatio: 1.777
         },
         (decodedText) => onScanSuccess(decodedText),
-        (errMsg) => { /* onScanFailure opcional */ }
+        () => {} // onFailure opcional
       );
       scanning = true;
       startBtn.disabled = true;
       stopBtn.disabled  = false;
-      statusText.textContent = 'Escáner activo. Apunta al código.';
+      statusText.textContent = 'Escáner activo. Apuntá al código.';
     } catch (e) {
       console.error('Error iniciando cámara:', e);
       statusText.textContent = 'No se pudo iniciar cámara.';
@@ -80,31 +99,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function stopScanner() {
     if (!scanning) return;
-    try {
-      await html5QrCode.stop();
-    } catch (_) {}
+    try { await html5QrCode.stop(); } catch {}
     scanning = false;
     startBtn.disabled = false;
     stopBtn.disabled  = true;
     statusText.textContent = 'Escáner detenido.';
   }
 
-  // --- PARSER + UI + GUARDADO ---
+  // ---- PARSER + UI + GUARDADO ----
   async function onScanSuccess(decodedText) {
-    // Evitar duplicados exactos
     if (seen.has(decodedText)) return;
     seen.add(decodedText);
+    console.log('QR raw:', decodedText);
 
-    // 1) Parsear JSON (tu QR real viene así)
+    // 1) Parsear JSON (tu QR viene así)
     let qr;
-    try {
-      qr = JSON.parse(decodedText);
-    } catch {
-      console.warn('QR no es JSON:', decodedText);
-      return;
-    }
+    try { qr = JSON.parse(decodedText); }
+    catch { console.warn('QR no es JSON'); return; }
 
-    // 2) Mapeo tolerante → payload para backend
+    // 2) Map a payload interno
     const payload = {
       sender_id:      String(qr.sender_id ?? ''),
       meli_id:        String(qr.id ?? qr.tracking_id ?? ''),
@@ -117,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // 3) Tarjeta visual
+    // 3) Tarjeta
     const card = document.createElement('div');
     card.className = 'bg-white p-4 rounded-lg shadow flex flex-col gap-2';
     card.innerHTML = `
@@ -132,7 +145,6 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     list.prepend(card);
 
-    // 4) Guardar → /escanear/meli
     const btnSave = card.querySelector('.btn-save');
     const txt     = card.querySelector('.save-status');
 
@@ -146,11 +158,10 @@ document.addEventListener('DOMContentLoaded', () => {
           body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error(await res.text());
-        const j = await res.json().catch(() => ({}));
+        const j = await res.json().catch(()=> ({}));
         txt.textContent = '✅ Guardado';
-        // si querés, mostrar partido/zona de la respuesta
         if (j?.zona || j?.partido) {
-          txt.textContent += ` (${j.partido||''} ${j.zona?'- '+j.zona:''})`;
+          txt.textContent += ` (${j.partido||''}${j.zona?' - '+j.zona:''})`;
         }
       } catch (err) {
         console.error('Error guardando envío:', err);
@@ -159,21 +170,4 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-
-  // --- Panel de debug opcional (?debug=1) ---
-  try {
-    const params = new URLSearchParams(location.search);
-    if (params.get('debug') === '1') {
-      const dbg = document.createElement('div');
-      dbg.style.cssText = 'position:fixed;bottom:10px;left:10px;right:10px;max-height:40vh;overflow:auto;background:#111;color:#0f0;font:12px monospace;padding:8px;border-radius:8px;z-index:99999';
-      dbg.innerHTML = '<div style="color:#fff;margin-bottom:6px">DEBUG</div><div id="dbgLog"></div>';
-      document.body.appendChild(dbg);
-      const logEl = dbg.querySelector('#dbgLog');
-      const _log = console.log;
-      console.log = (...a) => { _log(...a); logEl.innerText += a.map(x => typeof x==='string'?x:JSON.stringify(x)).join(' ') + '\n'; };
-      const _err = console.error;
-      console.error = (...a) => { _err(...a); logEl.innerText += '[ERR] ' + a.map(x => typeof x==='string'?x:JSON.stringify(x)).join(' ') + '\n'; };
-      console.log('debug panel listo');
-    }
-  } catch {}
 });
