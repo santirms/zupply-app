@@ -12,7 +12,7 @@ console.log('envioController keys:', Object.keys(ctrl));
 
 // nuevos para panel choferes
 router.get('/tracking/:tracking', ctrl.getByTracking);   // <-- QR
-//router.get('/asignados',          ctrl.asignados);       // <-- ruteo del día
+router.get('/asignados',          ctrl.asignados);       // <-- ruteo del día
 
 // por ObjectId (dejar AL FINAL para no capturar las anteriores)
 //router.get('/:id',             ctrl.getById);
