@@ -78,10 +78,21 @@ document.addEventListener('DOMContentLoaded', () => {
     return {}; // no se pudo
   }
 
-  function qrBoxFn(w, h) {
-    const side = Math.floor(Math.min(w, h) * 0.80);
+  function qrBoxFn(viewfinderWidth, viewfinderHeight) {
+  // Detectar orientación
+  const isPortrait = viewfinderHeight > viewfinderWidth;
+
+  if (isPortrait) {
+    // Más alto en móviles
+    const width = Math.floor(viewfinderWidth * 0.9);
+    const height = Math.floor(viewfinderHeight * 0.5);
+    return { width, height };
+  } else {
+    // Cuadrado grande en horizontal
+    const side = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.8);
     return { width: side, height: side };
   }
+}
 
   // --- modos ---
   modoRadios.forEach(radio => {
