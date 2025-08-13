@@ -257,7 +257,23 @@ router.get('/:id', async (req, res) => {
         path: 'cliente_id',
         populate: { path: 'lista_precios', model: 'ListaDePrecios' }
       });
+
     if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
+
+    // ⬇️ completar coords si faltan
+    if ((!envio.latitud || !envio.longitud) && envio.direccion) {
+      const hit = await geocodeDireccion({
+        direccion: envio.direccion,
+        codigo_postal: envio.codigo_postal,
+        partido: envio.partido || envio.zona
+      });
+      if (hit) {
+        envio.latitud = hit.lat;
+        envio.longitud = hit.lon;
+        await envio.save();
+      }
+    }
+
     res.json(envio);
   } catch (err) {
     console.error('Error al obtener envío:', err);
