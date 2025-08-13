@@ -288,30 +288,42 @@
     }
 
     // Detalle
-    async function mostrarDetalle(envioId) {
-      try {
-        const res = await fetch(`/api/envios/${envioId}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+async function mostrarDetalle(envioId) {
+  try {
+    const res = await fetch(`/api/envios/${envioId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
 
-        const clienteNombre = data.cliente_id?.nombre || '— sin nombre —';
+    const clienteNombre = data.cliente_id?.nombre || '— sin nombre —';
+    const partido = (data.partido && data.partido.trim()) ? data.partido.trim() : '-';
+    const zonaFact = (data.zona && data.zona.trim()) ? data.zona.trim() : '-';
+    const precioFmt = (typeof data.precio === 'number')
+      ? `$ ${data.precio.toFixed(2)}`
+      : '-';
 
-        const cd = document.getElementById('contenidoDetalle');
-        cd.innerHTML = `
-          <p><strong>Cliente:</strong> ${clienteNombre}</p>
-          <p><strong>Dirección:</strong> ${data.direccion || '-'}</p>
-          <p><strong>Tracking:</strong> ${data.meli_id || data.id_venta || '-'}</p>
-          <p><strong>Estado:</strong> ${data.estado || data.status || '-'}</p>
-          <p><strong>CP:</strong> ${data.codigo_postal || '-'}</p>
-          <p><strong>Zona/Partido:</strong> ${data.partido || data.zona || '-'}</p>
-          <p><strong>Referencia:</strong> ${data.referencia || '-'}</p>
-          <p><strong>Precio:</strong> ${typeof data.precio === 'number' ? '$ ' + data.precio.toFixed(2) : '-'}</p>
-        `;
+    const cd = document.getElementById('contenidoDetalle');
+    cd.innerHTML = `
+      <p><strong>Cliente:</strong> ${clienteNombre}</p>
+      <p><strong>Dirección:</strong> ${data.direccion || '-'}</p>
+      <p><strong>Tracking:</strong> ${data.meli_id || data.id_venta || '-'}</p>
+      <p><strong>Estado:</strong> ${data.estado || data.status || '-'}</p>
+      <p><strong>CP:</strong> ${data.codigo_postal || '-'}</p>
+      <p><strong>Partido:</strong> ${partido}</p>
+      <p><strong>Zona (facturación):</strong> ${zonaFact}</p>
+      <p><strong>Referencia:</strong> ${data.referencia || '-'}</p>
+      <p><strong>Precio:</strong> ${precioFmt}</p>
+    `;
 
-        const modal = document.getElementById('modalDetalle');
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-        document.body.classList.add('overflow-hidden');
+    const modal = document.getElementById('modalDetalle');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.classList.add('overflow-hidden');
+  } catch (e) {
+    console.error('Error mostrando detalle:', e);
+    alert('No se pudo cargar el detalle del envío.');
+  }
+}
+
 
         // mapa
         initMapa(data.latitud, data.longitud);
