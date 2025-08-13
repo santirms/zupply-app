@@ -18,6 +18,8 @@ const envioSchema = new mongoose.Schema({
   chofer:         { type: Schema.Types.ObjectId, ref: 'Chofer', default: null },
   zonaAsignada:   { type: Schema.Types.ObjectId, ref: 'Zona',   default: null },
   estado:         { type: String, enum: ['pendiente','asignado'], default: 'pendiente' },
+  latitud:   { type: Number, default: null },
+  longitud:  { type: Number, default: null },
 });
 
 // Índice de idempotencia SOLO cuando meli_id exista y no sea vacío:
