@@ -249,7 +249,25 @@ router.get('/del-dia', async (req, res) => {
 // ⬇️ NUEVO: QR por tracking (PONER ANTES de '/:id')
 router.get('/tracking/:tracking', getEnvioByTracking);
 
-// GET /envios/:id (ObjectId)
+// Helper: completa y guarda coords si faltan
+async function ensureCoords(envio) {
+  if (!envio) return envio;
+  if ((envio.latitud && envio.longitud) || !envio.direccion) return envio;
+
+  const hit = await geocodeDireccion({
+    direccion: envio.direccion,
+    codigo_postal: envio.codigo_postal,
+    partido: envio.partido || envio.zona
+  });
+  if (hit) {
+    envio.latitud = hit.lat;
+    envio.longitud = hit.lon;
+    await envio.save();
+  }
+  return envio;
+}
+
+// GET /envios/:id
 router.get('/:id', async (req, res) => {
   try {
     const envio = await Envio.findById(req.params.id)
@@ -257,29 +275,32 @@ router.get('/:id', async (req, res) => {
         path: 'cliente_id',
         populate: { path: 'lista_precios', model: 'ListaDePrecios' }
       });
-
     if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
 
-    // ⬇️ completar coords si faltan
-    if ((!envio.latitud || !envio.longitud) && envio.direccion) {
-      const hit = await geocodeDireccion({
-        direccion: envio.direccion,
-        codigo_postal: envio.codigo_postal,
-        partido: envio.partido || envio.zona
-      });
-      if (hit) {
-        envio.latitud = hit.lat;
-        envio.longitud = hit.lon;
-        await envio.save();
-      }
-    }
-
+    await ensureCoords(envio);   // ⬅️ completa lat/lng si faltan
     res.json(envio);
   } catch (err) {
     console.error('Error al obtener envío:', err);
     res.status(500).json({ error: 'Error al obtener envío' });
   }
 });
+
+// PATCH /envios/:id/geocode  (forzar desde el front)
+router.patch('/:id/geocode', async (req, res) => {
+  try {
+    const envio = await Envio.findById(req.params.id);
+    if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
+    await ensureCoords(envio);
+    if (!envio.latitud || !envio.longitud) {
+      return res.status(404).json({ error: 'No se pudo geocodificar' });
+    }
+    res.json({ ok: true, latitud: envio.latitud, longitud: envio.longitud });
+  } catch (err) {
+    console.error('Error PATCH geocode:', err);
+    res.status(500).json({ error: 'Error al geocodificar' });
+  }
+});
+
 // DELETE /envios/:id
 router.delete('/:id', async (req, res) => {
   try {
