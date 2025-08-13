@@ -295,8 +295,8 @@ async function mostrarDetalle(envioId) {
     const data = await res.json();
 
     const clienteNombre = data.cliente_id?.nombre || '— sin nombre —';
-    const partido = (data.partido && data.partido.trim()) ? data.partido.trim() : '-';
-    const zonaFact = (data.zona && data.zona.trim()) ? data.zona.trim() : '-';
+    const partido  = data.partido?.trim?.() || '-';
+    const zonaFact = data.zona?.trim?.()    || '-';
     const precioFmt = (typeof data.precio === 'number')
       ? `$ ${data.precio.toFixed(2)}`
       : '-';
@@ -314,22 +314,32 @@ async function mostrarDetalle(envioId) {
       <p><strong>Precio:</strong> ${precioFmt}</p>
     `;
 
+    // MAPA (si existe el contenedor y hay coords)
+    const mapEl = document.getElementById('mapDetalle');
+    if (mapEl) {
+      if (Number.isFinite(data.latitud) && Number.isFinite(data.longitud)) {
+        // si usás Leaflet u otra lib, asegurate de limpiar antes
+        mapEl.innerHTML = '';
+        if (typeof initMapa === 'function') {
+          initMapa(data.latitud, data.longitud);
+        }
+      } else {
+        mapEl.innerHTML =
+          '<div class="w-full h-full flex items-center justify-center text-gray-500">Sin coordenadas</div>';
+      }
+    }
+
     const modal = document.getElementById('modalDetalle');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     document.body.classList.add('overflow-hidden');
+
   } catch (e) {
     console.error('Error mostrando detalle:', e);
     alert('No se pudo cargar el detalle del envío.');
   }
 }
-        // mapa
-        initMapa(data.latitud, data.longitud);
-       catch (e) {
-        console.error('Error mostrando detalle:', e);
-        alert('No se pudo cargar el detalle del envío.');
-      }
-    }
+    
     function cerrarModalDetalle() {
       const modal = document.getElementById('modalDetalle');
       modal.classList.add('hidden');
