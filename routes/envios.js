@@ -270,12 +270,18 @@ async function ensureCoords(envio) {
 // GET /envios/:id
 router.get('/:id', async (req, res) => {
   try {
-    const envio = await Envio.findById(req.params.id)
-      .populate({
-        path: 'cliente_id',
-        populate: { path: 'lista_precios', model: 'ListaDePrecios' }
-      });
-    if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
+    const envio = await Envio.findById(id)
+      .populate('cliente_id')
+      .lean();
+
+    if (!envio) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
 
     await ensureCoords(envio);   // ⬅️ completa lat/lng si faltan
     res.json(envio);
