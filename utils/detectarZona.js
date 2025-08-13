@@ -33,5 +33,3 @@ module.exports = async function detectarZona(cpInput) {
 
   return { partido, zona };
 };
-
-module.exports = detectarZona;
