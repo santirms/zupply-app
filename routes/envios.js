@@ -4,6 +4,7 @@ const router  = express.Router();
 const Zona    = require('../models/Zona');
 const Envio   = require('../models/Envio');
 const Cliente = require('../models/Cliente');
+const { geocodeDireccion } = require('../utils/geocode');
 
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
 const { getEnvioByTracking } = require('../controllers/envioController');
