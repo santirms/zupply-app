@@ -323,16 +323,13 @@ async function mostrarDetalle(envioId) {
     alert('No se pudo cargar el detalle del envío.');
   }
 }
-
-
         // mapa
         initMapa(data.latitud, data.longitud);
-      } catch (e) {
+       catch (e) {
         console.error('Error mostrando detalle:', e);
         alert('No se pudo cargar el detalle del envío.');
       }
     }
-
     function cerrarModalDetalle() {
       const modal = document.getElementById('modalDetalle');
       modal.classList.add('hidden');
