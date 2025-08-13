@@ -243,29 +243,32 @@
           shipped: 'En camino',
           delivered: 'Entregado'
         }[estadoKey] || '-';
-
+        
+        const partidoUI = (e.partido && e.partido.trim()) ? e.partido : '-';
+        
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td class="px-4 py-2">
-            <button
-              class="text-indigo-600 hover:underline"
-              data-id="${e._id}"
-              onclick="mostrarDetalle(this.dataset.id)"
-              title="Ver detalle"
-            >
-              ${e.meli_id || e.id_venta || '(sin id)'}
-            </button>
-          </td>
-          <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
-          <td class="px-4 py-2">${fecha}</td>
-          <td class="px-4 py-2">${e.partido || e.zona || '-'}</td>
-          <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
-          <td class="px-4 py-2">${estadoLabel}</td>
-          <td class="px-4 py-2">
-            <button class="text-red-600 hover:text-red-700" title="Eliminar"
-                    onclick="abrirModalEliminar('${e._id}')">🗑</button>
-          </td>
-        `;
+        <td class="px-4 py-2">
+         <button
+          class="text-indigo-600 hover:underline"
+          data-id="${e._id}"
+          onclick="mostrarDetalle(this.dataset.id)"
+          title="Ver detalle"
+         >
+         ${e.meli_id || e.id_venta || '(sin id)'}
+        </button>
+        </td>
+        <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
+        <td class="px-4 py-2">${fecha}</td>
+        <!-- 👇 solo partido -->
+        <td class="px-4 py-2">${partidoUI}</td>
+        <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
+        <td class="px-4 py-2">${estadoLabel}</td>
+        <td class="px-4 py-2">
+        <button class="text-red-600 hover:text-red-700" title="Eliminar"
+            onclick="abrirModalEliminar('${e._id}')">🗑</button>
+      </td>
+      `;
         tbody.appendChild(tr);
       });
     }
