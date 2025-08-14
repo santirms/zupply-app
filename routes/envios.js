@@ -251,23 +251,61 @@ router.get('/del-dia', async (req, res) => {
 router.get('/tracking/:tracking', getEnvioByTracking);
 
 // Helper: completa y guarda coords si faltan
+// Geocodifica con Nominatim si faltan coords. Nunca lanza; si falla devuelve el envío como está.
 async function ensureCoords(envio) {
-  if (!envio) return envio;
-  if ((envio.latitud && envio.longitud) || !envio.direccion) return envio;
+  try {
+    // Si ya tiene coords válidas, listo
+    if (Number.isFinite(envio.latitud) && Number.isFinite(envio.longitud)) {
+      return envio;
+    }
 
-  const hit = await geocodeDireccion({
-    direccion: envio.direccion,
-    codigo_postal: envio.codigo_postal,
-    partido: envio.partido || envio.zona
-  });
-  if (hit) {
-    envio.latitud = hit.lat;
-    envio.longitud = hit.lon;
-    await envio.save();
+    // Build query: dirección, partido, CP, país
+    const parts = [];
+    if (envio.direccion)     parts.push(envio.direccion);
+    if (envio.partido)       parts.push(envio.partido);
+    if (envio.codigo_postal) parts.push(envio.codigo_postal);
+    parts.push('Argentina');
+
+    const q = parts.join(', ').trim();
+    if (!q) return envio; // nada para geocodificar
+
+    // Llamada a Nominatim
+    const r = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: {
+        q,
+        format: 'json',
+        addressdetails: 1,
+        limit: 1,
+        countrycodes: 'ar'
+      },
+      headers: {
+        'User-Agent': process.env.NOMINATIM_UA || 'ZupplyApp/1.0 (contact@example.com)'
+      },
+      timeout: 6000
+    });
+
+    const [hit] = r.data || [];
+    if (!hit) return envio;
+
+    const lat = parseFloat(hit.lat);
+    const lon = parseFloat(hit.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return envio;
+
+    // Actualizamos por _id y devolvemos el documento actualizado
+    const actualizado = await Envio.findByIdAndUpdate(
+      envio._id,
+      { $set: { latitud: lat, longitud: lon } },
+      { new: true }
+    );
+
+    // Si por alguna razón no volvió doc, devolvemos el original “enriquecido”
+    return actualizado || { ...(envio.toObject?.() ?? envio), latitud: lat, longitud: lon };
+
+  } catch (e) {
+    console.warn('ensureCoords: geocode falló:', e.message);
+    return envio; // nunca lanzar
   }
-  return envio;
 }
-
 // GET /envios/:id
 router.get('/:id', async (req, res) => {
   try {
