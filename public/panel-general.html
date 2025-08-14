@@ -23,7 +23,7 @@
     <!-- 🔍 Filtros -->
     <div class="bg-white p-4 rounded-lg shadow mb-6">
       <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4">
-        <input type="text" id="filtroCliente" placeholder="Cliente (nombre o sender_id)"
+       <input id="filtroTracking" type="text" placeholder="Buscar por tracking (ML o id_venta)" />
                class="border p-2 rounded w-full" />
 
         <input type="date" id="filtroDesde" class="border p-2 rounded w-full" />
@@ -170,47 +170,57 @@
     }
 
     // Filtros
-    async function aplicarFiltro() {
-      const cli = document.getElementById('filtroCliente').value.trim().toLowerCase();
-      const desde = document.getElementById('filtroDesde').value;
-      const hasta = document.getElementById('filtroHasta').value;
-      const partido = document.getElementById('filtroPartido').value;
-      const estado = document.getElementById('filtroEstado').value;
+async function aplicarFiltro() {
+  const cli     = (document.getElementById('filtroCliente')?.value || '').trim().toLowerCase();
+  const desde   = (document.getElementById('filtroDesde')?.value   || '');
+  const hasta   = (document.getElementById('filtroHasta')?.value   || '');
+  const partido = (document.getElementById('filtroPartido')?.value || '');
+  const estado  = (document.getElementById('filtroEstado')?.value  || '');
+  // <-- nuevo: texto para tracking
+  const trackingTxt = (document.getElementById('filtroTracking')?.value || '').trim().toLowerCase();
 
-      try {
-        if (!enviosCargados.length) {
-          const res = await fetch('/api/envios');
-          enviosCargados = await res.json();
-        }
-
-        enviosFiltrados = enviosCargados.filter(e => {
-          // Cliente
-          const nom = e.cliente_id?.nombre?.toLowerCase() || '';
-          const matchCli = !cli || nom.includes(cli) || (e.sender_id || '').toLowerCase().includes(cli);
-
-          // Fecha
-          const fechaISO = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
-          const afterDesde = !desde || fechaISO >= desde;
-          const beforeHasta = !hasta || fechaISO <= hasta;
-
-          // Partido/Zona
-          const zonaName = e.partido || e.zona || '';
-          const matchPartido = !partido || zonaName === partido;
-
-          // Estado (soporta tus enums + ML)
-          const est = (e.estado || e.status || '').toLowerCase();
-          const matchEstado = !estado || est === estado.toLowerCase();
-
-          return matchCli && afterDesde && beforeHasta && matchPartido && matchEstado;
-        });
-
-        currentPage = 1;
-        renderTabla();
-        renderPaginacion();
-      } catch (err) {
-        console.error('Error aplicando filtro:', err);
-      }
+  try {
+    if (!enviosCargados.length) {
+      const res = await fetch('/api/envios');
+      enviosCargados = await res.json();
     }
+
+    enviosFiltrados = enviosCargados.filter(e => {
+      // Cliente (por nombre o sender/código interno)
+      const nom = e.cliente_id?.nombre?.toLowerCase() || '';
+      const matchCli =
+        !cli ||
+        nom.includes(cli) ||
+        (e.sender_id || '').toLowerCase().includes(cli) ||
+        (e.cliente_id?.codigo_cliente || '').toLowerCase().includes(cli);
+
+      // Fecha
+      const fechaISO   = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
+      const afterDesde = !desde || fechaISO >= desde;
+      const beforeHasta= !hasta || fechaISO <= hasta;
+
+      // Partido/Zona (para selector exacto)
+      const zonaName = e.partido || e.zona || '';
+      const matchPartido = !partido || zonaName === partido;
+
+      // Estado
+      const est = (e.estado || e.status || '').toLowerCase();
+      const matchEstado = !estado || est === estado.toLowerCase();
+
+      // <-- nuevo: Tracking (meli_id o id_venta)
+      const tid = (e.meli_id || e.id_venta || '').toString().toLowerCase();
+      const matchTracking = !trackingTxt || tid.includes(trackingTxt);
+
+      return matchCli && afterDesde && beforeHasta && matchPartido && matchEstado && matchTracking;
+    });
+
+    currentPage = 1;
+    renderTabla();
+    renderPaginacion();
+  } catch (err) {
+    console.error('Error aplicando filtro:', err);
+  }
+}
 
     function limpiarFiltros() {
       document.getElementById('filtroCliente').value = '';
