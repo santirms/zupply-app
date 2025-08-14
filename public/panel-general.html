@@ -176,13 +176,22 @@
     }
 
     // Filtros
+// Atajos ENTER en inputs
+['filtroCliente','filtroTracking','filtroDesde','filtroHasta'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') aplicarFiltro(); });
+});
+
 async function aplicarFiltro() {
-  const cli     = (document.getElementById('filtroCliente')?.value || '').trim().toLowerCase();
-  const trackingTxt = (document.getElementById('filtroTracking')?.value || '').trim().toLowerCase();
-  const desde   = (document.getElementById('filtroDesde')?.value   || '');
-  const hasta   = (document.getElementById('filtroHasta')?.value   || '');
-  const partido = (document.getElementById('filtroPartido')?.value || '');
-  const estado  = (document.getElementById('filtroEstado')?.value  || '');
+  const cliRaw       = (document.getElementById('filtroCliente')?.value || '');
+  const trackingRaw  = (document.getElementById('filtroTracking')?.value || '');
+  const desde        = (document.getElementById('filtroDesde')?.value || '');
+  const hasta        = (document.getElementById('filtroHasta')?.value || '');
+  const partido      = (document.getElementById('filtroPartido')?.value || '');
+  const estado       = (document.getElementById('filtroEstado')?.value || '');
+
+  const cli          = cliRaw.trim().toLowerCase();
+  const trackingTxt  = trackingRaw.trim().toLowerCase().replace(/\s+/g,''); // sin espacios
 
   try {
     if (!enviosCargados.length) {
@@ -191,29 +200,30 @@ async function aplicarFiltro() {
     }
 
     enviosFiltrados = enviosCargados.filter(e => {
-      // Cliente (nombre, sender_id o código interno)
-      const nom = e.cliente_id?.nombre?.toLowerCase() || '';
+      // ---------- Cliente (nombre, sender_id, código interno)
+      const nom   = e.cliente_id?.nombre?.toLowerCase() || '';
+      const sid   = (e.sender_id || '').toLowerCase();
+      const cod   = (e.cliente_id?.codigo_cliente || '').toLowerCase();
       const matchCli =
-        !cli ||
-        nom.includes(cli) ||
-        (e.sender_id || '').toLowerCase().includes(cli) ||
-        (e.cliente_id?.codigo_cliente || '').toLowerCase().includes(cli);
+        !cli || nom.includes(cli) || sid.includes(cli) || cod.includes(cli);
 
-      // Tracking (meli_id o id_venta)
-      const tid = (e.meli_id || e.id_venta || '').toString().toLowerCase();
-      const matchTracking = !trackingTxt || tid.includes(trackingTxt);
+      // ---------- Tracking (busca en AMBOS: meli_id e id_venta)
+      const meliStr  = (e.meli_id   ?? '').toString().toLowerCase();
+      const ventaStr = (e.id_venta  ?? '').toString().toLowerCase();
+      const matchTracking =
+        !trackingTxt || meliStr.includes(trackingTxt) || ventaStr.includes(trackingTxt);
 
-      // Fechas
-      const fechaISO   = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
-      const afterDesde = !desde || fechaISO >= desde;
-      const beforeHasta= !hasta || fechaISO <= hasta;
+      // ---------- Fechas (YYYY-MM-DD)
+      const fechaISO    = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
+      const afterDesde  = !desde || fechaISO >= desde;
+      const beforeHasta = !hasta || fechaISO <= hasta;
 
-      // Partido/Zona exacto desde el selector
-      const zonaName = e.partido || e.zona || '';
+      // ---------- Partido exacto
+      const zonaName     = e.partido || e.zona || '';
       const matchPartido = !partido || zonaName === partido;
 
-      // Estado
-      const est = (e.estado || e.status || '').toLowerCase();
+      // ---------- Estado
+      const est         = (e.estado || e.status || '').toLowerCase();
       const matchEstado = !estado || est === estado.toLowerCase();
 
       return matchCli && matchTracking && afterDesde && beforeHasta && matchPartido && matchEstado;
