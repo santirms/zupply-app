@@ -177,12 +177,11 @@
     // Filtros
 async function aplicarFiltro() {
   const cli     = (document.getElementById('filtroCliente')?.value || '').trim().toLowerCase();
+  const trackingTxt = (document.getElementById('filtroTracking')?.value || '').trim().toLowerCase();
   const desde   = (document.getElementById('filtroDesde')?.value   || '');
   const hasta   = (document.getElementById('filtroHasta')?.value   || '');
   const partido = (document.getElementById('filtroPartido')?.value || '');
   const estado  = (document.getElementById('filtroEstado')?.value  || '');
-  // <-- nuevo: texto para tracking
-  const trackingTxt = (document.getElementById('filtroTracking')?.value || '').trim().toLowerCase();
 
   try {
     if (!enviosCargados.length) {
@@ -191,7 +190,7 @@ async function aplicarFiltro() {
     }
 
     enviosFiltrados = enviosCargados.filter(e => {
-      // Cliente (por nombre o sender/código interno)
+      // Cliente (nombre, sender_id o código interno)
       const nom = e.cliente_id?.nombre?.toLowerCase() || '';
       const matchCli =
         !cli ||
@@ -199,12 +198,16 @@ async function aplicarFiltro() {
         (e.sender_id || '').toLowerCase().includes(cli) ||
         (e.cliente_id?.codigo_cliente || '').toLowerCase().includes(cli);
 
-      // Fecha
+      // Tracking (meli_id o id_venta)
+      const tid = (e.meli_id || e.id_venta || '').toString().toLowerCase();
+      const matchTracking = !trackingTxt || tid.includes(trackingTxt);
+
+      // Fechas
       const fechaISO   = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
       const afterDesde = !desde || fechaISO >= desde;
       const beforeHasta= !hasta || fechaISO <= hasta;
 
-      // Partido/Zona (para selector exacto)
+      // Partido/Zona exacto desde el selector
       const zonaName = e.partido || e.zona || '';
       const matchPartido = !partido || zonaName === partido;
 
@@ -212,11 +215,7 @@ async function aplicarFiltro() {
       const est = (e.estado || e.status || '').toLowerCase();
       const matchEstado = !estado || est === estado.toLowerCase();
 
-      // <-- nuevo: Tracking (meli_id o id_venta)
-      const tid = (e.meli_id || e.id_venta || '').toString().toLowerCase();
-      const matchTracking = !trackingTxt || tid.includes(trackingTxt);
-
-      return matchCli && afterDesde && beforeHasta && matchPartido && matchEstado && matchTracking;
+      return matchCli && matchTracking && afterDesde && beforeHasta && matchPartido && matchEstado;
     });
 
     currentPage = 1;
