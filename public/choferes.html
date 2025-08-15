@@ -174,9 +174,15 @@ function initQrScanner() {
 
   // pegar manual y Enter
   document.querySelector('#inpManualTrk').addEventListener('keydown', e=>{
-    if (e.key === 'Enter') { e.preventDefault(); addTrackingQR(e.target.value); e.target.value=''; }
-  });
-}
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const trk = extractTracking(e.target.value);
+    if (!trk) return alert('Tracking inválido');
+    addTrackingQR(trk);
+    e.target.value = '';
+  }
+});
+
   // Inicialización al cargar la página
   document.addEventListener('DOMContentLoaded', () => {
     cargarDropdowns();
@@ -303,7 +309,9 @@ async function addTrackingQR(trk) {
   if (!trk || stateQR.seen.has(trk)) return;
 
   const r = await fetch(`/api/envios/tracking/${encodeURIComponent(trk)}`);
-  if (!r.ok) return alert(`No encontrado: ${trk}`);
+  if (!r.ok) {
+  return alert(`No encontrado en el sistema: ${trk}`);
+}
   const e = await r.json();
   if ((e.estado || 'pendiente') !== 'pendiente') return alert(`Ya asignado: ${trk}`);
 
