@@ -128,18 +128,27 @@ async function guardar() {
 
 function renderModalResultados(items) {
   const list = qs('#res-list');
-  list.innerHTML = items.map(x => `
-    <li class="border rounded p-3 mb-2">
+  list.innerHTML = '';
+  items.forEach(x => {
+    const li = document.createElement('li');
+    li.className = 'border rounded p-3 mb-2';
+    li.innerHTML = `
       <div class="flex items-center gap-4">
-        <img src="${x.qr_png}" alt="QR" class="w-20 h-20 object-contain"/>
+        <img alt="QR" class="w-20 h-20 object-contain"/>
         <div class="flex-1">
-          <div class="font-bold">Tracking: ${x.tracking}</div>
+          <div class="font-bold">Tracking (id_venta): ${x.id_venta}</div>
           <div class="text-sm">${x.destinatario} — ${x.direccion} (${x.codigo_postal}) ${x.partido||''}</div>
-          <a class="text-blue-600 hover:underline" href="${x.label_url}" target="_blank">Descargar etiqueta 10×15</a>
+          <a class="text-blue-600 hover:underline" href="${x.label_url}" target="_blank" rel="noopener">
+            Descargar etiqueta 10×15
+          </a>
         </div>
       </div>
-    </li>
-  `).join('');
+    `;
+    // Seteamos el src por DOM para evitar que el template quede “literal”
+    const img = li.querySelector('img');
+    img.src = x.qr_png || '';
+    list.appendChild(li);
+  });
 }
 
 function openModalResultados() {
@@ -149,4 +158,3 @@ function openModalResultados() {
 function closeModalResultados() {
   qs('#modal-resultados').classList.add('hidden');
 }
-
