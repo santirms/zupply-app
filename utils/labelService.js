@@ -1,16 +1,15 @@
-// utils/labelService.js
+// backend/utils/labelService.js
 const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
 const dayjs = require('dayjs');
 
-// 10x15 cm => 283.46 x 425.2 pt
-const LABEL_SIZE = [283.46, 425.2];
+const LABEL_SIZE = [283.46, 425.2]; // 10x15 cm
 
 function resolveTracking(envio) {
-  return (envio.id_venta && envio.id_venta.trim())
-      || (envio.meli_id && envio.meli_id.trim())
+  return (envio.id_venta && String(envio.id_venta).trim())
+      || (envio.meli_id && String(envio.meli_id).trim())
       || '';
 }
 
@@ -28,18 +27,14 @@ async function buildLabelPDF(envio) {
   const stream = fs.createWriteStream(outPath);
   doc.pipe(stream);
 
-  // QR del tracking (id_venta/meli_id)
   const qrBuffer = await QRCode.toBuffer(tracking, { width: 140, margin: 0 });
 
-  // Header
   doc.fontSize(18).text(envio.sender_id || 'Cliente', 12, 12, { width: LABEL_SIZE[0]-24 });
   doc.fontSize(22).text(tracking, { align: 'right' });
 
-  // QR a la derecha arriba
   doc.image(qrBuffer, LABEL_SIZE[0] - 12 - 120, 44, { width: 120 });
 
   const blockW = LABEL_SIZE[0] - 24 - 130;
-
   doc.moveDown(0.4);
   doc.fontSize(14).text(envio.destinatario || '', 12, 82, { width: blockW });
   doc.text(envio.direccion || '', { width: blockW });
@@ -53,10 +48,7 @@ async function buildLabelPDF(envio) {
   doc.moveDown(0.5);
   doc.fontSize(10).text(`Fecha: ${dayjs().format('DD/MM/YYYY')}`);
 
-  // Tracking grande abajo
-  doc.fontSize(28).text(tracking, 12, LABEL_SIZE[1] - 64, {
-    width: LABEL_SIZE[0]-24, align: 'center'
-  });
+  doc.fontSize(28).text(tracking, 12, LABEL_SIZE[1] - 64, { width: LABEL_SIZE[0]-24, align: 'center' });
 
   doc.end();
   await new Promise(res => stream.on('finish', res));
@@ -64,3 +56,4 @@ async function buildLabelPDF(envio) {
 }
 
 module.exports = { buildLabelPDF, resolveTracking };
+
