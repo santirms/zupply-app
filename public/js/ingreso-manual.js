@@ -114,13 +114,14 @@ async function guardar() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ paquetes })
     });
-    if (!res.ok) throw new Error(await res.text());
-    alert('Guardado exitoso');
-    window.location.reload();
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Error al guardar');
+
+    // Mostrar modal con resultados (QR + link a PDF)
+    renderModalResultados(data.docs);
+    openModalResultados();
   } catch (err) {
     console.error('Error saving:', err);
     alert('No se pudo guardar');
   }
 }
-
-
