@@ -21,15 +21,46 @@
 
     <!-- Asignación por QR -->
 
-    <div id="tab-qr" class="tab">
-    <select id="selectChoferQR"></select>
-    <select id="selectListaQR"></select>
-    <button id="btnStartScan" class="w-16 h-16 bg-gray-200 rounded shadow mb-4">📷</button>
-    <div id="qr-reader" class="w-full max-w-xs mx-auto hidden"></div>
+<div id="tab-qr" class="tab">
+  <div class="grid md:grid-cols-3 gap-3 mb-3">
+    <label>Chofer:
+      <select id="selectChoferQR" class="border rounded w-full"></select>
+    </label>
+    <label>Lista (pago chofer):
+      <select id="selectListaQR" class="border rounded w-full"></select>
+    </label>
+    <label>Zona:
+      <input id="inputZonaQR" class="border rounded w-full" placeholder="Ej: CABA / Zona 1" />
+    </label>
+  </div>
 
+  <div class="flex items-center gap-3 mb-3">
+    <button id="btnStartScan" class="w-16 h-16 bg-gray-200 rounded shadow">📷</button>
+    <input id="inpManualTrk" class="border rounded px-3 py-2" placeholder="Pegar tracking y Enter" />
+    <div id="countQR" class="ml-auto text-sm text-gray-600"></div>
+  </div>
 
-      <button class="bg-green-600 text-white px-4 py-2 rounded">Asignar Envíos</button>
+  <div id="qr-reader" class="w-full max-w-xs mx-auto hidden"></div>
+
+  <div class="bg-white border rounded p-3">
+    <table class="w-full text-sm">
+      <thead><tr class="border-b">
+        <th class="text-left p-1">Tracking</th>
+        <th class="text-left p-1">Cliente</th>
+        <th class="text-left p-1">Destinatario</th>
+        <th class="text-left p-1">Dirección</th>
+        <th class="text-left p-1">CP/Partido</th>
+        <th class="text-left p-1"></th>
+      </tr></thead>
+      <tbody id="tblQR"></tbody>
+    </table>
+    <div class="mt-3 flex gap-2 justify-end">
+      <a id="btnWA" class="hidden px-4 py-2 rounded bg-green-600 text-white" target="_blank" rel="noopener">WhatsApp</a>
+      <a id="btnRemito" class="hidden px-4 py-2 rounded bg-gray-700 text-white" target="_blank" rel="noopener">Ver remito</a>
+      <button id="btnAsignarQR" class="px-4 py-2 bg-blue-600 text-white rounded">Asignar</button>
     </div>
+  </div>
+</div>
 
     <!-- Asignación desde el mapa -->
     <div id="tab-mapa" class="tab hidden">
@@ -95,6 +126,7 @@
       document.getElementById(id).classList.add('hidden');
     }
   </script>
+  
 <!-- html5-qrcode -->
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
@@ -126,37 +158,28 @@ async function cargarDropdowns() {
 
 
   // Escaneo QR
-  function initQrScanner() {
-    const readerDiv = document.getElementById('qr-reader');
-    const html5QrCode = new Html5Qrcode("qr-reader");
+function initQrScanner() {
+  const readerDiv = document.getElementById('qr-reader');
+  const html5QrCode = new Html5Qrcode("qr-reader");
 
-    document.getElementById('btnStartScan').addEventListener('click', () => {
-      readerDiv.classList.toggle('hidden');
-      html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
-        async qrMessage => {
-          // Al leer, detenemos el escáner
-          await html5QrCode.stop();
-          readerDiv.classList.add('hidden');
+  document.getElementById('btnStartScan').addEventListener('click', async () => {
+    const visible = !readerDiv.classList.contains('hidden');
+    if (visible) { await html5QrCode.stop().catch(()=>{}); readerDiv.classList.add('hidden'); return; }
 
-          // Llamamos al endpoint para traer datos del envío
-          // ahora — busca por tracking (meli_id / id_venta / tracking_id)
-          const envioRes = await fetch(`/api/envios/tracking/${encodeURIComponent(qrMessage)}`);
-          if (!envioRes.ok) {
-            return alert('Envío no encontrado');
-          }
-          const envio = await envioRes.json();
-          console.log('Envio:', envio);
-          // Acá podés mostrar datos en el UI o guardarlos en una variable
-        },
-        err => {
-          console.warn('QR error:', err);
-        }
-      ).catch(err => console.error('No se pudo iniciar QR:', err));
-    });
-  }
+    readerDiv.classList.remove('hidden');
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      async msg => { await html5QrCode.stop(); readerDiv.classList.add('hidden'); addTrackingQR(msg); },
+      err => console.warn('QR error:', err)
+    ).catch(err => { console.error('No se pudo iniciar QR:', err); readerDiv.classList.add('hidden'); });
+  });
 
+  // pegar manual y Enter
+  document.querySelector('#inpManualTrk').addEventListener('keydown', e=>{
+    if (e.key === 'Enter') { e.preventDefault(); addTrackingQR(e.target.value); e.target.value=''; }
+  });
+}
   // Inicialización al cargar la página
   document.addEventListener('DOMContentLoaded', () => {
     cargarDropdowns();
@@ -200,6 +223,91 @@ async function cargarDropdowns() {
       alert('No se pudo crear el chofer');
     }
   });
+
+// --- Estado y helpers de la pestaña QR ---
+const $ = s => document.querySelector(s);
+const stateQR = { items: [], seen: new Set() };
+
+function renderListQR() {
+  const tb = $('#tblQR');
+  tb.innerHTML = stateQR.items.map(it => `
+    <tr class="border-b">
+      <td class="p-1">${it.tracking}</td>
+      <td class="p-1">${it.cliente||''}</td>
+      <td class="p-1">${it.destinatario||''}</td>
+      <td class="p-1">${it.direccion||''}</td>
+      <td class="p-1">${[it.codigo_postal||'', it.partido||''].filter(Boolean).join(' ')}</td>
+      <td class="p-1 text-right"><button class="text-red-600 hover:underline" data-trk="${it.tracking}">Quitar</button></td>
+    </tr>
+  `).join('');
+  $('#countQR').textContent = `Total: ${stateQR.items.length}`;
+  tb.querySelectorAll('button[data-trk]').forEach(btn=>{
+    btn.onclick = () => {
+      const trk = btn.getAttribute('data-trk');
+      stateQR.items = stateQR.items.filter(x=>x.tracking!==trk);
+      stateQR.seen.delete(trk);
+      renderListQR();
+    };
+  });
+}
+
+async function addTrackingQR(trk) {
+  trk = (trk||'').trim();
+  if (!trk || stateQR.seen.has(trk)) return;
+
+  const r = await fetch(`/api/envios/tracking/${encodeURIComponent(trk)}`);
+  if (!r.ok) return alert(`No encontrado: ${trk}`);
+  const e = await r.json();
+  if ((e.estado || 'pendiente') !== 'pendiente') return alert(`Ya asignado: ${trk}`);
+
+  stateQR.seen.add(trk);
+  stateQR.items.push({
+    _id: e._id,
+    tracking: e.id_venta || e.meli_id,
+    cliente: e.cliente_id?.nombre,
+    destinatario: e.destinatario,
+    direccion: e.direccion,
+    codigo_postal: e.codigo_postal,
+    partido: e.partido
+  });
+  renderListQR();
+}
+
+async function asignarQR() {
+  const chofer_id = $('#selectChoferQR').value;
+  const lista_chofer_id = $('#selectListaQR').value || null;
+  const zona = $('#inputZonaQR').value.trim();
+  if (!chofer_id || !stateQR.items.length) return alert('Elegí chofer y escaneá al menos un paquete');
+  if (!confirm(`Asignar ${stateQR.items.length} paquetes?`)) return;
+
+  const r = await fetch('/api/asignaciones/qr', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      chofer_id, lista_chofer_id, zona,
+      tracking_ids: stateQR.items.map(x=>x.tracking)
+    })
+  });
+  const data = await r.json();
+  if (!r.ok || !data.ok) return alert(data.error || 'Error al asignar');
+
+  // mostrar links
+  const btnRemito = $('#btnRemito');
+  const btnWA = $('#btnWA');
+  btnRemito.href = data.remito_url; btnRemito.classList.remove('hidden');
+  if (data.whatsapp_url) { btnWA.href = data.whatsapp_url; btnWA.classList.remove('hidden'); }
+
+  alert(`Asignados: ${data.total}`);
+  // limpiar lista
+  stateQR.items.length = 0; stateQR.seen.clear(); renderListQR();
+}
+
+// Hookear al cargar
+document.addEventListener('DOMContentLoaded', ()=>{
+  renderListQR();
+  document.getElementById('btnAsignarQR').addEventListener('click', asignarQR);
+});
+  
 </script>
 
 
