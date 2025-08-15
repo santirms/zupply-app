@@ -1,15 +1,23 @@
 // backend/controllers/envioController.js
 const Envio = require('../models/Envio');
-// si ya tenés un servicio de geocoding, impórtalo. Si no, lo puedes implementar aquí.
-const { geocodeAddress } = require('./services/geocode');  
+const QRCode = require('qrcode');
+const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
 
-// Crear un envío (y geolocalizarlo)
+// Usa tu util real; en tus otros archivos es geocodeDireccion desde ../utils/geocode
+let geocodeDireccion = async () => ({ lat: null, lon: null });
+try {
+  ({ geocodeDireccion } = require('../utils/geocode'));
+} catch (e) {
+  console.warn('geocode util no disponible, sigo sin geocodificar');
+}
+
+// Crear un envío manual (y geolocalizarlo opcionalmente)
 exports.crearEnvio = async (req, res) => {
   try {
     const {
       sender_id,
       cliente_id,
-      id_venta,
+      id_venta,       // 👈 este es TU tracking
       meli_id,
       codigo_postal,
       zona,
@@ -19,14 +27,20 @@ exports.crearEnvio = async (req, res) => {
       referencia
     } = req.body;
 
-    // 1) Geocodear la dirección completa
-    const coords = await geocodeAddress(`${direccion}, ${codigo_postal} ${partido}`);
-    
-    // 2) Construir el documento
-    const nuevo = new Envio({
+    // Geocode (si tenés util disponible)
+    let latitud = null, longitud = null;
+    if (direccion || codigo_postal || partido) {
+      const q = [direccion, codigo_postal, partido, 'Argentina'].filter(Boolean).join(', ');
+      const coords = await geocodeDireccion(q);
+      // Tus campos de esquema son latitud / longitud
+      latitud  = coords?.lat ?? null;
+      longitud = coords?.lon ?? coords?.lng ?? null;
+    }
+
+    const nuevo = await Envio.create({
       sender_id,
       cliente_id,
-      id_venta,
+      id_venta,      // 👈 tracking del sistema
       meli_id,
       codigo_postal,
       zona,
@@ -34,23 +48,29 @@ exports.crearEnvio = async (req, res) => {
       destinatario,
       direccion,
       referencia,
-      lat: coords.lat,
-      lng: coords.lng
+      latitud,       // 👈 coincide con el schema
+      longitud,      // 👈 coincide con el schema
+      fecha: new Date()
     });
 
-    // 3) Guardar en Mongo
-    await nuevo.save();
-    res.status(201).json(nuevo);
+    // Generar etiqueta 10x15 + QR usando id_venta (o meli_id)
+    const { url } = await buildLabelPDF(nuevo.toObject());
+    const tk = resolveTracking(nuevo);
+    const qr_png = await QRCode.toDataURL(tk, { width: 256, margin: 0 });
+    await Envio.updateOne({ _id: nuevo._id }, { $set: { label_url: url, qr_png } });
+
+    const doc = await Envio.findById(nuevo._id).lean();
+    res.status(201).json(doc);
   } catch (err) {
     console.error('Error crearEnvio:', err);
     res.status(500).json({ error: 'Error al crear envío' });
   }
 };
 
-// Listar envíos (por ejemplo, para el panel general)
+// Listar envíos
 exports.listarEnvios = async (req, res) => {
   try {
-    const envios = await Envio.find();
+    const envios = await Envio.find().lean();
     res.json(envios);
   } catch (err) {
     console.error('Error listarEnvios:', err);
@@ -58,11 +78,24 @@ exports.listarEnvios = async (req, res) => {
   }
 };
 
-// Obtener por tracking_id
+// Buscar por tracking del sistema (id_venta) o por meli_id
 exports.getEnvioByTracking = async (req, res) => {
   try {
-    const envio = await Envio.findOne({ tracking_id: req.params.trackingId });
+    const tracking = req.params.tracking || req.params.trackingId;
+    let envio = await Envio.findOne({ id_venta: tracking }).lean()
+             || await Envio.findOne({ meli_id: tracking }).lean();
+
     if (!envio) return res.status(404).json({ msg: 'Envío no encontrado' });
+
+    // Si no tiene etiqueta, generarla on-demand
+    if (!envio.label_url) {
+      const { url } = await buildLabelPDF(envio);
+      const tk = resolveTracking(envio);
+      const qr_png = await QRCode.toDataURL(tk, { width: 256, margin: 0 });
+      await Envio.updateOne({ _id: envio._id }, { $set: { label_url: url, qr_png } });
+      envio = await Envio.findById(envio._id).lean();
+    }
+
     res.json(envio);
   } catch (err) {
     console.error('Error getEnvioByTracking:', err);
@@ -70,18 +103,36 @@ exports.getEnvioByTracking = async (req, res) => {
   }
 };
 
-// Actualizar un envío (podés usarlo para re-geocode si cambian dirección, etc.)
+// Redirigir al PDF de etiqueta (si no existe, lo genera)
+exports.labelByTracking = async (req, res) => {
+  try {
+    const tracking = req.params.tracking || req.params.trackingId;
+    const envio = await Envio.findOne({ id_venta: tracking })
+               || await Envio.findOne({ meli_id: tracking });
+    if (!envio) return res.status(404).send('No encontrado');
+
+    if (envio.label_url) return res.redirect(envio.label_url);
+
+    const { url } = await buildLabelPDF(envio.toObject());
+    await Envio.updateOne({ _id: envio._id }, { $set: { label_url: url } });
+    res.redirect(url);
+  } catch (e) {
+    console.error('labelByTracking error:', e);
+    res.status(500).send('Error al generar/servir etiqueta');
+  }
+};
+
+// Actualizar (re-geocode si cambia dirección)
 exports.actualizarEnvio = async (req, res) => {
   try {
-    const updates = req.body;
-    // si cambió la dirección, geocodear de nuevo
+    const updates = { ...req.body };
     if (updates.direccion || updates.codigo_postal || updates.partido) {
-      const dir = `${updates.direccion || ''}, ${updates.codigo_postal || ''} ${updates.partido || ''}`;
-      const coords = await geocodeAddress(dir);
-      updates.lat = coords.lat;
-      updates.lng = coords.lng;
+      const q = [updates.direccion, updates.codigo_postal, updates.partido, 'Argentina'].filter(Boolean).join(', ');
+      const coords = await geocodeDireccion(q);
+      updates.latitud  = coords?.lat ?? null;
+      updates.longitud = coords?.lon ?? coords?.lng ?? null;
     }
-    const envio = await Envio.findByIdAndUpdate(req.params.id, updates, { new: true });
+    const envio = await Envio.findByIdAndUpdate(req.params.id, updates, { new: true }).lean();
     if (!envio) return res.status(404).json({ msg: 'Envío no encontrado' });
     res.json(envio);
   } catch (err) {
@@ -90,6 +141,7 @@ exports.actualizarEnvio = async (req, res) => {
   }
 };
 
+// Asignados (sin cambios de lógica, pero usando nombres de campos correctos)
 exports.asignados = async (req, res) => {
   try {
     const { choferId, fecha } = req.query;
@@ -99,11 +151,10 @@ exports.asignados = async (req, res) => {
     const start = new Date(fecha); start.setHours(0,0,0,0);
     const end   = new Date(fecha); end.setHours(23,59,59,999);
 
-    const Envio = require('../models/Envio');
     const envios = await Envio.find({
       chofer: choferId,
       updatedAt: { $gte: start, $lte: end }
-    }).select('destinatario direccion codigo_postal partido lat lng meli_id id_venta');
+    }).select('destinatario direccion codigo_postal partido latitud longitud meli_id id_venta').lean();
 
     res.json(envios);
   } catch (err) {
@@ -111,4 +162,3 @@ exports.asignados = async (req, res) => {
     res.status(500).json({ error: 'Error al obtener asignados' });
   }
 };
-
