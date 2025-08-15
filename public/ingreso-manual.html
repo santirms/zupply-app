@@ -47,24 +47,24 @@
     </div>
   </div>
 
+  <!-- Modal resultados -->
+<div id="modal-resultados" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+  <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold">Envíos creados</h2>
+      <button onclick="closeModalResultados()" class="text-gray-500 hover:text-black">✕</button>
+    </div>
+    <ul id="res-list" class="max-h-[60vh] overflow-auto"></ul>
+    <div class="mt-4 flex justify-end gap-2">
+      <button onclick="closeModalResultados()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+        Listo
+      </button>
+    </div>
+  </div>
+</div>
+  
   <!-- Código JS -->
   <script src="/js/ingreso-manual.js" defer></script>
-  
-  function renderModalResultados(items) {
-  const list = qs('#res-list');
-  list.innerHTML = items.map(x => `
-    <li class="border rounded p-3 mb-2">
-      <div class="flex items-center gap-4">
-        <img src="${x.qr_png}" alt="QR" class="w-20 h-20 object-contain"/>
-        <div class="flex-1">
-          <div class="font-bold">Tracking (id_venta): ${x.id_venta}</div>
-          <div class="text-sm">${x.destinatario} — ${x.direccion} (${x.codigo_postal}) ${x.partido||''}</div>
-          <a class="text-blue-600 hover:underline" href="${x.label_url}" target="_blank">Descargar etiqueta 10×15</a>
-        </div>
-      </div>
-    </li>
-  `).join('');
-}
 
 </body>
 </html>
