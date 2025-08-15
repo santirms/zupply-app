@@ -45,6 +45,9 @@ const envioSchema = new Schema({
 
   latitud:        { type: Number, default: null },
   longitud:       { type: Number, default: null },
+
+  label_url:  { type: String }, // /labels/<id_venta>.pdf
+  qr_png:     { type: String }, // DataURL para previsualizar QR
 }, { timestamps: false });
 
 /**
