@@ -130,7 +130,7 @@
 <!-- html5-qrcode -->
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
-  // Carga dropdowns
+// Carga dropdowns
 async function cargarDropdowns() {
   const [choferRes, listaRes] = await Promise.all([
     fetch('/api/choferes'),
@@ -138,23 +138,14 @@ async function cargarDropdowns() {
   ]);
   const [choferes, listas] = await Promise.all([choferRes.json(), listaRes.json()]);
 
-  // Opciones de chofer
-  const optsChofer = choferes
-    .map(c => `<option value="${c._id}">${c.nombre}</option>`)
-    .join('');
+  const optsChofer = choferes.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
+  const optsLista  = listas.map(l => `<option value="${l._id}">${l.nombre}</option>`).join('');
 
-  // Opciones de lista *sin* mostrar precio
-  const optsLista = listas
-    .map(l => `<option value="${l._id}">${l.nombre}</option>`)
-    .join('');
-
-  // Inyectar en ambos selects
-  document.querySelectorAll('#selectChoferQR, #selectChoferMapa')
-    .forEach(sel => sel.innerHTML = optsChofer);
-  document.querySelectorAll('#selectListaQR, #selectListaMapa')
-    .forEach(sel => sel.innerHTML = optsLista);
+  document.querySelectorAll('#selectChoferQR, #selectChoferMapa').forEach(sel => sel.innerHTML = optsChofer);
+  document.querySelectorAll('#selectListaQR, #selectListaMapa').forEach(sel => sel.innerHTML  = optsLista);
 }
-  // Escaneo QR
+
+// Lector QR
 function initQrScanner() {
   const readerDiv = document.getElementById('qr-reader');
   const html5QrCode = new Html5Qrcode("qr-reader");
@@ -167,29 +158,42 @@ function initQrScanner() {
     html5QrCode.start(
       { facingMode: "environment" },
       { fps: 10, qrbox: 250 },
-      async msg => { await html5QrCode.stop(); readerDiv.classList.add('hidden'); addTrackingQR(msg); },
+      async msg => {
+        await html5QrCode.stop();
+        readerDiv.classList.add('hidden');
+        const trk = extractTracking(msg);       // 👈 parsea JSON/URL/texto
+        if (!trk) { alert('QR inválido'); return; }
+        addTrackingQR(trk);
+      },
       err => console.warn('QR error:', err)
     ).catch(err => { console.error('No se pudo iniciar QR:', err); readerDiv.classList.add('hidden'); });
   });
 
-  // pegar manual y Enter
-  document.querySelector('#inpManualTrk').addEventListener('keydown', e=>{
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    const trk = extractTracking(e.target.value);
-    if (!trk) return alert('Tracking inválido');
-    addTrackingQR(trk);
-    e.target.value = '';
-  }
-});
+  // Pegar tracking a mano y Enter
+  document.querySelector('#inpManualTrk').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const trk = extractTracking(e.target.value);
+      if (!trk) return alert('Tracking inválido');
+      addTrackingQR(trk);
+      e.target.value = '';
+    }
+  });
+} // 👈 ESTA LLAVE FALTABA
 
-  // Inicialización al cargar la página
+// Inicialización al cargar
+document.addEventListener('DOMContentLoaded', () => {
+  cargarDropdowns();
+  initQrScanner();
+});
+// Inicialización al cargar la página
   document.addEventListener('DOMContentLoaded', () => {
     cargarDropdowns();
     initQrScanner();
   });
 </script>
-<script>
+  
+<script>  
   // 1) Capturo el submit del form y disparo el POST
   document.getElementById('formAddChofer').addEventListener('submit', async e => {
     e.preventDefault();
