@@ -6,6 +6,9 @@ const Zona    = require('../models/Zona');
 const Envio   = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const { geocodeDireccion } = require('../utils/geocode');
+const axios   = require('axios'); 
+const QRCode  = require('qrcode');
+const { buildLabelPDF } = require('../utils/labelService');
 
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
 const { getEnvioByTracking } = require('../controllers/envioController');
