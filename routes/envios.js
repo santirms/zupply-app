@@ -11,7 +11,8 @@ const QRCode  = require('qrcode');
 const { buildLabelPDF } = require('../utils/labelService');
 
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
-const { getEnvioByTracking } = require('../controllers/envioController');
+const { getEnvioByTracking, labelByTracking } = require('../controllers/envioController');
+
 
 // GET /envios
 router.get('/', async (req, res) => {
