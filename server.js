@@ -27,6 +27,7 @@ app.use('/api/clientes',      require('./routes/clientes'));
 
 //Ruta por defecto para cualquier archivo HTML
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/labels', express.static(path.join(__dirname, 'public', 'labels')));
 
 // 2) Monta tus APIs con prefijo /api
 app.use('/api/clientes',       require('./routes/clientes'));
