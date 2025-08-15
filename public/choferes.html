@@ -154,9 +154,6 @@ async function cargarDropdowns() {
   document.querySelectorAll('#selectListaQR, #selectListaMapa')
     .forEach(sel => sel.innerHTML = optsLista);
 }
-
-
-
   // Escaneo QR
 function initQrScanner() {
   const readerDiv = document.getElementById('qr-reader');
@@ -251,6 +248,56 @@ function renderListQR() {
   });
 }
 
+// Extrae el tracking usable (id_venta o meli_id) desde el texto del QR
+function extractTracking(raw) {
+  if (!raw) return '';
+  const s = String(raw).trim();
+
+  // Caso 1: JSON (como el de MeLi)
+  if (s.startsWith('{') && s.endsWith('}')) {
+    try {
+      const obj = JSON.parse(s);
+      // campos comunes
+      return String(
+        obj.id ||
+        obj.tracking ||
+        obj.tracking_id ||
+        obj.id_venta ||
+        obj.meli_id ||
+        obj.code ||
+        obj.shipment_id ||
+        ''
+      ).trim();
+    } catch (_) {}
+  }
+
+  // Caso 2: URL con query params
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s);
+      const p =
+        u.searchParams.get('id') ||
+        u.searchParams.get('tracking') ||
+        u.searchParams.get('tracking_id') ||
+        u.searchParams.get('shipment_id') ||
+        u.searchParams.get('meli_id');
+      if (p) return String(p).trim();
+
+      // último segmento numérico largo
+      const seg = u.pathname.split('/').filter(Boolean).reverse()
+        .find(x => /^\d{5,}$/.test(x));
+      if (seg) return seg;
+    } catch (_) {}
+  }
+
+  // Caso 3: texto plano → si trae un número largo, usarlo
+  const m = s.match(/\d{5,}/);
+  if (m) return m[0];
+
+  // Por defecto, devolver el string “pelado”
+  return s;
+}
+  
 async function addTrackingQR(trk) {
   trk = (trk||'').trim();
   if (!trk || stateQR.seen.has(trk)) return;
