@@ -107,18 +107,23 @@ exports.getEnvioByTracking = async (req, res) => {
 exports.labelByTracking = async (req, res) => {
   try {
     const tracking = req.params.tracking || req.params.trackingId;
-    const envio = await Envio.findOne({ id_venta: tracking })
+
+    // Buscamos por id_venta (tu tracking) o meli_id
+    const envio = await Envio.findOne({ id_venta: tracking }) 
                || await Envio.findOne({ meli_id: tracking });
+
     if (!envio) return res.status(404).send('No encontrado');
 
+    // Si ya hay PDF generado, redirigimos
     if (envio.label_url) return res.redirect(envio.label_url);
 
+    // Si no hay, lo generamos y redirigimos
     const { url } = await buildLabelPDF(envio.toObject());
     await Envio.updateOne({ _id: envio._id }, { $set: { label_url: url } });
-    res.redirect(url);
+    return res.redirect(url);
   } catch (e) {
     console.error('labelByTracking error:', e);
-    res.status(500).send('Error al generar/servir etiqueta');
+    return res.status(500).send('Error al generar/servir etiqueta');
   }
 };
 
