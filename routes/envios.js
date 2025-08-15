@@ -169,7 +169,7 @@ router.post('/cargar-masivo', async (req, res) => {
   }
 });
 
-// POST /manual
+// POST /manual  (SOLO este bloque cambia respecto a tu versión)
 router.post('/manual', async (req, res) => {
   try {
     const { paquetes } = req.body;
@@ -177,20 +177,15 @@ router.post('/manual', async (req, res) => {
       return res.status(400).json({ error: 'No hay paquetes.' });
     }
 
-    const docs = await Promise.all(paquetes.map(async p => {
-      // 1) Cliente
-      const cl = await Cliente.findById(p.cliente_id)
-                              .populate('lista_precios');
+    const results = [];
+    for (const p of paquetes) {
+      const cl = await Cliente.findById(p.cliente_id).populate('lista_precios');
       if (!cl) throw new Error('Cliente no encontrado');
 
-      // 2) Generar idVenta si falta
-      const idVenta = (p.id_venta || p.idVenta || '').trim() ||
-                      Math.random().toString(36).substr(2,8).toUpperCase();
+      const idVenta = (p.id_venta || p.idVenta || '').trim()
+        || Math.random().toString(36).substr(2,8).toUpperCase();
 
-      // 3) Determinar zonaName = p.zona o p.partido
       const zonaName = p.zona || p.partido || '';
-
-      // 4) Precio manual o de lista
       let costo = 0;
       if (p.manual_precio) {
         costo = Number(p.precio) || 0;
@@ -204,8 +199,7 @@ router.post('/manual', async (req, res) => {
         }
       }
 
-      // 5) Armamos el documento
-      return new Envio({
+      const envio = await Envio.create({
         cliente_id:    cl._id,
         sender_id:     cl.codigo_cliente,
         destinatario:  p.destinatario,
@@ -213,19 +207,40 @@ router.post('/manual', async (req, res) => {
         codigo_postal: p.codigo_postal,
         zona:          zonaName,
         partido:       zonaName,
-        id_venta:      idVenta,
+        id_venta:      idVenta,     // 👈 tracking del sistema
         referencia:    p.referencia,
         precio:        costo,
         fecha:         new Date()
-      }).save();
-    }));
+      });
 
-    return res.status(201).json({ inserted: docs.length, docs });
+      // Generar etiqueta 10x15 + QR usando id_venta
+      const { url: label_url } = await buildLabelPDF(envio.toObject());
+      const qr_png = await QRCode.toDataURL(idVenta, { width: 256, margin: 0 });
+      await Envio.updateOne({ _id: envio._id }, { $set: { label_url, qr_png } });
+
+      results.push({
+        _id: envio._id.toString(),
+        id_venta: idVenta,            // 👈 lo devolvemos explícito
+        tracking: idVenta,            // 👈 alias por si el front espera "tracking"
+        label_url,
+        qr_png,
+        destinatario: envio.destinatario,
+        direccion: envio.direccion,
+        codigo_postal: envio.codigo_postal,
+        partido: envio.partido
+      });
+    }
+
+    return res.status(201).json({ ok: true, total: results.length, docs: results });
   } catch (err) {
     console.error('Error POST /envios/manual:', err);
     return res.status(500).json({ error: err.message || 'Error al guardar envíos manuales' });
   }
 });
+
+// Mantener:
+router.get('/tracking/:tracking', getEnvioByTracking);
+router.get('/tracking/:tracking/label', labelByTracking);
 
 // GET /del-dia
 router.get('/del-dia', async (req, res) => {
