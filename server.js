@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
+const fs   = require('fs');
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use('/api/clientes',      require('./routes/clientes'));
 //Ruta por defecto para cualquier archivo HTML
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/labels', express.static(path.join(__dirname, 'public', 'labels')));
+app.use('/remitos', express.static(path.join(__dirname, 'public', 'remitos')));
 
 // 2) Monta tus APIs con prefijo /api
 app.use('/api/clientes',       require('./routes/clientes'));
@@ -72,3 +74,19 @@ mongoose.connect(process.env.MONGO_URI)
     app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
   })
   .catch(err => console.error('Error de conexión:', err));
+
+// limpieza cada 24h (archivos > 15 días)
+function cleanupOldRemitos() {
+  const dir = path.join(__dirname, 'public', 'remitos');
+  const keepMs = 15*24*60*60*1000;
+  const now = Date.now();
+  fs.mkdirSync(dir,{recursive:true});
+  fs.readdir(dir,(e,files)=>{ if(e) return;
+    files.forEach(f=>{
+      const p = path.join(dir,f);
+      fs.stat(p,(err,st)=>{ if(!err && (now - st.mtimeMs) > keepMs) fs.unlink(p,()=>{}); });
+    });
+  });
+}
+cleanupOldRemitos();
+setInterval(cleanupOldRemitos, 24*60*60*1000);
