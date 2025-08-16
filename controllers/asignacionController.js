@@ -80,22 +80,29 @@ exports.asignarViaQR = async (req, res) => {
         await Asignacion.updateOne({ _id: asg._id }, { $set: { remito_url } });
     }}
     catch (e) { console.error('Error al generar remito:', e); }
-
-    // 7) WhatsApp (no tirar si falta teléfono)
-    let whatsapp_url = null;
-    try {
-      const tel = (chofer?.telefono || '').replace(/\D/g,'');
-      if (tel) {
-        const texto = encodeURIComponent(
-          `Hola ${chofer?.nombre || ''}! tu remito de hoy está listo:\n` +
-          `📦 Total paquetes: ${pendientes.length}\n` +
-          `📍 Zona: ${listaNombre || zona || ''}\n` +
-          `🗓️ Fecha: ${new Date().toLocaleDateString()}\n` +
-          (remito_url ? `📄 Remito: ${remito_url}` : '')
-        );
-        whatsapp_url = `https://wa.me/${tel}?text=${texto}`;
-      }
-    } catch (e) { console.warn('No se pudo armar WhatsApp:', e.message); }
+    
+// Hora local AR (o lo que pongas en TZ)
+const now = dayjs.tz(new Date(), process.env.TZ || 'America/Argentina/Buenos_Aires');
+const fechaEs = now.format('DD/MM/YYYY');
+const horaEs  = now.format('HH:mm');
+    
+// 7) WhatsApp (no tirar si falta teléfono)
+let whatsapp_url = null;
+try {
+  const tel = (chofer?.telefono || '').replace(/\D/g,'');
+  if (tel) {
+    const mensaje =
+      `Hola ${chofer?.nombre || ''}! tu remito de hoy está listo:\n` +
+      `📦 Total paquetes: ${pendientes.length}\n` +
+      `📍 Zona: ${listaNombre || zona || ''}\n` +
+      `📅 Fecha: ${fechaEs}\n` +
+      `⌚ Hora: ${horaEs}`;
+    const texto = encodeURIComponent(mensaje);
+    whatsapp_url = `https://wa.me/${tel}?text=${texto}`;
+  }
+} catch (e) {
+  console.warn('No se pudo armar WhatsApp:', e.message);
+}
 
     // 8) Responder SIEMPRE ok con lo que tengamos
     return res.json({
