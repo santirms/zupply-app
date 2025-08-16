@@ -2,34 +2,37 @@ const Asignacion = require('../models/Asignacion');
 const Envio = require('../models/Envio');
 const Chofer = require('../models/Chofer');
 const { buildRemitoPDF } = require('../utils/remitoService');
-const ListaDePrecios = require('../models/listaDePrecios');
+
+let ListaDePrecios;
+try { ListaDePrecios = require('../models/ListaDePrecios'); } catch (_) {}
 
 // POST /api/asignaciones/qr
 // body: { chofer_id, lista_chofer_id, zona, tracking_ids: [ 'X', 'Y' ] }
+let ListaDePrecios;
+try { ListaDePrecios = require('../models/ListaDePrecios'); } catch (_) {}
+
 exports.asignarViaQR = async (req, res) => {
   try {
-    const { chofer_id, lista_chofer_id, zona, tracking_ids } = req.body;
+    const { chofer_id, lista_chofer_id, lista_nombre: listaNombreFromUI, zona, tracking_ids } = req.body;
     if (!chofer_id || !Array.isArray(tracking_ids) || !tracking_ids.length) {
       return res.status(400).json({ error: 'Faltan datos' });
-      const lista = lista_chofer_id ? await ListaDePrecios.findById(lista_chofer_id).lean() : null;
-      const listaNombre = lista?.nombre || ''; // ej: "Choferes Zona 1"
     }
 
-    // Buscar envíos por id_venta o meli_id
+    // 1) Buscar envíos por id_venta o meli_id
     const envios = await Envio.find({
       $or: [{ id_venta: { $in: tracking_ids } }, { meli_id: { $in: tracking_ids } }]
     }).populate('cliente_id').lean();
 
     if (!envios.length) return res.status(404).json({ error: 'No se encontraron envíos' });
 
-    // Tomar solo pendientes
+    // 2) Filtrar pendientes
     const pendientes = envios.filter(e => (e.estado || 'pendiente') === 'pendiente');
     if (!pendientes.length) return res.status(400).json({ error: 'Todos ya estaban asignados' });
 
-    // Crear asignación
+    // 3) Crear Asignación
     const asg = await Asignacion.create({
       chofer: chofer_id,
-      zona,
+      zona,                      // podés dejarlo o no usarlo
       lista_chofer_id: lista_chofer_id || null,
       envios: pendientes.map(e => ({
         envio: e._id,
@@ -46,36 +49,60 @@ exports.asignarViaQR = async (req, res) => {
       fecha: new Date()
     });
 
-    // Marcar envíos como asignados
+    // 4) Marcar envíos como asignados
     await Envio.updateMany(
-      { _id: { $in: pendientes.map(e=>e._id) } },
-      { $set: { estado:'asignado', chofer: chofer_id } }
+      { _id: { $in: pendientes.map(e => e._id) } },
+      { $set: { estado: 'asignado', chofer: chofer_id } }
     );
 
-// (cuando generás el PDF)
-const { url } = await buildRemitoPDF({
-  asignacion: asg,
-  chofer,
-  envios: pendientes,
-  listaNombre   // 👈 nuevo
-});
-await Asignacion.updateOne({ _id: asg._id }, { $set: { remito_url: url } });
-    
-// WhatsApp: usar listaNombre en “Zona”
-const total = pendientes.length;
-const tel = (chofer?.telefono || '').replace(/\D/g,'');
-const texto = encodeURIComponent(
-  `Hola ${chofer?.nombre || ''}! tu remito de hoy está listo:\n` +
-  `📦 Total paquetes: ${total}\n` +
-  `📍 Zona: ${listaNombre}\n` +              // 👈 lista de pago
-  `🗓️ Fecha: ${new Date().toLocaleDateString()}\n` +
-  `📄 Remito: ${url}`
-);
-const whatsapp_url = tel ? `https://wa.me/${tel}?text=${texto}` : null;
+    // 5) Preparar datos opcionales (lista/chofer)
+    const chofer = await Chofer.findById(chofer_id).lean();
+    let listaNombre = listaNombreFromUI || '';
+    try {
+      if (!listaNombre && lista_chofer_id && ListaDePrecios) {
+        const lp = await ListaDePrecios.findById(lista_chofer_id).lean();
+        listaNombre = lp?.nombre || '';
+      }
+    } catch (e) {
+      console.warn('No se pudo obtener lista de precios:', e.message);
+    }
 
-    return res.json({ ok:true, asignacion_id: asg._id, remito_url: url, whatsapp_url, total });
+    // 6) Generar PDF (no tirar el endpoint si falla)
+    let remito_url = null;
+    try {
+      const out = await buildRemitoPDF({ asignacion: asg, chofer, envios: pendientes, listaNombre });
+      remito_url = out.url || null;
+      if (remito_url) {
+        await Asignacion.updateOne({ _id: asg._id }, { $set: { remito_url } });
+    }}
+    catch (e) { console.error('Error al generar remito:', e); }
+
+    // 7) WhatsApp (no tirar si falta teléfono)
+    let whatsapp_url = null;
+    try {
+      const tel = (chofer?.telefono || '').replace(/\D/g,'');
+      if (tel) {
+        const texto = encodeURIComponent(
+          `Hola ${chofer?.nombre || ''}! tu remito de hoy está listo:\n` +
+          `📦 Total paquetes: ${pendientes.length}\n` +
+          `📍 Zona: ${listaNombre || zona || ''}\n` +
+          `🗓️ Fecha: ${new Date().toLocaleDateString()}\n` +
+          (remito_url ? `📄 Remito: ${remito_url}` : '')
+        );
+        whatsapp_url = `https://wa.me/${tel}?text=${texto}`;
+      }
+    } catch (e) { console.warn('No se pudo armar WhatsApp:', e.message); }
+
+    // 8) Responder SIEMPRE ok con lo que tengamos
+    return res.json({
+      ok: true,
+      asignacion_id: asg._id,
+      remito_url,
+      whatsapp_url,
+      total: pendientes.length
+    });
   } catch (err) {
-    console.error('asignarViaQR error:', err);
+    console.error('asignarViaQR fatal:', err);
     return res.status(500).json({ error: 'No se pudo crear la asignación' });
   }
 };
