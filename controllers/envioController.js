@@ -82,23 +82,42 @@ exports.listarEnvios = async (req, res) => {
 exports.getEnvioByTracking = async (req, res) => {
   try {
     const tracking = req.params.tracking || req.params.trackingId;
-    let envio = await Envio.findOne({ id_venta: tracking }).lean()
-             || await Envio.findOne({ meli_id: tracking }).lean();
 
+    // 1) buscamos el envío (por id_venta o meli_id)
+    let envio = await Envio.findOne({
+      $or: [{ id_venta: tracking }, { meli_id: tracking }]
+    });
     if (!envio) return res.status(404).json({ msg: 'Envío no encontrado' });
 
-    // Si no tiene etiqueta, generarla on-demand
+    // 2) si no tiene etiqueta, generarla (si usás eso)
     if (!envio.label_url) {
-      const { url } = await buildLabelPDF(envio);
-      const tk = resolveTracking(envio);
+      const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
+      const QRCode = require('qrcode');
+      const { url } = await buildLabelPDF(envio.toObject());
+      const tk = resolveTracking(envio.toObject());
       const qr_png = await QRCode.toDataURL(tk, { width: 256, margin: 0 });
       await Envio.updateOne({ _id: envio._id }, { $set: { label_url: url, qr_png } });
-      envio = await Envio.findById(envio._id).lean();
     }
 
-    res.json(envio);
+    // 3) devolver con cliente poblado (solo lo necesario)
+    const full = await Envio.findById(envio._id)
+      .populate('cliente_id', 'nombre codigo_cliente')
+      .lean();
+
+    return res.json({
+      _id: full._id,
+      id_venta: full.id_venta,
+      meli_id: full.meli_id,
+      sender_id: full.sender_id,
+      cliente_id: full.cliente_id ? { _id: full.cliente_id._id, nombre: full.cliente_id.nombre } : null,
+      direccion: full.direccion,
+      codigo_postal: full.codigo_postal,
+      partido: full.partido,
+      estado: full.estado || 'pendiente',
+      label_url: full.label_url || null
+    });
   } catch (err) {
-    console.error('Error getEnvioByTracking:', err);
+    console.error('getEnvioByTracking error:', err);
     res.status(500).json({ error: 'Error al buscar envío' });
   }
 };
