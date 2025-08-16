@@ -149,6 +149,8 @@ function initQrScanner() {
   const readerDiv = document.getElementById('qr-reader');
   const html5QrCode = new Html5Qrcode("qr-reader");
 
+  let lastTrk = null, lastAt = 0;
+
   document.getElementById('btnStartScan').addEventListener('click', async () => {
     const visible = !readerDiv.classList.contains('hidden');
     if (visible) { await html5QrCode.stop().catch(()=>{}); readerDiv.classList.add('hidden'); return; }
@@ -157,18 +159,24 @@ function initQrScanner() {
     html5QrCode.start(
       { facingMode: "environment" },
       { fps: 10, qrbox: 250 },
-      async msg => {
-        await html5QrCode.stop();
-        readerDiv.classList.add('hidden');
-        const trk = extractTracking(msg);       // 👈 parsea JSON/URL/texto
-        if (!trk) { alert('QR inválido'); return; }
+      msg => {
+        const trk = extractTracking(msg);
+        if (!trk) return;
+
+        const now = Date.now();
+        // evita spam si el mismo código queda en cámara
+        if (trk === lastTrk && (now - lastAt) < 1200) return;
+        lastTrk = trk; lastAt = now;
+
         addTrackingQR(trk);
+        // feedback sutil en teléfono
+        if (navigator.vibrate) navigator.vibrate(40);
       },
       err => console.warn('QR error:', err)
     ).catch(err => { console.error('No se pudo iniciar QR:', err); readerDiv.classList.add('hidden'); });
   });
-
-  // Pegar tracking a mano y Enter
+}
+// Pegar tracking a mano y Enter
   document.querySelector('#inpManualTrk').addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
