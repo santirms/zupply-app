@@ -2,7 +2,7 @@ const Asignacion = require('../models/Asignacion');
 const Envio = require('../models/Envio');
 const Chofer = require('../models/Chofer');
 const { buildRemitoPDF } = require('../utils/remitoService');
-const ListaDePrecios = require('../models/ListaDePrecios');
+const ListaDePrecios = require('../models/listaDePrecios');
 
 // POST /api/asignaciones/qr
 // body: { chofer_id, lista_chofer_id, zona, tracking_ids: [ 'X', 'Y' ] }
