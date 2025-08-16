@@ -3,9 +3,6 @@ const Envio = require('../models/Envio');
 const Chofer = require('../models/Chofer');
 const { buildRemitoPDF } = require('../utils/remitoService');
 
-let ListaDePrecios;
-try { ListaDePrecios = require('../models/ListaDePrecios'); } catch (_) {}
-
 // POST /api/asignaciones/qr
 // body: { chofer_id, lista_chofer_id, zona, tracking_ids: [ 'X', 'Y' ] }
 let ListaDePrecios;
