@@ -2,6 +2,7 @@ const Asignacion = require('../models/Asignacion');
 const Envio = require('../models/Envio');
 const Chofer = require('../models/Chofer');
 const { buildRemitoPDF } = require('../utils/remitoService');
+const ListaDePrecios = require('../models/ListaDePrecios');
 
 // POST /api/asignaciones/qr
 // body: { chofer_id, lista_chofer_id, zona, tracking_ids: [ 'X', 'Y' ] }
@@ -10,6 +11,8 @@ exports.asignarViaQR = async (req, res) => {
     const { chofer_id, lista_chofer_id, zona, tracking_ids } = req.body;
     if (!chofer_id || !Array.isArray(tracking_ids) || !tracking_ids.length) {
       return res.status(400).json({ error: 'Faltan datos' });
+      const lista = lista_chofer_id ? await ListaDePrecios.findById(lista_chofer_id).lean() : null;
+      const listaNombre = lista?.nombre || ''; // ej: "Choferes Zona 1"
     }
 
     // Buscar envíos por id_venta o meli_id
@@ -49,22 +52,26 @@ exports.asignarViaQR = async (req, res) => {
       { $set: { estado:'asignado', chofer: chofer_id } }
     );
 
-    // Generar PDF
-    const chofer = await Chofer.findById(chofer_id).lean();
-    const { url } = await buildRemitoPDF({ asignacion: asg, chofer, envios: pendientes });
-    await Asignacion.updateOne({ _id: asg._id }, { $set: { remito_url: url } });
-
-    // WhatsApp
-    const total = pendientes.length;
-    const tel = (chofer?.telefono || '').replace(/\D/g,''); // ej: 54911...
-    const texto = encodeURIComponent(
-      `Hola ${chofer?.nombre || ''}! tu remito de hoy está listo:\n` +
-      `📦 Total paquetes: ${total}\n` +
-      `📍 Zona: ${zona || ''}\n` +
-      `🗓️ Fecha: ${new Date().toLocaleDateString()}\n` +
-      `📄 Remito: ${url}`
-    );
-    const whatsapp_url = tel ? `https://wa.me/${tel}?text=${texto}` : null;
+// (cuando generás el PDF)
+const { url } = await buildRemitoPDF({
+  asignacion: asg,
+  chofer,
+  envios: pendientes,
+  listaNombre   // 👈 nuevo
+});
+await Asignacion.updateOne({ _id: asg._id }, { $set: { remito_url: url } });
+    
+// WhatsApp: usar listaNombre en “Zona”
+const total = pendientes.length;
+const tel = (chofer?.telefono || '').replace(/\D/g,'');
+const texto = encodeURIComponent(
+  `Hola ${chofer?.nombre || ''}! tu remito de hoy está listo:\n` +
+  `📦 Total paquetes: ${total}\n` +
+  `📍 Zona: ${listaNombre}\n` +              // 👈 lista de pago
+  `🗓️ Fecha: ${new Date().toLocaleDateString()}\n` +
+  `📄 Remito: ${url}`
+);
+const whatsapp_url = tel ? `https://wa.me/${tel}?text=${texto}` : null;
 
     return res.json({ ok:true, asignacion_id: asg._id, remito_url: url, whatsapp_url, total });
   } catch (err) {
