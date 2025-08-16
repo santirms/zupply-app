@@ -2,6 +2,13 @@ const Asignacion = require('../models/Asignacion');
 const Envio = require('../models/Envio');
 const Chofer = require('../models/Chofer');
 const { buildRemitoPDF } = require('../utils/remitoService');
+const dayjs = require('dayjs');
+require('dayjs/locale/es');
+const utc = require('dayjs/plugin/utc');
+const tz  = require('dayjs/plugin/timezone');
+dayjs.extend(utc);
+dayjs.extend(tz);
+dayjs.locale('es');
 
 // POST /api/asignaciones/qr
 // body: { chofer_id, lista_chofer_id, zona, tracking_ids: [ 'X', 'Y' ] }
