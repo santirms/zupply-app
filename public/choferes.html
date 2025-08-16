@@ -346,7 +346,9 @@ async function addTrackingQR(trk) {
 
 async function asignarQR() {
   const chofer_id = $('#selectChoferQR').value;
-  const lista_chofer_id = $('#selectListaQR').value || null;
+  const listaSel  = $('#selectListaQR');
+  const lista_chofer_id = listaSel.value || null;
+  const lista_nombre = listaSel.options[listaSel.selectedIndex]?.textContent || '';
   const zona = $('#inputZonaQR').value.trim();
   if (!chofer_id || !stateQR.items.length) return alert('Elegí chofer y escaneá al menos un paquete');
   if (!confirm(`Asignar ${stateQR.items.length} paquetes?`)) return;
@@ -355,21 +357,26 @@ async function asignarQR() {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
-      chofer_id, lista_chofer_id, zona,
+      chofer_id, lista_chofer_id, lista_nombre, zona,
       tracking_ids: stateQR.items.map(x=>x.tracking)
     })
   });
-  const data = await r.json();
-  if (!r.ok || !data.ok) return alert(data.error || 'Error al asignar');
 
-  // mostrar links
+  let data;
+  try { data = await r.json(); } catch (e) { /* puede no venir JSON si 500 crudo */ }
+
+  if (!r.ok || !data?.ok) {
+    console.error('Asignaciones/qr error:', data || await r.text());
+    return alert((data && (data.error || data.message)) || 'No se pudo crear la asignación');
+  }
+
+  // mostrar links si existen
   const btnRemito = $('#btnRemito');
   const btnWA = $('#btnWA');
-  btnRemito.href = data.remito_url; btnRemito.classList.remove('hidden');
+  if (data.remito_url) { btnRemito.href = data.remito_url; btnRemito.classList.remove('hidden'); }
   if (data.whatsapp_url) { btnWA.href = data.whatsapp_url; btnWA.classList.remove('hidden'); }
 
   alert(`Asignados: ${data.total}`);
-  // limpiar lista
   stateQR.items.length = 0; stateQR.seen.clear(); renderListQR();
 }
 
