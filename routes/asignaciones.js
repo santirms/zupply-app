@@ -1,11 +1,18 @@
 // backend/routes/asignaciones.js
 const router = require('express').Router();
-const { asignarViaQR, asignarViaMapa } = require('../controllers/asignacionController');
+const { asignarViaQR, asignarViaMapa,
+        listarAsignaciones, detalleAsignacion,
+        quitarEnvios, moverEnvios } = require('../controllers/asignacionController');
 
 // POST /api/asignaciones/qr
 router.post('/qr', asignarViaQR);
 
 // POST /api/asignaciones/mapa
 router.post('/mapa', asignarViaMapa);
+//HISTORIAL REMITOS
+router.get('/', listarAsignaciones);
+router.get('/:id', detalleAsignacion);
+router.patch('/:id/remove', quitarEnvios);
+router.patch('/:id/move', moverEnvios);
 
 module.exports = router;
