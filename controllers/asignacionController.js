@@ -88,3 +88,102 @@ exports.asignarViaMapa = async (req, res) => {
     return res.status(500).json({ error: 'No se pudo crear la asignación' });
   }
 };
+
+// Listar remitos (filtros opcionales: desde, hasta, chofer_id)
+exports.listarAsignaciones = async (req, res) => {
+  const { desde, hasta, chofer_id } = req.query;
+  const q = {};
+  if (chofer_id) q.chofer = chofer_id;
+  if (desde || hasta) {
+    q.fecha = {};
+    if (desde) q.fecha.$gte = new Date(desde);
+    if (hasta) q.fecha.$lte = new Date(hasta);
+  }
+  const rows = await Asignacion.find(q)
+    .populate('chofer', 'nombre telefono')
+    .sort({ fecha: -1 })
+    .select('fecha chofer zona total_paquetes remito_url')
+    .lean();
+  res.json(rows);
+};
+
+// Ver detalle
+exports.detalleAsignacion = async (req, res) => {
+  const asg = await Asignacion.findById(req.params.id).populate('chofer','nombre telefono').lean();
+  if (!asg) return res.status(404).json({ error: 'No encontrada' });
+  res.json(asg);
+};
+
+// Quitar envíos (volver a pendiente)
+exports.quitarEnvios = async (req, res) => {
+  const { tracking_ids = [] } = req.body;
+  const asg = await Asignacion.findById(req.params.id);
+  if (!asg) return res.status(404).json({ error: 'No encontrada' });
+
+  const keep = [], removed = [];
+  for (const it of asg.envios) {
+    const trk = it.id_venta || it.meli_id;
+    if (tracking_ids.includes(trk)) removed.push(it); else keep.push(it);
+  }
+  if (!removed.length) return res.status(400).json({ error: 'Nada para quitar' });
+
+  asg.envios = keep;
+  asg.total_paquetes = keep.length;
+  await asg.save();
+
+  // marcar envíos como pendientes
+  const ids = removed.map(x => x.envio);
+  await Envio.updateMany({ _id: { $in: ids } }, { $set: { estado: 'pendiente', chofer: null } });
+
+  // regenerar PDF
+  const chofer = await Chofer.findById(asg.chofer).lean();
+  const { buildRemitoPDF } = require('../utils/remitoService');
+  const { url } = await buildRemitoPDF({ asignacion: asg, chofer, envios: keep });
+  await Asignacion.updateOne({ _id: asg._id }, { $set: { remito_url: url } });
+
+  res.json({ ok: true, total: asg.total_paquetes, remito_url: url, quitados: removed.length });
+};
+
+// Mover envíos a otro chofer (crea nueva asignación)
+exports.moverEnvios = async (req, res) => {
+  const { tracking_ids = [], chofer_destino, zona } = req.body;
+  const origen = await Asignacion.findById(req.params.id);
+  if (!origen) return res.status(404).json({ error: 'No encontrada' });
+  if (!chofer_destino || !tracking_ids.length) return res.status(400).json({ error: 'Faltan datos' });
+
+  const mov = [], keep = [];
+  for (const it of origen.envios) {
+    const trk = it.id_venta || it.meli_id;
+    if (tracking_ids.includes(trk)) mov.push(it); else keep.push(it);
+  }
+  if (!mov.length) return res.status(400).json({ error: 'Nada para mover' });
+
+  // actualizar origen
+  origen.envios = keep;
+  origen.total_paquetes = keep.length;
+  await origen.save();
+
+  // nueva asignación destino
+  const destino = await Asignacion.create({
+    chofer: chofer_destino,
+    zona: zona || origen.zona,
+    envios: mov,
+    total_paquetes: mov.length,
+    fecha: new Date()
+  });
+
+  // actualizar estado de envíos
+  await Envio.updateMany({ _id: { $in: mov.map(x=>x.envio) } }, { $set: { estado: 'asignado', chofer: chofer_destino } });
+
+  // regenerar ambos PDFs
+  const { buildRemitoPDF } = require('../utils/remitoService');
+  const choferO = await Chofer.findById(origen.chofer).lean();
+  const choferD = await Chofer.findById(chofer_destino).lean();
+  const { url: urlO } = await buildRemitoPDF({ asignacion: origen, chofer: choferO, envios: keep });
+  const { url: urlD } = await buildRemitoPDF({ asignacion: destino, chofer: choferD, envios: mov });
+  await Asignacion.updateOne({ _id: origen._id }, { $set: { remito_url: urlO } });
+  await Asignacion.updateOne({ _id: destino._id }, { $set: { remito_url: urlD } });
+
+  res.json({ ok: true, origen_id: origen._id, destino_id: destino._id, remito_origen: urlO, remito_destino: urlD });
+};
+
