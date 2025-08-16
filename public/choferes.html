@@ -47,7 +47,6 @@
       <thead><tr class="border-b">
         <th class="text-left p-1">Tracking</th>
         <th class="text-left p-1">Cliente</th>
-        <th class="text-left p-1">Destinatario</th>
         <th class="text-left p-1">Dirección</th>
         <th class="text-left p-1">CP/Partido</th>
         <th class="text-left p-1"></th>
@@ -241,7 +240,6 @@ function renderListQR() {
     <tr class="border-b">
       <td class="p-1">${it.tracking}</td>
       <td class="p-1">${it.cliente||''}</td>
-      <td class="p-1">${it.destinatario||''}</td>
       <td class="p-1">${it.direccion||''}</td>
       <td class="p-1">${[it.codigo_postal||'', it.partido||''].filter(Boolean).join(' ')}</td>
       <td class="p-1 text-right"><button class="text-red-600 hover:underline" data-trk="${it.tracking}">Quitar</button></td>
@@ -324,7 +322,6 @@ async function addTrackingQR(trk) {
     _id: e._id,
     tracking: e.id_venta || e.meli_id,
     cliente: e.cliente_id?.nombre,
-    destinatario: e.destinatario,
     direccion: e.direccion,
     codigo_postal: e.codigo_postal,
     partido: e.partido
