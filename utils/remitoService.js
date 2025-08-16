@@ -26,8 +26,8 @@ async function buildRemitoPDF({ asignacion, chofer, envios }) {
   doc.fontSize(11).text('Detalle de paquetes', { underline:true });
   doc.moveDown(0.3);
 
-  const headers = ['Tracking','Cliente','Destinatario','Dirección','CP/Partido'];
-  const widths  = [110,90,120,160,80];
+  const headers = ['Tracking', 'Cliente', 'Dirección', 'CP/Partido'];
+  const widths  = [140, 120, 220, 100];
   const startX = doc.x, startY = doc.y;
   headers.forEach((h,i)=>doc.text(h,startX+widths.slice(0,i).reduce((a,b)=>a+b,0),startY,{width:widths[i],continued:i<headers.length-1}));
   doc.moveDown(0.6);
@@ -36,7 +36,6 @@ async function buildRemitoPDF({ asignacion, chofer, envios }) {
     const cells = [
       e.id_venta || e.meli_id || '',
       e.cliente_id?.nombre || '',
-      e.destinatario || '',
       e.direccion || '',
       [e.codigo_postal||'', e.partido||''].filter(Boolean).join(' ')
     ];
