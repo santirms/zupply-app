@@ -14,5 +14,6 @@ router.get('/', listarAsignaciones);
 router.get('/:id', detalleAsignacion);
 router.patch('/:id/remove', quitarEnvios);
 router.patch('/:id/move', moverEnvios);
+router.patch('/:id/add', agregarEnvios);      // agregar a un remito
 
 module.exports = router;
