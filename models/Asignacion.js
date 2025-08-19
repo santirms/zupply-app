@@ -21,6 +21,8 @@ const asignacionSchema = new Schema({
   total_paquetes: { type: Number, default: 0 },
   remito_url:     { type: String },
   fecha:          { type: Date, default: Date.now }
+  lista_chofer_id: { type: Schema.Types.ObjectId, ref: 'ListaDePrecios' },
+  lista_nombre:    { type: String }, // ej: "Choferes Zona 1"
 }, { timestamps: true });
 
 module.exports = mongoose.models.Asignacion || mongoose.model('Asignacion', asignacionSchema);
