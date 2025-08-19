@@ -18,7 +18,7 @@ const asignacionSchema = new Schema({
   chofer:          { type: Schema.Types.ObjectId, ref: 'Chofer', required: true },
   zona:            { type: String }, // opcional: no se usa en PDF/WA si guardás lista_nombre
   lista_chofer_id: { type: Schema.Types.ObjectId, ref: 'ListaDePrecios' },
-  lista_nombre:    { type: String }, // ej: "Choferes Zona 1"
+  lista_nombre:    { type: String, default: '' }, // ej: "Choferes Zona 1"
 
   envios:          [asignacionEnvioSchema],
   total_paquetes:  { type: Number, default: 0 },
