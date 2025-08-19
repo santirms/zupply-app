@@ -399,45 +399,48 @@
     }
 
     // Historial
-    async function cargarRemitos() {
-      const p = new URLSearchParams();
-      const d = $('#fDesde')?.value, h = $('#fHasta')?.value, c = $('#fChofer')?.value;
-      if (d) p.set('desde', d);
-      if (h) p.set('hasta', h);
-      if (c) p.set('chofer_id', c);
+async function cargarRemitos() {
+  const p = new URLSearchParams();
+  const d = document.querySelector('#fDesde')?.value;
+  const h = document.querySelector('#fHasta')?.value;
+  const c = document.querySelector('#fChofer')?.value;
+  if (d) p.set('desde', d);
+  if (h) p.set('hasta', h);
+  if (c) p.set('chofer_id', c);
 
-      const r = await fetch('/api/asignaciones?' + p.toString());
-      const rows = await r.json();
+  const r = await fetch('/api/asignaciones?' + p.toString());
+  const rows = await r.json();
 
-      const tbody = document.getElementById('tblRemitos');
-      if (!tbody) return;
+  const tbody = document.getElementById('tblRemitos');
+  if (!tbody) return;
 
-      tbody.innerHTML = rows.map(x => `
-        <tr class="border-b">
-          <td class="p-1">${new Date(x.fecha).toLocaleString()}</td>
-          <td class="p-1">${x.chofer?.nombre || ''}</td>
-          <td class="p-1">${x.lista_nombre || x.zona || ''}</td>
-          <td class="p-1">${x.total_paquetes}</td>
-          <td class="p-1">
-            <button type="button" class="text-blue-600 underline" data-edit="${x._id}">Editar</button>
-          </td>
-          <td class="p-1">
-            ${x.remito_url ? `<a href="${x.remito_url}" target="_blank" rel="noopener">Descargar</a>` : '-'}
-          </td>
-        </tr>
-      ).trim()`).join('');
+  tbody.innerHTML = rows
+    .map(x => `
+      <tr class="border-b">
+        <td class="p-1">${new Date(x.fecha).toLocaleString()}</td>
+        <td class="p-1">${x.chofer?.nombre || ''}</td>
+        <td class="p-1">${x.lista_nombre || x.lista?.nombre || x.zona || '-'}</td>
+        <td class="p-1">${x.total_paquetes ?? x.total ?? (x.envios?.length || 0)}</td>
+        <td class="p-1">
+          <button type="button" class="text-blue-600 underline" data-edit="${x._id}">Editar</button>
+        </td>
+        <td class="p-1">
+          ${x.remito_url ? `<a href="${x.remito_url}" target="_blank" rel="noopener">Descargar</a>` : '-'}
+        </td>
+      </tr>
+    `.trim())
+    .join('');
 
-      // enganchar los botones Editar (sin navegar)
-      tbody.querySelectorAll('[data-edit]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const id = btn.getAttribute('data-edit');
-          if (!id) return;
-          window.abrirEditorRemito(id);
-        });
-      });
-    }
-
+  // enganchar los botones Editar
+  tbody.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute('data-edit');
+      if (!id) return;
+      window.abrirEditorRemito(id);
+    });
+  });
+}
     document.getElementById('btnFiltrarRemitos').onclick = cargarRemitos;
 
     // Editor de remito (GLOBAL)
