@@ -134,7 +134,7 @@ exports.asignarViaMapa = async (req, res) => {
   }
 };
 
-// Listar remitos (filtros opcionales: desde, hasta, chofer_id)
+// listarAsignaciones
 exports.listarAsignaciones = async (req, res) => {
   const { desde, hasta, chofer_id } = req.query;
   const q = {};
@@ -147,16 +147,28 @@ exports.listarAsignaciones = async (req, res) => {
   const rows = await Asignacion.find(q)
     .populate('chofer', 'nombre telefono')
     .sort({ fecha: -1 })
-    .select('fecha chofer zona total_paquetes remito_url')
+    .select('fecha chofer total_paquetes remito_url lista_nombre zona')   // 👈 lista_nombre
     .lean();
   res.json(rows);
 };
 
-// Ver detalle
+// detalleAsignacion
 exports.detalleAsignacion = async (req, res) => {
-  const asg = await Asignacion.findById(req.params.id).populate('chofer','nombre telefono').lean();
-  if (!asg) return res.status(404).json({ error: 'No encontrada' });
-  res.json(asg);
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+    const asg = await Asignacion.findById(id)
+      .populate('chofer', 'nombre telefono')
+      .populate('envios.cliente_id', 'nombre')       // 👈 para ver Cliente en el editor
+      .lean();
+    if (!asg) return res.status(404).json({ error: 'Asignación no encontrada' });
+    res.json(asg);
+  } catch (e) {
+    console.error('detalleAsignacion error:', e);
+    res.status(500).json({ error: 'Error al obtener asignación' });
+  }
 };
 
 // Quitar envíos (volver a pendiente)
@@ -315,8 +327,73 @@ exports.agregarEnvios = async (req, res) => {
     await Asignacion.updateOne({ _id: asignacion._id }, { $set: { remito_url: url } });
 
     return res.json({ ok:true, remito_url: url, total: asignacion.total_paquetes });
+    // al final de agregarEnvios:
+   return res.json({ ok:true, remito_url: url, total: asignacion.total_paquetes, agregados: subdocs.length });
   } catch (err) {
     console.error('agregarEnvios error:', err);
     return res.status(500).json({ error: 'No se pudo agregar' });
+  }
+};
+
+exports.whatsappLink = async (req, res) => {
+  try {
+    const asg = await Asignacion.findById(req.params.id)
+      .populate('chofer', 'nombre telefono')
+      .lean();
+    if (!asg) return res.status(404).json({ error: 'Asignación no encontrada' });
+
+    const tel = (asg.chofer?.telefono || '').replace(/\D/g, '');
+    const now = dayjs.tz(new Date(), process.env.TZ || 'America/Argentina/Buenos_Aires');
+    const fecha = now.format('DD/MM/YYYY');
+    const hora  = now.format('HH:mm');
+
+    const tipo = String(req.query.tipo || '').toLowerCase();
+    const n = Number(req.query.cantidad || 0);
+    let accion = 'actualizó';
+    if (tipo.includes('agreg')) accion = `se agregaron ${n} paquete${n===1?'':'s'}`;
+    else if (tipo.includes('quita') || tipo.includes('remov')) accion = `se quitaron ${n} paquete${n===1?'':'s'}`;
+
+    const msj =
+      `Hola ${asg.chofer?.nombre || ''}! se actualizó tu remito de hoy:\n` +
+      (accion ? `🔁 ${accion}\n` : '') +
+      `📦 Total paquetes: ${asg.total_paquetes}\n` +
+      `📍 Zona: ${asg.lista_nombre || asg.zona || ''}\n` +
+      `📅 Fecha: ${fecha}\n` +
+      `⌚ Hora: ${hora}`;
+
+    const whatsapp_url = tel ? `https://wa.me/${tel}?text=${encodeURIComponent(msj)}` : null;
+    res.json({ ok: true, whatsapp_url });
+  } catch (e) {
+    console.error('whatsappLink error:', e);
+    res.status(500).json({ error: 'No se pudo generar el WhatsApp' });
+  }
+};
+
+// DELETE /api/asignaciones/:id  (usa ?force=true para devolver envíos a pendiente)
+exports.eliminarAsignacion = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const force = String(req.query.force || '').toLowerCase() === 'true';
+    const asg = await Asignacion.findById(id);
+    if (!asg) return res.status(404).json({ error: 'Asignación no encontrada' });
+
+    if ((asg.envios?.length || 0) > 0) {
+      if (!force) {
+        return res.status(400).json({ error: 'La asignación tiene envíos. Usá ?force=true para revertirlos antes de eliminar.' });
+      }
+      await Envio.updateMany(
+        { _id: { $in: asg.envios.map(e => e.envio) } },
+        {
+          $set: { estado: 'pendiente', chofer: null },
+          $push: { eventos: { tipo:'revertido', origen:'sistema', detalle:`remito eliminado ${asg._id}` } }
+        }
+      );
+    }
+
+    await Asignacion.deleteOne({ _id: id });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('eliminarAsignacion error:', e);
+    res.status(500).json({ error: 'No se pudo eliminar la asignación' });
   }
 };
