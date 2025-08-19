@@ -2,7 +2,7 @@
 const router = require('express').Router();
 const { asignarViaQR, asignarViaMapa,
         listarAsignaciones, detalleAsignacion,
-        quitarEnvios, moverEnvios } = require('../controllers/asignacionController');
+        quitarEnvios, moverEnvios, agregarEnvios, } = require('../controllers/asignacionController');
 
 // POST /api/asignaciones/qr
 router.post('/qr', asignarViaQR);
