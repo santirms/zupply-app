@@ -416,10 +416,15 @@ function abrirModal(id) {
       $('#fChofer').innerHTML = `<option value="">(todos)</option>` +
         arr.map(c=>`<option value="${c._id}">${c.nombre}</option>`).join('');
       cargarRemitos();
-    });
+ document.querySelectorAll('[data-edit]').forEach(btn=>{
+  btn.onclick = ()=> abrirEditorRemito(btn.getAttribute('data-edit'));
+});
+
+  
   }
 }
- 
+
+  
 </script>
 
 
