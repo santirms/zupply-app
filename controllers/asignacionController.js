@@ -18,7 +18,7 @@ try { ListaDePrecios = require('../models/ListaDePrecios'); } catch (_) {}
 
 exports.asignarViaQR = async (req, res) => {
   try {
-    const { chofer_id, lista_chofer_id, lista_nombre: listaNombreFromUI, zona, tracking_ids } = req.body;
+    const { chofer_id, lista_chofer_id, lista_nombre, tracking_ids } = req.body;
     if (!chofer_id || !Array.isArray(tracking_ids) || !tracking_ids.length) {
       return res.status(400).json({ error: 'Faltan datos' });
     }
@@ -35,10 +35,10 @@ exports.asignarViaQR = async (req, res) => {
     if (!pendientes.length) return res.status(400).json({ error: 'Todos ya estaban asignados' });
 
     // 3) Crear Asignación
-    const asg = await Asignacion.create({
+   const asg = await Asignacion.create({
       chofer: chofer_id,
-      zona,                      // podés dejarlo o no usarlo
       lista_chofer_id: lista_chofer_id || null,
+      lista_nombre: lista_nombre || '',
       envios: pendientes.map(e => ({
         envio: e._id,
         id_venta: e.id_venta,
