@@ -231,12 +231,7 @@ function initQrScanner() {
       e.target.value = '';
     }
   });
- 
-// Inicialización al cargar
-document.addEventListener('DOMContentLoaded', () => {
-  cargarDropdowns();
-  initQrScanner();
-});
+
 // Inicialización al cargar la página
   document.addEventListener('DOMContentLoaded', () => {
     cargarDropdowns();
@@ -613,11 +608,18 @@ async function agregarAlRemito(trackingList){
   const data = await r.json();
   if (!r.ok || !data.ok) { alert(data.error || 'No se pudo agregar'); return; }
 
-  // refrescar detalle
-  await abrirEditorRemito(editorState.id);
+  // WhatsApp de “agregados”
+  if (data.agregados) {
+    try {
+      const rr = await fetch(`/api/asignaciones/${editorState.id}/whatsapp?tipo=agregados&cantidad=${data.agregados}`);
+      const ww = await rr.json();
+      if (ww.whatsapp_url) window.open(ww.whatsapp_url, '_blank');
+    } catch {}
+  }
+
+  await abrirEditorRemito(editorState.id); // refresca editor
 }
 
-// quitar seleccionados
 document.getElementById('btnQuitarSel').onclick = async ()=>{
   const sel = Array.from(document.querySelectorAll('#tblEditorRows input[type=checkbox]:checked'))
     .map(c => c.getAttribute('data-trk'));
@@ -630,6 +632,15 @@ document.getElementById('btnQuitarSel').onclick = async ()=>{
   });
   const data = await r.json();
   if (!r.ok || !data.ok) { alert(data.error || 'No se pudo quitar'); return; }
+
+  // WhatsApp de “quitados”
+  if (data.quitados) {
+    try {
+      const rr = await fetch(`/api/asignaciones/${editorState.id}/whatsapp?tipo=quitados&cantidad=${data.quitados}`);
+      const ww = await rr.json();
+      if (ww.whatsapp_url) window.open(ww.whatsapp_url, '_blank');
+    } catch {}
+  }
 
   await abrirEditorRemito(editorState.id);
 };
@@ -663,20 +674,6 @@ document.getElementById('btnReenviarWA').onclick = async () => {
   if (!r.ok || !data.ok || !data.whatsapp_url) return alert('No se pudo generar WhatsApp');
   window.open(data.whatsapp_url, '_blank');
 };
-
-// tras agregar
-if (data.agregados) {
-  const rr = await fetch(`/api/asignaciones/${editorState.id}/whatsapp?tipo=agregados&cantidad=${data.agregados}`);
-  const ww = await rr.json();
-  if (ww.whatsapp_url) window.open(ww.whatsapp_url, '_blank');
-}
-
-// tras quitar
-if (data.quitados) {
-  const rr = await fetch(`/api/asignaciones/${editorState.id}/whatsapp?tipo=quitados&cantidad=${data.quitados}`);
-  const ww = await rr.json();
-  if (ww.whatsapp_url) window.open(ww.whatsapp_url, '_blank');
-}
 
 document.getElementById('btnEliminarRemito').onclick = async () => {
   if (!editorState.id) return;
