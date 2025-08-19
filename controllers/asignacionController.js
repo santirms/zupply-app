@@ -185,13 +185,64 @@ exports.detalleAsignacion = async (req, res) => {
 
     if (!asg) return res.status(404).json({ error: 'Asignación no encontrada' });
 
-    // Traigo envíos completos (y cliente) usando los IDs guardados
-    const envios = await Envio.find({ _id: { $in: asg.envios || [] } })
-      .populate({ path: 'cliente_id', select: 'nombre' })
-      .lean();
+    // Normalizo posibles formatos de "envios"
+    const raw = Array.isArray(asg.envios) ? asg.envios : [];
+    const ids = [];
+    const trackings = [];
 
-    asg.envios = envios;
-    res.json(asg);
+    for (const v of raw) {
+      if (!v) continue;
+
+      // ¿viene como ObjectId / string / objeto con _id?
+      const maybeId = (v && v._id) ? v._id : v;
+
+      if (mongoose.isValidObjectId(maybeId)) {
+        ids.push(maybeId);
+        continue;
+      }
+
+      // ¿viene como tracking?
+      if (typeof v === 'object') {
+        if (v.id_venta) trackings.push(String(v.id_venta).trim());
+        if (v.meli_id)  trackings.push(String(v.meli_id).trim());
+        if (v.tracking) trackings.push(String(v.tracking).trim());
+      } else if (typeof maybeId === 'string' && maybeId.trim()) {
+        // podría ser un tracking guardado "crudo"
+        trackings.push(maybeId.trim());
+      }
+    }
+
+    const found = [];
+
+    if (ids.length) {
+      const byIds = await Envio.find({ _id: { $in: ids } })
+        .populate({ path: 'cliente_id', select: 'nombre' })
+        .lean();
+      found.push(...byIds);
+    }
+
+    if (trackings.length) {
+      const byTrk = await Envio.find({
+        $or: [
+          { id_venta: { $in: trackings } },
+          { meli_id:  { $in: trackings } }
+        ]
+      })
+        .populate({ path: 'cliente_id', select: 'nombre' })
+        .lean();
+
+      // de-duplico por _id
+      const seen = new Set(found.map(x => String(x._id)));
+      for (const r of byTrk) {
+        const k = String(r._id);
+        if (!seen.has(k)) { found.push(r); seen.add(k); }
+      }
+    }
+
+    asg.envios = found;
+    asg.total_paquetes = found.length;
+
+    return res.json(asg);
   } catch (e) {
     console.error('detalleAsignacion error:', e);
     res.status(500).json({ error: e.message || 'Error al obtener detalle' });
