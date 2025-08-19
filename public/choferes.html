@@ -431,7 +431,6 @@ async function cargarRemitos() {
     `.trim())
     .join('');
 
-  // enganchar los botones Editar
   tbody.querySelectorAll('[data-edit]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
