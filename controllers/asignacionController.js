@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Asignacion = require('../models/Asignacion');
 const Envio = require('../models/Envio');
 const Chofer = require('../models/Chofer');
@@ -156,18 +157,27 @@ exports.listarAsignaciones = async (req, res) => {
 exports.detalleAsignacion = async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({ error: 'ID inválido' });
     }
+
+    // Traigo asignación con chofer
     const asg = await Asignacion.findById(id)
-      .populate('chofer', 'nombre telefono')
-      .populate('envios.cliente_id', 'nombre')       // 👈 para ver Cliente en el editor
+      .populate({ path: 'chofer', select: 'nombre telefono' })
       .lean();
+
     if (!asg) return res.status(404).json({ error: 'Asignación no encontrada' });
-    res.json(asg);
+
+    // Si guardás sólo IDs de envíos, traelos aparte y populá cliente
+    const envios = await Envio.find({ _id: { $in: asg.envios || [] } })
+      .populate({ path: 'cliente_id', select: 'nombre' })
+      .lean();
+
+    asg.envios = envios; // sobrescribo con objetos completos
+    return res.json(asg);
   } catch (e) {
     console.error('detalleAsignacion error:', e);
-    res.status(500).json({ error: 'Error al obtener asignación' });
+    res.status(500).json({ error: e.message || 'Error al obtener detalle' });
   }
 };
 
