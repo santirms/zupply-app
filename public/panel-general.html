@@ -40,9 +40,15 @@
           <input type="date" id="filtroDesde" class="border p-2 rounded w-full" />
         <input type="date" id="filtroHasta" class="border p-2 rounded w-full" />
 
-        <select id="filtroPartido" class="border p-2 rounded w-full">
-          <option value="">— Todos los partidos —</option>
-        </select>
+      <!-- Botón + panel de checks -->
+   <div class="relative">
+    <button id="btnPartidos" type="button"
+    class="border p-2 rounded w-full flex justify-between items-center">
+    Partidos (múltiple)
+    <span class="text-gray-400 text-xs" id="countPartidos"></span>
+  </button>
+  <div id="panelPartidos" class="absolute z-10 mt-1 bg-white border rounded shadow w-64 p-2 hidden max-h-64 overflow-auto"></div>
+</div>
 
         <select id="filtroEstado" class="border p-2 rounded w-full">
           <option value="">— Todos los estados —</option>
@@ -164,21 +170,50 @@
     }
 
     // Partidos
-    async function cargarPartidos() {
-      try {
-        const res = await fetch('/api/partidos');
-        const lista = await res.json();
-        const select = document.getElementById('filtroPartido');
-        lista.forEach(p => {
-          const opt = document.createElement('option');
-          opt.value = p.nombre;
-          opt.textContent = p.nombre;
-          select.appendChild(opt);
-        });
-      } catch (e) {
-        console.error('No se pudo cargar partidos:', e);
+const seleccionPartidos = new Set();
+
+async function cargarPartidos() {
+  try {
+    const res = await fetch('/api/partidos');
+    const lista = await res.json();
+    const panel = document.getElementById('panelPartidos');
+    panel.innerHTML = '';
+
+    lista.forEach(p => {
+      const id = `chk_${p.nombre.replace(/\s+/g, '_')}`;
+      const row = document.createElement('label');
+      row.className = 'flex items-center gap-2 p-1 cursor-pointer';
+      row.innerHTML = `
+        <input type="checkbox" id="${id}" data-nombre="${p.nombre}" class="accent-indigo-600">
+        <span>${p.nombre}</span>
+      `;
+      panel.appendChild(row);
+    });
+
+    // toggle panel
+    const btn = document.getElementById('btnPartidos');
+    btn.addEventListener('click', () => {
+      panel.classList.toggle('hidden');
+    });
+    // click fuera
+    document.addEventListener('click', (e) => {
+      if (!panel.contains(e.target) && e.target !== btn) panel.classList.add('hidden');
+    });
+
+    // manejar checks
+    panel.addEventListener('change', (e) => {
+      if (e.target && e.target.matches('input[type="checkbox"]')) {
+        const nombre = e.target.dataset.nombre;
+        if (e.target.checked) seleccionPartidos.add(nombre);
+        else seleccionPartidos.delete(nombre);
+        document.getElementById('countPartidos').textContent =
+          seleccionPartidos.size ? `(${seleccionPartidos.size})` : '';
       }
-    }
+    });
+  } catch (e) {
+    console.error('No se pudo cargar partidos:', e);
+  }
+}
 
     // Filtros
 // Atajos ENTER en inputs
@@ -192,7 +227,8 @@ async function aplicarFiltro() {
   const trackingRaw  = (document.getElementById('filtroTracking')?.value || '');
   const desde        = (document.getElementById('filtroDesde')?.value || '');
   const hasta        = (document.getElementById('filtroHasta')?.value || '');
-  const partido      = (document.getElementById('filtroPartido')?.value || '');
+  const zonaName = e.partido || e.zona || '';
+  const matchPartido = !seleccionPartidos.size || seleccionPartidos.has(zonaName);
   const estado       = (document.getElementById('filtroEstado')?.value || '');
 
   const cli          = cliRaw.trim().toLowerCase();
