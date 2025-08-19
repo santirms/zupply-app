@@ -232,3 +232,91 @@ exports.moverEnvios = async (req, res) => {
   res.json({ ok: true, origen_id: origen._id, destino_id: destino._id, remito_origen: urlO, remito_destino: urlD });
 };
 
+exports.agregarEnvios = async (req, res) => {
+  try {
+    const asgId = req.params.id;
+    const { tracking_ids = [], force_move = true, lista_chofer_id, lista_nombre } = req.body;
+    if (!Array.isArray(tracking_ids) || !tracking_ids.length) {
+      return res.status(400).json({ error: 'Sin tracking_ids' });
+    }
+
+    const asignacion = await Asignacion.findById(asgId);
+    if (!asignacion) return res.status(404).json({ error: 'Asignación no encontrada' });
+
+    // buscar envíos por id_venta o meli_id
+    const envios = await Envio.find({
+      $or: [{ id_venta: { $in: tracking_ids } }, { meli_id: { $in: tracking_ids } }]
+    }).populate('cliente_id').lean();
+
+    if (!envios.length) return res.status(404).json({ error: 'No se encontraron envíos' });
+
+    // detectar duplicados ya presentes en este remito
+    const ya = new Set(asignacion.envios.map(e => String(e.envio)));
+    const nuevos = envios.filter(e => !ya.has(String(e._id)));
+
+    // detectar envíos que están en otra asignación
+    const idsNuevos = nuevos.map(e => e._id);
+    const otras = await Asignacion.find({ 'envios.envio': { $in: idsNuevos } });
+
+    if (otras.length && !force_move) {
+      const conflictos = [];
+      for (const e of nuevos) {
+        const enOtra = otras.find(o => o.envios.some(x => String(x.envio) === String(e._id)));
+        if (enOtra) conflictos.push(e.id_venta || e.meli_id);
+      }
+      return res.status(409).json({ error: 'Algunos envíos ya están en otra asignación', conflictos });
+    }
+
+    // remover de otras asignaciones (si las hay)
+    for (const o of otras) {
+      const keep = o.envios.filter(x => !idsNuevos.some(id => String(id) === String(x.envio)));
+      if (keep.length !== o.envios.length) {
+        o.envios = keep;
+        o.total_paquetes = keep.length;
+        await o.save();
+        // regenerar PDF de origen
+        const choferO = await Chofer.findById(o.chofer).lean();
+        const { url: urlO } = await buildRemitoPDF({ asignacion: o, chofer: choferO, envios: keep, listaNombre: o.lista_nombre });
+        await Asignacion.updateOne({ _id: o._id }, { $set: { remito_url: urlO } });
+      }
+    }
+
+    // agregar a esta asignación
+    const subdocs = nuevos.map(e => ({
+      envio: e._id,
+      id_venta: e.id_venta,
+      meli_id: e.meli_id,
+      cliente_id: e.cliente_id?._id,
+      destinatario: e.destinatario,
+      direccion: e.direccion,
+      codigo_postal: e.codigo_postal,
+      partido: e.partido,
+      precio: e.precio
+    }));
+
+    asignacion.envios.push(...subdocs);
+    asignacion.total_paquetes = asignacion.envios.length;
+    if (lista_chofer_id) asignacion.lista_chofer_id = lista_chofer_id;
+    if (lista_nombre)     asignacion.lista_nombre   = lista_nombre;  // guardamos el nombre visible de la lista
+    await asignacion.save();
+
+    // actualizar envíos (estado y chofer)
+    await Envio.updateMany(
+      { _id: { $in: subdocs.map(x => x.envio) } },
+      { 
+        $set: { estado: 'en_ruta', chofer: asignacion.chofer },
+        $push: { eventos: { tipo:'en_ruta', origen:'sistema', detalle:`agregado a ${asignacion._id}` } }
+      }
+    );
+
+    // regenerar PDF de destino
+    const chofer = await Chofer.findById(asignacion.chofer).lean();
+    const { url } = await buildRemitoPDF({ asignacion, chofer, envios: asignacion.envios, listaNombre: asignacion.lista_nombre });
+    await Asignacion.updateOne({ _id: asignacion._id }, { $set: { remito_url: url } });
+
+    return res.json({ ok:true, remito_url: url, total: asignacion.total_paquetes });
+  } catch (err) {
+    console.error('agregarEnvios error:', err);
+    return res.status(500).json({ error: 'No se pudo agregar' });
+  }
+};
