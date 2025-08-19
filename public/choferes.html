@@ -432,20 +432,43 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 async function cargarRemitos() {
   const p = new URLSearchParams();
-  const d = $('#fDesde').value, h = $('#fHasta').value, c = $('#fChofer').value;
-  if (d) p.set('desde', d); if (h) p.set('hasta', h); if (c) p.set('chofer_id', c);
-  const r = await fetch('/api/asignaciones?'+p.toString());
+  const d = $('#fDesde')?.value, h = $('#fHasta')?.value, c = $('#fChofer')?.value;
+  if (d) p.set('desde', d);
+  if (h) p.set('hasta', h);
+  if (c) p.set('chofer_id', c);
+
+  const r = await fetch('/api/asignaciones?' + p.toString());
   const rows = await r.json();
-  $('#tblRemitos').innerHTML = rows.map(x=>`
+
+  const tbody = document.getElementById('tblRemitos');
+  if (!tbody) return;
+
+  tbody.innerHTML = rows.map(x => `
     <tr class="border-b">
       <td class="p-1">${new Date(x.fecha).toLocaleString()}</td>
-      <td class="p-1">${x.chofer?.nombre||''}</td>
-      <td class="p-1">${x.zona||''}</td>
+      <td class="p-1">${x.chofer?.nombre || ''}</td>
+      <td class="p-1">${x.lista_nombre || x.zona || ''}</td>
       <td class="p-1">${x.total_paquetes}</td>
-      <td class="p-1"><a class="text-blue-600" href="${x.remito_url}" target="_blank">Descargar</a></td>
+      <td class="p-1">
+        <button type="button" class="text-blue-600 underline" data-edit="${x._id}">Editar</button>
+      </td>
+      <td class="p-1">
+        ${x.remito_url ? `<a href="${x.remito_url}" target="_blank" rel="noopener">Descargar</a>` : '-'}
+      </td>
     </tr>
   `).join('');
+
+  // enganchar los botones Editar (sin navegar)
+  tbody.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute('data-edit');
+      if (!id) return;
+      abrirEditorRemito(id);   // 👈 abre el modal editor
+    });
+  });
 }
+  
 document.getElementById('btnFiltrarRemitos').onclick = cargarRemitos;
 
 // al abrir el modal, llená el select de choferes
