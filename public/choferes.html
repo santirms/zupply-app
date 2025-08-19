@@ -149,13 +149,12 @@
       <tbody id="tblEditorRows"></tbody>
     </table>
 
-    <div class="mt-3 flex justify-between items-center">
-      <div id="editorCount" class="text-sm"></div>
-      <a id="linkRemitoPDF" class="text-blue-600 underline" target="_blank">Ver PDF</a>
-    </div>
+<div class="mt-3 flex justify-between items-center">
+  <div id="editorCount" class="text-sm"></div>
+  <div class="flex items-center gap-3">
     <a id="linkRemitoPDF" class="text-blue-600 underline" target="_blank">Ver PDF</a>
-<button id="btnReenviarWA" class="ml-3 px-3 py-2 bg-green-600 text-white rounded">Reenviar WhatsApp</button>
-<button id="btnEliminarRemito" class="ml-3 px-3 py-2 bg-red-700 text-white rounded">Eliminar remito</button>
+    <button id="btnReenviarWA" class="px-3 py-2 bg-green-600 text-white rounded">Reenviar WhatsApp</button>
+    <button id="btnEliminarRemito" class="px-3 py-2 bg-red-700 text-white rounded">Eliminar remito</button>
   </div>
 </div>
   
@@ -165,10 +164,6 @@
       document.getElementById(`tab-${tab}`).classList.remove('hidden');
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.replace('bg-blue-600', 'bg-gray-300'));
       event.target.classList.replace('bg-gray-300', 'bg-blue-600');
-    }
-
-    function abrirModal(id) {
-      document.getElementById(id).classList.remove('hidden');
     }
 
     function cerrarModal(id) {
@@ -480,7 +475,6 @@ async function abrirModal(id) {
 
   if (id === 'modalRemitos') {
     try {
-      // cargar choferes en el filtro
       const res = await fetch('/api/choferes');
       const arr = await res.json();
       const sel = document.getElementById('fChofer');
@@ -489,7 +483,6 @@ async function abrirModal(id) {
           `<option value="">(todos)</option>` +
           arr.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
       }
-
       // cargar remitos y luego enganchar botones Editar
       await cargarRemitos();
       document.querySelectorAll('[data-edit]').forEach(btn => {
@@ -504,8 +497,12 @@ async function abrirModal(id) {
 </script>
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
+  
 const editorState = { id:null, rows:[], seen:new Set(), remito_url:null, lista_nombre:'', chofer_id:null };
 
+window.abrirEditorRemito = async function (asgId) {
+  editorState.id = asgId;  
+  
 async function abrirEditorRemito(asgId){
   editorState.id = asgId;
   // cargar detalle
