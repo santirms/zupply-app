@@ -1,28 +1,30 @@
+// models/Asignacion.js
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
+const asignacionEnvioSchema = new Schema({
+  envio:         { type: Schema.Types.ObjectId, ref: 'Envio', required: true },
+  id_venta:      { type: String },
+  meli_id:       { type: String },
+  cliente_id:    { type: Schema.Types.ObjectId, ref: 'Cliente' },
+  destinatario:  { type: String },
+  direccion:     { type: String },
+  codigo_postal: { type: String },
+  partido:       { type: String },
+  precio:        { type: Number }
+}, { _id: false });
+
 const asignacionSchema = new Schema({
-  chofer: { type: Schema.Types.ObjectId, ref: 'Chofer', required: true },
-  zona:   { type: String },
-  lista_chofer_id: { type: Schema.Types.ObjectId, ref: 'ListaDePrecios' },
-
-  envios: [{
-    envio:        { type: Schema.Types.ObjectId, ref: 'Envio', required: true },
-    id_venta:     String,
-    meli_id:      String,
-    cliente_id:   { type: Schema.Types.ObjectId, ref: 'Cliente' },
-    destinatario: String,
-    direccion:    String,
-    codigo_postal:String,
-    partido:      String,
-    precio:       Number
-  }],
-
-  total_paquetes: { type: Number, default: 0 },
-  remito_url:     { type: String },
-  fecha:          { type: Date, default: Date.now }
+  chofer:          { type: Schema.Types.ObjectId, ref: 'Chofer', required: true },
+  zona:            { type: String }, // opcional: no se usa en PDF/WA si guardás lista_nombre
   lista_chofer_id: { type: Schema.Types.ObjectId, ref: 'ListaDePrecios' },
   lista_nombre:    { type: String }, // ej: "Choferes Zona 1"
+
+  envios:          [asignacionEnvioSchema],
+  total_paquetes:  { type: Number, default: 0 },
+  remito_url:      { type: String },
+  fecha:           { type: Date, default: Date.now }
 }, { timestamps: true });
 
 module.exports = mongoose.models.Asignacion || mongoose.model('Asignacion', asignacionSchema);
+
