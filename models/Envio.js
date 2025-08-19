@@ -41,7 +41,16 @@ const envioSchema = new Schema({
   // campos de asignación/operación
   chofer:         { type: Schema.Types.ObjectId, ref: 'Chofer', default: null },
   zonaAsignada:   { type: Schema.Types.ObjectId, ref: 'Zona',   default: null },
-  estado:         { type: String, enum: ['pendiente','asignado'], default: 'pendiente' },
+  estado: {
+  type: String,
+  enum: ['pendiente','asignado','en_camino','demorado','reprogramado','no_entregado','entregado','cancelado'],
+  default: 'pendiente'
+  },
+  estado_meli: {
+  status:    { type: String, default: null },   // p.ej. shipped, delivered, not_delivered...
+  substatus: { type: String, default: null },   // p.ej. delayed, returning_to_sender...
+  updatedAt: { type: Date,   default: null }
+  },
 
   latitud:        { type: Number, default: null },
   longitud:       { type: Number, default: null },
