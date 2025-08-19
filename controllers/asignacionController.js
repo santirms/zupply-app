@@ -452,26 +452,42 @@ exports.eliminarAsignacion = async (req, res) => {
   try {
     const { id } = req.params;
     const force = String(req.query.force || '').toLowerCase() === 'true';
-    const asg = await Asignacion.findById(id);
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
+    const asg = await Asignacion.findById(id).lean();
     if (!asg) return res.status(404).json({ error: 'Asignación no encontrada' });
 
-    if ((asg.envios?.length || 0) > 0) {
-      if (!force) {
-        return res.status(400).json({ error: 'La asignación tiene envíos. Usá ?force=true para revertirlos antes de eliminar.' });
-      }
+    const raw = Array.isArray(asg.envios) ? asg.envios : [];
+    // intentar extraer ObjectIds válidos
+    const ids = raw
+      .map(v => (v && v._id) ? v._id : v)
+      .filter(x => mongoose.isValidObjectId(x));
+
+    // contamos cuántos de esos IDs existen realmente
+    const countExist = ids.length
+      ? await Envio.countDocuments({ _id: { $in: ids } })
+      : 0;
+
+    if (countExist > 0 && !force) {
+      return res.status(409).json({
+        error: 'La asignación tiene envíos. Usá ?force=true para revertirlos antes de eliminar.'
+      });
+    }
+
+    if (countExist > 0) {
       await Envio.updateMany(
-        { _id: { $in: asg.envios.map(e => e.envio) } },
-        {
-          $set: { estado: 'pendiente', chofer: null },
-          $push: { eventos: { tipo:'revertido', origen:'sistema', detalle:`remito eliminado ${asg._id}` } }
-        }
+        { _id: { $in: ids } },
+        { $set: { estado: 'pendiente', chofer: null, zonaAsignada: null } }
       );
     }
 
     await Asignacion.deleteOne({ _id: id });
-    res.json({ ok: true });
+    return res.json({ ok: true, reverted: countExist });
   } catch (e) {
     console.error('eliminarAsignacion error:', e);
-    res.status(500).json({ error: 'No se pudo eliminar la asignación' });
+    res.status(500).json({ error: 'Error al eliminar asignación' });
   }
 };
