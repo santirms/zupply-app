@@ -10,6 +10,7 @@ const Zona    = require('../models/Zona');
 
 const { getValidToken } = require('../utils/meliUtils');
 const detectarZona      = require('../utils/detectarZona');
+const { mapMeliToInterno } = require('../utils/meliStatus');
 
 const CLIENT_ID     = process.env.MERCADOLIBRE_CLIENT_ID;
 const CLIENT_SECRET = process.env.MERCADOLIBRE_CLIENT_SECRET;
