@@ -387,21 +387,24 @@ async function addTrackingQR(trk) {
 
 async function asignarQR() {
   const chofer_id = $('#selectChoferQR').value;
-  const listaSel  = $('#selectListaQR');
+  const listaSel    = document.getElementById('selectListaQR');
   const lista_chofer_id = listaSel.value || null;
-  const lista_nombre = listaSel.options[listaSel.selectedIndex]?.textContent || '';
+  const lista_nombre    = (listaSel.options[listaSel.selectedIndex]?.textContent || '').trim();
   const zona = $('#inputZonaQR').value.trim();
   if (!chofer_id || !stateQR.items.length) return alert('Elegí chofer y escaneá al menos un paquete');
   if (!confirm(`Asignar ${stateQR.items.length} paquetes?`)) return;
 
-  const r = await fetch('/api/asignaciones/qr', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      chofer_id, lista_chofer_id, lista_nombre, zona,
-      tracking_ids: stateQR.items.map(x=>x.tracking)
-    })
-  });
+const r = await fetch('/api/asignaciones/qr', {
+  method:'POST',
+  headers:{'Content-Type':'application/json'},
+  body: JSON.stringify({
+    chofer_id,
+    lista_chofer_id,
+    lista_nombre,   // 👈 va también el nombre
+    zona,           // si lo usás
+    tracking_ids: stateQR.items.map(x=>x.tracking)
+  })
+});
 
   let data;
   try { data = await r.json(); } catch (e) { /* puede no venir JSON si 500 crudo */ }
