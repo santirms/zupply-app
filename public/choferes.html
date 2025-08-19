@@ -119,7 +119,45 @@
     </table>
   </div>
 </div>
+  
+<div id="modalEditorRemito" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+  <div class="bg-white rounded shadow w-[980px] max-h-[85vh] overflow-auto p-4">
+    <div class="flex justify-between items-center mb-2">
+      <h3 class="text-lg font-bold">Editar remito</h3>
+      <button onclick="cerrarModal('modalEditorRemito')">✕</button>
+    </div>
 
+    <div id="remitoInfo" class="text-sm text-gray-700 mb-3"></div>
+
+    <div class="flex items-center gap-2 mb-3">
+      <button id="btnScanEditor" class="px-3 py-2 bg-gray-200 rounded">📷 Escanear para agregar</button>
+      <input id="inpAddTrk" class="border rounded px-2 py-1" placeholder="Pegar tracking y Enter" />
+      <select id="selChoferDestino" class="border rounded px-2 py-1"></select>
+      <select id="selListaDestino" class="border rounded px-2 py-1"></select>
+      <button id="btnMoverSel" class="px-3 py-2 bg-amber-600 text-white rounded">Mover seleccionados</button>
+      <button id="btnQuitarSel" class="px-3 py-2 bg-red-600 text-white rounded ml-auto">Quitar seleccionados</button>
+    </div>
+
+    <div id="qr-reader-editor" class="hidden w-full max-w-xs"></div>
+
+    <table class="w-full text-sm">
+      <thead><tr class="border-b">
+        <th class="p-1"><input type="checkbox" id="chkAllRows" /></th>
+        <th class="text-left p-1">Tracking</th>
+        <th class="text-left p-1">Cliente</th>
+        <th class="text-left p-1">Dirección</th>
+        <th class="text-left p-1">CP/Partido</th>
+      </tr></thead>
+      <tbody id="tblEditorRows"></tbody>
+    </table>
+
+    <div class="mt-3 flex justify-between items-center">
+      <div id="editorCount" class="text-sm"></div>
+      <a id="linkRemitoPDF" class="text-blue-600 underline" target="_blank">Ver PDF</a>
+    </div>
+  </div>
+</div>
+  
   <script>
     function mostrarTab(tab) {
       document.querySelectorAll('.tab').forEach(t => t.classList.add('hidden'));
@@ -419,12 +457,165 @@ function abrirModal(id) {
  document.querySelectorAll('[data-edit]').forEach(btn=>{
   btn.onclick = ()=> abrirEditorRemito(btn.getAttribute('data-edit'));
 });
-
-  
   }
 }
 
-  
+</script>
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+const editorState = { id:null, rows:[], seen:new Set(), remito_url:null, lista_nombre:'', chofer_id:null };
+
+async function abrirEditorRemito(asgId){
+  editorState.id = asgId;
+  // cargar detalle
+  const r = await fetch(`/api/asignaciones/${asgId}`);
+  if (!r.ok) return alert('No se pudo cargar el remito');
+  const asg = await r.json();
+
+  editorState.rows = (asg.envios || []).map(e => ({
+    tracking: e.id_venta || e.meli_id,
+    cliente:  e.cliente_id?.nombre || '',
+    direccion: e.direccion || '',
+    cp: e.codigo_postal || '',
+    partido: e.partido || ''
+  }));
+  editorState.seen = new Set(editorState.rows.map(x=>x.tracking));
+  editorState.remito_url  = asg.remito_url || null;
+  editorState.lista_nombre = asg.lista_nombre || '';
+  editorState.chofer_id = asg.chofer?._id || asg.chofer || null;
+
+  // info remito
+  document.getElementById('remitoInfo').innerHTML =
+    `<div>Chofer: <b>${asg.chofer?.nombre || ''}</b> · Lista (pago chofer): <b>${asg.lista_nombre || ''}</b> · Fecha: ${new Date(asg.fecha).toLocaleString()}</div>`;
+
+  // link PDF
+  const a = document.getElementById('linkRemitoPDF');
+  if (editorState.remito_url) { a.href = editorState.remito_url; a.classList.remove('pointer-events-none'); }
+  else { a.removeAttribute('href'); a.classList.add('pointer-events-none'); }
+
+  // pintar filas
+  renderEditorRows();
+
+  // llenar select chofer destino y listas
+  const [choferes, listas] = await Promise.all([
+    fetch('/api/choferes').then(x=>x.json()),
+    fetch('/api/listas-de-precios?prefix=Choferes').then(x=>x.json())
+  ]);
+  document.getElementById('selChoferDestino').innerHTML =
+    `<option value="">(Elegir chofer destino)</option>` +
+    choferes.map(c=>`<option value="${c._id}">${c.nombre}</option>`).join('');
+  document.getElementById('selListaDestino').innerHTML =
+    `<option value="">(Misma lista)</option>` +
+    listas.map(l=>`<option value="${l._id}">${l.nombre}</option>`).join('');
+
+  abrirModal('modalEditorRemito');
+}
+
+function renderEditorRows(){
+  const tb = document.getElementById('tblEditorRows');
+  tb.innerHTML = editorState.rows.map(r=>`
+    <tr class="border-b">
+      <td class="p-1"><input type="checkbox" data-trk="${r.tracking}"></td>
+      <td class="p-1">${r.tracking}</td>
+      <td class="p-1">${r.cliente}</td>
+      <td class="p-1">${r.direccion}</td>
+      <td class="p-1">${[r.cp, r.partido].filter(Boolean).join(' ')}</td>
+    </tr>
+  `).join('');
+  document.getElementById('editorCount').textContent = `Total: ${editorState.rows.length}`;
+  const chkAll = document.getElementById('chkAllRows');
+  chkAll.checked = false;
+  chkAll.onchange = () => {
+    tb.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = chkAll.checked);
+  };
+}
+
+// agregar por input
+document.addEventListener('keydown', e=>{
+  if (e.target && e.target.id === 'inpAddTrk' && e.key === 'Enter') {
+    e.preventDefault();
+    const trk = extractTracking(e.target.value);
+    e.target.value = '';
+    if (!trk || editorState.seen.has(trk)) return;
+    agregarAlRemito([trk]);
+  }
+});
+
+// escanear en editor
+(function(){
+  let scanner = null;
+  const reader = document.getElementById('qr-reader-editor');
+  document.getElementById('btnScanEditor').onclick = async () => {
+    if (reader.classList.contains('hidden')) {
+      reader.classList.remove('hidden');
+      scanner = new Html5Qrcode('qr-reader-editor');
+      let last='', lastAt=0;
+      await scanner.start({ facingMode:'environment' }, { fps:10, qrbox:250 }, msg=>{
+        const trk = extractTracking(msg);
+        const now = Date.now();
+        if (!trk) return;
+        if (trk===last && now-lastAt<1200) return;
+        last = trk; lastAt = now;
+        agregarAlRemito([trk]);
+        if (navigator.vibrate) navigator.vibrate(40);
+      });
+    } else {
+      await scanner.stop().catch(()=>{});
+      reader.classList.add('hidden');
+    }
+  };
+})();
+
+async function agregarAlRemito(trackingList){
+  const body = { tracking_ids: trackingList, force_move: true };
+  const r = await fetch(`/api/asignaciones/${editorState.id}/add`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  const data = await r.json();
+  if (!r.ok || !data.ok) { alert(data.error || 'No se pudo agregar'); return; }
+
+  // refrescar detalle
+  await abrirEditorRemito(editorState.id);
+}
+
+// quitar seleccionados
+document.getElementById('btnQuitarSel').onclick = async ()=>{
+  const sel = Array.from(document.querySelectorAll('#tblEditorRows input[type=checkbox]:checked'))
+    .map(c => c.getAttribute('data-trk'));
+  if (!sel.length) return alert('Seleccioná al menos uno');
+  if (!confirm(`Quitar ${sel.length} del remito (vuelven a pendiente)?`)) return;
+
+  const r = await fetch(`/api/asignaciones/${editorState.id}/remove`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ tracking_ids: sel })
+  });
+  const data = await r.json();
+  if (!r.ok || !data.ok) { alert(data.error || 'No se pudo quitar'); return; }
+
+  await abrirEditorRemito(editorState.id);
+};
+
+// mover seleccionados
+document.getElementById('btnMoverSel').onclick = async ()=>{
+  const sel = Array.from(document.querySelectorAll('#tblEditorRows input[type=checkbox]:checked'))
+    .map(c => c.getAttribute('data-trk'));
+  const chofer_destino = document.getElementById('selChoferDestino').value;
+  const lista_chofer_id = document.getElementById('selListaDestino').value || null;
+  const lista_nombre = document.querySelector('#selListaDestino option:checked')?.textContent || '';
+
+  if (!sel.length) return alert('Seleccioná al menos uno');
+  if (!chofer_destino) return alert('Elegí chofer destino');
+
+  const r = await fetch(`/api/asignaciones/${editorState.id}/move`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ tracking_ids: sel, chofer_destino, lista_chofer_id, lista_nombre })
+  });
+  const data = await r.json();
+  if (!r.ok || !data.ok) { alert(data.error || 'No se pudo mover'); return; }
+
+  await abrirEditorRemito(editorState.id);
+};
 </script>
 
 
