@@ -135,25 +135,43 @@ exports.asignarViaMapa = async (req, res) => {
   }
 };
 
-// listarAsignaciones
+
+// ➜ LISTAR (historial) — usa ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&chofer_id=<id>
 exports.listarAsignaciones = async (req, res) => {
-  const { desde, hasta, chofer_id } = req.query;
-  const q = {};
-  if (chofer_id) q.chofer = chofer_id;
-  if (desde || hasta) {
-    q.fecha = {};
-    if (desde) q.fecha.$gte = new Date(desde);
-    if (hasta) q.fecha.$lte = new Date(hasta);
+  try {
+    const { desde, hasta, chofer_id } = req.query;
+    const q = {};
+    if (desde || hasta) {
+      q.fecha = {};
+      if (desde) q.fecha.$gte = new Date(desde);
+      if (hasta) q.fecha.$lte = new Date(hasta);
+    }
+    if (chofer_id) q.chofer = chofer_id;
+
+    const rows = await Asignacion.find(q)
+      .populate({ path: 'chofer', select: 'nombre telefono' })
+      .sort({ fecha: -1 })
+      .lean();
+
+    // Normalizamos campos que espera el front
+    const out = rows.map(r => ({
+      _id: r._id,
+      fecha: r.fecha,
+      chofer: r.chofer || null,
+      // mostrar el nombre de la lista (pago chofer) como "zona"
+      lista_nombre: r.lista_nombre || '',
+      remito_url: r.remito_url || '',
+      total_paquetes: Array.isArray(r.envios) ? r.envios.length : (r.total_paquetes || 0),
+    }));
+
+    res.json(out);
+  } catch (e) {
+    console.error('listarAsignaciones error:', e);
+    res.status(500).json({ error: 'Error al listar asignaciones' });
   }
-  const rows = await Asignacion.find(q)
-    .populate('chofer', 'nombre telefono')
-    .sort({ fecha: -1 })
-    .select('fecha chofer total_paquetes remito_url lista_nombre zona')   // 👈 lista_nombre
-    .lean();
-  res.json(rows);
 };
 
-// detalleAsignacion
+// ➜ DETALLE (para el editor)
 exports.detalleAsignacion = async (req, res) => {
   try {
     const { id } = req.params;
@@ -161,20 +179,19 @@ exports.detalleAsignacion = async (req, res) => {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    // Traigo asignación con chofer
     const asg = await Asignacion.findById(id)
       .populate({ path: 'chofer', select: 'nombre telefono' })
       .lean();
 
     if (!asg) return res.status(404).json({ error: 'Asignación no encontrada' });
 
-    // Si guardás sólo IDs de envíos, traelos aparte y populá cliente
+    // Traigo envíos completos (y cliente) usando los IDs guardados
     const envios = await Envio.find({ _id: { $in: asg.envios || [] } })
       .populate({ path: 'cliente_id', select: 'nombre' })
       .lean();
 
-    asg.envios = envios; // sobrescribo con objetos completos
-    return res.json(asg);
+    asg.envios = envios;
+    res.json(asg);
   } catch (e) {
     console.error('detalleAsignacion error:', e);
     res.status(500).json({ error: e.message || 'Error al obtener detalle' });
