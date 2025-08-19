@@ -28,6 +28,8 @@ router.get('/', async (req, res) => {
 
     // 1) Traer envíos con cliente + lista_precios
     let envios = await Envio.find(filtro)
+      .sort({ fecha: -1, _id: -1 })                    // ⬅️ (punto 3) nuevos primero
+      .populate({ path: 'chofer', select: 'nombre telefono' }) // ⬅️ popular chofer
       .populate({
         path: 'cliente_id',
         populate: { path: 'lista_precios', model: 'ListaDePrecios' }
