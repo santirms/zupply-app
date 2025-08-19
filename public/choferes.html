@@ -449,18 +449,32 @@ async function cargarRemitos() {
 document.getElementById('btnFiltrarRemitos').onclick = cargarRemitos;
 
 // al abrir el modal, llená el select de choferes
-function abrirModal(id) {
-  document.getElementById(id).classList.remove('hidden');
-  if (id==='modalRemitos') {
-    // reusar lista de choferes
-    fetch('/api/choferes').then(r=>r.json()).then(arr=>{
-      $('#fChofer').innerHTML = `<option value="">(todos)</option>` +
-        arr.map(c=>`<option value="${c._id}">${c.nombre}</option>`).join('');
-      cargarRemitos();
- document.querySelectorAll('[data-edit]').forEach(btn=>{
-  btn.onclick = ()=> abrirEditorRemito(btn.getAttribute('data-edit'));
-});
-  )}
+async function abrirModal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('hidden');
+
+  if (id === 'modalRemitos') {
+    try {
+      // cargar choferes en el filtro
+      const res = await fetch('/api/choferes');
+      const arr = await res.json();
+      const sel = document.getElementById('fChofer');
+      if (sel) {
+        sel.innerHTML =
+          `<option value="">(todos)</option>` +
+          arr.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
+      }
+
+      // cargar remitos y luego enganchar botones Editar
+      await cargarRemitos();
+      document.querySelectorAll('[data-edit]').forEach(btn => {
+        btn.onclick = () => abrirEditorRemito(btn.getAttribute('data-edit'));
+      });
+    } catch (err) {
+      console.error('Error cargando remitos/choferes:', err);
+    }
+  }
 }
 
 </script>
