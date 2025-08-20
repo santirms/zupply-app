@@ -16,5 +16,6 @@ function mapMeliToInterno(status, substatus) {
   // default
   return 'pendiente';
 }
+const TERMINALES = new Set(['delivered','cancelled']); // terminales en MeLi
 
-module.exports = { mapMeliToInterno };
+module.exports = { mapMeliToInterno, TERMINALES };
