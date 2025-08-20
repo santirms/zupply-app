@@ -41,13 +41,14 @@
         <input type="date" id="filtroHasta" class="border p-2 rounded w-full" />
 
       <!-- Botón + panel de checks -->
-   <div class="relative">
-    <button id="btnPartidos" type="button"
+<div class="relative">
+  <button id="btnPartidos" type="button"
     class="border p-2 rounded w-full flex justify-between items-center">
     Partidos (múltiple)
     <span class="text-gray-400 text-xs" id="countPartidos"></span>
   </button>
-  <div id="panelPartidos" class="absolute z-10 mt-1 bg-white border rounded shadow w-64 p-2 hidden max-h-64 overflow-auto"></div>
+  <div id="panelPartidos"
+       class="absolute z-10 mt-1 bg-white border rounded shadow w-64 p-2 hidden max-h-64 overflow-auto"></div>
 </div>
 
         <select id="filtroEstado" class="border p-2 rounded w-full">
@@ -130,6 +131,19 @@
     let currentPage = 1;
     const pageSize = 10;
 
+// Normaliza para comparar (sin acentos, minúsculas)
+const normalize = s => (s || '').toString().toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+// Set con los partidos seleccionados (normalizados). Set vacío = TODOS
+const seleccionPartidos = new Set();
+
+// UI ayuda
+function updateCountPartidos() {
+  const el = document.getElementById('countPartidos');
+  el.textContent = (!seleccionPartidos.size) ? '(Todos)' : `(${seleccionPartidos.size})`;
+}
+    
     // Mapa (Leaflet)
     let mapaInstancia = null;
 
@@ -176,44 +190,84 @@ async function cargarPartidos() {
   try {
     const res = await fetch('/api/partidos');
     const lista = await res.json();
+
     const panel = document.getElementById('panelPartidos');
     panel.innerHTML = '';
 
+    // ✔ Fila "Todos"
+    const rowAll = document.createElement('label');
+    rowAll.className = 'flex items-center gap-2 p-1 cursor-pointer font-medium';
+    rowAll.innerHTML = `
+      <input type="checkbox" id="chk_all_partidos" class="accent-indigo-600" checked>
+      <span>Todos</span>
+    `;
+    panel.appendChild(rowAll);
+
+    const hr = document.createElement('hr');
+    hr.className = 'my-1';
+    panel.appendChild(hr);
+
+    // ✔ Resto de partidos (sin tildar inicialmente)
     lista.forEach(p => {
-      const id = `chk_${p.nombre.replace(/\s+/g, '_')}`;
+      const nombre = p.nombre;
+      const nombreNorm = normalize(nombre);
       const row = document.createElement('label');
       row.className = 'flex items-center gap-2 p-1 cursor-pointer';
       row.innerHTML = `
-        <input type="checkbox" id="${id}" data-nombre="${p.nombre}" class="accent-indigo-600">
-        <span>${p.nombre}</span>
+        <input type="checkbox"
+               data-nombre="${nombre}"
+               data-nombre-norm="${nombreNorm}"
+               class="accent-indigo-600">
+        <span>${nombre}</span>
       `;
       panel.appendChild(row);
     });
 
-    // toggle panel
+    // Toggle del panel
     const btn = document.getElementById('btnPartidos');
     btn.addEventListener('click', () => {
       panel.classList.toggle('hidden');
     });
-    // click fuera
     document.addEventListener('click', (e) => {
       if (!panel.contains(e.target) && e.target !== btn) panel.classList.add('hidden');
     });
 
-    // manejar checks
+    // Manejo de checks
     panel.addEventListener('change', (e) => {
-      if (e.target && e.target.matches('input[type="checkbox"]')) {
-        const nombre = e.target.dataset.nombre;
-        if (e.target.checked) seleccionPartidos.add(nombre);
-        else seleccionPartidos.delete(nombre);
-        document.getElementById('countPartidos').textContent =
-          seleccionPartidos.size ? `(${seleccionPartidos.size})` : '';
+      const target = e.target;
+      if (target.id === 'chk_all_partidos') {
+        // "Todos" → vaciamos el set y destildamos individuales
+        if (target.checked) {
+          seleccionPartidos.clear();
+          panel.querySelectorAll('input[type="checkbox"][data-nombre-norm]')
+               .forEach(cb => cb.checked = false);
+        }
+        updateCountPartidos();
+        aplicarFiltro();
+        return;
+      }
+
+      if (target.matches('input[type="checkbox"][data-nombre-norm]')) {
+        // Se tocó un partido individual → desactiva "Todos"
+        const all = document.getElementById('chk_all_partidos');
+        all.checked = false;
+
+        const nomNorm = target.dataset.nombreNorm;
+        if (target.checked) seleccionPartidos.add(nomNorm);
+        else seleccionPartidos.delete(nomNorm);
+
+        updateCountPartidos();
+        aplicarFiltro();
       }
     });
+
+    // Estado inicial: "Todos"
+    updateCountPartidos();
   } catch (e) {
     console.error('No se pudo cargar partidos:', e);
   }
 }
+
 
     // Filtros
 // Atajos ENTER en inputs
@@ -243,10 +297,11 @@ async function aplicarFiltro() {
     enviosFiltrados = enviosCargados.filter(e => {
       // ---------- Cliente (nombre, sender_id, código interno)
       const nom   = e.cliente_id?.nombre?.toLowerCase() || '';
+      const cli  = document.getElementById('filtroCliente').value.trim().toLowerCase();
       const sid   = (e.sender_id || '').toLowerCase();
       const cod   = (e.cliente_id?.codigo_cliente || '').toLowerCase();
       const matchCli =
-        !cli || nom.includes(cli) || sid.includes(cli) || cod.includes(cli);
+        !cli || nom.includes(cli) || (e.sender_id || '').toLowerCase().includes(cli);
 
       // ---------- Tracking (busca en AMBOS: meli_id e id_venta)
       const meliStr  = (e.meli_id   ?? '').toString().toLowerCase();
@@ -255,17 +310,20 @@ async function aplicarFiltro() {
         !trackingTxt || meliStr.includes(trackingTxt) || ventaStr.includes(trackingTxt);
 
       // ---------- Fechas (YYYY-MM-DD)
-      const fechaISO    = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
-      const afterDesde  = !desde || fechaISO >= desde;
+      const desde = document.getElementById('filtroDesde').value;
+      const hasta = document.getElementById('filtroHasta').value;
+      const fechaISO = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
+      const afterDesde = !desde || fechaISO >= desde;
       const beforeHasta = !hasta || fechaISO <= hasta;
 
       // ---------- Partido exacto
-      const zonaName     = e.partido || e.zona || '';
-      const matchPartido = !partido || zonaName === partido;
+      const zonaNameNorm = normalize(e.partido || e.zona || '');
+      const matchPartido = !seleccionPartidos.size || seleccionPartidos.has(zonaNameNorm);
 
       // ---------- Estado
-      const est         = (e.estado || e.status || '').toLowerCase();
-      const matchEstado = !estado || est === estado.toLowerCase();
+      const estadoSel = (document.getElementById('filtroEstado').value || '').toLowerCase();
+      const estItem = (e.estado || e.status || e.estado_meli?.status || '').toLowerCase();
+      const matchEstado = !estadoSel || estItem === estadoSel;
 
       return matchCli && matchTracking && afterDesde && beforeHasta && matchPartido && matchEstado;
     });
@@ -278,17 +336,25 @@ async function aplicarFiltro() {
   }
 }
 
-    function limpiarFiltros() {
-      document.getElementById('filtroCliente').value = '';
-      document.getElementById('filtroDesde').value = '';
-      document.getElementById('filtroHasta').value = '';
-      document.getElementById('filtroPartido').value = '';
-      document.getElementById('filtroEstado').value = '';
-      enviosFiltrados = enviosCargados.slice();
-      currentPage = 1;
-      renderTabla();
-      renderPaginacion();
-    }
+   function limpiarFiltros() {
+  document.getElementById('filtroCliente').value = '';
+  document.getElementById('filtroDesde').value = '';
+  document.getElementById('filtroHasta').value = '';
+  document.getElementById('filtroEstado').value = '';
+
+  // Restablecer "Todos" en partidos
+  seleccionPartidos.clear();
+  const all = document.getElementById('chk_all_partidos');
+  if (all) all.checked = true;
+  document.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]')
+          .forEach(cb => cb.checked = false);
+  updateCountPartidos();
+
+  enviosFiltrados = enviosCargados.slice().sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  currentPage = 1;
+  renderTabla();
+  renderPaginacion();
+}
 
     // Tabla
     function renderTabla() {
