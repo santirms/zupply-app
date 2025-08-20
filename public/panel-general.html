@@ -269,8 +269,6 @@ async function cargarPartidos() {
   }
 }
 
-
-    // Filtros
 // Atajos ENTER en inputs
 ['filtroCliente','filtroTracking','filtroDesde','filtroHasta'].forEach(id => {
   const el = document.getElementById(id);
@@ -282,12 +280,10 @@ async function aplicarFiltro() {
   const trackingRaw  = (document.getElementById('filtroTracking')?.value || '');
   const desde        = (document.getElementById('filtroDesde')?.value || '');
   const hasta        = (document.getElementById('filtroHasta')?.value || '');
-  const zonaName = e.partido || e.zona || '';
-  const matchPartido = !seleccionPartidos.size || seleccionPartidos.has(zonaName);
-  const estado       = (document.getElementById('filtroEstado')?.value || '');
+  const estadoSel    = (document.getElementById('filtroEstado')?.value || '').toLowerCase();
 
-  const cli          = cliRaw.trim().toLowerCase();
-  const trackingTxt  = trackingRaw.trim().toLowerCase().replace(/\s+/g,''); // sin espacios
+  const cliSearch    = cliRaw.trim().toLowerCase();
+  const trackingTxt  = trackingRaw.trim().toLowerCase().replace(/\s+/g,'');
 
   try {
     if (!enviosCargados.length) {
@@ -296,37 +292,37 @@ async function aplicarFiltro() {
     }
 
     enviosFiltrados = enviosCargados.filter(e => {
-      // ---------- Cliente (nombre, sender_id, código interno)
-      const nom   = e.cliente_id?.nombre?.toLowerCase() || '';
-      const cli  = document.getElementById('filtroCliente').value.trim().toLowerCase();
-      const sid   = (e.sender_id || '').toLowerCase();
-      const cod   = (e.cliente_id?.codigo_cliente || '').toLowerCase();
-      const matchCli =
-        !cli || nom.includes(cli) || (e.sender_id || '').toLowerCase().includes(cli);
+      // Cliente / sender / código
+      const nom = e.cliente_id?.nombre?.toLowerCase() || '';
+      const sender = (e.sender_id || '').toLowerCase();
+      const matchCli = !cliSearch || nom.includes(cliSearch) || sender.includes(cliSearch);
 
-      // ---------- Tracking (busca en AMBOS: meli_id e id_venta)
+      // Tracking (meli_id o id_venta)
       const meliStr  = (e.meli_id   ?? '').toString().toLowerCase();
       const ventaStr = (e.id_venta  ?? '').toString().toLowerCase();
-      const matchTracking =
-        !trackingTxt || meliStr.includes(trackingTxt) || ventaStr.includes(trackingTxt);
+      const matchTracking = !trackingTxt || meliStr.includes(trackingTxt) || ventaStr.includes(trackingTxt);
 
-      // ---------- Fechas (YYYY-MM-DD)
-      const desde = document.getElementById('filtroDesde').value;
-      const hasta = document.getElementById('filtroHasta').value;
+      // Fechas YYYY-MM-DD
       const fechaISO = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
-      const afterDesde = !desde || fechaISO >= desde;
+      const afterDesde  = !desde || fechaISO >= desde;
       const beforeHasta = !hasta || fechaISO <= hasta;
 
-      // ---------- Partido exacto
+      // Partidos (checklist múltiple)
       const zonaNameNorm = normalize(e.partido || e.zona || '');
       const matchPartido = !seleccionPartidos.size || seleccionPartidos.has(zonaNameNorm);
 
-      // ---------- Estado
-      const estadoSel = (document.getElementById('filtroEstado').value || '').toLowerCase();
+      // Estado (interno o MeLi)
       const estItem = (e.estado || e.status || e.estado_meli?.status || '').toLowerCase();
       const matchEstado = !estadoSel || estItem === estadoSel;
 
       return matchCli && matchTracking && afterDesde && beforeHasta && matchPartido && matchEstado;
+    });
+
+    // Orden: más nuevos primero
+    enviosFiltrados.sort((a, b) => {
+      const fa = a.fecha ? new Date(a.fecha).getTime() : 0;
+      const fb = b.fecha ? new Date(b.fecha).getTime() : 0;
+      return fb - fa;
     });
 
     currentPage = 1;
@@ -448,20 +444,14 @@ async function mostrarDetalle(envioId) {
     `;
 
     // MAPA (si existe el contenedor y hay coords)
-    const mapEl = document.getElementById('mapDetalle');
+    const mapEl = document.getElementById('mapaDetalle');
     if (mapEl) {
       if (Number.isFinite(data.latitud) && Number.isFinite(data.longitud)) {
-        // si usás Leaflet u otra lib, asegurate de limpiar antes
-        mapEl.innerHTML = '';
-        if (typeof initMapa === 'function') {
-          initMapa(data.latitud, data.longitud);
-        }
-      } else {
-        mapEl.innerHTML =
-          '<div class="w-full h-full flex items-center justify-center text-gray-500">Sin coordenadas</div>';
-      }
-    }
-
+  initMapa(data.latitud, data.longitud);
+} else {
+  initMapa(null, null); // muestra "Sin coordenadas"
+}
+    
     const modal = document.getElementById('modalDetalle');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
