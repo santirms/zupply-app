@@ -184,7 +184,9 @@ function updateCountPartidos() {
     }
 
     // Partidos
-
+console.log('seleccionPartidos:', Array.from(seleccionPartidos));
+console.log('ejemplo zona/partido:', enviosCargados.slice(0,3).map(e => e.partido || e.zona));
+    
 async function cargarPartidos() {
   try {
     const res = await fetch('/api/partidos');
