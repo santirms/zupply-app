@@ -190,4 +190,111 @@ await Envio.updateOne(
   }
 });
 
+// Forzar sync de un envío puntual por meli_id (útil para probar desde UI/Postman)
+router.post('/force-sync/:meli_id', async (req, res) => {
+  try {
+    const meli_id = String(req.params.meli_id);
+    const envio = await Envio.findOne({ meli_id }).populate('cliente_id');
+    if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
+
+    const user_id = envio.cliente_id?.user_id;
+    if (!user_id) return res.status(400).json({ error: 'Cliente sin user_id MeLi' });
+
+    const access_token = await getValidToken(user_id);
+    const { data: sh } = await axios.get(
+      `https://api.mercadolibre.com/shipments/${meli_id}`,
+      { headers: { Authorization: `Bearer ${access_token}` } }
+    );
+
+    const cp         = sh?.receiver_address?.zip_code || '';
+    const destinat   = sh?.receiver_address?.receiver_name || '';
+    const street     = sh?.receiver_address?.street_name || '';
+    const number     = sh?.receiver_address?.street_number || '';
+    const address    = [street, number].filter(Boolean).join(' ').trim();
+    const referencia = sh?.receiver_address?.comment || '';
+
+    const zInfo    = await detectarZona(cp);
+    const partido  = zInfo?.partido || '';
+    const zonaNom  = zInfo?.zona    || '';
+
+    const precio = await (async () => {
+      if (!envio.cliente_id?.lista_precios || !zonaNom) return 0;
+      const zonaDoc = await Zona.findOne({ nombre: zonaNom });
+      if (!zonaDoc) return 0;
+      const item = envio.cliente_id.lista_precios.zonas.find(z => String(z.zona) === String(zonaDoc._id));
+      return item?.precio ?? 0;
+    })();
+
+    const estado_meli = { status: sh.status || null, substatus: sh.substatus || null, updatedAt: new Date() };
+    const estado_interno = mapMeliToInterno(sh.status, sh.substatus);
+
+    await Envio.updateOne(
+      { meli_id },
+      {
+        $set: {
+          codigo_postal: cp,
+          partido, zona: zonaNom,
+          destinatario: destinat,
+          direccion: address,
+          referencia,
+          precio,
+          estado_meli,
+          estado: estado_interno
+        }
+      }
+    );
+
+    const updated = await Envio.findOne({ meli_id });
+    res.json({ ok: true, envio: updated });
+  } catch (err) {
+    console.error('force-sync error:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Error al sincronizar' });
+  }
+});
+
+// Sync masivo (para cron/worker): actualiza no terminales
+router.post('/sync-pending', async (req, res) => {
+  try {
+    const TERMINALES = new Set(['delivered','cancelled']);
+
+    const pendientes = await Envio.find({
+      meli_id: { $ne: null },
+      $or: [
+        { 'estado_meli.status': { $nin: Array.from(TERMINALES) } },
+        { estado: { $nin: ['entregado','cancelado'] } },
+      ]
+    }).limit(100);
+
+    let ok = 0, fail = 0;
+    for (const e of pendientes) {
+      try {
+        const cliente = await Cliente.findById(e.cliente_id);
+        if (!cliente?.user_id) { fail++; continue; }
+        const access_token = await getValidToken(cliente.user_id);
+        const { data: sh } = await axios.get(
+          `https://api.mercadolibre.com/shipments/${e.meli_id}`,
+          { headers: { Authorization: `Bearer ${access_token}` } }
+        );
+
+        const estado_meli = { status: sh.status || null, substatus: sh.substatus || null, updatedAt: new Date() };
+        const estado_interno = mapMeliToInterno(sh.status, sh.substatus);
+
+        await Envio.updateOne(
+          { _id: e._id },
+          { $set: { estado_meli, estado: estado_interno } }
+        );
+        ok++;
+      } catch (err) {
+        fail++;
+        console.error('sync item error:', e._id, err.response?.data || err.message);
+      }
+      await new Promise(r => setTimeout(r, 150)); // rate-limit suave
+    }
+    res.json({ ok, fail, total: pendientes.length });
+  } catch (err) {
+    console.error('sync-pending error:', err);
+    res.status(500).json({ error: 'Error en sync-pending' });
+  }
+});
+
 module.exports = router;
