@@ -154,26 +154,36 @@ router.post('/webhook', async (req, res) => {
     // Precio por lista del cliente
     const precio   = await precioPorZona(cliente, zonaNom);
 
-    // Upsert por meli_id (idempotente)
-    await Envio.updateOne(
-      { meli_id: String(sh.id) },
-      {
-        $setOnInsert: { fecha: new Date() },
-        $set: {
-          meli_id:       String(sh.id),
-          sender_id:     String(cliente.codigo_cliente || cliente.sender_id?.[0] || user_id),
-          cliente_id:    cliente._id,
-          codigo_postal: cp,
-          partido,
-          zona:          zonaNom,
-          destinatario:  destinat,
-          direccion:     address,
-          referencia,
-          precio
-        }
-      },
-      { upsert: true }
-    );
+const estado_meli = {
+  status:    sh.status || null,
+  substatus: sh.substatus || null,
+  updatedAt: new Date()
+};
+const estado_interno = mapMeliToInterno(sh.status, sh.substatus);
+
+// Upsert por meli_id (idempotente)
+await Envio.updateOne(
+  { meli_id: String(sh.id) },
+  {
+    $setOnInsert: { fecha: new Date() },
+    $set: {
+      meli_id:       String(sh.id),
+      sender_id:     String(cliente.codigo_cliente || cliente.sender_id?.[0] || user_id),
+      cliente_id:    cliente._id,
+      codigo_postal: cp,
+      partido,
+      zona:          zonaNom,
+      destinatario:  destinat,
+      direccion:     address,
+      referencia,
+      precio,
+      estado_meli,
+      estado: estado_interno
+    }
+  },
+  { upsert: true }
+);
+    
   } catch (err) {
     console.error('Webhook ML error:', err.response?.data || err.message);
     // Ya respondimos 200; no relanzamos error
