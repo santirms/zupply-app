@@ -124,393 +124,394 @@
     </div>
   </div>
 
-  <script>
-    // Estado
-    let enviosCargados = [];
-    let enviosFiltrados = [];
-    let currentPage = 1;
-    const pageSize = 10;
+<script>
+  // =================== Estado ===================
+  let enviosCargados = [];
+  let enviosFiltrados = [];
+  let currentPage = 1;
+  const pageSize = 10;
+  let mapaInstancia = null;
 
-// Normaliza para comparar (sin acentos, minúsculas)
-const normalize = s => (s || '').toString().toLowerCase()
-  .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  // =================== Utils ===================
+  const normalize = s =>
+    (s || '')
+      .toString()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
 
-// Set con los partidos seleccionados (normalizados). Set vacío = TODOS
-const seleccionPartidos = new Set();
-
-// UI ayuda
-function updateCountPartidos() {
-  const el = document.getElementById('countPartidos');
-  el.textContent = (!seleccionPartidos.size) ? '(Todos)' : `(${seleccionPartidos.size})`;
-}
-    
-    // Mapa (Leaflet)
-    let mapaInstancia = null;
-
-    function initMapa(lat, lng) {
-      const cont = document.getElementById('mapa');
-
-      // sin coords
-      if (!lat || !lng) {
-        cont.innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">Sin coordenadas</div>';
-        return;
-      }
-
-      // destruir si existe
-      if (mapaInstancia) {
-        mapaInstancia.remove();
-        mapaInstancia = null;
-      }
-
-      mapaInstancia = L.map('mapa').setView([lat, lng], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(mapaInstancia);
-      L.marker([lat, lng]).addTo(mapaInstancia);
-
-      // forzar recalcular tamaño (modal venía oculto)
-      setTimeout(() => mapaInstancia.invalidateSize(), 0);
-    }
-
-    // Resumen del día
-    async function cargarResumenDiario() {
-      try {
-        const res = await fetch('/api/envios/del-dia');
-        const data = await res.json();
-        document.getElementById('total-paquetes').textContent = data.total ?? 0;
-      } catch (e) {
-        console.error('Error al cargar resumen diario:', e);
-      }
-    }
-
-    // Partidos
-console.log('seleccionPartidos:', Array.from(seleccionPartidos));
-console.log('ejemplo zona/partido:', enviosCargados.slice(0,3).map(e => e.partido || e.zona));
-    
-async function cargarPartidos() {
-  try {
-    const res = await fetch('/api/partidos');
-    const lista = await res.json();
-
-    const panel = document.getElementById('panelPartidos');
-    panel.innerHTML = '';
-
-    // ✔ Fila "Todos"
-    const rowAll = document.createElement('label');
-    rowAll.className = 'flex items-center gap-2 p-1 cursor-pointer font-medium';
-    rowAll.innerHTML = `
-      <input type="checkbox" id="chk_all_partidos" class="accent-indigo-600" checked>
-      <span>Todos</span>
-    `;
-    panel.appendChild(rowAll);
-
-    const hr = document.createElement('hr');
-    hr.className = 'my-1';
-    panel.appendChild(hr);
-
-    // ✔ Resto de partidos (sin tildar inicialmente)
-    lista.forEach(p => {
-      const nombre = p.nombre;
-      const nombreNorm = normalize(nombre);
-      const row = document.createElement('label');
-      row.className = 'flex items-center gap-2 p-1 cursor-pointer';
-      row.innerHTML = `
-        <input type="checkbox"
-               data-nombre="${nombre}"
-               data-nombre-norm="${nombreNorm}"
-               class="accent-indigo-600">
-        <span>${nombre}</span>
-      `;
-      panel.appendChild(row);
-    });
-
-    // Toggle del panel
-    const btn = document.getElementById('btnPartidos');
-    btn.addEventListener('click', () => {
-      panel.classList.toggle('hidden');
-    });
-    document.addEventListener('click', (e) => {
-      if (!panel.contains(e.target) && e.target !== btn) panel.classList.add('hidden');
-    });
-
-    // Manejo de checks
-    panel.addEventListener('change', (e) => {
-      const target = e.target;
-      if (target.id === 'chk_all_partidos') {
-        // "Todos" → vaciamos el set y destildamos individuales
-        if (target.checked) {
-          seleccionPartidos.clear();
-          panel.querySelectorAll('input[type="checkbox"][data-nombre-norm]')
-               .forEach(cb => cb.checked = false);
-        }
-        updateCountPartidos();
-        aplicarFiltro();
-        return;
-      }
-
-      if (target.matches('input[type="checkbox"][data-nombre-norm]')) {
-        // Se tocó un partido individual → desactiva "Todos"
-        const all = document.getElementById('chk_all_partidos');
-        all.checked = false;
-
-        const nomNorm = target.dataset.nombreNorm;
-        if (target.checked) seleccionPartidos.add(nomNorm);
-        else seleccionPartidos.delete(nomNorm);
-
-        updateCountPartidos();
-        aplicarFiltro();
-      }
-    });
-
-    // Estado inicial: "Todos"
-    updateCountPartidos();
-  } catch (e) {
-    console.error('No se pudo cargar partidos:', e);
+  // Filtro multi-partidos (Set vacío = TODOS)
+  const seleccionPartidos = new Set();
+  function updateCountPartidos() {
+    const el = document.getElementById('countPartidos');
+    if (el) el.textContent = !seleccionPartidos.size ? '(Todos)' : `(${seleccionPartidos.size})`;
   }
-}
 
-// Atajos ENTER en inputs
-['filtroCliente','filtroTracking','filtroDesde','filtroHasta'].forEach(id => {
-  const el = document.getElementById(id);
-  if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') aplicarFiltro(); });
-});
-
-async function aplicarFiltro() {
-  const cliRaw       = (document.getElementById('filtroCliente')?.value || '');
-  const trackingRaw  = (document.getElementById('filtroTracking')?.value || '');
-  const desde        = (document.getElementById('filtroDesde')?.value || '');
-  const hasta        = (document.getElementById('filtroHasta')?.value || '');
-  const estadoSel    = (document.getElementById('filtroEstado')?.value || '').toLowerCase();
-
-  const cliSearch    = cliRaw.trim().toLowerCase();
-  const trackingTxt  = trackingRaw.trim().toLowerCase().replace(/\s+/g,'');
-
-  try {
-    if (!enviosCargados.length) {
-      const res = await fetch('/api/envios');
-      enviosCargados = await res.json();
+  // =================== Mapa ===================
+  function initMapa(lat, lng) {
+    const cont = document.getElementById('mapa');
+    if (!cont) return;
+    // limpiar
+    cont.innerHTML = '';
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      cont.innerHTML =
+        '<div class="flex items-center justify-center h-full text-gray-500">Sin coordenadas</div>';
+      return;
     }
+    if (mapaInstancia) {
+      mapaInstancia.remove();
+      mapaInstancia = null;
+    }
+    mapaInstancia = L.map('mapa').setView([lat, lng], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(mapaInstancia);
+    L.marker([lat, lng]).addTo(mapaInstancia);
+    setTimeout(() => mapaInstancia.invalidateSize(), 0);
+  }
 
-    enviosFiltrados = enviosCargados.filter(e => {
-      // Cliente / sender / código
-      const nom = e.cliente_id?.nombre?.toLowerCase() || '';
-      const sender = (e.sender_id || '').toLowerCase();
-      const matchCli = !cliSearch || nom.includes(cliSearch) || sender.includes(cliSearch);
+  // =================== Resumen ===================
+  async function cargarResumenDiario() {
+    try {
+      const res = await fetch('/api/envios/del-dia', { cache: 'no-store' });
+      const data = await res.json();
+      document.getElementById('total-paquetes').textContent = data.total ?? 0;
+    } catch (e) {
+      console.error('Error al cargar resumen diario:', e);
+    }
+  }
 
-      // Tracking (meli_id o id_venta)
-      const meliStr  = (e.meli_id   ?? '').toString().toLowerCase();
-      const ventaStr = (e.id_venta  ?? '').toString().toLowerCase();
-      const matchTracking = !trackingTxt || meliStr.includes(trackingTxt) || ventaStr.includes(trackingTxt);
+  // =================== Partidos (checklist + "Todos") ===================
+  async function cargarPartidos() {
+    try {
+      const res = await fetch('/api/partidos', { cache: 'no-store' });
+      const lista = await res.json();
 
-      // Fechas YYYY-MM-DD
-      const fechaISO = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
-      const afterDesde  = !desde || fechaISO >= desde;
-      const beforeHasta = !hasta || fechaISO <= hasta;
+      const panel = document.getElementById('panelPartidos');
+      panel.innerHTML = '';
 
-      // Partidos (checklist múltiple)
-      const zonaNameNorm = normalize(e.partido || e.zona || '');
-      const matchPartido = !seleccionPartidos.size || seleccionPartidos.has(zonaNameNorm);
+      // "Todos"
+      const rowAll = document.createElement('label');
+      rowAll.className = 'flex items-center gap-2 p-1 cursor-pointer font-medium';
+      rowAll.innerHTML = `
+        <input type="checkbox" id="chk_all_partidos" class="accent-indigo-600" checked>
+        <span>Todos</span>
+      `;
+      panel.appendChild(rowAll);
 
-      // Estado (interno o MeLi)
-      const estItem = (e.estado || e.status || e.estado_meli?.status || '').toLowerCase();
-      const matchEstado = !estadoSel || estItem === estadoSel;
+      const hr = document.createElement('hr');
+      hr.className = 'my-1';
+      panel.appendChild(hr);
 
-      return matchCli && matchTracking && afterDesde && beforeHasta && matchPartido && matchEstado;
-    });
+      // Individuales
+      lista.forEach(p => {
+        const nombre = p.nombre;
+        const nombreNorm = normalize(nombre);
+        const row = document.createElement('label');
+        row.className = 'flex items-center gap-2 p-1 cursor-pointer';
+        row.innerHTML = `
+          <input type="checkbox"
+                 data-nombre="${nombre}"
+                 data-nombre-norm="${nombreNorm}"
+                 class="accent-indigo-600">
+          <span>${nombre}</span>
+        `;
+        panel.appendChild(row);
+      });
 
-    // Orden: más nuevos primero
-    enviosFiltrados.sort((a, b) => {
-      const fa = a.fecha ? new Date(a.fecha).getTime() : 0;
-      const fb = b.fecha ? new Date(b.fecha).getTime() : 0;
-      return fb - fa;
-    });
+      // Toggle panel
+      const btn = document.getElementById('btnPartidos');
+      btn.addEventListener('click', () => panel.classList.toggle('hidden'));
+      document.addEventListener('click', (e) => {
+        if (!panel.contains(e.target) && e.target !== btn) panel.classList.add('hidden');
+      });
 
+      // Manejo de checks
+      panel.addEventListener('change', (e) => {
+        const target = e.target;
+        if (target.id === 'chk_all_partidos') {
+          if (target.checked) {
+            seleccionPartidos.clear();
+            panel.querySelectorAll('input[type="checkbox"][data-nombre-norm]')
+                 .forEach(cb => cb.checked = false);
+          }
+          updateCountPartidos();
+          aplicarFiltro();
+          return;
+        }
+        if (target.matches('input[type="checkbox"][data-nombre-norm]')) {
+          const all = document.getElementById('chk_all_partidos');
+          all.checked = false;
+          const nomNorm = target.dataset.nombreNorm;
+          if (target.checked) seleccionPartidos.add(nomNorm);
+          else seleccionPartidos.delete(nomNorm);
+          updateCountPartidos();
+          aplicarFiltro();
+        }
+      });
+
+      updateCountPartidos();
+    } catch (e) {
+      console.error('No se pudo cargar partidos:', e);
+    }
+  }
+
+  // =================== Filtros ===================
+  async function aplicarFiltro() {
+    const cliRaw       = (document.getElementById('filtroCliente')?.value || '');
+    const trackingRaw  = (document.getElementById('filtroTracking')?.value || '');
+    const desde        = (document.getElementById('filtroDesde')?.value || '');
+    const hasta        = (document.getElementById('filtroHasta')?.value || '');
+    const estadoSel    = (document.getElementById('filtroEstado')?.value || '').toLowerCase();
+
+    const cliSearch    = cliRaw.trim().toLowerCase();
+    const trackingTxt  = trackingRaw.trim().toLowerCase().replace(/\s+/g,'');
+
+    try {
+      if (!enviosCargados.length) {
+        const res = await fetch('/api/envios', { cache: 'no-store' });
+        enviosCargados = await res.json();
+      }
+
+      enviosFiltrados = enviosCargados.filter(e => {
+        // Cliente / sender
+        const nom    = e.cliente_id?.nombre?.toLowerCase() || '';
+        const sender = (e.sender_id || '').toLowerCase();
+        const matchCli = !cliSearch || nom.includes(cliSearch) || sender.includes(cliSearch);
+
+        // Tracking (meli_id o id_venta)
+        const meliStr  = (e.meli_id   ?? '').toString().toLowerCase();
+        const ventaStr = (e.id_venta  ?? '').toString().toLowerCase();
+        const matchTracking = !trackingTxt || meliStr.includes(trackingTxt) || ventaStr.includes(trackingTxt);
+
+        // Fechas
+        const fechaISO = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
+        const afterDesde  = !desde || fechaISO >= desde;
+        const beforeHasta = !hasta || fechaISO <= hasta;
+
+        // Partidos (multi)
+        const zonaNameNorm = normalize(e.partido || e.zona || '');
+        const matchPartido = !seleccionPartidos.size || seleccionPartidos.has(zonaNameNorm);
+
+        // Estado (interno o Meli)
+        const estItem = (e.estado || e.status || e.estado_meli?.status || '').toLowerCase();
+        const matchEstado = !estadoSel || estItem === estadoSel;
+
+        return matchCli && matchTracking && afterDesde && beforeHasta && matchPartido && matchEstado;
+      });
+
+      // Orden: nuevos primero
+      enviosFiltrados.sort((a, b) => {
+        const fa = a.fecha ? new Date(a.fecha).getTime() : 0;
+        const fb = b.fecha ? new Date(b.fecha).getTime() : 0;
+        return fb - fa;
+      });
+
+      currentPage = 1;
+      renderTabla();
+      renderPaginacion();
+    } catch (err) {
+      console.error('Error aplicando filtro:', err);
+    }
+  }
+
+  function limpiarFiltros() {
+    document.getElementById('filtroCliente').value = '';
+    document.getElementById('filtroTracking').value = '';
+    document.getElementById('filtroDesde').value = '';
+    document.getElementById('filtroHasta').value = '';
+    document.getElementById('filtroEstado').value = '';
+
+    // Restaurar "Todos" en partidos
+    seleccionPartidos.clear();
+    const all = document.getElementById('chk_all_partidos');
+    if (all) all.checked = true;
+    document
+      .querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]')
+      .forEach(cb => (cb.checked = false));
+    updateCountPartidos();
+
+    enviosFiltrados = enviosCargados.slice().sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
     currentPage = 1;
     renderTabla();
     renderPaginacion();
-  } catch (err) {
-    console.error('Error aplicando filtro:', err);
   }
-}
 
-   function limpiarFiltros() {
-  document.getElementById('filtroCliente').value = '';
-  document.getElementById('filtroDesde').value = '';
-  document.getElementById('filtroHasta').value = '';
-  document.getElementById('filtroEstado').value = '';
+  // =================== Tabla / Paginación ===================
+  function renderTabla() {
+    const tbody = document.getElementById('tablaEnvios');
+    tbody.innerHTML = '';
 
-  // Restablecer "Todos" en partidos
-  seleccionPartidos.clear();
-  const all = document.getElementById('chk_all_partidos');
-  if (all) all.checked = true;
-  document.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]')
-          .forEach(cb => cb.checked = false);
-  updateCountPartidos();
+    if (!enviosFiltrados.length) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        `<td class="px-4 py-6 text-center text-gray-500" colspan="7">No hay envíos para los filtros seleccionados</td>`;
+      tbody.appendChild(tr);
+      return;
+    }
 
-  enviosFiltrados = enviosCargados.slice().sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
-  currentPage = 1;
-  renderTabla();
-  renderPaginacion();
-}
+    const start = (currentPage - 1) * pageSize;
+    const page = enviosFiltrados.slice(start, start + pageSize);
 
-    // Tabla
-    function renderTabla() {
-      const tbody = document.getElementById('tablaEnvios');
-      tbody.innerHTML = '';
-      const start = (currentPage - 1) * pageSize;
-      const page = enviosFiltrados.slice(start, start + pageSize);
+    page.forEach(e => {
+      const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
+      const estadoKey = (e.estado || e.status || e.estado_meli?.status || '').toLowerCase();
+      const estadoLabel = {
+        pendiente: 'Pendiente',
+        asignado: 'Asignado',
+        en_camino: 'En camino',
+        demorado: 'Demorado',
+        reprogramado: 'Reprogramado',
+        no_entregado: 'No entregado',
+        entregado: 'Entregado',
+        cancelado: 'Cancelado',
+        pending: 'Pendiente (ML)',
+        shipped: 'En camino (ML)',
+        delivered: 'Entregado (ML)'
+      }[estadoKey] || '-';
 
-      page.forEach(e => {
-        const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
+      const partidoUI = (e.partido && e.partido.trim()) ? e.partido : (e.zona || '-');
 
-        // Etiqueta de estado
-        const estadoKey = (e.estado || e.status || '').toLowerCase();
-        const estadoLabel = {
-          pendiente: 'Pendiente',
-          asignado: 'Asignado',
-          pending: 'Pendiente',
-          shipped: 'En camino',
-          delivered: 'Entregado'
-        }[estadoKey] || '-';
-        
-        const partidoUI = (e.partido && e.partido.trim()) ? e.partido : '-';
-        
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
         <td class="px-4 py-2">
-         <button
-          class="text-indigo-600 hover:underline"
-          data-id="${e._id}"
-          onclick="mostrarDetalle(this.dataset.id)"
-          title="Ver detalle"
-         >
-         ${e.meli_id || e.id_venta || '(sin id)'}
-        </button>
+          <button class="text-indigo-600 hover:underline"
+                  data-id="${e._id}"
+                  onclick="mostrarDetalle(this.dataset.id)"
+                  title="Ver detalle">
+            ${e.meli_id || e.id_venta || '(sin id)'}
+          </button>
         </td>
         <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
         <td class="px-4 py-2">${fecha}</td>
-        <!-- 👇 solo partido -->
         <td class="px-4 py-2">${partidoUI}</td>
         <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
         <td class="px-4 py-2">${estadoLabel}</td>
         <td class="px-4 py-2">
-        <button class="text-red-600 hover:text-red-700" title="Eliminar"
-            onclick="abrirModalEliminar('${e._id}')">🗑</button>
-      </td>
+          <button class="text-red-600 hover:text-red-700" title="Eliminar"
+                  onclick="abrirModalEliminar('${e._id}')">🗑</button>
+        </td>
       `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    function renderPaginacion() {
-      const totalPages = Math.max(1, Math.ceil(enviosFiltrados.length / pageSize));
-      document.getElementById('infoPagina').textContent = `Página ${currentPage} de ${totalPages}`;
-      document.getElementById('prevBtn').disabled = currentPage === 1;
-      document.getElementById('nextBtn').disabled = currentPage === totalPages;
-    }
-
-    function cambiarPagina(dir) {
-      const totalPages = Math.max(1, Math.ceil(enviosFiltrados.length / pageSize));
-      currentPage = Math.min(totalPages, Math.max(1, currentPage + dir));
-      renderTabla();
-      renderPaginacion();
-    }
-
-    // Detalle
-async function mostrarDetalle(envioId) {
-  try {
-    const res = await fetch(`/api/envios/${envioId}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-
-    const clienteNombre = data.cliente_id?.nombre || '— sin nombre —';
-    const partido  = data.partido?.trim?.() || '-';
-    const zonaFact = data.zona?.trim?.()    || '-';
-    const precioFmt = (typeof data.precio === 'number')
-      ? `$ ${data.precio.toFixed(2)}`
-      : '-';
-
-    const cd = document.getElementById('contenidoDetalle');
-    cd.innerHTML = `
-      <p><strong>Cliente:</strong> ${clienteNombre}</p>
-      <p><strong>Dirección:</strong> ${data.direccion || '-'}</p>
-      <p><strong>Tracking:</strong> ${data.meli_id || data.id_venta || '-'}</p>
-      <p><strong>Estado:</strong> ${data.estado || data.status || '-'}</p>
-      <p><strong>CP:</strong> ${data.codigo_postal || '-'}</p>
-      <p><strong>Partido:</strong> ${partido}</p>
-      <p><strong>Zona (facturación):</strong> ${zonaFact}</p>
-      <p><strong>Referencia:</strong> ${data.referencia || '-'}</p>
-      <p><strong>Precio:</strong> ${precioFmt}</p>
-    `;
-
-    // MAPA (si existe el contenedor y hay coords)
-    const mapEl = document.getElementById('mapaDetalle');
-    if (mapEl) {
-      if (Number.isFinite(data.latitud) && Number.isFinite(data.longitud)) {
-  initMapa(data.latitud, data.longitud);
-} else {
-  initMapa(null, null); // muestra "Sin coordenadas"
-}
-    
-    const modal = document.getElementById('modalDetalle');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    document.body.classList.add('overflow-hidden');
-
-  } catch (e) {
-    console.error('Error mostrando detalle:', e);
-    alert('No se pudo cargar el detalle del envío.');
+      tbody.appendChild(tr);
+    });
   }
-}
-    
-    function cerrarModalDetalle() {
+
+  function renderPaginacion() {
+    const totalPages = Math.max(1, Math.ceil(enviosFiltrados.length / pageSize));
+    document.getElementById('infoPagina').textContent = `Página ${currentPage} de ${totalPages}`;
+    document.getElementById('prevBtn').disabled = currentPage === 1;
+    document.getElementById('nextBtn').disabled = currentPage === totalPages;
+  }
+
+  function cambiarPagina(dir) {
+    const totalPages = Math.max(1, Math.ceil(enviosFiltrados.length / pageSize));
+    currentPage = Math.min(totalPages, Math.max(1, currentPage + dir));
+    renderTabla();
+    renderPaginacion();
+  }
+
+  // =================== Detalle / Modales ===================
+  async function mostrarDetalle(envioId) {
+    try {
+      const res = await fetch(`/api/envios/${envioId}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      const clienteNombre = data.cliente_id?.nombre || '— sin nombre —';
+      const partido  = data.partido?.trim?.() || '-';
+      const zonaFact = data.zona?.trim?.()    || '-';
+      const precioFmt = (typeof data.precio === 'number') ? `$ ${data.precio.toFixed(2)}` : '-';
+
+      const cd = document.getElementById('contenidoDetalle');
+      cd.innerHTML = `
+        <p><strong>Cliente:</strong> ${clienteNombre}</p>
+        <p><strong>Dirección:</strong> ${data.direccion || '-'}</p>
+        <p><strong>Tracking:</strong> ${data.meli_id || data.id_venta || '-'}</p>
+        <p><strong>Estado:</strong> ${data.estado || data.status || '-'}</p>
+        <p><strong>CP:</strong> ${data.codigo_postal || '-'}</p>
+        <p><strong>Partido:</strong> ${partido}</p>
+        <p><strong>Zona (facturación):</strong> ${zonaFact}</p>
+        <p><strong>Referencia:</strong> ${data.referencia || '-'}</p>
+        <p><strong>Precio:</strong> ${precioFmt}</p>
+      `;
+
       const modal = document.getElementById('modalDetalle');
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-      document.body.classList.remove('overflow-hidden');
-      if (mapaInstancia) {
-        mapaInstancia.remove();
-        mapaInstancia = null;
-      }
-    }
-
-    // Eliminar
-    let envioAEliminar = null;
-
-    function abrirModalEliminar(id) {
-      envioAEliminar = id;
-      const modal = document.getElementById('modalEliminar');
       modal.classList.remove('hidden');
       modal.classList.add('flex');
       document.body.classList.add('overflow-hidden');
-    }
 
-    function cerrarModalEliminar() {
-      envioAEliminar = null;
-      const modal = document.getElementById('modalEliminar');
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-      document.body.classList.remove('overflow-hidden');
-    }
-
-    document.getElementById('btnConfirmEliminar').addEventListener('click', async () => {
-      if (!envioAEliminar) return;
-      try {
-        const res = await fetch(`/api/envios/${envioAEliminar}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        // actualizar arrays en memoria
-        enviosCargados = enviosCargados.filter(e => e._id !== envioAEliminar);
-        enviosFiltrados = enviosFiltrados.filter(e => e._id !== envioAEliminar);
-        cerrarModalEliminar();
-        renderTabla();
-        renderPaginacion();
-      } catch (e) {
-        console.error('Error eliminando envío:', e);
-        alert('No se pudo eliminar el envío.');
+      if (Number.isFinite(data.latitud) && Number.isFinite(data.longitud)) {
+        initMapa(data.latitud, data.longitud);
+      } else {
+        initMapa(NaN, NaN);
       }
+    } catch (e) {
+      console.error('Error mostrando detalle:', e);
+      alert('No se pudo cargar el detalle del envío.');
+    }
+  }
+
+  function cerrarModalDetalle() {
+    const modal = document.getElementById('modalDetalle');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.classList.remove('overflow-hidden');
+    if (mapaInstancia) {
+      mapaInstancia.remove();
+      mapaInstancia = null;
+    }
+  }
+
+  let envioAEliminar = null;
+  function abrirModalEliminar(id) {
+    envioAEliminar = id;
+    const modal = document.getElementById('modalEliminar');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.classList.add('overflow-hidden');
+  }
+  function cerrarModalEliminar() {
+    envioAEliminar = null;
+    const modal = document.getElementById('modalEliminar');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.classList.remove('overflow-hidden');
+  }
+  document.getElementById('btnConfirmEliminar').addEventListener('click', async () => {
+    if (!envioAEliminar) return;
+    try {
+      const res = await fetch(`/api/envios/${envioAEliminar}`, { method: 'DELETE', cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      enviosCargados = enviosCargados.filter(e => e._id !== envioAEliminar);
+      enviosFiltrados = enviosFiltrados.filter(e => e._id !== envioAEliminar);
+      cerrarModalEliminar();
+      renderTabla();
+      renderPaginacion();
+    } catch (e) {
+      console.error('Error eliminando envío:', e);
+      alert('No se pudo eliminar el envío.');
+    }
+  });
+
+  // Exponer funciones para los onclick del HTML
+  window.aplicarFiltro = aplicarFiltro;
+  window.limpiarFiltros = limpiarFiltros;
+  window.cambiarPagina = cambiarPagina;
+  window.mostrarDetalle = mostrarDetalle;
+  window.abrirModalEliminar = abrirModalEliminar;
+  window.cerrarModalEliminar = cerrarModalEliminar;
+  window.cerrarModalDetalle = cerrarModalDetalle;
+
+  // =================== Inicio ===================
+  document.addEventListener('DOMContentLoaded', () => {
+    // Atajos ENTER
+    ['filtroCliente','filtroTracking','filtroDesde','filtroHasta'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') aplicarFiltro(); });
     });
 
-    // UX: cerrar modales con click afuera y ESC
+    // Cerrar modales por click afuera / ESC
     document.getElementById('modalDetalle').addEventListener('click', (e) => {
       if (e.target.id === 'modalDetalle') cerrarModalDetalle();
     });
@@ -518,18 +519,14 @@ async function mostrarDetalle(envioId) {
       if (e.target.id === 'modalEliminar') cerrarModalEliminar();
     });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        cerrarModalDetalle();
-        cerrarModalEliminar();
-      }
+      if (e.key === 'Escape') { cerrarModalDetalle(); cerrarModalEliminar(); }
     });
 
-    // Al cargar
-    document.addEventListener('DOMContentLoaded', () => {
-      cargarResumenDiario();
-      cargarPartidos();
-      aplicarFiltro();
-    });
-  </script>
+    cargarResumenDiario();
+    cargarPartidos().then(() => aplicarFiltro());
+  });
+</script>
+
+  
 </body>
 </html>
