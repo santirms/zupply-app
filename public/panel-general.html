@@ -39,7 +39,18 @@
     />
           <input type="date" id="filtroDesde" class="border p-2 rounded w-full" />
         <input type="date" id="filtroHasta" class="border p-2 rounded w-full" />
-
+   <td class="px-4 py-2">
+  <button class="text-indigo-600 hover:underline"
+          data-id="${e._id}" onclick="mostrarDetalle(this.dataset.id)">
+    ${e.meli_id || e.id_venta || '(sin id)'}
+  </button>
+  ${e.meli_id ? `
+    <button class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-gray-50"
+            onclick="forceSyncMeli('${e.meli_id}')"
+            title="Actualizar estado desde MeLi">↻</button>` : ''
+  }
+</td>
+   
       <!-- Botón + panel de checks -->
 <div class="relative">
   <button id="btnPartidos" type="button"
@@ -546,6 +557,21 @@
     cargarResumenDiario();
     cargarPartidos().then(() => aplicarFiltro());
   });
+
+  async function forceSyncMeli(meli_id) {
+  try {
+    const r = await fetch(`/api/auth/meli/force-sync/${meli_id}`, { method: 'POST' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    // refrescamos la lista en memoria
+    enviosCargados = []; // forzá recarga
+    await aplicarFiltro();
+  } catch (e) {
+    console.error('force-sync error', e);
+    alert('No se pudo sincronizar con MeLi.');
+  }
+}
+window.forceSyncMeli = forceSyncMeli;
+
 </script>
 
   
