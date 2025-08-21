@@ -39,17 +39,6 @@
     />
           <input type="date" id="filtroDesde" class="border p-2 rounded w-full" />
         <input type="date" id="filtroHasta" class="border p-2 rounded w-full" />
-   <td class="px-4 py-2">
-  <button class="text-indigo-600 hover:underline"
-          data-id="${e._id}" onclick="mostrarDetalle(this.dataset.id)">
-    ${e.meli_id || e.id_venta || '(sin id)'}
-  </button>
-  ${e.meli_id ? `
-    <button class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-gray-50"
-            onclick="forceSyncMeli('${e.meli_id}')"
-            title="Actualizar estado desde MeLi">↻</button>` : ''
-  }
-</td>
    
       <!-- Botón + panel de checks -->
 <div class="relative">
@@ -64,7 +53,6 @@
 
 <select id="filtroEstado" class="border p-2 rounded w-full">
   <option value="">— Todos los estados —</option>
-  <!-- Estados internos -->
   <option value="pendiente">Pendiente</option>
   <option value="asignado">Asignado</option>
   <option value="en_camino">En camino</option>
@@ -73,15 +61,8 @@
   <option value="no_entregado">No entregado</option>
   <option value="entregado">Entregado</option>
   <option value="cancelado">Cancelado</option>
-  <!-- Estados MeLi -->
-  <option value="pending">ML: pending</option>
-  <option value="handling">ML: handling</option>
-  <option value="ready_to_ship">ML: ready_to_ship</option>
-  <option value="shipped">ML: shipped</option>
-  <option value="delivered">ML: delivered</option>
-  <option value="not_delivered">ML: not_delivered</option>
-  <option value="cancelled">ML: cancelled</option>
 </select>
+
 
         <button onclick="aplicarFiltro()"
                 class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow">
@@ -205,6 +186,35 @@
     }
   }
 
+function uiStatus(envio) {
+  const raw = (envio.estado || envio.status || envio.estado_meli?.status || '').toLowerCase();
+  const sub = (envio.estado_meli?.substatus || '').toLowerCase();
+
+  const norm = ({
+    // ML → internos
+    pending: 'pendiente',
+    handling: 'pendiente',
+    ready_to_ship: 'pendiente',
+    shipped: 'en_camino',
+    delivered: 'entregado',
+    not_delivered: 'no_entregado',
+    cancelled: 'cancelado'
+  })[raw] || raw || 'pendiente';
+
+  const label = ({
+    // Etiquetas en español (una sola lista)
+    pendiente: 'Pendiente',
+    asignado: 'Asignado',
+    en_camino: 'En camino',
+    demorado: 'Demorado',
+    reprogramado: 'Reprogramado',
+    no_entregado: 'No entregado',
+    entregado: 'Entregado',
+    cancelado: 'Cancelado'
+  })[norm] || 'Pendiente';
+
+  return { key: norm, label, substatus: sub.replace(/_/g,' ') };
+}  
   // =================== Partidos (checklist + "Todos") ===================
   async function cargarPartidos() {
     try {
@@ -318,8 +328,9 @@
         const matchPartido = !seleccionPartidos.size || seleccionPartidos.has(zonaNameNorm);
 
         // Estado (interno o Meli)
-        const estItem = (e.estado || e.status || e.estado_meli?.status || '').toLowerCase();
-        const matchEstado = !estadoSel || estItem === estadoSel;
+        const matchEstado = !estadoSel || estadoUnificado === estadoSel;
+        const { key: estadoUnificado } = uiStatus(e);
+
 
         return matchCli && matchTracking && afterDesde && beforeHasta && matchPartido && matchEstado;
       });
@@ -400,10 +411,10 @@
 
       const partidoUI = (e.partido && e.partido.trim()) ? e.partido : (e.zona || '-');
       
-      const sub = (e.estado_meli?.substatus || '').replace(/_/g,' ');
-      const subChip = sub
-      ? `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-700">${sub}</span>`
-      : '';
+      const { label: estadoLabel, substatus } = uiStatus(e);
+      const subChip = substatus
+       ? `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${substatus}</span>`
+       : '';
       
       const tr = document.createElement('tr');
       tr.innerHTML = `
