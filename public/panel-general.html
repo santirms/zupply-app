@@ -413,9 +413,9 @@ function substatusChip(sub) {
       const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
       const estadoKey = (e.estado || e.status || e.estado_meli?.status || '').toLowerCase();
       
-      const { label: estadoLabel, substatus } = uiStatus(e);
-      const subChip = substatus
-       ? `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${substatus}</span>`
+      const { key: estadoKey, label: estadoLabel, substatus } = uiStatus(e);
+      const estadoHTML = estadoBadge(estadoKey, estadoLabel) + substatusChip(substatus);
+      ? `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${substatus}</span>`
        : '';
       const partidoUI = (e.partido && e.partido.trim()) ? e.partido : (e.zona || '-');
       const zonaFact = (e.zona && e.zona.trim()) ? e.zona : '';  
@@ -442,7 +442,7 @@ function substatusChip(sub) {
   <td class="px-4 py-2">${fecha}</td>
   <td class="px-4 py-2" title="${zonaFact}">${partidoUI}</td>
   <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
-  <td class="px-4 py-2">${estadoLabel}${subChip}</td>
+  <td class="px-4 py-2">${estadoHTML}</td>
   <td class="px-4 py-2">
     <button class="text-red-600 hover:text-red-700" title="Eliminar"
             onclick="abrirModalEliminar('${e._id}')">🗑</button>
