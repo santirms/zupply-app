@@ -186,9 +186,30 @@
     }
   }
 
-function uiStatus(envio) {
+  function uiStatus(envio) {
   const raw = (envio.estado || envio.status || envio.estado_meli?.status || '').toLowerCase();
   const sub = (envio.estado_meli?.substatus || '').toLowerCase();
+
+  // === chips de estado (globales) ===
+  function estadoBadge(key, label) {
+  const css = {
+    entregado:     'bg-green-100  text-green-700  border-green-200',
+    en_camino:     'bg-sky-100    text-sky-700    border-sky-200',
+    pendiente:     'bg-gray-100   text-gray-700   border-gray-200',
+    asignado:      'bg-indigo-100 text-indigo-700 border-indigo-200',
+    demorado:      'bg-red-100    text-red-700    border-red-200',
+    reprogramado:  'bg-blue-100   text-blue-700   border-blue-200',
+    no_entregado:  'bg-amber-100  text-amber-700  border-amber-200',
+    cancelado:     'bg-slate-200  text-slate-700  border-slate-300',
+  }[key] || 'bg-gray-100 text-gray-700 border-gray-200';
+
+  return `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${css}">${label}</span>`;
+}
+
+ function substatusChip(sub) {
+  if (!sub) return '';
+  return `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${sub}</span>`;
+}
 
   const norm = ({
     // ML → internos
@@ -329,28 +350,6 @@ function uiStatus(envio) {
 
   // Estado (unificado)
   const { key: estadoUnificado } = uiStatus(e);
-  // Devuelve un <span> con color según el estado unificado
-  function estadoBadge(key, label) {
-  const css = {
-    entregado:     'bg-green-100  text-green-700  border-green-200',
-    en_camino:     'bg-sky-100    text-sky-700    border-sky-200',
-    pendiente:     'bg-gray-100   text-gray-700   border-gray-200',
-    asignado:      'bg-indigo-100 text-indigo-700 border-indigo-200',
-    demorado:      'bg-red-100    text-red-700    border-red-200',
-    reprogramado:  'bg-blue-100   text-blue-700   border-blue-200',
-    no_entregado:  'bg-amber-100  text-amber-700  border-amber-200',
-    cancelado:     'bg-slate-200  text-slate-700  border-slate-300',
-  }[key] || 'bg-gray-100 text-gray-700 border-gray-200';
-
-  return `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${css}">${label}</span>`;
-}
-
-// Chip neutro para substatus ML (si viene)
-function substatusChip(sub) {
-  if (!sub) return '';
-  return `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${sub}</span>`;
-}
-
   const matchEstado = !estadoSel || estadoUnificado === estadoSel;
 
   return matchCli && matchTracking && afterDesde && beforeHasta && matchPartido && matchEstado;
