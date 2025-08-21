@@ -391,24 +391,6 @@ function uiStatus(envio) {
     page.forEach(e => {
       const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
       const estadoKey = (e.estado || e.status || e.estado_meli?.status || '').toLowerCase();
-      const estadoLabel = {
-        pendiente: 'Pendiente',
-        asignado: 'Asignado',
-        en_camino: 'En camino',
-        demorado: 'Demorado',
-        reprogramado: 'Reprogramado',
-        no_entregado: 'No entregado',
-        entregado: 'Entregado',
-        cancelado: 'Cancelado',
-         ending: 'Pendiente (ML)',
-        handling: 'Preparando (ML)',
-        ready_to_ship: 'Listo para enviar (ML)',
-        shipped: 'En camino (ML)',
-        delivered: 'Entregado (ML)',
-        not_delivered: 'No entregado (ML)',
-        cancelled: 'Cancelado (ML)',
-        }[estadoKey] || '-';
-
       const partidoUI = (e.partido && e.partido.trim()) ? e.partido : (e.zona || '-');
       
       const { label: estadoLabel, substatus } = uiStatus(e);
@@ -416,27 +398,36 @@ function uiStatus(envio) {
        ? `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${substatus}</span>`
        : '';
       
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td class="px-4 py-2">
-          <button class="text-indigo-600 hover:underline"
-                  data-id="${e._id}"
-                  onclick="mostrarDetalle(this.dataset.id)"
-                  title="Ver detalle">
-            ${e.meli_id || e.id_venta || '(sin id)'}
-          </button>
-        </td>
-        <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
-        <td class="px-4 py-2">${fecha}</td>
-        <td class="px-4 py-2">${partidoUI}</td>
-        <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
-        <td class="px-4 py-2">${estadoLabel}${subChip}</td>
-        <td class="px-4 py-2">
-          <button class="text-red-600 hover:text-red-700" title="Eliminar"
-                  onclick="abrirModalEliminar('${e._id}')">🗑</button>
-        </td>
-      `;
-      tbody.appendChild(tr);
+ const tr = document.createElement('tr');
+tr.innerHTML = `
+  <td class="px-4 py-2">
+    <button
+      class="text-indigo-600 hover:underline"
+      data-id="${e._id}"
+      onclick="mostrarDetalle(this.dataset.id)"
+      title="Ver detalle"
+    >
+      ${e.meli_id || e.id_venta || '(sin id)'}
+    </button>
+    ${e.meli_id ? `
+      <button
+        class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-gray-50"
+        onclick="forceSyncMeli('${e.meli_id}')"
+        title="Actualizar estado desde MeLi">↻</button>
+    ` : ''}
+  </td>
+  <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
+  <td class="px-4 py-2">${fecha}</td>
+  <td class="px-4 py-2" title="${zonaFact}">${partidoUI}</td>
+  <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
+  <td class="px-4 py-2">${estadoLabel}${subChip}</td>
+  <td class="px-4 py-2">
+    <button class="text-red-600 hover:text-red-700" title="Eliminar"
+            onclick="abrirModalEliminar('${e._id}')">🗑</button>
+  </td>
+`;
+tbody.appendChild(tr);
+
     });
   }
 
