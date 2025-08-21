@@ -307,34 +307,34 @@ function uiStatus(envio) {
         enviosCargados = await res.json();
       }
 
+
       enviosFiltrados = enviosCargados.filter(e => {
-        // Cliente / sender
-        const nom    = e.cliente_id?.nombre?.toLowerCase() || '';
-        const sender = (e.sender_id || '').toLowerCase();
-        const matchCli = !cliSearch || nom.includes(cliSearch) || sender.includes(cliSearch);
+  // Cliente / sender
+  const nom    = e.cliente_id?.nombre?.toLowerCase() || '';
+  const sender = (e.sender_id || '').toLowerCase();
+  const matchCli = !cliSearch || nom.includes(cliSearch) || sender.includes(cliSearch);
 
-        // Tracking (meli_id o id_venta)
-        const meliStr  = (e.meli_id   ?? '').toString().toLowerCase();
-        const ventaStr = (e.id_venta  ?? '').toString().toLowerCase();
-        const matchTracking = !trackingTxt || meliStr.includes(trackingTxt) || ventaStr.includes(trackingTxt);
+  // Tracking (meli_id o id_venta)
+  const meliStr  = (e.meli_id   ?? '').toString().toLowerCase();
+  const ventaStr = (e.id_venta  ?? '').toString().toLowerCase();
+  const matchTracking = !trackingTxt || meliStr.includes(trackingTxt) || ventaStr.includes(trackingTxt);
 
-        // Fechas
-        const fechaISO = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
-        const afterDesde  = !desde || fechaISO >= desde;
-        const beforeHasta = !hasta || fechaISO <= hasta;
+  // Fechas
+  const fechaISO = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
+  const afterDesde  = !desde || fechaISO >= desde;
+  const beforeHasta = !hasta || fechaISO <= hasta;
 
-        // Partidos (multi)
-        const zonaNameNorm = normalize(e.partido || e.zona || '');
-        const matchPartido = !seleccionPartidos.size || seleccionPartidos.has(zonaNameNorm);
+  // Partidos (multi)
+  const zonaNameNorm = normalize(e.partido || e.zona || '');
+  const matchPartido = !seleccionPartidos.size || seleccionPartidos.has(zonaNameNorm);
 
-        // Estado (interno o Meli)
-        const matchEstado = !estadoSel || estadoUnificado === estadoSel;
-        const { key: estadoUnificado } = uiStatus(e);
+  // Estado (unificado)
+  const { key: estadoUnificado } = uiStatus(e);
+  const matchEstado = !estadoSel || estadoUnificado === estadoSel;
 
-
-        return matchCli && matchTracking && afterDesde && beforeHasta && matchPartido && matchEstado;
-      });
-
+  return matchCli && matchTracking && afterDesde && beforeHasta && matchPartido && matchEstado;
+});
+      
       // Orden: nuevos primero
       enviosFiltrados.sort((a, b) => {
         const fa = a.fecha ? new Date(a.fecha).getTime() : 0;
@@ -391,25 +391,26 @@ function uiStatus(envio) {
     page.forEach(e => {
       const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
       const estadoKey = (e.estado || e.status || e.estado_meli?.status || '').toLowerCase();
-      const partidoUI = (e.partido && e.partido.trim()) ? e.partido : (e.zona || '-');
       
       const { label: estadoLabel, substatus } = uiStatus(e);
       const subChip = substatus
        ? `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${substatus}</span>`
        : '';
-      
- const tr = document.createElement('tr');
-tr.innerHTML = `
-  <td class="px-4 py-2">
+      const partidoUI = (e.partido && e.partido.trim()) ? e.partido : (e.zona || '-');
+      const zonaFact = (e.zona && e.zona.trim()) ? e.zona : '';  
+    
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+    <td class="px-4 py-2">
     <button
       class="text-indigo-600 hover:underline"
       data-id="${e._id}"
       onclick="mostrarDetalle(this.dataset.id)"
       title="Ver detalle"
-    >
-      ${e.meli_id || e.id_venta || '(sin id)'}
-    </button>
-    ${e.meli_id ? `
+     >
+     ${e.meli_id || e.id_venta || '(sin id)'}
+     </button>
+     ${e.meli_id ? `
       <button
         class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-gray-50"
         onclick="forceSyncMeli('${e.meli_id}')"
