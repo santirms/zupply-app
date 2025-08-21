@@ -307,28 +307,6 @@ function uiStatus(envio) {
         enviosCargados = await res.json();
       }
 
-      // Devuelve un <span> con color según el estado unificado
-function estadoBadge(key, label) {
-  const css = {
-    entregado:     'bg-green-100  text-green-700  border-green-200',
-    en_camino:     'bg-sky-100    text-sky-700    border-sky-200',
-    pendiente:     'bg-gray-100   text-gray-700   border-gray-200',
-    asignado:      'bg-indigo-100 text-indigo-700 border-indigo-200',
-    demorado:      'bg-red-100    text-red-700    border-red-200',
-    reprogramado:  'bg-blue-100   text-blue-700   border-blue-200',
-    no_entregado:  'bg-amber-100  text-amber-700  border-amber-200',
-    cancelado:     'bg-slate-200  text-slate-700  border-slate-300',
-  }[key] || 'bg-gray-100 text-gray-700 border-gray-200';
-
-  return `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${css}">${label}</span>`;
-}
-
-// Chip neutro para substatus ML (si viene)
-function substatusChip(sub) {
-  if (!sub) return '';
-  return `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${sub}</span>`;
-}
-
       enviosFiltrados = enviosCargados.filter(e => {
   // Cliente / sender
   const nom    = e.cliente_id?.nombre?.toLowerCase() || '';
@@ -351,6 +329,28 @@ function substatusChip(sub) {
 
   // Estado (unificado)
   const { key: estadoUnificado } = uiStatus(e);
+  // Devuelve un <span> con color según el estado unificado
+  function estadoBadge(key, label) {
+  const css = {
+    entregado:     'bg-green-100  text-green-700  border-green-200',
+    en_camino:     'bg-sky-100    text-sky-700    border-sky-200',
+    pendiente:     'bg-gray-100   text-gray-700   border-gray-200',
+    asignado:      'bg-indigo-100 text-indigo-700 border-indigo-200',
+    demorado:      'bg-red-100    text-red-700    border-red-200',
+    reprogramado:  'bg-blue-100   text-blue-700   border-blue-200',
+    no_entregado:  'bg-amber-100  text-amber-700  border-amber-200',
+    cancelado:     'bg-slate-200  text-slate-700  border-slate-300',
+  }[key] || 'bg-gray-100 text-gray-700 border-gray-200';
+
+  return `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${css}">${label}</span>`;
+}
+
+// Chip neutro para substatus ML (si viene)
+function substatusChip(sub) {
+  if (!sub) return '';
+  return `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${sub}</span>`;
+}
+
   const matchEstado = !estadoSel || estadoUnificado === estadoSel;
 
   return matchCli && matchTracking && afterDesde && beforeHasta && matchPartido && matchEstado;
@@ -394,64 +394,65 @@ function substatusChip(sub) {
   }
 
   // =================== Tabla / Paginación ===================
-  function renderTabla() {
-    const tbody = document.getElementById('tablaEnvios');
-    tbody.innerHTML = '';
+ function renderTabla() {
+  const tbody = document.getElementById('tablaEnvios');
+  tbody.innerHTML = '';
 
-    if (!enviosFiltrados.length) {
-      const tr = document.createElement('tr');
-      tr.innerHTML =
-        `<td class="px-4 py-6 text-center text-gray-500" colspan="7">No hay envíos para los filtros seleccionados</td>`;
-      tbody.appendChild(tr);
-      return;
-    }
+  if (!enviosFiltrados.length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td class="px-4 py-6 text-center text-gray-500" colspan="7">No hay envíos para los filtros seleccionados</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
 
-    const start = (currentPage - 1) * pageSize;
-    const page = enviosFiltrados.slice(start, start + pageSize);
+  const start = (currentPage - 1) * pageSize;
+  const page = enviosFiltrados.slice(start, start + pageSize);
 
-    page.forEach(e => {
-      const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
-      const estadoKey = (e.estado || e.status || e.estado_meli?.status || '').toLowerCase();
-      
-      const { key: estadoKey, label: estadoLabel, substatus } = uiStatus(e);
-      const estadoHTML = estadoBadge(estadoKey, estadoLabel) + substatusChip(substatus);
-      ? `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${substatus}</span>`
-       : '';
-      const partidoUI = (e.partido && e.partido.trim()) ? e.partido : (e.zona || '-');
-      const zonaFact = (e.zona && e.zona.trim()) ? e.zona : '';  
-    
+  page.forEach(e => {
+    const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
+
+    // Estado (badge + substatus)
+    const { key: eKey, label: eLabel, substatus } = uiStatus(e);
+    const estadoHTML = estadoBadge(eKey, eLabel) + substatusChip(substatus);
+
+    // Partido visible y zona para tooltip (limpia sufijos N/E/… si los hubiera)
+    const partidoUI = (e.partido && e.partido.trim()) ? e.partido : (e.zona || '-');
+    const zonaFact  = (e.zona && e.zona.trim())
+      ? e.zona.replace(/\s+(N|S|E|O|NE|NO|SE|SO)$/i, '').trim()
+      : '';
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
-    <td class="px-4 py-2">
-    <button
-      class="text-indigo-600 hover:underline"
-      data-id="${e._id}"
-      onclick="mostrarDetalle(this.dataset.id)"
-      title="Ver detalle"
-     >
-     ${e.meli_id || e.id_venta || '(sin id)'}
-     </button>
-     ${e.meli_id ? `
-      <button
-        class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-gray-50"
-        onclick="forceSyncMeli('${e.meli_id}')"
-        title="Actualizar estado desde MeLi">↻</button>
-    ` : ''}
-  </td>
-  <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
-  <td class="px-4 py-2">${fecha}</td>
-  <td class="px-4 py-2" title="${zonaFact}">${partidoUI}</td>
-  <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
-  <td class="px-4 py-2">${estadoHTML}</td>
-  <td class="px-4 py-2">
-    <button class="text-red-600 hover:text-red-700" title="Eliminar"
-            onclick="abrirModalEliminar('${e._id}')">🗑</button>
-  </td>
-`;
-tbody.appendChild(tr);
-
-    });
-  }
+      <td class="px-4 py-2">
+        <button
+          class="text-indigo-600 hover:underline"
+          data-id="${e._id}"
+          onclick="mostrarDetalle(this.dataset.id)"
+          title="Ver detalle"
+        >
+          ${e.meli_id || e.id_venta || '(sin id)'}
+        </button>
+        ${e.meli_id ? `
+          <button
+            class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-gray-50"
+            onclick="forceSyncMeli('${e.meli_id}')"
+            title="Actualizar estado desde MeLi">↻</button>
+        ` : ''}
+      </td>
+      <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
+      <td class="px-4 py-2">${fecha}</td>
+      <td class="px-4 py-2" title="${zonaFact}">${partidoUI}</td>
+      <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
+      <td class="px-4 py-2">${estadoHTML}</td>
+      <td class="px-4 py-2">
+        <button class="text-red-600 hover:text-red-700" title="Eliminar"
+                onclick="abrirModalEliminar('${e._id}')">🗑</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
 
   function renderPaginacion() {
     const totalPages = Math.max(1, Math.ceil(enviosFiltrados.length / pageSize));
