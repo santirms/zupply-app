@@ -11,6 +11,7 @@ const Zona    = require('../models/Zona');
 const { getValidToken } = require('../utils/meliUtils');
 const detectarZona      = require('../utils/detectarZona');
 const { mapMeliToInterno } = require('../utils/meliStatus');
+const { ingestShipment } = require('../services/meliIngest');
 
 const CLIENT_ID     = process.env.MERCADOLIBRE_CLIENT_ID;
 const CLIENT_SECRET = process.env.MERCADOLIBRE_CLIENT_SECRET;
@@ -124,8 +125,9 @@ router.post('/webhook', async (req, res) => {
 
     // Cliente por user_id
     const cliente = await Cliente.findOne({ user_id }).populate('lista_precios');
-    if (!cliente) return;
-    if (!cliente.auto_ingesta) return; // sólo si está habilitado
+    if (!cliente || !cliente.auto_ingesta) return;
+    const shipmentId = String(resource.split('/').pop());
+    await ingestShipment({ shipmentId, cliente });
 
     // Token válido
     const access_token = await getValidToken(user_id);
@@ -195,6 +197,7 @@ router.post('/force-sync/:meli_id', async (req, res) => {
   try {
     const meli_id = String(req.params.meli_id);
     const envio = await Envio.findOne({ meli_id }).populate('cliente_id');
+    const cliente = envio.cliente_id?.populate ? await envio.cliente_id.populate('lista_precios') : envio.cliente_id;
     if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
 
     const user_id = envio.cliente_id?.user_id;
@@ -244,7 +247,7 @@ router.post('/force-sync/:meli_id', async (req, res) => {
       }
     );
 
-    const updated = await Envio.findOne({ meli_id });
+    const updated = await ingestShipment({ shipmentId: meli_id, cliente });
     res.json({ ok: true, envio: updated });
   } catch (err) {
     console.error('force-sync error:', err.response?.data || err.message);
