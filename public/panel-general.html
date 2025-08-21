@@ -51,14 +51,26 @@
        class="absolute z-10 mt-1 bg-white border rounded shadow w-64 p-2 hidden max-h-64 overflow-auto"></div>
 </div>
 
-        <select id="filtroEstado" class="border p-2 rounded w-full">
-          <option value="">— Todos los estados —</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="asignado">Asignado</option>
-          <option value="pending">Pendiente (ML)</option>
-          <option value="shipped">En camino (ML)</option>
-          <option value="delivered">Entregado (ML)</option>
-        </select>
+<select id="filtroEstado" class="border p-2 rounded w-full">
+  <option value="">— Todos los estados —</option>
+  <!-- Estados internos -->
+  <option value="pendiente">Pendiente</option>
+  <option value="asignado">Asignado</option>
+  <option value="en_camino">En camino</option>
+  <option value="demorado">Demorado</option>
+  <option value="reprogramado">Reprogramado</option>
+  <option value="no_entregado">No entregado</option>
+  <option value="entregado">Entregado</option>
+  <option value="cancelado">Cancelado</option>
+  <!-- Estados MeLi -->
+  <option value="pending">ML: pending</option>
+  <option value="handling">ML: handling</option>
+  <option value="ready_to_ship">ML: ready_to_ship</option>
+  <option value="shipped">ML: shipped</option>
+  <option value="delivered">ML: delivered</option>
+  <option value="not_delivered">ML: not_delivered</option>
+  <option value="cancelled">ML: cancelled</option>
+</select>
 
         <button onclick="aplicarFiltro()"
                 class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow">
@@ -366,13 +378,22 @@
         no_entregado: 'No entregado',
         entregado: 'Entregado',
         cancelado: 'Cancelado',
-        pending: 'Pendiente (ML)',
+         ending: 'Pendiente (ML)',
+        handling: 'Preparando (ML)',
+        ready_to_ship: 'Listo para enviar (ML)',
         shipped: 'En camino (ML)',
-        delivered: 'Entregado (ML)'
-      }[estadoKey] || '-';
+        delivered: 'Entregado (ML)',
+        not_delivered: 'No entregado (ML)',
+        cancelled: 'Cancelado (ML)',
+        }[estadoKey] || '-';
 
       const partidoUI = (e.partido && e.partido.trim()) ? e.partido : (e.zona || '-');
-
+      
+      const sub = (e.estado_meli?.substatus || '').replace(/_/g,' ');
+      const subChip = sub
+      ? `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-700">${sub}</span>`
+      : '';
+      
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="px-4 py-2">
@@ -387,7 +408,7 @@
         <td class="px-4 py-2">${fecha}</td>
         <td class="px-4 py-2">${partidoUI}</td>
         <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
-        <td class="px-4 py-2">${estadoLabel}</td>
+        <td class="px-4 py-2">${estadoLabel}${subChip}</td>
         <td class="px-4 py-2">
           <button class="text-red-600 hover:text-red-700" title="Eliminar"
                   onclick="abrirModalEliminar('${e._id}')">🗑</button>
