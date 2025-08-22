@@ -37,6 +37,14 @@
       placeholder="Buscar por tracking (ML o id_venta)"
       class="border p-2 rounded w-full"
     />
+
+    <!-- ⬇️ NUEVO: ID de venta -->
+    <input
+     id="filtroIdVenta"
+     type="text"
+     placeholder="Buscar por ID de venta"
+     class="border p-2 rounded w-full"
+   />
           <input type="date" id="filtroDesde" class="border p-2 rounded w-full" />
         <input type="date" id="filtroHasta" class="border p-2 rounded w-full" />
    
@@ -82,6 +90,7 @@
         <thead class="bg-gray-100">
           <tr>
             <th class="px-4 py-2 text-left font-semibold">Tracking</th>
+            <th class="px-4 py-2 text-left font-semibold">ID de venta</th> <!-- NUEVA -->
             <th class="px-4 py-2 text-left font-semibold">Cliente</th>
             <th class="px-4 py-2 text-left font-semibold">Fecha</th>
             <th class="px-4 py-2 text-left font-semibold">Partido</th>
@@ -322,6 +331,7 @@
   async function aplicarFiltro() {
     const cliRaw       = (document.getElementById('filtroCliente')?.value || '');
     const trackingRaw  = (document.getElementById('filtroTracking')?.value || '');
+    const idVentaRaw  = document.getElementById('filtroIdVenta')?.value  || '';
     const desde        = (document.getElementById('filtroDesde')?.value || '');
     const hasta        = (document.getElementById('filtroHasta')?.value || '');
     const estadoSel    = (document.getElementById('filtroEstado')?.value || '').toLowerCase();
@@ -343,8 +353,11 @@
 
   // Tracking (meli_id o id_venta)
   const meliStr  = (e.meli_id   ?? '').toString().toLowerCase();
+  const ventaStr  = (e.id_venta ?? '').toString().toLowerCase();
   const ventaStr = (e.id_venta  ?? '').toString().toLowerCase();
   const matchTracking = !trackingTxt || meliStr.includes(trackingTxt) || ventaStr.includes(trackingTxt);
+  const matchIdVenta  = !idVentaTxt || ventaStr.includes(idVentaTxt);
+
 
   // Fechas
   const fechaISO = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
@@ -359,8 +372,9 @@
   const { key: estadoUnificado } = uiStatus(e);
   const matchEstado = !estadoSel || estadoUnificado === estadoSel;
 
-  return matchCli && matchTracking && afterDesde && beforeHasta && matchPartido && matchEstado;
-});
+    return matchCli && matchTracking && matchIdVenta && afterDesde && beforeHasta && matchPartido && matchEstado;
+
+      });
       
       // Orden: nuevos primero
       enviosFiltrados.sort((a, b) => {
@@ -407,7 +421,7 @@
   if (!enviosFiltrados.length) {
     const tr = document.createElement('tr');
     tr.innerHTML =
-      `<td class="px-4 py-6 text-center text-gray-500" colspan="7">No hay envíos para los filtros seleccionados</td>`;
+      `<td class="px-4 py-6 text-center text-gray-500" colspan="8">No hay envíos para los filtros seleccionados</td>`;
     tbody.appendChild(tr);
     return;
   }
@@ -443,6 +457,7 @@
             onclick="forceSyncMeli('${e.meli_id}')"
             title="Actualizar estado desde MeLi">↻</button>
         ` : ''}
+      <td class="px-4 py-2 font-mono">${e.id_venta || '-'}</td>
       </td>
       <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
       <td class="px-4 py-2">${fecha}</td>
@@ -567,10 +582,11 @@
   // =================== Inicio ===================
   document.addEventListener('DOMContentLoaded', () => {
     // Atajos ENTER
-    ['filtroCliente','filtroTracking','filtroDesde','filtroHasta'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') aplicarFiltro(); });
-    });
+   ['filtroCliente','filtroTracking','filtroIdVenta','filtroDesde','filtroHasta']
+   .forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') aplicarFiltro(); });
+   });
 
     // Cerrar modales por click afuera / ESC
     document.getElementById('modalDetalle').addEventListener('click', (e) => {
