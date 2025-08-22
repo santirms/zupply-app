@@ -32,7 +32,8 @@ async function ingestShipment({ shipmentId, cliente }) {
   const number     = sh?.receiver_address?.street_number || '';
   const address    = [street, number].filter(Boolean).join(' ').trim();
   const referencia = sh?.receiver_address?.comment || '';
-
+  const idVenta = sh.order_id || '';
+  
   // 3) Partido/zona + precio
   const { partido, zona } = await detectarZona(cp); // tu helper devuelve { partido, zona }
   const precio = await precioPorZona(cliente, zona);
@@ -52,6 +53,7 @@ async function ingestShipment({ shipmentId, cliente }) {
       $setOnInsert: { fecha: new Date() },
       $set: {
         meli_id: String(sh.id),
+        id_venta: idVenta,
         sender_id: String(cliente.codigo_cliente || cliente.sender_id?.[0] || cliente.user_id),
         cliente_id: cliente._id,
         codigo_postal: cp,
