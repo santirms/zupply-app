@@ -84,7 +84,7 @@
             <th class="px-4 py-2 text-left font-semibold">Tracking</th>
             <th class="px-4 py-2 text-left font-semibold">Cliente</th>
             <th class="px-4 py-2 text-left font-semibold">Fecha</th>
-            <th class="px-4 py-2 text-left font-semibold">Zona/Partido</th>
+            <th class="px-4 py-2 text-left font-semibold">Partido</th>
             <th class="px-4 py-2 text-left font-semibold">Chofer</th>
             <th class="px-4 py-2 text-left font-semibold">Estado</th>
             <th class="px-4 py-2 text-left font-semibold">Acciones</th>
@@ -415,8 +415,8 @@
     const estadoHTML = estadoBadge(eKey, eLabel) + substatusChip(substatus);
 
     // Partido visible y zona para tooltip (limpia sufijos N/E/… si los hubiera)
-    const partidoUI = (e.partido && e.partido.trim()) ? e.partido : (e.zona || '-');
-    const zonaFact  = (e.zona && e.zona.trim())
+   const partidoUI = (e.partido && e.partido.trim()) ? e.partido : '-';
+   const zonaFact  = (e.zona && e.zona.trim()) ? e.zona : '';    
       ? e.zona.replace(/\s+(N|S|E|O|NE|NO|SE|SO)$/i, '').trim()
       : '';
 
