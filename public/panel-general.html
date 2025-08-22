@@ -338,6 +338,8 @@
 
     const cliSearch    = cliRaw.trim().toLowerCase();
     const trackingTxt  = trackingRaw.trim().toLowerCase().replace(/\s+/g,'');
+    const idVentaTxt = idVentaRaw.trim().toLowerCase().replace(/\s+/g, '');
+
 
     try {
       if (!enviosCargados.length) {
@@ -440,34 +442,34 @@
    const zonaFact  = (e.zona && e.zona.trim()) ? cleanZona(e.zona) : '';
        
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="px-4 py-2">
-        <button
-          class="text-indigo-600 hover:underline"
-          data-id="${e._id}"
-          onclick="mostrarDetalle(this.dataset.id)"
-          title="Ver detalle"
-        >
-          ${e.meli_id || e.id_venta || '(sin id)'}
-        </button>
-        ${e.meli_id ? `
-          <button
-            class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-gray-50"
-            onclick="forceSyncMeli('${e.meli_id}')"
-            title="Actualizar estado desde MeLi">↻</button>
-        ` : ''}
-      <td class="px-4 py-2 font-mono">${e.id_venta || '-'}</td>
-      </td>
-      <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
-      <td class="px-4 py-2">${fecha}</td>
-      <td class="px-4 py-2" title="${zonaFact}">${partidoUI}</td>
-      <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
-      <td class="px-4 py-2">${estadoHTML}</td>
-      <td class="px-4 py-2">
-        <button class="text-red-600 hover:text-red-700" title="Eliminar"
-                onclick="abrirModalEliminar('${e._id}')">🗑</button>
-      </td>
-    `;
+tr.innerHTML = `
+  <td class="px-4 py-2">
+    <button
+      class="text-indigo-600 hover:underline"
+      data-id="${e._id}"
+      onclick="mostrarDetalle(this.dataset.id)"
+      title="Ver detalle"
+    >
+      ${e.meli_id || e.id_venta || '(sin id)'}
+    </button>
+    ${e.meli_id ? `
+      <button
+        class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-gray-50"
+        onclick="forceSyncMeli('${e.meli_id}')"
+        title="Actualizar estado desde MeLi">↻</button>
+    ` : ''}
+  </td>
+  <td class="px-4 py-2 font-mono">${e.id_venta || '-'}</td>   <!-- ✅ ahora es otra celda -->
+  <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
+  <td class="px-4 py-2">${fecha}</td>
+  <td class="px-4 py-2" title="${zonaFact}">${partidoUI}</td>
+  <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
+  <td class="px-4 py-2">${estadoHTML}</td>
+  <td class="px-4 py-2">
+    <button class="text-red-600 hover:text-red-700" title="Eliminar"
+            onclick="abrirModalEliminar('${e._id}')">🗑</button>
+  </td>
+`;
     tbody.appendChild(tr);
   });
 }
