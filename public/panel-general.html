@@ -417,9 +417,7 @@
     // Partido visible y zona para tooltip (limpia sufijos N/E/… si los hubiera)
    const partidoUI = (e.partido && e.partido.trim()) ? e.partido : '-';
    const zonaFact  = (e.zona && e.zona.trim()) ? e.zona : '';    
-      ? e.zona.replace(/\s+(N|S|E|O|NE|NO|SE|SO)$/i, '').trim()
-      : '';
-
+       
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="px-4 py-2">
