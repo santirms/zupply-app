@@ -354,7 +354,6 @@
   // Tracking (meli_id o id_venta)
   const meliStr  = (e.meli_id   ?? '').toString().toLowerCase();
   const ventaStr  = (e.id_venta ?? '').toString().toLowerCase();
-  const ventaStr = (e.id_venta  ?? '').toString().toLowerCase();
   const matchTracking = !trackingTxt || meliStr.includes(trackingTxt) || ventaStr.includes(trackingTxt);
   const matchIdVenta  = !idVentaTxt || ventaStr.includes(idVentaTxt);
 
