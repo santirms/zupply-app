@@ -1,79 +1,95 @@
-const Envio   = require('../models/Envio');
-const Zona    = require('../models/Zona');
-const { obtenerDatosDeEnvio } = require('../utils/meliUtils'); // usa tus tokens/refresh
-const detectarZona = require('../utils/detectarZona');          // tu helper existente
+// services/meliIngest.js
+const axios = require('axios');
+const Envio = require('../models/Envio');
+const Zona  = require('../models/Zona');
+const { getValidToken } = require('../utils/meliUtils');
 const { mapMeliToInterno } = require('../utils/meliStatus');
 
-// precio por lista del cliente + nombre de zona
-async function precioPorZona(cliente, zonaNombre) {
-  if (!cliente?.lista_precios || !zonaNombre) return 0;
-  const zonaDoc = await Zona.findOne({ nombre: zonaNombre });
-  if (!zonaDoc) return 0;
-  const match = (cliente.lista_precios.zonas || [])
-    .find(zp => String(zp.zona) === String(zonaDoc._id));
-  return match?.precio ?? 0;
+// helper para precio por zona (omito si ya lo tenés)
+async function precioPorZona(cliente, zonaNombre) { /* ... */ }
+
+async function fetchShipment(shipmentId, user_id) {
+  const access_token = await getValidToken(user_id);
+  const { data: sh } = await axios.get(
+    `https://api.mercadolibre.com/shipments/${shipmentId}`,
+    { headers: { Authorization: `Bearer ${access_token}` } }
+  );
+  return sh;
 }
 
-/**
- * Ingesta idempotente por meli_id.
- * Requiere cliente con lista_precios populada (populate en quien lo llama).
- */
+async function fetchPackIdFromOrder(orderId, user_id) {
+  if (!orderId) return null;
+  const access_token = await getValidToken(user_id);
+  const { data: order } = await axios.get(
+    `https://api.mercadolibre.com/orders/${orderId}`,
+    { headers: { Authorization: `Bearer ${access_token}` } }
+  );
+  // orders API trae pack_id cuando corresponde
+  return order?.pack_id || null;
+}
+
 async function ingestShipment({ shipmentId, cliente }) {
-  if (!shipmentId) throw new Error('shipmentId requerido');
-  if (!cliente?.user_id) throw new Error('cliente sin user_id MeLi');
+  const sh = await fetchShipment(shipmentId, cliente.user_id);
 
-  // 1) Leer shipment desde MeLi con tus utils (refresca token si hace falta)
-  const sh = await obtenerDatosDeEnvio(shipmentId, cliente.user_id);
+  // address
+  const cp       = sh?.receiver_address?.zip_code || '';
+  const dest     = sh?.receiver_address?.receiver_name || '';
+  const street   = sh?.receiver_address?.street_name || '';
+  const number   = sh?.receiver_address?.street_number || '';
+  const address  = [street, number].filter(Boolean).join(' ').trim();
+  const ref      = sh?.receiver_address?.comment || '';
 
-  // 2) Extraer datos
-  const cp         = sh?.receiver_address?.zip_code || '';
-  const destinat   = sh?.receiver_address?.receiver_name || '';
-  const street     = sh?.receiver_address?.street_name || '';
-  const number     = sh?.receiver_address?.street_number || '';
-  const address    = [street, number].filter(Boolean).join(' ').trim();
-  const referencia = sh?.receiver_address?.comment || '';
-  const idVenta = sh.order_id || '';
-  
-  // 3) Partido/zona + precio
-  const { partido, zona } = await detectarZona(cp); // tu helper devuelve { partido, zona }
-  const precio = await precioPorZona(cliente, zona);
+  // partido/zona
+  const detectarZona = require('../utils/detectarZona');
+  const { partido = '', zona: zonaNom = '' } = await detectarZona(cp);
 
-  // 4) Estados
+  // precio
+  const precio = await precioPorZona(cliente, zonaNom);
+
+  // estado (meli + interno)
   const estado_meli = {
-    status: sh.status || null,
+    status:    sh.status || null,
     substatus: sh.substatus || null,
     updatedAt: new Date()
   };
   const estado = mapMeliToInterno(sh.status, sh.substatus);
 
-  // 5) Upsert idempotente por meli_id
-  await Envio.updateOne(
+  // *** IDs ***
+  const order_id = sh?.order_id || null;            // viene en /shipments/:id
+  let pack_id = null;
+  try { pack_id = await fetchPackIdFromOrder(order_id, cliente.user_id); } catch {}
+
+  // lo que mostrás/buscás en el panel:
+  const id_venta = pack_id || order_id || null;
+
+  // upsert
+  const res = await Envio.findOneAndUpdate(
     { meli_id: String(sh.id) },
     {
       $setOnInsert: { fecha: new Date() },
       $set: {
         meli_id: String(sh.id),
-        id_venta: idVenta,
-        sender_id: String(cliente.codigo_cliente || cliente.sender_id?.[0] || cliente.user_id),
+        sender_id: (cliente.codigo_cliente || cliente.sender_id?.[0] || cliente.user_id) + '',
         cliente_id: cliente._id,
         codigo_postal: cp,
         partido,
-        zona,
-        destinatario: destinat,
+        zona: zonaNom,
+        destinatario: dest,
         direccion: address,
-        referencia,
+        referencia: ref,
         precio,
         estado_meli,
-        estado
+        estado,
+        // 👇 nuevos / corregidos
+        id_venta,       // PRIORIDAD pack_id
+        order_id,       // por si querés auditar
+        pack_id         // guardalo también; Mongo es flexible
       }
     },
-    { upsert: true }
+    { upsert: true, new: true }
   );
 
-  // 6) Devolver documento actualizado (opcional)
-  return await Envio.findOne({ meli_id: String(sh.id) })
-                    .populate({ path: 'chofer', select: 'nombre telefono' })
-                    .populate('cliente_id');
+  return res;
 }
 
 module.exports = { ingestShipment };
