@@ -145,6 +145,10 @@
       .replace(/[\u0300-\u036f]/g, '')
       .trim();
 
+    // Agregá arriba, junto a utils:
+  const cleanZona = z =>
+    (z || '').replace(/\s+(N|S|E|O|NE|NO|SE|SO)$/i, '').trim();
+
   // Filtro multi-partidos (Set vacío = TODOS)
   const seleccionPartidos = new Set();
   function updateCountPartidos() {
@@ -416,7 +420,7 @@
 
     // Partido visible y zona para tooltip (limpia sufijos N/E/… si los hubiera)
    const partidoUI = (e.partido && e.partido.trim()) ? e.partido : '-';
-   const zonaFact  = (e.zona && e.zona.trim()) ? e.zona : '';    
+   const zonaFact  = (e.zona && e.zona.trim()) ? cleanZona(e.zona) : '';
        
     const tr = document.createElement('tr');
     tr.innerHTML = `
