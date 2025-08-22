@@ -214,7 +214,7 @@
   const raw = (envio.estado || envio.status || envio.estado_meli?.status || '').toLowerCase();
   const sub = (envio.estado_meli?.substatus || '').toLowerCase();
     
-  const norm = ({
+  let norm = ({
     // ML → internos
     pending: 'pendiente',
     handling: 'pendiente',
@@ -225,6 +225,10 @@
     cancelled: 'cancelado'
   })[raw] || raw || 'pendiente';
 
+  // 👇 si viene substatus, manda:
+  if (sub.includes('resched')) norm = 'reprogramado';
+  else if (sub.includes('delay')) norm = 'demorado';
+    
   const label = ({
     // Etiquetas en español (una sola lista)
     pendiente: 'Pendiente',
