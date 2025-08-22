@@ -503,7 +503,8 @@
       cd.innerHTML = `
         <p><strong>Cliente:</strong> ${clienteNombre}</p>
         <p><strong>Dirección:</strong> ${data.direccion || '-'}</p>
-        <p><strong>Tracking:</strong> ${data.meli_id || data.id_venta || '-'}</p>
+        <p><strong>Tracking (ML):</strong> ${data.meli_id || '-'}</p>
+        <p><strong>ID de venta:</strong> ${data.id_venta || '-'}</p>
         <p><strong>Estado:</strong> ${data.estado || data.status || '-'}</p>
         <p><strong>CP:</strong> ${data.codigo_postal || '-'}</p>
         <p><strong>Partido:</strong> ${partido}</p>
