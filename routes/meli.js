@@ -7,8 +7,8 @@ const Token   = require('../models/Token');
 const Cliente = require('../models/Cliente');
 const Envio   = require('../models/Envio');
 
-const { getValidToken } = require('../utils/meliUtils');   // usado en /ping
-const { ingestShipment } = require('../services/meliIngest'); // única fuente de verdad
+const { getValidToken } = require('../utils/meliUtils');     // usado en /ping
+const { ingestShipment } = require('../services/meliIngest'); // ÚNICA fuente de verdad
 
 const CLIENT_ID     = process.env.MERCADOLIBRE_CLIENT_ID;
 const CLIENT_SECRET = process.env.MERCADOLIBRE_CLIENT_SECRET;
@@ -107,7 +107,7 @@ router.post('/webhook', async (req, res) => {
 
     const shipmentId = String(resource.split('/').pop());
 
-    // Ingesta idempotente (crea/actualiza, mapea estado, precio, etc.)
+    // Ingesta idempotente (crea/actualiza, mapea estado, precio, id_venta, etc.)
     await ingestShipment({ shipmentId, cliente });
 
   } catch (err) {
@@ -130,6 +130,7 @@ router.post('/force-sync/:meli_id', async (req, res) => {
     const cliente = await Cliente.findById(envio.cliente_id).populate('lista_precios');
     if (!cliente?.user_id) return res.status(400).json({ error: 'Cliente sin user_id MeLi' });
 
+    // Única fuente de verdad: esto también persiste id_venta (order_id)
     const updated = await ingestShipment({ shipmentId: meli_id, cliente });
     res.json({ ok: true, envio: updated });
   } catch (err) {
@@ -172,6 +173,37 @@ router.post('/sync-pending', async (req, res) => {
   } catch (err) {
     console.error('sync-pending error:', err);
     res.status(500).json({ error: 'Error en sync-pending' });
+  }
+});
+
+/* -------------------------------------------
+ * (OPCIONAL) Backfill de id_venta para envíos antiguos
+ * POST /api/auth/meli/backfill-order-id
+ * ----------------------------------------- */
+router.post('/backfill-order-id', async (req, res) => {
+  try {
+    const toFix = await Envio.find({
+      meli_id: { $ne: null },
+      $or: [{ id_venta: { $exists: false } }, { id_venta: { $in: [null, ''] } }]
+    }).limit(200);
+
+    let ok = 0, fail = 0;
+    for (const e of toFix) {
+      try {
+        const cliente = await Cliente.findById(e.cliente_id);
+        if (!cliente?.user_id) { fail++; continue; }
+        await ingestShipment({ shipmentId: e.meli_id, cliente }); // esto setea id_venta=order_id
+        ok++;
+      } catch (err) {
+        fail++;
+        console.error('backfill item error:', e._id, err?.response?.data || err.message);
+      }
+      await new Promise(r => setTimeout(r, 120));
+    }
+    res.json({ ok, fail, total: toFix.length });
+  } catch (err) {
+    console.error('backfill-order-id error:', err);
+    res.status(500).json({ error: 'Error en backfill-order-id' });
   }
 });
 
