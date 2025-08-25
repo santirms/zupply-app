@@ -9,6 +9,7 @@ const Envio   = require('../models/Envio');
 
 const { getValidToken } = require('../utils/meliUtils');     // usado en /ping
 const { ingestShipment } = require('../services/meliIngest'); // ÚNICA fuente de verdad
+const { assertCronAuth } = require('../middlewares/cronAuth');
 
 const CLIENT_ID     = process.env.MERCADOLIBRE_CLIENT_ID;
 const CLIENT_SECRET = process.env.MERCADOLIBRE_CLIENT_SECRET;
@@ -143,7 +144,7 @@ router.post('/force-sync/:meli_id', async (req, res) => {
  * Sync masivo (para cron/worker)
  * POST /api/auth/meli/sync-pending
  * ----------------------------------------- */
-router.post('/sync-pending', async (req, res) => {
+router.post('/sync-pending', assertCronAuth, async (req, res) => {
   try {
     // Traer envíos no terminales (internos) o sin estado terminal de MeLi
     const pendientes = await Envio.find({
