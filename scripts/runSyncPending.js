@@ -2,13 +2,12 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 
-// ⬅️ REGISTRAR MODELOS ANTES DE USARLOS (clave para populate)
-require('../models/ListaDePrecios');
+// Registrar modelos ANTES de usarlos (¡ojo con la caja del nombre del archivo!)
+require('../models/listaDePrecios');
 require('../models/Cliente');
 require('../models/Envio');
-require('../models/Zona'); // si existe
-require('../models/Partido');
-// (si tenés 'Chofer' u otros que se pueblen, también agregar sus requires)
+try { require('../models/Zona'); } catch (_) {} // si existe
+require('../models/partidos');
 
 const { syncPendingShipments } = require('../services/meliSync');
 
@@ -26,7 +25,7 @@ const { syncPendingShipments } = require('../services/meliSync');
     }
 
     const opt = {};
-    const dbName = process.env.MONGODB_DB || process.env.MONGO_DB; // opcional
+    const dbName = process.env.MONGODB_DB || process.env.MONGO_DB;
     if (dbName) opt.dbName = dbName;
 
     await mongoose.connect(uri, opt);
@@ -46,4 +45,3 @@ const { syncPendingShipments } = require('../services/meliSync');
     process.exit(1);
   }
 })();
-
