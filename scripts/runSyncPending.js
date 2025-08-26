@@ -1,6 +1,15 @@
 // scripts/runSyncPending.js
 require('dotenv').config();
 const mongoose = require('mongoose');
+
+// ⬅️ REGISTRAR MODELOS ANTES DE USARLOS (clave para populate)
+require('../models/ListaDePrecios');
+require('../models/Cliente');
+require('../models/Envio');
+require('../models/Zona'); // si existe
+require('../models/Partidos');
+// (si tenés 'Chofer' u otros que se pueblen, también agregar sus requires)
+
 const { syncPendingShipments } = require('../services/meliSync');
 
 (async () => {
@@ -23,8 +32,8 @@ const { syncPendingShipments } = require('../services/meliSync');
     await mongoose.connect(uri, opt);
     console.log('[cron] Conectado a Mongo');
 
-    const limit   = Number(process.env.MELI_SYNC_LIMIT     || 200);
-    const delayMs = Number(process.env.MELI_SYNC_DELAY_MS  || 150);
+    const limit   = Number(process.env.MELI_SYNC_LIMIT    || 200);
+    const delayMs = Number(process.env.MELI_SYNC_DELAY_MS || 150);
 
     const res = await syncPendingShipments({ limit, delayMs });
     console.log('[cron] meli-sync results:', JSON.stringify(res));
