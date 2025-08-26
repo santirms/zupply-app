@@ -7,7 +7,7 @@ require('../models/ListaDePrecios');
 require('../models/Cliente');
 require('../models/Envio');
 require('../models/Zona'); // si existe
-require('../models/Partido');
+require('../models/partidos');
 // (si tenés 'Chofer' u otros que se pueblen, también agregar sus requires)
 
 const { syncPendingShipments } = require('../services/meliSync');
