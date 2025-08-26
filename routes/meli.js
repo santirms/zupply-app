@@ -209,11 +209,6 @@ router.post('/backfill-order-id', async (req, res) => {
   }
 });
 
-// al tope:
-const { backfillCliente } = require('../services/meliBackfill');
-
-// ...dentro de router:
-
 // Backfill de un cliente puntual (últimos N días)
 router.post('/backfill/:clienteId', async (req, res) => {
   try {
