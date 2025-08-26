@@ -10,6 +10,7 @@ const Envio   = require('../models/Envio');
 const { getValidToken } = require('../utils/meliUtils');     // usado en /ping
 const { ingestShipment } = require('../services/meliIngest'); // ÚNICA fuente de verdad
 const { assertCronAuth } = require('../middlewares/cronAuth');
+const { backfillCliente } = require('../services/meliBackfill');
 
 const CLIENT_ID     = process.env.MERCADOLIBRE_CLIENT_ID;
 const CLIENT_SECRET = process.env.MERCADOLIBRE_CLIENT_SECRET;
@@ -207,5 +208,49 @@ router.post('/backfill-order-id', async (req, res) => {
     res.status(500).json({ error: 'Error en backfill-order-id' });
   }
 });
+
+// al tope:
+const { backfillCliente } = require('../services/meliBackfill');
+
+// ...dentro de router:
+
+// Backfill de un cliente puntual (últimos N días)
+router.post('/backfill/:clienteId', async (req, res) => {
+  try {
+    const days = Number(req.query.days || 7);
+    const cliente = await Cliente.findById(req.params.clienteId).populate('lista_precios');
+    if (!cliente) return res.status(404).json({ ok:false, error:'Cliente no encontrado' });
+    if (!cliente.user_id) return res.status(400).json({ ok:false, error:'Cliente sin user_id MeLi' });
+
+    const r = await backfillCliente({ cliente, days });
+    return res.json({ ok:true, ...r });
+  } catch (err) {
+    console.error('backfill cliente error:', err.response?.data || err.message);
+    res.status(500).json({ ok:false, error:'Error en backfill' });
+  }
+});
+
+// Backfill para todos los clientes con auto_ingesta
+router.post('/backfill-all', async (req, res) => {
+  try {
+    const days = Number(req.query.days || 2);
+    const clientes = await Cliente.find({
+      auto_ingesta: true,
+      user_id: { $exists: true, $ne: null }
+    }).populate('lista_precios');
+
+    let stats = [];
+    for (const cliente of clientes) {
+      const r = await backfillCliente({ cliente, days });
+      stats.push({ cliente: cliente._id, nombre: cliente.nombre, ...r });
+      await new Promise(r => setTimeout(r, 300));
+    }
+    res.json({ ok:true, totalClientes: clientes.length, stats });
+  } catch (err) {
+    console.error('backfill-all error:', err.response?.data || err.message);
+    res.status(500).json({ ok:false, error:'Error en backfill-all' });
+  }
+});
+
 
 module.exports = router;
