@@ -39,7 +39,15 @@ async function syncPendingShipments({ limit = 200, delayMs = 150 } = {}) {
   res.total = lot.length;
 
   for (const e of lot) {
-    if (!e.meli_id) { res.skipped_no_meli_id++; continue; }
+    if (!cliente?.user_id) {
+  skipped_no_user++;
+  console.log('[meliSync] skip por falta de user_id:', {
+    envio_id: e._id.toString(),
+    meli_id: e.meli_id,
+    cliente_id: e.cliente_id?.toString?.(),
+  });
+  continue;
+}
 
     try {
       const cliente = await Cliente.findById(e.cliente_id).populate('lista_precios');
