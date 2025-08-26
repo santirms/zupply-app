@@ -2,7 +2,7 @@
 const Envio    = require('../models/Envio');
 const Cliente  = require('../models/Cliente');
 const { ingestShipment } = require('./meliIngest');
-require('../models/ListaDePrecios');
+require('../models/listaDePrecios');
 
 
 const TERMINALES_MELI = new Set(['delivered', 'cancelled']);
