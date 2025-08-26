@@ -252,5 +252,33 @@ router.post('/backfill-all', async (req, res) => {
   }
 });
 
+router.get('/debug/pending-linked', async (req, res) => {
+  try {
+    const clientesVinc = await Cliente.find({ user_id: { $exists: true, $ne: null } }, { _id:1 });
+    const idsVinc = clientesVinc.map(c => c._id);
+
+    const allWithMeli = await Envio.countDocuments({ meli_id: { $ne: null } });
+    const linkedAll   = await Envio.countDocuments({ meli_id: { $ne: null }, cliente_id: { $in: idsVinc } });
+    const linkedPending = await Envio.find({
+      meli_id: { $ne: null },
+      cliente_id: { $in: idsVinc },
+      $or: [
+        { estado: { $nin: ['entregado','cancelado'] } },
+        { 'estado_meli.status': { $nin: ['delivered','cancelled'] } },
+        { estado: { $exists: false } }
+      ]
+    }).select('_id meli_id estado estado_meli.status cliente_id fecha').limit(20).lean();
+
+    res.json({
+      ok: true,
+      counts: { allWithMeli, linkedAll, linkedPending: linkedPending.length, clientesVinc: idsVinc.length },
+      sample: linkedPending
+    });
+  } catch (e) {
+    console.error('debug/pending-linked', e);
+    res.status(500).json({ ok:false, error:'debug failed' });
+  }
+});
+
 
 module.exports = router;
