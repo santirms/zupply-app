@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 
 const Cliente = require('../models/Cliente');
 require('../models/Envio'); // por si algún populate lo necesita
+require('../models/listaDePrecios');
 
 const { backfillCliente } = require('../services/meliBackfill');
 const { syncPendingShipments } = require('../services/meliSync');
