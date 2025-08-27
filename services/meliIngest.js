@@ -28,9 +28,30 @@ async function fetchPackIdFromOrder(orderId, user_id) {
   return order?.pack_id || null;
 }
 
+function esFlexDeVerdad(sh) {
+  const lt   = (sh.logistic_type || '').toLowerCase();      // ej: "self_service", "drop_off", "fulfillment"...
+  const mode = (sh.mode || '').toLowerCase();               // ej: "me2", "custom"
+  const tags = (Array.isArray(sh.tags) ? sh.tags : []).map(t => String(t).toLowerCase());
+
+  // Regla principal: logistic_type === self_service (Mercado Envíos Flex)
+  if (lt === 'self_service') return true;
+
+  // Fallbacks razonables (por si cambia la forma en algunas cuentas):
+  if (tags.includes('self_service') || tags.includes('self_service_in') || tags.includes('self_service_delivered')) {
+    return true;
+  }
+
+  // Cualquier otra cosa: NO Flex
+  return false;
+}
+
 async function ingestShipment({ shipmentId, cliente }) {
   const sh = await fetchShipment(shipmentId, cliente.user_id);
-
+  
+if (process.env.FLEX_ONLY === 'true' && !esFlexDeVerdad(sh)) {
+    return { skipped: true, reason: 'non_flex', shipmentId };
+  }
+  
   // address
   const cp       = sh?.receiver_address?.zip_code || '';
   const dest     = sh?.receiver_address?.receiver_name || '';
