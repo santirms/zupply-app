@@ -151,19 +151,32 @@ router.post('/cargar-masivo', async (req, res) => {
         }
       }
 
+        // 3) Derivar partido/zona desde el CP (fallback a lo que venga en la etiqueta)
+  const cp = et.codigo_postal || '';
+  let partido = (et.partido || '').trim();
+  let zona    = (et.zona    || '').trim();
+
+  if (!partido || !zona) {
+    try {
+      const z = await detectarZona(cp); // { partido, zona }
+      if (!partido) partido = z?.partido || '';
+      if (!zona)    zona    = z?.zona    || '';
+    } catch { /* noop */ }
+  }
+
       return {
-        meli_id:       et.tracking_id      || '',
-        sender_id:     et.sender_id        || '',
-        cliente_id:    cl?._id             || null,
-        codigo_postal: et.codigo_postal    || '',
-        zona:          et.zona             || et.partido || '',
-        destinatario:  et.destinatario     || '',
-        direccion:     et.direccion        || '',
-        referencia:    et.referencia       || '',
-        // 3) Usamos la fecha combinada aquí:
-        fecha:         fechaEtiqueta,
-        id_venta:      et.tracking_id      || '',
-        precio:        0
+       meli_id:       et.tracking_id      || '',
+       sender_id:     et.sender_id        || '',
+       cliente_id:    cl?._id             || null,
+       codigo_postal: cp,
+       partido,                      // 👈 ahora lo seteamos
+       zona,                         // 👈 y también la zona (para facturación)
+       destinatario:  et.destinatario     || '',
+       direccion:     et.direccion        || '',
+       referencia:    et.referencia       || '',
+      fecha:         fechaEtiqueta,
+      id_venta:      et.id_venta || et.order_id || et.tracking_id || '', // usa lo que tengas
+      precio:        0
       };
     }));
 
