@@ -26,44 +26,48 @@ router.get('/', async (req, res) => {
       if (hasta) filtro.fecha.$lte = new Date(hasta);
     }
 
-    // 1) Traer envíos con cliente + lista_precios
-    let envios = await Envio.find(filtro)
-      .sort({ fecha: -1, _id: -1 })                    // ⬅️ (punto 3) nuevos primero
-      .populate({ path: 'chofer', select: 'nombre telefono' }) // ⬅️ popular chofer
-      .populate({
-        path: 'cliente_id',
-        populate: { path: 'lista_precios', model: 'ListaDePrecios' }
-      });
+// 2) Procesar cada envío
+const zonaCache = new Map(); // cache partido -> nombreZona
 
-    // 2) Procesar cada envío
-    envios = await Promise.all(envios.map(async envioDoc => {
-      const e = envioDoc.toObject();
+envios = await Promise.all(envios.map(async envioDoc => {
+  const e = envioDoc.toObject();
 
-      // a) Determinar nombre de zona (puede estar en e.zona o e.partido)
-      const zonaName = e.zona || e.partido || '';
+  // Mantener SIEMPRE el partido tal cual viene del doc
+  const partidoName = e.partido || '';
 
-      // b) Calcular precio si no viene
-      if (typeof e.precio !== 'number' || e.precio <= 0) {
-        let costo = 0;
-        const cl = e.cliente_id;
-        if (cl?.lista_precios) {
-          const zonaDoc = await Zona.findOne({ partidos: zonaName });
-          if (zonaDoc) {
-            const zp = cl.lista_precios.zonas.find(z =>
-              z.zona.toString() === zonaDoc._id.toString()
-            );
-            costo = zp?.precio ?? 0;
-          }
-        }
-        e.precio = costo;
+  // Determinar zona para facturación: si no viene, derivarla por partido
+  let zonaFact = e.zona || '';
+  if (!zonaFact && partidoName) {
+    if (zonaCache.has(partidoName)) {
+      zonaFact = zonaCache.get(partidoName);
+    } else {
+      const zDocByPartido = await Zona.findOne({ partidos: partidoName }, { nombre: 1 });
+      zonaFact = zDocByPartido?.nombre || '';
+      zonaCache.set(partidoName, zonaFact);
+    }
+  }
+
+  // Calcular precio si no viene/<=0, usando la zona de facturación
+  if ((typeof e.precio !== 'number') || e.precio <= 0) {
+    let costo = 0;
+    const cl = e.cliente_id;
+    if (cl?.lista_precios && zonaFact) {
+      const zDocByNombre = await Zona.findOne({ nombre: zonaFact }, { _id: 1 });
+      if (zDocByNombre) {
+        const zp = cl.lista_precios.zonas?.find(z =>
+          String(z.zona) === String(zDocByNombre._id)
+        );
+        costo = zp?.precio ?? 0;
       }
+    }
+    e.precio = costo;
+  }
 
-      // c) Unificamos ambos campos para el front
-      e.zona    = zonaName;
-      e.partido = zonaName;
+  // Exponer zona para tooltip/columna, pero NO tocar e.partido
+  e.zona = zonaFact;
 
-      return e;
-    }));
+  return e;
+}));
 
     return res.json(envios);
   } catch (err) {
