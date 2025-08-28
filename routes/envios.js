@@ -18,6 +18,8 @@ const { getEnvioByTracking, labelByTracking } = require('../controllers/envioCon
 router.get('/', async (req, res) => {
   try {
     const { sender_id, desde, hasta } = req.query;
+
+    // 1) Filtro base
     const filtro = {};
     if (sender_id) filtro.sender_id = sender_id;
     if (desde || hasta) {
@@ -26,55 +28,61 @@ router.get('/', async (req, res) => {
       if (hasta) filtro.fecha.$lte = new Date(hasta);
     }
 
-// 2) Procesar cada envío
-const zonaCache = new Map(); // cache partido -> nombreZona
+    // 2) Traer envíos de DB (con cliente + lista de precios)
+    const enviosDocs = await Envio.find(filtro)
+      .populate({ path: 'cliente_id', populate: { path: 'lista_precios' } });
 
-envios = await Promise.all(envios.map(async envioDoc => {
-  const e = envioDoc.toObject();
+    // 3) Procesar cada envío (calcular zona de facturación, precio si falta, etc.)
+    const zonaCache = new Map(); // cache partido -> nombreZona
 
-  // Mantener SIEMPRE el partido tal cual viene del doc
-  const partidoName = e.partido || '';
+    const envios = await Promise.all(enviosDocs.map(async (envioDoc) => {
+      const e = envioDoc.toObject();
 
-  // Determinar zona para facturación: si no viene, derivarla por partido
-  let zonaFact = e.zona || '';
-  if (!zonaFact && partidoName) {
-    if (zonaCache.has(partidoName)) {
-      zonaFact = zonaCache.get(partidoName);
-    } else {
-      const zDocByPartido = await Zona.findOne({ partidos: partidoName }, { nombre: 1 });
-      zonaFact = zDocByPartido?.nombre || '';
-      zonaCache.set(partidoName, zonaFact);
-    }
-  }
+      // mantener partido tal cual
+      const partidoName = e.partido || '';
 
-  // Calcular precio si no viene/<=0, usando la zona de facturación
-  if ((typeof e.precio !== 'number') || e.precio <= 0) {
-    let costo = 0;
-    const cl = e.cliente_id;
-    if (cl?.lista_precios && zonaFact) {
-      const zDocByNombre = await Zona.findOne({ nombre: zonaFact }, { _id: 1 });
-      if (zDocByNombre) {
-        const zp = cl.lista_precios.zonas?.find(z =>
-          String(z.zona) === String(zDocByNombre._id)
-        );
-        costo = zp?.precio ?? 0;
+      // zona de facturación: usar e.zona si viene; si no, derivar por partido
+      let zonaFact = e.zona || '';
+      if (!zonaFact && partidoName) {
+        if (zonaCache.has(partidoName)) {
+          zonaFact = zonaCache.get(partidoName);
+        } else {
+          const zDocByPartido = await Zona.findOne({ partidos: partidoName }, { nombre: 1 });
+          zonaFact = zDocByPartido?.nombre || '';
+          zonaCache.set(partidoName, zonaFact);
+        }
       }
-    }
-    e.precio = costo;
-  }
 
-  // Exponer zona para tooltip/columna, pero NO tocar e.partido
-  e.zona = zonaFact;
+      // precio si no hay / <= 0 usando lista de precios del cliente
+      if (typeof e.precio !== 'number' || e.precio <= 0) {
+        let costo = 0;
+        const cl = e.cliente_id;
+        if (cl?.lista_precios && zonaFact) {
+          const zDocByNombre = await Zona.findOne({ nombre: zonaFact }, { _id: 1 });
+          if (zDocByNombre) {
+            const zp = cl.lista_precios.zonas?.find(
+              z => String(z.zona) === String(zDocByNombre._id)
+            );
+            costo = zp?.precio ?? 0;
+          }
+        }
+        e.precio = costo;
+      }
 
-  return e;
-}));
+      // exponer zona (para tooltip/columna), NO tocar e.partido
+      e.zona = zonaFact;
 
+      return e;
+    }));
+
+    // 4) Responder array
     return res.json(envios);
   } catch (err) {
     console.error('Error GET /envios:', err);
     return res.status(500).json({ error: 'Error al obtener envíos' });
   }
 });
+
 
 // POST /guardar-masivo
 router.post('/guardar-masivo', async (req, res) => {
