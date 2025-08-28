@@ -29,26 +29,29 @@ async function fetchPackIdFromOrder(orderId, user_id) {
 }
 
 function esFlexDeVerdad(sh) {
-  const lt   = (sh.logistic_type || '').toLowerCase();      // ej: "self_service", "drop_off", "fulfillment"...
-  const mode = (sh.mode || '').toLowerCase();               // ej: "me2", "custom"
-  const tags = (Array.isArray(sh.tags) ? sh.tags : []).map(t => String(t).toLowerCase());
+  // Puede venir en shipping_option.logistic_type o en la raíz
+  const lt = (sh?.shipping_option?.logistic_type || sh?.logistic_type || '').toLowerCase();
 
-  // Regla principal: logistic_type === self_service (Mercado Envíos Flex)
+  // Tags pueden venir en shipping_option.tags o en sh.tags
+  const tags = [
+    ...(Array.isArray(sh?.shipping_option?.tags) ? sh.shipping_option.tags : []),
+    ...(Array.isArray(sh?.tags) ? sh.tags : []),
+  ].map(t => String(t).toLowerCase());
+
+  // Regla principal: Flex = self_service
   if (lt === 'self_service') return true;
 
-  // Fallbacks razonables (por si cambia la forma en algunas cuentas):
-  if (tags.includes('self_service') || tags.includes('self_service_in') || tags.includes('self_service_delivered')) {
-    return true;
-  }
+  // Fallbacks por si ML lo expone como tag
+  if (tags.some(t => /(^|_)self_service(_|$)|flex/.test(t))) return true;
 
-  // Cualquier otra cosa: NO Flex
+  // Todo lo demás NO es Flex (ME clásico, Fulfillment, CrossDock, etc.)
   return false;
 }
 
 async function ingestShipment({ shipmentId, cliente }) {
   const sh = await fetchShipment(shipmentId, cliente.user_id);
   
-if (process.env.FLEX_ONLY === 'true' && !esFlexDeVerdad(sh)) {
+  if (!esFlexDeVerdad(sh)) {
     return { skipped: true, reason: 'non_flex', shipmentId };
   }
   
