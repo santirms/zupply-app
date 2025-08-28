@@ -280,9 +280,6 @@ router.get('/del-dia', async (req, res) => {
   }
 });
 
-// ⬇️ NUEVO: QR por tracking (PONER ANTES de '/:id')
-router.get('/tracking/:tracking', getEnvioByTracking);
-
 // Helper: completa y guarda coords si faltan
 // Geocodifica con Nominatim si faltan coords. Nunca lanza; si falla devuelve el envío como está.
 async function ensureCoords(envio) {
