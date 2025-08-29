@@ -69,15 +69,16 @@ const envioSchema = new Schema({
 
   label_url:  { type: String }, // /labels/<id_venta>.pdf
   qr_png:     { type: String }, // DataURL para previsualizar QR
-  envioSchema.add({
-  historial: { type: [HistItemSchema], default: [] }
-  });
   }, { timestamps: false });
 
 /**
  * Índice de idempotencia:
  * Único sólo cuando meli_id existe y no es vacío.
  */
+envioSchema.add({
+historial: { type: [HistItemSchema], default: [] }
+});
+
 envioSchema.index(
   { meli_id: 1 },
   { unique: true, partialFilterExpression: { meli_id: { $exists: true, $nin: [null, ''] } } }
