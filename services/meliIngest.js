@@ -48,7 +48,7 @@ function esFlexDeVerdad(sh) {
   return false;
 }
 
-async function ingestShipment({ shipmentId, cliente }) {
+async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor_name = null }) {
   const sh = await fetchShipment(shipmentId, cliente.user_id);
   
   if (!esFlexDeVerdad(sh)) {
@@ -112,6 +112,50 @@ async function ingestShipment({ shipmentId, cliente }) {
     },
     { upsert: true, new: true }
   );
+  
+  const prev = await Envio.findOne(
+    { meli_id: String(sh.id) },
+    { estado: 1, estado_meli: 1 }
+  ).lean();
+
+  const changed =
+    (prev?.estado ?? null) !== estado_interno ||
+    (prev?.estado_meli?.status ?? null)    !== estado_meli.status ||
+    (prev?.estado_meli?.substatus ?? null) !== estado_meli.substatus;
+
+  const update = {
+    $setOnInsert: { fecha: new Date() },
+    $set: {
+      meli_id:       String(sh.id),
+      sender_id:     String(cliente.codigo_cliente || cliente.sender_id?.[0] || cliente.user_id),
+      cliente_id:    cliente._id,
+      codigo_postal: cp,
+      partido,
+      zona:          zonaNom,
+      destinatario:  destinat,
+      direccion:     address,
+      referencia,
+      precio,
+      estado_meli,
+      estado: estado_interno
+    }
+  };
+
+  if (changed) {
+    update.$push = {
+      historial: {
+        at: new Date(),
+        estado: estado_interno,
+        estado_meli: { status: estado_meli.status, substatus: estado_meli.substatus },
+        source,
+        actor_name // en ML normalmente null
+      }
+    };
+  }
+
+  await Envio.updateOne({ meli_id: String(sh.id) }, update, { upsert: true });
+  return await Envio.findOne({ meli_id: String(sh.id) }).lean();
+}
 
   return res;
 }
