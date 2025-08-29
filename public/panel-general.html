@@ -117,11 +117,29 @@
        class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
     <div class="bg-white rounded-lg shadow-lg w-11/12 md:w-2/3 lg:w-1/2 p-6 relative">
       <button onclick="cerrarModalDetalle()" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700">✕</button>
-      <h2 class="text-2xl font-semibold mb-4">Detalle del Envío</h2>
-      <div id="contenidoDetalle" class="space-y-1"></div>
-      <div id="mapa" class="h-64 mt-4 rounded bg-gray-100"></div>
-    </div>
+     <h2 class="text-2xl font-semibold mb-4">Seguimiento del envío</h2>
+<!-- Tabs -->
+<div class="mb-4 border-b">
+  <nav class="flex gap-2" role="tablist">
+    <button id="tabBtnDetalle" class="px-3 py-2 rounded-t border-b-2 border-indigo-600 text-indigo-700 font-medium"
+            onclick="switchTab('detalle')">Detalle del envío</button>
+    <button id="tabBtnHist" class="px-3 py-2 rounded-t border-b-2 border-transparent text-gray-600 hover:text-gray-800"
+            onclick="switchTab('historial')">Historial</button>
+  </nav>
+</div>
+
+<!-- Tab: Detalle -->
+<div id="tabDetalle">
+  <div id="contenidoDetalle" class="space-y-1"></div>
+  <div id="mapa" class="h-64 mt-4 rounded bg-gray-100"></div>
+</div>
+
+<!-- Tab: Historial -->
+<div id="tabHistorial" class="hidden">
+  <div id="contenidoHistorial" class="space-y-2">
+    <div class="text-sm text-gray-500">Cargando historial…</div>
   </div>
+</div>
 
   <!-- Modal Eliminar -->
   <div id="modalEliminar"
@@ -500,6 +518,14 @@ tr.innerHTML = `
       const zonaFact = data.zona?.trim?.()    || '-';
       const precioFmt = (typeof data.precio === 'number') ? `$ ${data.precio.toFixed(2)}` : '-';
 
+      // Historial (si el backend lo envía en el objeto)
+      const hist = Array.isArray(data.historial) ? data.historial : [];
+      renderHistorial(hist);
+
+      // Aseguramos que por default esté la pestaña Detalle
+      switchTab('detalle');
+
+
       const cd = document.getElementById('contenidoDetalle');
       cd.innerHTML = `
         <p><strong>Cliente:</strong> ${clienteNombre}</p>
@@ -580,6 +606,77 @@ tr.innerHTML = `
   window.abrirModalEliminar = abrirModalEliminar;
   window.cerrarModalEliminar = cerrarModalEliminar;
   window.cerrarModalDetalle = cerrarModalDetalle;
+
+  function switchTab(which) {
+  const det = document.getElementById('tabDetalle');
+  const his = document.getElementById('tabHistorial');
+  const bDet = document.getElementById('tabBtnDetalle');
+  const bHis = document.getElementById('tabBtnHist');
+
+  const activate = (btn) => {
+    btn.classList.remove('text-gray-600','border-transparent');
+    btn.classList.add('text-indigo-700','border-indigo-600','font-medium');
+  };
+  const deactivate = (btn) => {
+    btn.classList.add('text-gray-600','border-transparent');
+    btn.classList.remove('text-indigo-700','border-indigo-600','font-medium');
+  };
+
+  if (which === 'detalle') {
+    det.classList.remove('hidden');
+    his.classList.add('hidden');
+    activate(bDet); deactivate(bHis);
+  } else {
+    det.classList.add('hidden');
+    his.classList.remove('hidden');
+    activate(bHis); deactivate(bDet);
+  }
+}
+
+// Render del historial dentro del modal
+function renderHistorial(histArray=[]) {
+  const cont = document.getElementById('contenidoHistorial');
+  if (!Array.isArray(histArray) || !histArray.length) {
+    cont.innerHTML = `<p class="text-sm text-gray-500">Sin eventos por ahora.</p>`;
+    return;
+  }
+  // más nuevo primero
+  const rows = histArray
+    .slice()
+    .sort((a,b)=> new Date(b.at||b.fecha||b.updatedAt||0) - new Date(a.at||a.fecha||a.updatedAt||0))
+    .map(h => {
+      const fechaStr = h.at ? new Date(h.at).toLocaleString() :
+                       h.updatedAt ? new Date(h.updatedAt).toLocaleString() : '-';
+
+      // Usamos tu UI unificada para mostrar el badge
+      const { key, label } = uiStatus({ estado: h.estado, estado_meli: h.estado_meli });
+      const badge = estadoBadge(key, label);
+      const usuario = h.usuario || '—';
+
+      return `
+        <tr class="border-b">
+          <td class="px-3 py-2 whitespace-nowrap">${fechaStr}</td>
+          <td class="px-3 py-2">${badge}</td>
+          <td class="px-3 py-2 whitespace-nowrap text-gray-700">${usuario}</td>
+        </tr>
+      `;
+    }).join('');
+
+  cont.innerHTML = `
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-3 py-2 text-left font-semibold">Fecha y hora</th>
+            <th class="px-3 py-2 text-left font-semibold">Estado</th>
+            <th class="px-3 py-2 text-left font-semibold">Usuario</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
 
   // =================== Inicio ===================
   document.addEventListener('DOMContentLoaded', () => {
