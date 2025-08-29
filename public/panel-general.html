@@ -634,24 +634,28 @@ tr.innerHTML = `
 }
 
 // Render del historial dentro del modal
-function renderHistorial(histArray=[]) {
+function renderHistorial(histArray = []) {
   const cont = document.getElementById('contenidoHistorial');
   if (!Array.isArray(histArray) || !histArray.length) {
     cont.innerHTML = `<p class="text-sm text-gray-500">Sin eventos por ahora.</p>`;
     return;
   }
-  // más nuevo primero
+
   const rows = histArray
     .slice()
-    .sort((a,b)=> new Date(b.at||b.fecha||b.updatedAt||0) - new Date(a.at||a.fecha||a.updatedAt||0))
+    .sort((a, b) => new Date(b.at || b.fecha || b.updatedAt || 0) - new Date(a.at || a.fecha || a.updatedAt || 0))
     .map(h => {
-      const fechaStr = h.at ? new Date(h.at).toLocaleString() :
-                       h.updatedAt ? new Date(h.updatedAt).toLocaleString() : '-';
+      const fechaStr =
+        h.at ? new Date(h.at).toLocaleString()
+             : h.updatedAt ? new Date(h.updatedAt).toLocaleString()
+             : '-';
 
-      // Usamos tu UI unificada para mostrar el badge
-      const { key, label } = uiStatus({ estado: h.estado, estado_meli: h.estado_meli });
-      const badge = estadoBadge(key, label);
-      const usuario = h.usuario || '—';
+      // Badge + substatus usando tu UI unificada
+      const { key, label, substatus } = uiStatus({ estado: h.estado, estado_meli: h.estado_meli });
+      const badge = estadoBadge(key, label) + (substatus ? substatusChip(substatus) : '');
+
+      // actor_name (backend) o usuario (por si lo agregaste así)
+      const usuario = h.actor_name || h.usuario || '—';
 
       return `
         <tr class="border-b">
@@ -660,7 +664,8 @@ function renderHistorial(histArray=[]) {
           <td class="px-3 py-2 whitespace-nowrap text-gray-700">${usuario}</td>
         </tr>
       `;
-    }).join('');
+    })
+    .join('');
 
   cont.innerHTML = `
     <div class="overflow-x-auto">
@@ -677,6 +682,7 @@ function renderHistorial(histArray=[]) {
     </div>
   `;
 }
+
 
   // =================== Inicio ===================
   document.addEventListener('DOMContentLoaded', () => {
