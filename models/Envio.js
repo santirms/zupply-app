@@ -2,6 +2,18 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
+const HistItemSchema = new mongoose.Schema({
+  at:        { type: Date, default: Date.now },
+  estado:    { type: String }, // tu estado unificado
+  estado_meli: {
+    status:    { type: String, default: null },
+    substatus: { type: String, default: null }
+  },
+  source:     { type: String, default: 'panel' }, // 'meli:webhook' | 'meli:cron' | 'meli:force-sync' | 'panel' | 'scan' | 'api'
+  actor_name: { type: String, default: null },    // tu chofer/operador si corresponde
+  note:       { type: String, default: '' }
+}, { _id: false });
+
 const envioSchema = new Schema({
   sender_id:      { type: String, required: true },
   cliente_id:     { type: Schema.Types.ObjectId, ref: 'Cliente', required: true },
@@ -57,7 +69,10 @@ const envioSchema = new Schema({
 
   label_url:  { type: String }, // /labels/<id_venta>.pdf
   qr_png:     { type: String }, // DataURL para previsualizar QR
-}, { timestamps: false });
+  envioSchema.add({
+  historial: { type: [HistItemSchema], default: [] }
+  });
+  }, { timestamps: false });
 
 /**
  * Índice de idempotencia:
@@ -70,5 +85,6 @@ envioSchema.index(
 
 // (opcional) índice para listar por cliente/fecha más rápido en panel/facturación
 envioSchema.index({ cliente_id: 1, fecha: -1 });
+
 
 module.exports = mongoose.models.Envio || mongoose.model('Envio', envioSchema);
