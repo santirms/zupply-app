@@ -15,7 +15,9 @@
     "pdf-parse": "^1.1.1",
     "dayjs": "^1.11.0",
     "pdfkit": "^0.15.0",
-    "qrcode": "^1.5.0"
+    "qrcode": "^1.5.0",
+    "express-session": "^1.17.3",
+    "connect-mongo": "^5.0.0"
     },
   "devDependencies": {
     "nodemon": "^3.1.10"
