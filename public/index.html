@@ -26,15 +26,18 @@
 <body>
   <h1>Panel Principal</h1>
   <ul>
-    <li><a href="/panel-general.html">📊 Panel General de Envíos</a></li>
-    <li><a href="/scanner.html">📷 Escanear Paquetes</a></li>
-    <li><a href="/clientes.html">👥 Clientes</a></li>
-    <li><a href="/facturacion-general.html">💰 Facturación</a></li>
-    <li><a href="/subir-etiquetas.html"> 📥Subir Etiquetas</a></li>
-    <li><a href="/escaneo-qr.html"> 📷 Escaneo QR Manual</a></li>
-    <li><a href="/ingreso-manual.html">👨🏻‍💻 Ingreso Manual</a></li>
-    <li><a href="/panel-zonas-listas.html">🗺️ Zonas y Listas de Precios</a></li>
-    <li><a href="/choferes.html">🚐 Panel Choferes</a></li>
+<!-- Habilitados para admin y coordinator -->
+<a href="/panel-general"   data-roles="admin,coordinator">📊 Panel General de Envíos</a>
+<a href="/escanear"        data-roles="admin,coordinator">📷 Escanear Paquetes</a>
+<a href="/leer-etiquetas"  data-roles="admin,coordinator">⬆️ Subir Etiquetas</a>
+<a href="/ingreso-manual"  data-roles="admin,coordinator">👩‍💻 Ingreso Manual</a>
+<a href="/panel-choferes"  data-roles="admin,coordinator">🚐 Panel Choferes</a>
+
+<!-- Solo admin -->
+<a href="/clientes"        data-roles="admin">👥 Clientes</a>
+<a href="/facturacion"     data-roles="admin">💰 Facturación</a>
+<a href="/zonas"           data-roles="admin">📚 Zonas y Listas de Precios</a>
+    >
 
   </ul>
 </body>
