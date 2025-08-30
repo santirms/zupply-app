@@ -8,13 +8,14 @@ const fs   = require('fs');
 
 const app = express();
 
+app.set('trust proxy', 1);
 // === Sesión ===
 app.use(session({
   name: 'zupply.sid',
   secret: process.env.SESSION_SECRET || 'cambialo-en-produccion',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 1000 * 60 * 60 * 8, sameSite: 'lax' }
+  cookie: { secure: 'auto', sameSite: 'lax', maxAge: 1000*60*60*8 }
 }));
 
 // Rutas de auth
