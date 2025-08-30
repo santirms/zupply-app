@@ -189,7 +189,8 @@ function renderPage({ ok, title, message, details, ctaHref = '/', ctaText = 'Con
 
     <h1>${escapeHtml(title)}</h1>
     <p>${escapeHtml(message)}</p>
-    ${details ? <p class="small">Detalle: <code>${escapeHtml(details)}</code></p> : ''}
+   ${details ? `<p class="small">Detalle: <code>${escapeHtml(details)}</code></p>` : ''}
+    
 
     <a class="cta" href="${ctaHref}">${escapeHtml(ctaText)}</a>
     <p class="small">Podés cerrar esta ventana con seguridad.</p>
