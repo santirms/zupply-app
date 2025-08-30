@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Login Zupply</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto;display:grid;place-items:center;height:100dvh;background:#0f172a;color:#e2e8f0;margin:0}
+    form{background:#111827;padding:28px 24px;border-radius:16px;min-width:320px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+    h1{margin:0 0 12px;font-size:22px}
+    label{display:block;margin:12px 0 6px}
+    input{width:100%;padding:10px;border-radius:10px;border:1px solid #334155;background:#0b1220;color:#e2e8f0}
+    button{margin-top:16px;width:100%;padding:12px;border:0;border-radius:12px;background:#f59e0b;color:#0b1220;font-weight:700;cursor:pointer}
+    .demo{font-size:12px;opacity:.8;margin-top:10px}
+    .demo code{background:#0b1220;padding:2px 6px;border-radius:8px}
+  </style>
+</head>
+<body>
+  <form method="POST" action="/auth/login">
+    <h1>Ingresar</h1>
+    <label>Usuario</label>
+    <input name="username" autocomplete="username" required />
+    <label>Contraseña</label>
+    <input name="password" type="password" autocomplete="current-password" required />
+    <button type="submit">Entrar</button>
+    <div class="demo">
+      Admin: <code>admin / techoro01</code><br/>
+      Coordinador: <code>logistica / 123</code>
+    </div>
+  </form>
+</body>
+</html>
