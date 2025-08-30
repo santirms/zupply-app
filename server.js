@@ -42,6 +42,22 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '../zupply-app')));
 app.use(express.urlencoded({ extended: true }));
 
+const FRONT_INDEX =
+  fs.existsSync(path.join(__dirname, 'public', 'index.html'))
+    ? path.join(__dirname, 'public', 'index.html')
+    : path.join(__dirname, '../zupply-app', 'index.html');
+
+app.get(
+  [
+    '/panel-general',
+    '/escanear',
+    '/leer-etiquetas',
+    '/ingreso-manual',
+    '/panel-choferes',
+  ],
+  (req, res) => res.sendFile(FRONT_INDEX)
+);
+
 // Zonas
 app.use('/api/zonas', require('./routes/zonas'));
 
