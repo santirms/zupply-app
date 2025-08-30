@@ -22,11 +22,9 @@ const REDIRECT_URI  = process.env.MERCADOLIBRE_REDIRECT_URI;
 router.get('/callback', async (req, res) => {
   try {
     const { code, state } = req.query;
-    if (!code || !state) return res.status(400).send(renderPage({
-      ok: false,
-      title: 'Faltan parámetros',
-      message: 'No recibimos "code" o "state" en el callback.',
-    }));
+     if (!code || !state) {
+      return res.status(400).send('Faltan parámetros en callback');
+    }
 
     const body = new URLSearchParams({
       grant_type:    'authorization_code',
@@ -63,157 +61,13 @@ router.get('/callback', async (req, res) => {
       $addToSet: { sender_id: senderId }
     });
 
-    // Si querés, podés redirigir a tu front:
-    // return res.redirect(${process.env.FRONTEND_URL}/oauth-result?status=ok);
-
-    return res
-      .status(200)
-      .type('html; charset=utf-8')
-      .send(renderPage({
-        ok: true,
-        title: '¡Listo! Cliente vinculado',
-        message: 'La autenticación con Mercado Libre fue exitosa y el cliente quedó vinculado.',
-        ctaHref: process.env.FRONTEND_URL || '/',
-        ctaText: 'Volver a Zupply'
-      }));
+   return res.send('✅ Autenticación exitosa y cliente vinculado.');
 
   } catch (err) {
     console.error('Error en OAuth callback:', err.response?.data || err.message);
-
-    return res
-      .status(500)
-      .type('html; charset=utf-8')
-      .send(renderPage({
-        ok: false,
-        title: 'Hubo un problema',
-        message: 'Ocurrió un error durante el proceso de autenticación. Intentá nuevamente.',
-        details: (err.response?.data?.error_description || err.message),
-        ctaHref: process.env.FRONTEND_URL || '/',
-        ctaText: 'Reintentar'
-      }));
-  }
-});
-
-/** === Vista bonita para el callback ===
- *  Ajustá los colores a los del logo de Zupply:
- *  --brand-1: color principal
- *  --brand-2: color secundario (para el degradado)
- *  --accent : color de acento/botones
- */
-function renderPage({ ok, title, message, details, ctaHref = '/', ctaText = 'Continuar' }) {
-  return `<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Zupply – Autenticación</title>
-  <style>
-    :root{
-      /* TODO: cambiá estos valores por los de tu marca */
-      --brand-1: #111827;    /* ej. gris muy oscuro */
-      --brand-2: #1f2937;    /* ej. gris oscuro para degradado */
-      --accent:  #00c2ff;    /* ej. celeste Zupply (ajustar) */
-      --ok:      #22c55e;
-      --bad:     #ef4444;
-      --text:    #f9fafb;
-      --muted:   #cbd5e1;
-      --card:    #0b1220cc;
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
-      background: radial-gradient(1200px 800px at 80% -10%, var(--brand-2), var(--brand-1)) fixed;
-      color: var(--text);
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-    }
-    .card{
-      width: min(640px, 92vw);
-      background: var(--card);
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,.08);
-      border-radius: 20px;
-      padding: 28px 28px 24px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.35);
-      animation: float .5s ease-out both;
-    }
-    @keyframes float{from{transform:translateY(10px);opacity:.0}to{transform:translateY(0);opacity:1}}
-    .logo{
-      display:flex;align-items:center;gap:10px;margin-bottom:14px;
-      font-weight:700; letter-spacing:.2px;
-    }
-    .logo-badge{
-      width:36px;height:36px;border-radius:10px;
-      background: linear-gradient(135deg, var(--accent), #7dd3fc);
-      display:grid;place-items:center;color:#001018;font-weight:900;
-    }
-    h1{margin:8px 0 4px;font-size:1.6rem}
-    p {margin:8px 0 0; line-height:1.5; color:var(--muted)}
-    .status{
-      display:inline-flex;align-items:center;gap:8px;
-      margin:14px 0 8px; padding:8px 12px; border-radius:999px;
-      font-weight:600; font-size:.95rem;
-      background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
-      color: ${ok ? 'var(--ok)' : 'var(--bad)'};
-    }
-    .cta{
-      margin-top:18px; display:inline-block; text-decoration:none;
-      padding:12px 18px; border-radius:12px; font-weight:700;
-      background: linear-gradient(135deg, var(--accent), #60a5fa);
-      color:#001018; transition: transform .08s ease;
-      border: none;
-    }
-    .cta:active{ transform: translateY(1px) }
-    .small{margin-top:10px; font-size:.85rem; color:var(--muted)}
-    code{background:rgba(255,255,255,.06); padding:2px 6px; border-radius:6px}
-    .okdot,.baddot{
-      width:10px;height:10px;border-radius:999px;
-      background: ${ok ? 'var(--ok)' : 'var(--bad)'};
-      box-shadow: 0 0 10px currentColor;
-    }
-  </style>
-</head>
-<body>
-  <main class="card" role="main" aria-live="polite">
-    <div class="logo">
-      <div class="logo-badge">Z</div>
-      <div>Zupply</div>
-    </div>
-
-    <div class="status">
-      <span class="${ok ? 'okdot' : 'baddot'}"></span>
-      ${ok ? 'Autenticación exitosa' : 'Autenticación fallida'}
-    </div>
-
-    <h1>${escapeHtml(title)}</h1>
-    <p>${escapeHtml(message)}</p>
-   ${details ? `<p class="small">Detalle: <code>${escapeHtml(details)}</code></p>` : ''}
-    
-
-    <a class="cta" href="${ctaHref}">${escapeHtml(ctaText)}</a>
-    <p class="small">Podés cerrar esta ventana con seguridad.</p>
-  </main>
-  <script>
-    // Si esto se abrió en una ventana emergente, intentá cerrarla:
-    if (window.opener && !window.opener.closed) {
-      // window.close(); // descomentá si usás popups
-    }
-  </script>
-</body>
-</html>`;
-}
-
-function escapeHtml(str='') {
-  return String(str)
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'",'&#39;');
-}
-
+    return res.status(500).send('❌ Error durante el callback OAuth');
+   
+  
 /* -------------------------------------------
  * Probar token (users/me)
  * GET /api/auth/meli/ping/:clienteId
