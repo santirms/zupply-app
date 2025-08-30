@@ -38,7 +38,6 @@ function requireAuth(req, res, next) {
 function restrictCoordinator(req, res, next) {
   const u = req.session?.user;
   if (!u || u.role !== 'coordinator') return next(); // admin u otros → pasan
-  if (req.path === '/') return res.redirect('/panel-general'); // comodidad
 
   const ok = ALLOWED_FOR_COORDINATOR.some(rx => rx.test(req.path));
   if (ok) return next();
