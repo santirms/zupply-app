@@ -22,16 +22,21 @@ const REDIRECT_URI  = process.env.MERCADOLIBRE_REDIRECT_URI;
 router.get('/callback', async (req, res) => {
   try {
     const { code, state } = req.query;
-     if (!code || !state) {
-      return res.status(400).send('Faltan parámetros en callback');
+    if (!code || !state) {
+      // si querés: redirigir a linked con error
+      const u = new URL('https://linked.zupply.tech/');
+      u.searchParams.set('ok', '0');
+      u.searchParams.set('msg', 'Faltan parámetros en callback');
+      return res.redirect(302, u.toString());
     }
 
+    // 1) Intercambio de código por tokens
     const body = new URLSearchParams({
       grant_type:    'authorization_code',
       client_id:     CLIENT_ID,
       client_secret: CLIENT_SECRET,
       code,
-      redirect_uri:  REDIRECT_URI
+      redirect_uri:  REDIRECT_URI, // debe coincidir EXACTO con el configurado en ML
     });
 
     const tokenRes = await axios.post(
@@ -42,6 +47,7 @@ router.get('/callback', async (req, res) => {
 
     const { access_token, refresh_token, user_id, expires_in } = tokenRes.data;
 
+    // 2) Persistir/actualizar tokens
     await Token.findOneAndUpdate(
       { user_id },
       {
@@ -49,23 +55,48 @@ router.get('/callback', async (req, res) => {
         refresh_token,
         expires_in,
         fecha_creacion: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       },
       { upsert: true }
     );
 
-    // Vincular cliente (state = "clienteId|senderId")
+    // 3) Vincular cliente (state = "clienteId|senderId")
     const [clienteId, senderId] = String(state).split('|');
     await Cliente.findByIdAndUpdate(clienteId, {
       user_id,
-      $addToSet: { sender_id: senderId }
+      $addToSet: { sender_id: senderId },
     });
 
-   return res.send('✅ Autenticación exitosa y cliente vinculado.');
+    // Datos opcionales para mostrar en la landing
+    const clienteDoc = await Cliente.findById(clienteId).select('nombre').lean();
+    const nombre = clienteDoc?.nombre || '';
+
+    let nickname = '';
+    try {
+      const me = await axios.get('https://api.mercadolibre.com/users/me', {
+        headers: { Authorization: `Bearer ${access_token}` },
+      });
+      nickname = me.data?.nickname || '';
+    } catch (_) { /* ignoro si falla */ }
+
+    // 4) Redirección a tu landing en el subdominio
+    const url = new URL('https://linked.zupply.tech/');
+    if (nombre)   url.searchParams.set('cliente', nombre);
+    if (senderId) url.searchParams.set('sender',  senderId);
+    if (nickname) url.searchParams.set('nickname', nickname);
+
+    return res.redirect(303, url.toString());
 
   } catch (err) {
-    console.error('Error en OAuth callback:', err.response?.data || err.message);
-    return res.status(500).send('❌ Error durante el callback OAuth');
+    console.error('Error en OAuth callback:', err?.response?.data || err.message);
+
+    const u = new URL('https://linked.zupply.tech/');
+    u.searchParams.set('ok', '0');
+    u.searchParams.set('msg', err?.response?.data?.message || 'Error durante el callback OAuth');
+    return res.redirect(302, u.toString());
+  }
+});
+
    
   
 /* -------------------------------------------
