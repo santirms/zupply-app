@@ -1,24 +1,24 @@
 // middlewares/auth.js
 
-// === PANTALLAS habilitadas para coordinador ===
+// === PANTALLAS habilitadas para coordinador (tus URLs de menú) ===
 const PAGE_ALLOW = [
   /^\/$/, // home (tu SPA puede montar acá)
   /^\/panel-general(\/|$|\.html)/,
-  /^\/panel-choferes(\/|$|\.html)/,
+  /^\/escanear(\/|$|\.html)/,          // Escanear Paquetes
+  /^\/leer-etiquetas(\/|$|\.html)/,    // Subir Etiquetas
   /^\/ingreso-manual(\/|$|\.html)/,
-  /^\/leer-etiquetas(\/|$|\.html)/,
-  /^\/escanear(\/|$|\.html)/,
+  /^\/panel-choferes(\/|$|\.html)/,
 ];
 
-// === ESTÁTICOS comunes (bundles, fuentes, imágenes, PDFs, etc.) ===
+// === ESTÁTICOS comunes (bundles, fuentes, imgs, etc.) ===
 const STATIC_ALLOW = [
   /^\/(css|js|img|images|assets|static|build|dist|fonts|media)(\/|$)/,
-  /^\/labels(\/|$)/,   // tu carpeta estática de labels
-  /^\/remitos(\/|$)/,  // tu carpeta estática de remitos
+  /^\/labels(\/|$)/,     // usás esta carpeta
+  /^\/remitos(\/|$)/,    // y esta también
   /^\/favicon\.ico$/,
   /^\/manifest\.json$/,
   /^\/service-worker\.js$/,
-  // extensiones típicas servidas desde la raíz
+  // archivos sueltos en raíz (por si tu build los sirve así)
   /^\/.*\.(css|js|map|png|jpe?g|svg|ico|webp|woff2?|ttf|eot|pdf|txt|csv|xlsx)$/,
 ];
 
@@ -61,7 +61,7 @@ function restrictCoordinator(req, res, next) {
   const ok = ALLOWED_FOR_COORDINATOR.some(rx => rx.test(req.path));
   if (ok) return next();
 
-  // DEBUG temporal para ver qué está bloqueando:
+  // DEBUG: deja esto por ahora para ver qué bloquea
   console.warn('[COORD 403]', req.method, req.path);
 
   if (req.accepts('html')) return res.status(403).send('Acceso restringido para coordinador');
