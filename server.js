@@ -1,11 +1,24 @@
 require('dotenv').config();
 const express = require('express');
+const session = require('express-session');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
 const fs   = require('fs');
 
 const app = express();
+
+// === Sesión ===
+app.use(session({
+  name: 'zupply.sid',
+  secret: process.env.SESSION_SECRET || 'cambialo-en-produccion',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 1000 * 60 * 60 * 8, sameSite: 'lax' }
+}));
+
+// Rutas de auth
+app.use('/auth', require('./routes/auth'));
 
 app.use(cors());
 app.use(express.json());
