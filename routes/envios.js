@@ -389,6 +389,66 @@ router.patch('/:id/geocode', async (req, res) => {
   }
 });
 
+// PATCH /envios/:id/asignar
+router.patch('/:id/asignar', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { chofer_id, chofer_nombre, actor_name } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
+    // Opcional: si tenés modelo Chofer y querés validar el id
+    let choferPayload = undefined;
+    let choferName = chofer_nombre || null;
+    try {
+      const Chofer = require('../models/Chofer'); // si existe en tu proyecto
+      if (chofer_id) {
+        const ch = await Chofer.findById(chofer_id);
+        if (ch) {
+          choferPayload = { _id: ch._id, nombre: ch.nombre };
+          choferName = ch.nombre;
+        }
+      }
+    } catch (_) {
+      // Si no tenés modelo Chofer, ignoramos y usamos sólo el nombre
+    }
+
+    // Si no resolvimos por id pero vino nombre, guardamos el nombre en un objeto simple
+    if (!choferPayload && chofer_nombre) {
+      choferPayload = { nombre: chofer_nombre };
+    }
+
+    const update = {
+      $set: { estado: 'asignado' },
+      $push: {
+        historial: {
+          at: new Date(),
+          estado: 'asignado',
+          estado_meli: null,
+          source: 'zupply:asignacion',
+          actor_name: actor_name || choferName || 'operador'
+        }
+      }
+    };
+
+    // Guardamos el chofer en el envío si tenemos algo para setear
+    if (choferPayload) {
+      update.$set.chofer = choferPayload;
+    }
+
+    const envio = await Envio.findByIdAndUpdate(id, update, { new: true });
+    if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
+
+    res.json({ ok: true, envio });
+  } catch (err) {
+    console.error('PATCH /envios/:id/asignar error:', err);
+    res.status(500).json({ error: 'No se pudo asignar el envío' });
+  }
+});
+
+
 // DELETE /envios/:id
 router.delete('/:id', async (req, res) => {
   try {
