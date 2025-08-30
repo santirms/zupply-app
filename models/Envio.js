@@ -69,6 +69,7 @@ const envioSchema = new Schema({
 
   label_url:  { type: String }, // /labels/<id_venta>.pdf
   qr_png:     { type: String }, // DataURL para previsualizar QR
+  historial:  { type: [HistItemSchema], default: [] }  // <<< aquí
   }, { timestamps: false });
 
 /**
