@@ -18,8 +18,24 @@ app.use(session({
   cookie: { secure: 'auto', sameSite: 'lax', maxAge: 1000*60*60*8 }
 }));
 
-// Rutas de auth
+// Rutas de auth (públicas)
 app.use('/auth', require('./routes/auth'));
+
+// === GUARDIA GLOBAL ANTI-INVITADOS ===
+// Bloquea TODO lo que no sea /auth si no hay sesión
+app.use((req, res, next) => {
+  if (req.path.startsWith('/auth')) return next();
+  if (req.session?.user) return next();
+
+  if (req.accepts('html')) return res.redirect('/auth/login');
+  return res.status(401).json({ error: 'Login requerido' });
+});
+
+// (opcional) Restricción de rol coordinador
+try {
+  const { restrictCoordinator } = require('./middlewares/auth');
+  app.use(restrictCoordinator);
+} catch {}
 
 app.use(cors());
 app.use(express.json());
