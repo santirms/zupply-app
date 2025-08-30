@@ -2,30 +2,25 @@
 const axios = require('axios');
 const Envio = require('../models/Envio');
 const Zona  = require('../models/Zona');
+const { getValidToken } = require('../utils/meliUtils');
+const { mapMeliToInterno } = require('../utils/meliStatus');
 const detectarZona = require('../utils/detectarZona');
 
-const { getValidToken }   = require('../utils/meliUtils');
-const { mapMeliToInterno } = require('../utils/meliStatus');
-
-/* ------------------------------
- * Helpers
- * ----------------------------*/
-
-/** Precio según lista de precios del cliente y nombre de zona (no toca DB si falta info). */
+/** Precio por zona usando la lista de precios del cliente */
 async function precioPorZona(cliente, zonaNombre) {
   try {
     if (!cliente?.lista_precios || !zonaNombre) return 0;
     const zonaDoc = await Zona.findOne({ nombre: zonaNombre }, { _id: 1 });
     if (!zonaDoc) return 0;
-
-    const hit = (cliente.lista_precios.zonas || [])
+    const zp = (cliente.lista_precios.zonas || [])
       .find(z => String(z.zona) === String(zonaDoc._id));
-    return hit?.precio ?? 0;
+    return zp?.precio ?? 0;
   } catch {
     return 0;
   }
 }
 
+/** GET /shipments/:id */
 async function fetchShipment(shipmentId, user_id) {
   const access_token = await getValidToken(user_id);
   const { data } = await axios.get(
@@ -35,6 +30,7 @@ async function fetchShipment(shipmentId, user_id) {
   return data;
 }
 
+/** GET /orders/:id -> pack_id (para “id de venta” 2000...) */
 async function fetchPackIdFromOrder(orderId, user_id) {
   if (!orderId) return null;
   const access_token = await getValidToken(user_id);
@@ -45,7 +41,7 @@ async function fetchPackIdFromOrder(orderId, user_id) {
   return order?.pack_id || null;
 }
 
-/** Flex “de verdad”: logistic_type self_service o tags equivalentes. */
+/** Determina si el envío es Flex (self_service) */
 function esFlexDeVerdad(sh) {
   const lt = (sh?.shipping_option?.logistic_type || sh?.logistic_type || '').toLowerCase();
   const tags = [
@@ -55,19 +51,17 @@ function esFlexDeVerdad(sh) {
 
   if (lt === 'self_service') return true;
   if (tags.some(t => /(^|_)self_service(_|$)|flex/.test(t))) return true;
-
-  return false; // ME clásico, fulfillment, etc.
+  return false;
 }
 
-/* ------------------------------
- * Ingesta principal
- * ----------------------------*/
-async function ingestShipment({
-  shipmentId,
-  cliente,                 // ⚠️ con lista_precios populada si querés precio
-  source = 'meli:cron',    // 'meli:webhook' | 'meli:cron' | 'meli:force-sync'
-  actor_name = null        // normalmente null para ML
-}) {
+/**
+ * Ingesta/actualización idempotente de un shipment de MeLi.
+ * - Mapea estado ML -> interno
+ * - Calcula partido/zona/precio
+ * - Setea id_venta (pack_id > order_id)
+ * - Escribe historial si cambió el estado
+ */
+async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor_name = null }) {
   // 1) Traer shipment
   const sh = await fetchShipment(shipmentId, cliente.user_id);
 
@@ -76,7 +70,7 @@ async function ingestShipment({
     return { skipped: true, reason: 'non_flex', shipmentId };
   }
 
-  // 3) Direcciones
+  // 3) Dirección
   const cp      = sh?.receiver_address?.zip_code || '';
   const dest    = sh?.receiver_address?.receiver_name || '';
   const street  = sh?.receiver_address?.street_name || '';
@@ -84,44 +78,48 @@ async function ingestShipment({
   const address = [street, number].filter(Boolean).join(' ').trim();
   const ref     = sh?.receiver_address?.comment || '';
 
-  // 4) Partido / zona (para facturación)
-  const { partido = '', zona: zonaNom = '' } = await detectarZona(cp);
+  // 4) Partido / Zona
+  const { partido = '', zona: zonaNom = '' } = await detectarZona(cp) || {};
 
-  // 5) Precio por zona
+  // 5) Precio por zona/lista
   const precio = await precioPorZona(cliente, zonaNom);
 
-  // 6) Estados (MeLi + interno)
+  // 6) Estado ML e interno
   const estado_meli = {
     status:    sh.status || null,
     substatus: sh.substatus || null,
     updatedAt: new Date()
   };
-  let estado_interno = mapMeliToInterno(sh.status, sh.substatus); // ej: 'pendiente','en_camino','entregado',...
+  const estado_interno = mapMeliToInterno(sh.status, sh.substatus);
 
-  // 7) IDs comerciales
-  const order_id = sh?.order_id || null;
+  // 7) IDs de venta (prioridad pack_id)
+  //    En /shipments/:id a veces viene order_id; si no, intenta en sh.orders[0].id
+  const order_id = sh?.order_id || (Array.isArray(sh?.orders) ? sh.orders[0]?.id : null) || null;
   let pack_id = null;
-  try { pack_id = await fetchPackIdFromOrder(order_id, cliente.user_id); } catch (_) {}
-  const id_venta = pack_id || order_id || null; // lo que mostrás/buscás en el panel
+  try {
+    pack_id = await fetchPackIdFromOrder(order_id, cliente.user_id);
+  } catch {
+    // no romper si falla orders
+  }
+  const id_venta = pack_id || order_id || null;
 
-  // 8) Mirar el anterior para saber si cambió el estado
+  // 8) Chequear cambios de estado para “historial”
   const prev = await Envio.findOne(
     { meli_id: String(sh.id) },
     { estado: 1, 'estado_meli.status': 1, 'estado_meli.substatus': 1 }
   ).lean();
 
   const changed =
-    !prev ||
-    (prev.estado ?? null) !== estado_interno ||
+    (prev?.estado ?? null) !== estado_interno ||
     (prev?.estado_meli?.status ?? null) !== estado_meli.status ||
     (prev?.estado_meli?.substatus ?? null) !== estado_meli.substatus;
 
-  // 9) Armar update idempotente
+  // 9) Upsert
   const update = {
     $setOnInsert: { fecha: new Date() },
     $set: {
       meli_id:       String(sh.id),
-      sender_id:     String(cliente.codigo_cliente || (cliente.sender_id?.[0]) || cliente.user_id),
+      sender_id:     String(cliente.codigo_cliente || cliente.sender_id?.[0] || cliente.user_id),
       cliente_id:    cliente._id,
       codigo_postal: cp,
       partido,
@@ -132,7 +130,6 @@ async function ingestShipment({
       precio,
       estado_meli,
       estado:        estado_interno,
-      // Auditoría comercial:
       id_venta,
       order_id,
       pack_id
@@ -145,21 +142,19 @@ async function ingestShipment({
         at: new Date(),
         estado: estado_interno,
         estado_meli: { status: estado_meli.status, substatus: estado_meli.substatus },
-        source,             // 'meli:webhook' | 'meli:cron' | 'meli:force-sync'
-        actor_name,         // null para ML
-        note: `ML: ${estado_meli.status || '-'}${estado_meli.substatus ? ' / ' + estado_meli.substatus : ''}`
+        source,
+        actor_name // para ML suele quedar null
       }
     };
   }
 
-  // 10) Upsert + devolver doc actualizado
   const updated = await Envio.findOneAndUpdate(
     { meli_id: String(sh.id) },
     update,
     { upsert: true, new: true }
-  ).lean();
+  );
 
-  return updated;
+  return updated.toObject ? updated.toObject() : updated;
 }
 
 module.exports = { ingestShipment };
