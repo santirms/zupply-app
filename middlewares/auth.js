@@ -1,71 +1,62 @@
-// middlewares/auth.js
-
-// === PANTALLAS habilitadas para coordinador (tus URLs de menú) ===
-const PAGE_ALLOW = [
-  /^\/$/, // home (tu SPA puede montar acá)
-  /^\/panel-general(\/|$|\.html)/,
-  /^\/escanear(\/|$|\.html)/,          // Escanear Paquetes
-  /^\/leer-etiquetas(\/|$|\.html)/,    // Subir Etiquetas
-  /^\/ingreso-manual(\/|$|\.html)/,
-  /^\/panel-choferes(\/|$|\.html)/,
-];
-
-// === ESTÁTICOS comunes (bundles, fuentes, imgs, etc.) ===
-const STATIC_ALLOW = [
-  /^\/(css|js|img|images|assets|static|build|dist|fonts|media)(\/|$)/,
-  /^\/labels(\/|$)/,     // usás esta carpeta
-  /^\/remitos(\/|$)/,    // y esta también
-  /^\/favicon\.ico$/,
-  /^\/manifest\.json$/,
-  /^\/service-worker\.js$/,
-  // archivos sueltos en raíz (por si tu build los sirve así)
-  /^\/.*\.(css|js|map|png|jpe?g|svg|ico|webp|woff2?|ttf|eot|pdf|txt|csv|xlsx)$/,
-];
-
-// === APIs necesarias por esos módulos ===
-const API_ALLOW = [
-  /^\/api\/zonas(\/|$)/,
-  /^\/api\/envios(\/|$)/,
-  /^\/api\/asignaciones(\/|$)/,
-  /^\/api\/choferes(\/|$)/,
-  /^\/api\/partidos(\/|$)/,
-  /^\/api\/listas-de-precios(\/|$)/,
-  /^\/api\/clientes(\/|$)/,
-  /^\/api\/detectar-zona(\/|$)/,
-  /^\/api\/auth\/meli(\/|$)/,
-];
-
-// Rutas no-API relacionadas
-const OTHER_ALLOW = [
-  /^\/auth\/meli(\/|$)/,
-];
-
-const ALLOWED_FOR_COORDINATOR = [
-  ...PAGE_ALLOW,
-  ...STATIC_ALLOW,
-  ...API_ALLOW,
-  ...OTHER_ALLOW,
-];
-
 function requireAuth(req, res, next) {
-  if (req.path.startsWith('/auth')) return next();
-  if (req.session && req.session.user) return next();
-  if (req.accepts('html')) return res.redirect('/auth/login');
-  return res.status(401).json({ error: 'Login requerido' });
-}
-
-function restrictCoordinator(req, res, next) {
   const u = req.session?.user;
-  if (!u || u.role !== 'coordinator') return next(); // admin u otros → pasan
-
-  const ok = ALLOWED_FOR_COORDINATOR.some(rx => rx.test(req.path));
-  if (ok) return next();
-
-  // DEBUG: deja esto por ahora para ver qué bloquea
-  console.warn('[COORD 403]', req.method, req.path);
-
-  if (req.accepts('html')) return res.status(403).send('Acceso restringido para coordinador');
-  return res.status(403).json({ error: 'Acceso restringido para coordinador', path: req.path });
+  if (u?.authenticated && u?.role) return next();
+  return res.status(401).json({ error: 'No autenticado' });
 }
 
-module.exports = { requireAuth, restrictCoordinator };
+function requireRole(...roles) {
+  return (req, res, next) => {
+    const u = req.session?.user;
+    if (!u?.authenticated) return res.status(401).json({ error: 'No autenticado' });
+    if (!roles.includes(u.role)) return res.status(403).json({ error: 'Sin permisos' });
+    next();
+  };
+}
+
+/** Bloquea métodos de escritura para un rol (p.ej. coordinador solo-lectura en panel general) */
+function restrictMethodsForRoles(role, blocked = ['POST','PUT','PATCH','DELETE']) {
+  return (req, res, next) => {
+    const u = req.session?.user;
+    if (u?.role === role && blocked.includes(req.method)) {
+      return res.status(403).json({ error: 'Solo lectura para tu rol' });
+    }
+    next();
+  };
+}
+
+/** Verifica que el envío sea del chofer logueado (asume campo chofer_id en Envio) */
+async function onlyOwnShipments(req, res, next) {
+  try {
+    const u = req.session?.user;
+    if (u?.role !== 'chofer') return res.status(403).json({ error: 'Solo chofer' });
+
+    const Envio = require('../models/Envio');
+    const envioId = req.params.id || req.body.envio_id;
+    const envio = await Envio.findById(envioId).select('chofer_id source');
+    if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
+
+    if (String(envio.chofer_id) !== String(u.driver_id)) {
+      return res.status(403).json({ error: 'No es tu envío' });
+    }
+    req.envio = envio;
+    next();
+  } catch (e) { next(e); }
+}
+
+/** Limita que el chofer solo marque entregado si es manual/etiqueta (no Flex) */
+function onlyManualOrEtiqueta(req, res, next) {
+  const envio = req.envio;
+  const permitidas = ['panel','scan','pdf','etiqueta']; // ajustá a tus sources reales
+  if (!envio || !permitidas.includes(envio.source)) {
+    return res.status(403).json({ error: 'No se puede modificar este envío' });
+  }
+  next();
+}
+
+module.exports = {
+  requireAuth,
+  requireRole,
+  restrictMethodsForRoles,
+  onlyOwnShipments,
+  onlyManualOrEtiqueta
+};
