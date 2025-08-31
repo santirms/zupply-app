@@ -13,6 +13,14 @@ const { buildLabelPDF } = require('../utils/labelService');
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
 const { getEnvioByTracking, labelByTracking } = require('../controllers/envioController');
 
+// ⬇️ NUEVO: middlewares
+const { requireAuth, restrictMethodsForRoles, requireRole } = require('../middlewares/auth');
+
+// ⬇️ TODO EL PANEL GENERAL REQUIERE LOGIN
+router.use(requireAuth);
+
+// ⬇️ COORDINADOR = SOLO LECTURA EN ESTE PANEL
+router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE']));
 
 // GET /envios
 router.get('/', async (req, res) => {
