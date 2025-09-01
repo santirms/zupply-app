@@ -1,0 +1,80 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Usuarios</title>
+<h1>Usuarios</h1>
+
+<section style="margin:16px 0; padding:12px; border:1px solid #ccc;">
+  <h3>Crear usuario</h3>
+  <label>Rol:
+    <select id="role">
+      <option value="admin">admin</option>
+      <option value="coordinador">coordinador</option>
+      <option value="chofer">chofer</option>
+    </select>
+  </label>
+  <div id="adminFields">
+    <div><label>Email: <input id="email" type="email"></label></div>
+    <div><label>Contraseña: <input id="password" type="password" placeholder="opcional"></label></div>
+  </div>
+  <div id="coorFields" style="display:none">
+    <div><label>Email: <input id="emailC" type="email"></label></div>
+    <div><label>Contraseña: <input id="passwordC" type="password" placeholder="opcional"></label></div>
+  </div>
+  <div id="choferFields" style="display:none">
+    <div><label>Nombre (username): <input id="chofer_nombre" placeholder="Juan Pérez"></label></div>
+    <div><label>Teléfono (será la contraseña inicial): <input id="chofer_telefono"></label></div>
+  </div>
+  <button id="crear">Crear</button>
+  <div id="msg"></div>
+</section>
+
+<section>
+  <h3>Listado</h3>
+  <table border="1" cellpadding="6" id="tbl"><thead><tr><th>id</th><th>email</th><th>username</th><th>rol</th><th>activo</th></tr></thead><tbody></tbody></table>
+</section>
+
+<script>
+const roleSel = document.getElementById('role');
+const fields = {
+  admin:  ()=>{ adminFields.style.display='block'; coorFields.style.display='none'; choferFields.style.display='none'; },
+  coordinador: ()=>{ adminFields.style.display='none'; coorFields.style.display='block'; choferFields.style.display='none'; },
+  chofer: ()=>{ adminFields.style.display='none'; coorFields.style.display='none'; choferFields.style.display='block'; }
+};
+roleSel.onchange = ()=> (fields[roleSel.value]||fields.admin)();
+(fields[roleSel.value]||fields.admin)();
+
+async function load() {
+  const r = await fetch('/users'); const {users=[]} = await r.json();
+  const tb = document.querySelector('#tbl tbody'); tb.innerHTML='';
+  for (const u of users) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${u._id}</td><td>${u.email||''}</td><td>${u.username||''}</td><td>${u.role}</td><td>${u.is_active?'✔':'✖'}</td>`;
+    tb.appendChild(tr);
+  }
+}
+load();
+
+document.getElementById('crear').onclick = async () => {
+  try {
+    const role = roleSel.value;
+    let body={ role };
+    if (role==='admin') {
+      body.email = document.getElementById('email').value.trim();
+      body.password = document.getElementById('password').value;
+    } else if (role==='coordinador') {
+      body.email = document.getElementById('emailC').value.trim();
+      body.password = document.getElementById('passwordC').value;
+    } else {
+      body.chofer_nombre   = document.getElementById('chofer_nombre').value.trim();
+      body.chofer_telefono = document.getElementById('chofer_telefono').value.trim();
+    }
+    const r = await fetch('/users', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Error al crear');
+    document.getElementById('msg').textContent = role==='chofer'
+      ? `Chofer creado. Usuario: ${data.username || '(ver en listado)'}`
+      : `Usuario creado.`;
+    load();
+  } catch(e) { document.getElementById('msg').textContent = e.message; }
+};
+</script>
