@@ -52,11 +52,6 @@ app.get('/index', (req, res) => {
   return res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// opcional: que el root redirija al panel
-app.get('/', (req, res) => {
-  return res.redirect('/index');
-});
-
 const pages = {
   '/':                 'index.html',
   '/panel-general':    'index.html',
