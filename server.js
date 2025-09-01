@@ -44,6 +44,19 @@ app.get('/auth/login', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
+// panel protegido: muestra panel-general.html
+app.get('/panel-general', (req, res) => {
+  if (!req.session?.user?.authenticated) {
+    return res.redirect('/auth/login');
+  }
+  return res.sendFile(path.join(__dirname, 'public', 'panel-general.html'));
+});
+
+// opcional: que el root redirija al panel
+app.get('/', (req, res) => {
+  return res.redirect('/panel-general');
+});
+
 /* -------- Guardia global: bloquea TODO lo no público si no hay sesión ------- */
 app.use((req, res, next) => {
   // Permitir auth y archivos públicos
