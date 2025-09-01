@@ -38,7 +38,7 @@ app.use(session({
 app.use('/auth', require('./routes/auth'));
 
 // Archivos estáticos públicos mínimos (login y assets)
-app.use('/public', express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public')));
 // si tu login está en public/login.html podés servirlo corto:
 app.get('/auth/login', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
