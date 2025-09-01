@@ -54,8 +54,26 @@ app.get('/index', (req, res) => {
 
 // opcional: que el root redirija al panel
 app.get('/', (req, res) => {
-  return res.redirect('/panel-general');
+  return res.redirect('/index');
 });
+
+const pages = {
+  '/':                 'index.html',
+  '/panel-general':    'index.html',
+  '/panel/envios':     'panel-general.html',
+  '/panel/ingreso':    'ingreso-manual.html',
+  '/panel/escanear':   'scanner.html',
+  '/panel/etiquetas':  'panel-etiquetas.html',
+  '/panel/choferes':   'choferes.html',
+  '/panel/facturacion':'facturacion-general.html'
+};
+
+for (const [route, file] of Object.entries(pages)) {
+  app.get(route, (req, res) => {
+    if (!req.session?.user?.authenticated) return res.redirect('/auth/login');
+    res.sendFile(path.join(__dirname, 'public', file));
+  });
+}
 
 /* -------- Guardia global: bloquea TODO lo no público si no hay sesión ------- */
 app.use((req, res, next) => {
