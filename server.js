@@ -45,11 +45,11 @@ app.get('/auth/login', (_req, res) => {
 });
 
 // panel protegido: muestra panel-general.html
-app.get('/panel-general', (req, res) => {
+app.get('/index', (req, res) => {
   if (!req.session?.user?.authenticated) {
     return res.redirect('/auth/login');
   }
-  return res.sendFile(path.join(__dirname, 'public', 'panel-general.html'));
+  return res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // opcional: que el root redirija al panel
