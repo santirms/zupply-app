@@ -156,11 +156,7 @@
   </div>
 
 <script>
-  
-  fetch('/me').then(r=>r.json()).then(m=>{
-    document.body.insertAdjacentHTML('beforeend', `<p>Hola ${m.email} (rol: ${m.role})</p>`)
-  }).catch(()=>location.href='/auth/login');
-  
+    
   // =================== Estado ===================
   let enviosCargados = [];
   let enviosFiltrados = [];
