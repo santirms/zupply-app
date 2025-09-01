@@ -57,7 +57,7 @@
           return;
         }
         // si login OK, al home (que está protegido por sesión)
-        location.href = '/';
+        location.href = '/panel-general';
       } catch (e) {
         err.textContent = 'Error de red';
         btn.disabled = false;
