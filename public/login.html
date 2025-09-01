@@ -2,31 +2,67 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>Login Zupply</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Zupply | Login</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto;display:grid;place-items:center;height:100dvh;background:#0f172a;color:#e2e8f0;margin:0}
-    form{background:#111827;padding:28px 24px;border-radius:16px;min-width:320px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
-    h1{margin:0 0 12px;font-size:22px}
-    label{display:block;margin:12px 0 6px}
-    input{width:100%;padding:10px;border-radius:10px;border:1px solid #334155;background:#0b1220;color:#e2e8f0}
-    button{margin-top:16px;width:100%;padding:12px;border:0;border-radius:12px;background:#f59e0b;color:#0b1220;font-weight:700;cursor:pointer}
-    .demo{font-size:12px;opacity:.8;margin-top:10px}
-    .demo code{background:#0b1220;padding:2px 6px;border-radius:8px}
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#0f172a; color:#e2e8f0; display:grid; place-items:center; height:100dvh; margin:0;}
+    .card { background:#111827; padding:24px; border-radius:16px; width:min(360px, 92vw); box-shadow:0 8px 30px rgba(0,0,0,.35); }
+    h1 { margin:0 0 16px; font-size:1.25rem; }
+    label { display:block; font-size:.9rem; margin:10px 0 6px; color:#cbd5e1; }
+    input { width:100%; padding:10px 12px; border-radius:10px; border:1px solid #334155; background:#0b1220; color:#e2e8f0; outline:none; }
+    button { width:100%; margin-top:14px; padding:12px; border:0; border-radius:10px; background:#6d28d9; color:white; font-weight:600; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
+    .err { color:#fca5a5; margin-top:10px; min-height:1.2em; }
+    .hint { margin-top:10px; font-size:.85rem; color:#94a3b8; text-align:center; }
   </style>
 </head>
 <body>
-  <form method="POST" action="/auth/login">
-    <h1>Ingresar</h1>
-    <label>Usuario</label>
-    <input name="username" autocomplete="username" required />
-    <label>Contraseña</label>
-    <input name="password" type="password" autocomplete="current-password" required />
-    <button type="submit">Entrar</button>
-    <div class="demo">
-      Admin: <code>admin / techoro01</code><br/>
-      Coordinador: <code>logistica / 123</code>
-    </div>
-  </form>
+  <div class="card">
+    <h1>Ingresar a Zupply</h1>
+    <form id="f">
+      <label>Email</label>
+      <input id="email" type="email" autocomplete="username" required />
+      <label>Contraseña</label>
+      <input id="password" type="password" autocomplete="current-password" required />
+      <button id="btn" type="submit">Entrar</button>
+      <div id="err" class="err"></div>
+      <div class="hint">Usa las credenciales sembradas o creadas por el admin.</div>
+    </form>
+  </div>
+
+  <script>
+    const f = document.getElementById('f');
+    const btn = document.getElementById('btn');
+    const err = document.getElementById('err');
+
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.textContent = '';
+      btn.disabled = true;
+
+      try {
+        const r = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value
+          })
+        });
+
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.ok) {
+          err.textContent = data.error || 'No se pudo iniciar sesión';
+          btn.disabled = false;
+          return;
+        }
+        // si login OK, al home (que está protegido por sesión)
+        location.href = '/';
+      } catch (e) {
+        err.textContent = 'Error de red';
+        btn.disabled = false;
+      }
+    });
+  </script>
 </body>
 </html>
