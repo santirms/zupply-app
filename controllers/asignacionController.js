@@ -34,9 +34,22 @@ exports.asignarViaQR = async (req, res) => {
     const pendientes = envios.filter(e => (e.estado || 'pendiente') === 'pendiente');
     if (!pendientes.length) return res.status(400).json({ error: 'Todos ya estaban asignados' });
 
-    // 3) Crear Asignación
-   const asg = await Asignacion.create({
-      chofer: chofer_id,
+    // --- Resolver chofer: aceptar id o nombre ---
+    const isValidId = v => mongoose.Types.ObjectId.isValid(String(v || ''));
+    let chDoc = null;
+    if (isValidId(chofer_id)) {
+      chDoc = await Chofer.findById(chofer_id).lean();
+    }
+    if (!chDoc && chofer_nombre) {
+      chDoc = await Chofer.findOne({ nombre: new RegExp(`^${chofer_nombre}$`, 'i') }).lean();
+    }
+    if (!chDoc) {
+      return res.status(400).json({ error: 'Chofer inválido (enviar chofer_id válido o chofer_nombre existente)' });
+    }
+
+    // 3) Crear Asignación (guardar ObjectId)
+    const asg = await Asignacion.create({
+      chofer: chDoc._id,
       lista_chofer_id: lista_chofer_id || null,
       lista_nombre: lista_nombre || '',
       envios: pendientes.map(e => ({
@@ -81,6 +94,7 @@ exports.asignarViaQR = async (req, res) => {
 );
 
   // 5) Preparar datos opcionales (nombre visible de la lista)
+    const chofer = chDoc;
     let listaNombre = (lista_nombre || '').trim();
     try {
       if (!listaNombre && lista_chofer_id && ListaDePrecios) {
