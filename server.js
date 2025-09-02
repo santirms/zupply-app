@@ -21,28 +21,23 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'cambialo-en-produccion',
   resave: false,
   saveUninitialized: false,
-  store: MongoStore.create({
-    mongoUrl: process.env.MONGO_URI,            // usa tu var actual
-    ttl: 60 * 60 * 24 * 7                       // 7 días
-  }),
   cookie: {
-    secure: 'auto',
-    sameSite: 'lax',
     httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 8                  // 8 h
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production', // evita líos en mobile/local
+    maxAge: 1000 * 60 * 60 * 8
   }
 }));
 
 /* --------------------------- Rutas públicas ------------------------- */
-// Auth público (login/logout)
-app.use('/auth', require('./routes/auth'));
 
-// Archivos estáticos públicos mínimos (login y assets)
-app.use(express.static(path.join(__dirname, 'public')));
 // si tu login está en public/login.html podés servirlo corto:
 app.get('/auth/login', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
+
+// Auth público (login/logout)
+app.use('/auth', require('./routes/auth'));
 
 // panel protegido: muestra panel-general.html
 app.get('/index', (req, res) => {
@@ -81,6 +76,9 @@ app.use((req, res, next) => {
   if (req.accepts('html')) return res.redirect('/auth/login');
   return res.status(401).json({ error: 'Login requerido' });
 });
+
+// Archivos estáticos públicos mínimos (login y assets)
+app.use(express.static(path.join(__dirname, 'public')));
 
 /* -------------- A partir de acá, todo requiere sesión ---------------- */
 app.use('/api/zonas',            require('./routes/zonas'));
