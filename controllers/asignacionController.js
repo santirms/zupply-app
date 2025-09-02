@@ -94,7 +94,6 @@ exports.asignarViaQR = async (req, res) => {
 );
 
   // 5) Preparar datos opcionales (nombre visible de la lista)
-    const chofer = chDoc;
     let listaNombre = (lista_nombre || '').trim();
     try {
       if (!listaNombre && lista_chofer_id && ListaDePrecios) {
