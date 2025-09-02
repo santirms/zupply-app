@@ -207,7 +207,7 @@
     }
 
     // Dropdowns iniciales
-  async function cargarDropdowns() {
+async function cargarDropdowns() {
   try {
     const [choferRes, listaRes] = await Promise.all([
       fetch('/api/choferes', { credentials: 'same-origin' }),
@@ -219,9 +219,9 @@
     const optsChofer = choferes.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
     const optsLista  = listas.map(l => `<option value="${l._id}">${l.nombre}</option>`).join('');
 
-    const selChoferQR   = document.getElementById('choferSel');
+    const selChoferQR   = document.getElementById('choferSel');       // 👈 IDs REALES
     const selChoferMapa = document.getElementById('choferSelMapa');
-    const selListaQR    = document.getElementById('listaSel');
+    const selListaQR    = document.getElementById('listaSel');        // 👈 IDs REALES
     const selListaMapa  = document.getElementById('selectListaMapa');
 
     if (selChoferQR)   selChoferQR.innerHTML   = optsChofer;
@@ -234,6 +234,7 @@
     console.error('cargarDropdowns error:', e);
   }
 }
+
     // Lector QR (pestaña principal)
     function initQrScanner() {
       const readerDiv = document.getElementById('qr-reader');
@@ -376,20 +377,19 @@
       renderListQR();
     }
 async function asignarQR() {
-  const selChofer = document.getElementById('choferSel');
-  const selLista  = document.getElementById('listaSel');
-  const zona      = document.getElementById('inputZonaQR')?.value?.trim() || '';
+  const selChofer = document.getElementById('choferSel');   // 👈 IDs REALES
+  const selLista  = document.getElementById('listaSel');    // 👈 IDs REALES
 
   const chofer_id       = selChofer?.value || '';
   const lista_chofer_id = selLista?.value || null;
   const lista_nombre    = selLista?.selectedOptions?.[0]?.text?.trim() || '';
+  const zona            = document.getElementById('inputZonaQR')?.value?.trim() || '';
 
   const tracking_ids = stateQR.items.map(x => x.tracking).filter(Boolean);
 
-  if (!chofer_id || !tracking_ids.length) {
-    return alert('Elegí chofer y escaneá al menos un paquete');
-  }
-  if (!confirm(`Asignar ${tracking_ids.length} paquetes?`)) return;
+  if (!chofer_id) return alert('Elegí un chofer');
+  if (!tracking_ids.length) return alert('Escaneá o pegá al menos un tracking');
+  if (!confirm(`Asignar ${tracking_ids.length} paquete(s)?`)) return;
 
   try {
     const r = await fetch('/api/asignaciones/qr', {
@@ -405,7 +405,7 @@ async function asignarQR() {
       return alert(data.error || `Error ${r.status}`);
     }
 
-    // mostrar accesos si se generaron
+    // Mostrar accesos si llegaron
     const btnRemito = document.getElementById('btnRemito');
     const btnWA     = document.getElementById('btnWA');
     if (data.remito_url && btnRemito) { btnRemito.href = data.remito_url; btnRemito.classList.remove('hidden'); }
@@ -418,6 +418,7 @@ async function asignarQR() {
     alert('Error de red');
   }
 }
+
 
     let data;
       try { data = await r.json(); } catch {}
