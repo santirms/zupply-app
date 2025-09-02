@@ -26,17 +26,28 @@
  <body>
   <h1>Panel Principal</h1>
   <ul>
-    <li><a href="/panel-general.html">📊 Panel General de Envíos</a></li>
-    <li><a href="/scanner.html">📷 Escanear Paquetes</a></li>
-    <li><a href="/clientes.html">👥 Clientes</a></li>
-    <li><a href="/facturacion-general.html">💰 Facturación</a></li>
-    <li><a href="/subir-etiquetas.html"> 📥Subir Etiquetas</a></li>
-    <li><a href="/ingreso-manual.html">👨🏻‍💻 Ingreso Manual</a></li>
-    <li><a href="/panel-zonas-listas.html">🗺️ Zonas y Listas de Precios</a></li>
-    <li><a href="/choferes.html">🚐 Panel Choferes</a></li>
-    <li><a href="/panel-usuarios.html">👤 Usuarios</a></li>
+    
+  <li data-allow="admin,coordinador"><a href="/panel-general.html">📊 Panel General de Envíos</a></li>
+  <li data-allow="admin,coordinador"><a href="/scanner.html">📷 Escanear Paquetes</a></li>
+  <li data-allow="admin,coordinador"><a href="/subir-etiquetas.html">📥 Subir Etiquetas</a></li>
+  <li data-allow="admin,coordinador"><a href="/ingreso-manual.html">👨🏻‍💻 Ingreso Manual</a></li>
+  <li data-allow="admin,coordinador"><a href="/choferes.html">🚐 Panel Choferes</a></li>
 
+  <!-- Solo admin -->
+  <li data-allow="admin"><a href="/clientes.html">👥 Clientes</a></li>
+  <li data-allow="admin"><a href="/facturacion-general.html">💰 Facturación</a></li>
+  <li data-allow="admin"><a href="/panel-zonas-listas.html">🗺️ Zonas y Listas de Precios</a></li>
+  <li data-allow="admin"><a href="/panel-usuarios.html">👤 Usuarios</a></li>
 
   </ul>
-</body>
+   
+   <script>
+  fetch('/me').then(r=>r.json()).then(me=>{
+    document.querySelectorAll('[data-allow]').forEach(el=>{
+      const allow = el.getAttribute('data-allow').split(',').map(s=>s.trim());
+      if (!allow.includes(me.role)) el.style.display='none';
+    });
+  }).catch(()=>location.href='/auth/login');
+</script>
+   </body>
 </html>
