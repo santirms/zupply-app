@@ -373,14 +373,16 @@
       if (!chofer_id || !stateQR.items.length) return alert('Elegí chofer y escaneá al menos un paquete');
       if (!confirm(`Asignar ${stateQR.items.length} paquetes?`)) return;
 
-      const r = await fetch('/api/asignaciones/qr', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          chofer_id, lista_chofer_id, lista_nombre, zona,
-          tracking_ids: stateQR.items.map(x=>x.tracking)
-        })
-      });
+     await fetch('/api/asignaciones/qr', {
+  method: 'POST',
+  headers: {'Content-Type':'application/json'},
+  body: JSON.stringify({
+    chofer_id: selectChofer.value,                     // o chofer_nombre: 'Santi'
+    lista_chofer_id: selectLista.value || null,
+    lista_nombre: selectLista.options[selectLista.selectedIndex]?.text || '',
+    tracking_ids: codigosSeleccionados                 // o tracking/id_venta/meli_id
+  })
+})
 
       let data;
       try { data = await r.json(); } catch {}
