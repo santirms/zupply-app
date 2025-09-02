@@ -52,6 +52,8 @@ app.use((req, res, next) => {
   return res.status(401).json({ error: 'Login requerido' });
 });
 
+app.use('/me', require('./routes/me'));
+
 // --- helpers para páginas ---
 function requireAuthPage(req, res, next) {
   if (req.session?.user?.authenticated) return next();
