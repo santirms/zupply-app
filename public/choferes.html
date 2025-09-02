@@ -207,20 +207,33 @@
     }
 
     // Dropdowns iniciales
-    async function cargarDropdowns() {
-      const [choferRes, listaRes] = await Promise.all([
-        fetch('/api/choferes'),
-        fetch('/api/listas-de-precios?prefix=Choferes')
-      ]);
-      const [choferes, listas] = await Promise.all([choferRes.json(), listaRes.json()]);
+  async function cargarDropdowns() {
+  try {
+    const [choferRes, listaRes] = await Promise.all([
+      fetch('/api/choferes', { credentials: 'same-origin' }),
+      fetch('/api/listas-de-precios?prefix=Choferes', { credentials: 'same-origin' })
+    ]);
+    const choferes = await choferRes.json().catch(()=>[]);
+    const listas   = await listaRes.json().catch(()=>[]);
 
-      const optsChofer = choferes.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
-      const optsLista  = listas.map(l => `<option value="${l._id}">${l.nombre}</option>`).join('');
+    const optsChofer = choferes.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
+    const optsLista  = listas.map(l => `<option value="${l._id}">${l.nombre}</option>`).join('');
 
-      document.querySelectorAll('#choferSelQR, #choferSelMapa').forEach(sel => sel.innerHTML = optsChofer);
-      document.querySelectorAll('#selectListaQR, #selectListaMapa').forEach(sel => sel.innerHTML  = optsLista);
-    }
+    const selChoferQR   = document.getElementById('choferSel');
+    const selChoferMapa = document.getElementById('choferSelMapa');
+    const selListaQR    = document.getElementById('listaSel');
+    const selListaMapa  = document.getElementById('selectListaMapa');
 
+    if (selChoferQR)   selChoferQR.innerHTML   = optsChofer;
+    if (selChoferMapa) selChoferMapa.innerHTML = optsChofer;
+
+    const listaHTML = `<option value="">(sin lista)</option>${optsLista}`;
+    if (selListaQR)   selListaQR.innerHTML   = listaHTML;
+    if (selListaMapa) selListaMapa.innerHTML = listaHTML;
+  } catch (e) {
+    console.error('cargarDropdowns error:', e);
+  }
+}
     // Lector QR (pestaña principal)
     function initQrScanner() {
       const readerDiv = document.getElementById('qr-reader');
@@ -362,29 +375,51 @@
       });
       renderListQR();
     }
+async function asignarQR() {
+  const selChofer = document.getElementById('choferSel');
+  const selLista  = document.getElementById('listaSel');
+  const zona      = document.getElementById('inputZonaQR')?.value?.trim() || '';
 
-    async function asignarQR() {
-      const chofer_id = $('#choferSelQR').value;
-      const listaSel  = document.getElementById('selectListaQR');
-      const lista_chofer_id = listaSel.value || null;
-      const lista_nombre    = (listaSel.options[listaSel.selectedIndex]?.textContent || '').trim();
-      const zona = $('#inputZonaQR').value.trim();
+  const chofer_id       = selChofer?.value || '';
+  const lista_chofer_id = selLista?.value || null;
+  const lista_nombre    = selLista?.selectedOptions?.[0]?.text?.trim() || '';
 
-      if (!chofer_id || !stateQR.items.length) return alert('Elegí chofer y escaneá al menos un paquete');
-      if (!confirm(`Asignar ${stateQR.items.length} paquetes?`)) return;
+  const tracking_ids = stateQR.items.map(x => x.tracking).filter(Boolean);
 
-     await fetch('/api/asignaciones/qr', {
-  method: 'POST',
-  headers: {'Content-Type':'application/json'},
-  body: JSON.stringify({
-    chofer_id: choferSel.value,                     // o chofer_nombre: 'Santi'
-    lista_chofer_id: selectLista.value || null,
-    lista_nombre: selectLista.options[selectLista.selectedIndex]?.text || '',
-    tracking_ids: codigosSeleccionados                 // o tracking/id_venta/meli_id
-  })
-})
+  if (!chofer_id || !tracking_ids.length) {
+    return alert('Elegí chofer y escaneá al menos un paquete');
+  }
+  if (!confirm(`Asignar ${tracking_ids.length} paquetes?`)) return;
 
-      let data;
+  try {
+    const r = await fetch('/api/asignaciones/qr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ chofer_id, lista_chofer_id, lista_nombre, tracking_ids, zona })
+    });
+
+    const data = await r.json().catch(()=> ({}));
+    if (!r.ok || !data.ok) {
+      console.error('Asignaciones/qr error:', data);
+      return alert(data.error || `Error ${r.status}`);
+    }
+
+    // mostrar accesos si se generaron
+    const btnRemito = document.getElementById('btnRemito');
+    const btnWA     = document.getElementById('btnWA');
+    if (data.remito_url && btnRemito) { btnRemito.href = data.remito_url; btnRemito.classList.remove('hidden'); }
+    if (data.whatsapp_url && btnWA)   { btnWA.href     = data.whatsapp_url; btnWA.classList.remove('hidden'); }
+
+    alert(`Asignados: ${data.total}`);
+    stateQR.items.length = 0; stateQR.seen.clear(); renderListQR();
+  } catch (e) {
+    console.error(e);
+    alert('Error de red');
+  }
+}
+
+    let data;
       try { data = await r.json(); } catch {}
       if (!r.ok || !data?.ok) {
         console.error('Asignaciones/qr error:', data || await r.text());
