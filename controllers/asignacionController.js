@@ -18,15 +18,20 @@ try { ListaDePrecios = require('../models/ListaDePrecios'); } catch (_) {}
 
 exports.asignarViaQR = async (req, res) => {
   try {
-    const { chofer_id, lista_chofer_id, lista_nombre, tracking_ids, zona } = req.body;
-    if (!chofer_id || !Array.isArray(tracking_ids) || !tracking_ids.length) {
-      return res.status(400).json({ error: 'Faltan datos' });
+    const { chofer_id, chofer_nombre, lista_chofer_id, lista_nombre, tracking_ids, zona, tracking, id_venta, meli_id } = req.body;
+    +  // Normalizo los códigos a un array de strings
+  const tracks = Array.isArray(tracking_ids) && tracking_ids.length
+    ? tracking_ids
+    : [tracking, id_venta, meli_id].filter(Boolean);
+
+  if ((!chofer_id && !chofer_nombre) || !tracks.length) {
+  return res.status(400).json({ error: 'Faltan datos' });
     }
 
     // 1) Buscar envíos por id_venta o meli_id
-    const envios = await Envio.find({
-      $or: [{ id_venta: { $in: tracking_ids } }, { meli_id: { $in: tracking_ids } }]
-    }).populate('cliente_id').lean();
+     const envios = await Envio.find({
+    $or: [{ id_venta: { $in: tracks } }, { meli_id: { $in: tracks } }]
+   }).populate('cliente_id').lean();
 
     if (!envios.length) return res.status(404).json({ error: 'No se encontraron envíos' });
 
@@ -68,7 +73,7 @@ exports.asignarViaQR = async (req, res) => {
     });
 
      // 4) Marcar envíos como asignados + chofer + historial
-   const chofer = await Chofer.findById(chofer_id).lean();
+   const chofer = chDoc; // usamos el mismo doc resuelto
    const actor  = req.session?.user?.email || req.session?.user?.role || 'operador';
 
    await Envio.updateMany(
@@ -76,6 +81,7 @@ exports.asignarViaQR = async (req, res) => {
      {
      $set: {
       estado: 'asignado',
+      chofer: chofer._id,              // <- si el esquema es ObjectId
       chofer_id: chofer?._id || chofer_id,
        chofer_nombre: chofer?.nombre || undefined,
        'chofer._id': chofer?._id || chofer_id,      // por si usás subdocumento
@@ -127,7 +133,7 @@ try {
     const mensaje =
       `Hola ${chofer?.nombre || ''}! tu remito de hoy está listo:\n` +
       `📦 Total paquetes: ${pendientes.length}\n` +
-      `📍 Zona: ${listaNombre || ''}\n` +
+      `📍 Zona: ${listaNombre || zona || ''}\n` +
       `📅 Fecha: ${fechaEs}\n` +
       `⌚ Hora: ${horaEs}`;
     const texto = encodeURIComponent(mensaje);
