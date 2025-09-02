@@ -52,6 +52,52 @@ app.use((req, res, next) => {
   return res.status(401).json({ error: 'Login requerido' });
 });
 
+// --- helpers para páginas ---
+function requireAuthPage(req, res, next) {
+  if (req.session?.user?.authenticated) return next();
+  return res.redirect('/auth/login');
+}
+function requireRolePage(...roles) {
+  return (req, res, next) => {
+    const role = req.session?.user?.role;
+    if (roles.includes(role)) return next();
+    // si no tiene permisos, volvelo al panel principal
+    return res.redirect('/index.html');
+  };
+}
+
+const pagesAdminOnly = [
+  '/panel-usuarios.html',
+  '/clientes.html',
+  '/facturacion-general.html',
+  '/panel-zonas-listas.html'
+];
+
+const pagesAdminCoord = [
+  '/panel-general.html',
+  '/scanner.html',
+  '/subir-etiquetas.html',
+  '/ingreso-manual.html',
+  '/choferes.html',
+  '/index.html',           // panel principal
+  '/index'                 // alias si lo usás
+];
+
+// Gateo por rol (estas rutas deben ir ANTES del static)
+pagesAdminOnly.forEach(p =>
+  app.get(p, requireAuthPage, requireRolePage('admin'),
+    (req, res) => res.sendFile(path.join(__dirname, 'public', p.replace(/^\//,''))))
+);
+
+pagesAdminCoord.forEach(p =>
+  app.get(p, requireAuthPage, requireRolePage('admin','coordinador'),
+    (req, res) => res.sendFile(path.join(__dirname, 'public', p.replace(/^\//,''))))
+);
+
+// si querés un alias bonito:
+app.get('/panel/envios', requireAuthPage, requireRolePage('admin','coordinador'),
+  (req,res)=>res.sendFile(path.join(__dirname,'public','panel-general.html')));
+
 // Archivos estáticos públicos mínimos (login y assets)
 app.use(express.static(path.join(__dirname, 'public')));
 
