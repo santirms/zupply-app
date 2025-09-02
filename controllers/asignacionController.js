@@ -18,7 +18,7 @@ try { ListaDePrecios = require('../models/ListaDePrecios'); } catch (_) {}
 
 exports.asignarViaQR = async (req, res) => {
   try {
-    const { chofer_id, lista_chofer_id, lista_nombre, tracking_ids } = req.body;
+    const { chofer_id, lista_chofer_id, lista_nombre, tracking_ids, zona } = req.body;
     if (!chofer_id || !Array.isArray(tracking_ids) || !tracking_ids.length) {
       return res.status(400).json({ error: 'Faltan datos' });
     }
@@ -54,15 +54,34 @@ exports.asignarViaQR = async (req, res) => {
       fecha: new Date()
     });
 
-    // 4) Marcar envíos como asignados
-    await Envio.updateMany(
-      { _id: { $in: pendientes.map(e => e._id) } },
-      { $set: { estado: 'asignado', chofer: chofer_id } }
-    );
+     // 4) Marcar envíos como asignados + chofer + historial
+   const chofer = await Chofer.findById(chofer_id).lean();
+   const actor  = req.session?.user?.email || req.session?.user?.role || 'operador';
 
-    // 5) Preparar datos opcionales (lista/chofer)
-    const chofer = await Chofer.findById(chofer_id).lean();
-    let listaNombre = listaNombreFromUI || '';
+   await Envio.updateMany(
+     { _id: { $in: pendientes.map(e => e._id) } },
+     {
+     $set: {
+      estado: 'asignado',
+      chofer_id: chofer?._id || chofer_id,
+       chofer_nombre: chofer?.nombre || undefined,
+       'chofer._id': chofer?._id || chofer_id,      // por si usás subdocumento
+       'chofer.nombre': chofer?.nombre || undefined
+     },
+     $push: {
+       historial: {
+         at: new Date(),
+         estado: 'asignado',
+        estado_meli: null,
+         source: 'zupply:qr',
+         actor_name: actor
+       }
+     }
+  }
+);
+
+  // 5) Preparar datos opcionales (nombre visible de la lista)
+    let listaNombre = (lista_nombre || '').trim();
     try {
       if (!listaNombre && lista_chofer_id && ListaDePrecios) {
         const lp = await ListaDePrecios.findById(lista_chofer_id).lean();
@@ -95,7 +114,7 @@ try {
     const mensaje =
       `Hola ${chofer?.nombre || ''}! tu remito de hoy está listo:\n` +
       `📦 Total paquetes: ${pendientes.length}\n` +
-      `📍 Zona: ${listaNombre || zona || ''}\n` +
+      `📍 Zona: ${listaNombre || ''}\n` +
       `📅 Fecha: ${fechaEs}\n` +
       `⌚ Hora: ${horaEs}`;
     const texto = encodeURIComponent(mensaje);
