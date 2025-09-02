@@ -3,6 +3,7 @@ const User = require('../models/User');
 
 exports.login = async (req, res) => {
   try {
+        console.log('POST /auth/login body:', req.body); // 👈 ayuda a depurar
     // permite { identifier } o { email } o { username }
     const identifier = String(req.body.identifier || req.body.email || req.body.username || '')
       .trim()
