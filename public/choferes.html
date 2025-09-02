@@ -25,10 +25,10 @@
     <div id="tab-qr" class="tab">
       <div class="grid md:grid-cols-3 gap-3 mb-3">
         <label>Chofer:
-          <select id="selectChoferQR" class="border rounded w-full"></select>
+          <select id="choferSel" class="border rounded w-full"></select>
         </label>
         <label>Lista (pago chofer):
-          <select id="selectListaQR" class="border rounded w-full"></select>
+          <select id="listaSel" class="border rounded w-full"></select>
         </label>
         <label>
           <input id="inputZonaQR" type="hidden" value="">
@@ -66,7 +66,7 @@
 
     <!-- Asignación desde el mapa -->
     <div id="tab-mapa" class="tab hidden">
-      <select id="selectChoferMapa" class="border rounded px-2 py-1"></select>
+      <select id="choferSelMapa" class="border rounded px-2 py-1"></select>
       <select id="selectListaMapa" class="border rounded px-2 py-1"></select>
       <div id="mapaEnvios" class="w-full h-96 bg-gray-200 rounded mb-4"></div>
       <button class="bg-green-600 text-white px-4 py-2 rounded">Asignar Envíos Seleccionados</button>
@@ -217,7 +217,7 @@
       const optsChofer = choferes.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
       const optsLista  = listas.map(l => `<option value="${l._id}">${l.nombre}</option>`).join('');
 
-      document.querySelectorAll('#selectChoferQR, #selectChoferMapa').forEach(sel => sel.innerHTML = optsChofer);
+      document.querySelectorAll('#choferSelQR, #choferSelMapa').forEach(sel => sel.innerHTML = optsChofer);
       document.querySelectorAll('#selectListaQR, #selectListaMapa').forEach(sel => sel.innerHTML  = optsLista);
     }
 
@@ -364,7 +364,7 @@
     }
 
     async function asignarQR() {
-      const chofer_id = $('#selectChoferQR').value;
+      const chofer_id = $('#choferSelQR').value;
       const listaSel  = document.getElementById('selectListaQR');
       const lista_chofer_id = listaSel.value || null;
       const lista_nombre    = (listaSel.options[listaSel.selectedIndex]?.textContent || '').trim();
@@ -377,7 +377,7 @@
   method: 'POST',
   headers: {'Content-Type':'application/json'},
   body: JSON.stringify({
-    chofer_id: selectChofer.value,                     // o chofer_nombre: 'Santi'
+    chofer_id: choferSel.value,                     // o chofer_nombre: 'Santi'
     lista_chofer_id: selectLista.value || null,
     lista_nombre: selectLista.options[selectLista.selectedIndex]?.text || '',
     tracking_ids: codigosSeleccionados                 // o tracking/id_venta/meli_id
