@@ -18,28 +18,44 @@ try { ListaDePrecios = require('../models/ListaDePrecios'); } catch (_) {}
 
 exports.asignarViaQR = async (req, res) => {
   try {
-    const { chofer_id, chofer_nombre, lista_chofer_id, lista_nombre, tracking_ids, zona, tracking, id_venta, meli_id } = req.body;
-    +  // Normalizo los códigos a un array de strings
-  const tracks = Array.isArray(tracking_ids) && tracking_ids.length
-    ? tracking_ids
-    : [tracking, id_venta, meli_id].filter(Boolean);
+    // Acepta id o nombre del chofer, y distintos formatos de tracking
+    const {
+      chofer_id,
+      chofer_nombre,
+      lista_chofer_id,
+      lista_nombre,
+      tracking_ids,
+      tracking,
+      id_venta,
+      meli_id,
+      zona
+    } = req.body || {};
 
-  if ((!chofer_id && !chofer_nombre) || !tracks.length) {
-  return res.status(400).json({ error: 'Faltan datos' });
+    // Normalizo los códigos a un array
+    const tracks = (Array.isArray(tracking_ids) && tracking_ids.length)
+      ? tracking_ids
+      : [tracking, id_venta, meli_id].filter(Boolean);
+
+    if ((!chofer_id && !chofer_nombre) || !tracks.length) {
+      return res.status(400).json({ error: 'Faltan datos' });
     }
 
     // 1) Buscar envíos por id_venta o meli_id
-     const envios = await Envio.find({
-    $or: [{ id_venta: { $in: tracks } }, { meli_id: { $in: tracks } }]
-   }).populate('cliente_id').lean();
+    const envios = await Envio.find({
+      $or: [{ id_venta: { $in: tracks } }, { meli_id: { $in: tracks } }]
+    }).populate('cliente_id').lean();
 
-    if (!envios.length) return res.status(404).json({ error: 'No se encontraron envíos' });
+    if (!envios.length) {
+      return res.status(404).json({ error: 'No se encontraron envíos' });
+    }
 
     // 2) Filtrar pendientes
     const pendientes = envios.filter(e => (e.estado || 'pendiente') === 'pendiente');
-    if (!pendientes.length) return res.status(400).json({ error: 'Todos ya estaban asignados' });
+    if (!pendientes.length) {
+      return res.status(400).json({ error: 'Todos ya estaban asignados' });
+    }
 
-    // --- Resolver chofer: aceptar id o nombre ---
+    // 3) Resolver chofer (id o nombre) y validar
     const isValidId = v => mongoose.Types.ObjectId.isValid(String(v || ''));
     let chDoc = null;
     if (isValidId(chofer_id)) {
@@ -52,7 +68,7 @@ exports.asignarViaQR = async (req, res) => {
       return res.status(400).json({ error: 'Chofer inválido (enviar chofer_id válido o chofer_nombre existente)' });
     }
 
-    // 3) Crear Asignación (guardar ObjectId)
+    // 4) Crear Asignación
     const asg = await Asignacion.create({
       chofer: chDoc._id,
       lista_chofer_id: lista_chofer_id || null,
@@ -72,78 +88,74 @@ exports.asignarViaQR = async (req, res) => {
       fecha: new Date()
     });
 
-     // 4) Marcar envíos como asignados + chofer + historial
-   const chofer = chDoc; // usamos el mismo doc resuelto
-   const actor  = req.session?.user?.email || req.session?.user?.role || 'operador';
+    // 5) Marcar envíos como asignados + chofer + historial
+    const actor = req.session?.user?.email || req.session?.user?.role || 'operador';
+    await Envio.updateMany(
+      { _id: { $in: pendientes.map(e => e._id) } },
+      {
+        $set: {
+          estado: 'asignado',
+          chofer: chDoc._id,            // si tu esquema usa ObjectId
+          chofer_id: chDoc._id,         // si además tenés un campo plano
+          chofer_nombre: chDoc.nombre,  // útil para la UI
+          // si TU esquema usa subdoc { chofer: { _id, nombre } }, cambia por:
+          // chofer: { _id: chDoc._id, nombre: chDoc.nombre }
+        },
+        $push: {
+          historial: {
+            at: new Date(),
+            estado: 'asignado',
+            estado_meli: null,
+            source: 'zupply:qr',
+            actor_name: actor
+          }
+        }
+      }
+    );
 
-   await Envio.updateMany(
-     { _id: { $in: pendientes.map(e => e._id) } },
-     {
-     $set: {
-      estado: 'asignado',
-      chofer: chofer._id,              // <- si el esquema es ObjectId
-      chofer_id: chofer?._id || chofer_id,
-       chofer_nombre: chofer?.nombre || undefined,
-       'chofer._id': chofer?._id || chofer_id,      // por si usás subdocumento
-       'chofer.nombre': chofer?.nombre || undefined
-     },
-     $push: {
-       historial: {
-         at: new Date(),
-         estado: 'asignado',
-        estado_meli: null,
-         source: 'zupply:qr',
-         actor_name: actor
-       }
-     }
-  }
-);
-
-  // 5) Preparar datos opcionales (nombre visible de la lista)
+    // 6) Nombre visible de la lista (si no vino, lo levanto por id)
     let listaNombre = (lista_nombre || '').trim();
-    try {
-      if (!listaNombre && lista_chofer_id && ListaDePrecios) {
+    if (!listaNombre && lista_chofer_id && ListaDePrecios) {
+      try {
         const lp = await ListaDePrecios.findById(lista_chofer_id).lean();
         listaNombre = lp?.nombre || '';
-      }
-    } catch (e) {
-      console.warn('No se pudo obtener lista de precios:', e.message);
+      } catch { /* noop */ }
     }
 
-    // 6) Generar PDF (no tirar el endpoint si falla)
+    // 7) Generar PDF (no romper si falla)
     let remito_url = null;
     try {
-      const out = await buildRemitoPDF({ asignacion: asg, chofer, envios: pendientes, listaNombre });
-      remito_url = out.url || null;
+      const out = await buildRemitoPDF({
+        asignacion: asg,
+        chofer: chDoc,
+        envios: pendientes,
+        listaNombre
+      });
+      remito_url = out?.url || null;
       if (remito_url) {
         await Asignacion.updateOne({ _id: asg._id }, { $set: { remito_url } });
-    }}
-    catch (e) { console.error('Error al generar remito:', e); }
-    
-// Hora local AR (o lo que pongas en TZ)
-const now = dayjs.tz(new Date(), process.env.TZ || 'America/Argentina/Buenos_Aires');
-const fechaEs = now.format('DD/MM/YYYY');
-const horaEs  = now.format('HH:mm');
-    
-// 7) WhatsApp (no tirar si falta teléfono)
-let whatsapp_url = null;
-try {
-  const tel = (chofer?.telefono || '').replace(/\D/g,'');
-  if (tel) {
-    const mensaje =
-      `Hola ${chofer?.nombre || ''}! tu remito de hoy está listo:\n` +
-      `📦 Total paquetes: ${pendientes.length}\n` +
-      `📍 Zona: ${listaNombre || zona || ''}\n` +
-      `📅 Fecha: ${fechaEs}\n` +
-      `⌚ Hora: ${horaEs}`;
-    const texto = encodeURIComponent(mensaje);
-    whatsapp_url = `https://wa.me/${tel}?text=${texto}`;
-  }
-} catch (e) {
-  console.warn('No se pudo armar WhatsApp:', e.message);
-}
+      }
+    } catch (e) {
+      console.error('Error al generar remito:', e);
+    }
 
-    // 8) Responder SIEMPRE ok con lo que tengamos
+    // 8) WhatsApp (opcional)
+    let whatsapp_url = null;
+    try {
+      const tel = String(chDoc?.telefono || '').replace(/\D/g, '');
+      if (tel) {
+        const now = dayjs.tz(new Date(), process.env.TZ || 'America/Argentina/Buenos_Aires');
+        const mensaje =
+          `Hola ${chDoc?.nombre || ''}! tu remito de hoy está listo:\n` +
+          `📦 Total paquetes: ${pendientes.length}\n` +
+          `📍 Zona: ${listaNombre || zona || ''}\n` +
+          `📅 Fecha: ${now.format('DD/MM/YYYY')}\n` +
+          `⌚ Hora: ${now.format('HH:mm')}`;
+        whatsapp_url = `https://wa.me/${tel}?text=${encodeURIComponent(mensaje)}`;
+      }
+    } catch { /* noop */ }
+
+    // 9) Respuesta
     return res.json({
       ok: true,
       asignacion_id: asg._id,
@@ -153,7 +165,7 @@ try {
     });
   } catch (err) {
     console.error('asignarViaQR fatal:', err);
-    return res.status(500).json({ error: 'No se pudo crear la asignación' });
+    return res.status(500).json({ error: 'No se pudo crear la asignación', detail: err.message });
   }
 };
 
@@ -173,6 +185,10 @@ exports.asignarViaMapa = async (req, res) => {
   }
 };
 
+// Hora local AR (o lo que pongas en TZ)
+const now = dayjs.tz(new Date(), process.env.TZ || 'America/Argentina/Buenos_Aires');
+const fechaEs = now.format('DD/MM/YYYY');
+const horaEs  = now.format('HH:mm');
 
 // ➜ LISTAR (historial) — usa ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&chofer_id=<id>
 exports.listarAsignaciones = async (req, res) => {
