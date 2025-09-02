@@ -12,6 +12,7 @@ const app = express();
 /* ------------------------- Middlewares base ------------------------- */
 app.set('trust proxy', 1);
 app.use(cors());
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -39,6 +40,21 @@ app.get('/auth/login', (_req, res) => {
 // Auth público (login/logout)
 app.use('/auth', require('./routes/auth'));
 
+/* -------- Guardia global: bloquea TODO lo no público si no hay sesión ------- */
+app.use((req, res, next) => {
+  // Permitir auth y archivos públicos
+  if (req.path.startsWith('/auth')) return next();
+  if (req.path.startsWith('/public')) return next();
+  if (req.session?.user) return next();
+
+  // HTML → redirige a login, API → 401 JSON
+  if (req.accepts('html')) return res.redirect('/auth/login');
+  return res.status(401).json({ error: 'Login requerido' });
+});
+
+// Archivos estáticos públicos mínimos (login y assets)
+app.use(express.static(path.join(__dirname, 'public')));
+
 // panel protegido: muestra panel-general.html
 app.get('/index', (req, res) => {
   if (!req.session?.user?.authenticated) {
@@ -64,21 +80,6 @@ for (const [route, file] of Object.entries(pages)) {
     res.sendFile(path.join(__dirname, 'public', file));
   });
 }
-
-/* -------- Guardia global: bloquea TODO lo no público si no hay sesión ------- */
-app.use((req, res, next) => {
-  // Permitir auth y archivos públicos
-  if (req.path.startsWith('/auth')) return next();
-  if (req.path.startsWith('/public')) return next();
-  if (req.session?.user) return next();
-
-  // HTML → redirige a login, API → 401 JSON
-  if (req.accepts('html')) return res.redirect('/auth/login');
-  return res.status(401).json({ error: 'Login requerido' });
-});
-
-// Archivos estáticos públicos mínimos (login y assets)
-app.use(express.static(path.join(__dirname, 'public')));
 
 /* -------------- A partir de acá, todo requiere sesión ---------------- */
 app.use('/api/zonas',            require('./routes/zonas'));
