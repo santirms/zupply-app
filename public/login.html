@@ -41,14 +41,14 @@
       btn.disabled = true;
 
       try {
-        const r = await fetch('/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: document.getElementById('email').value.trim(),
-            password: document.getElementById('password').value
-          })
-        });
+      await fetch('/auth/login', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+       identifier: document.getElementById('email').value.trim(), // puede ser nombre o email
+       password: document.getElementById('password').value
+  })
+});
 
         const data = await r.json().catch(() => ({}));
         if (!r.ok || !data.ok) {
