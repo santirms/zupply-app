@@ -78,6 +78,34 @@ exports.listarEnvios = async (req, res) => {
   }
 };
 
+function buildTimeline(envio) {
+  const t = [];
+  if (Array.isArray(envio.historial)) {
+    for (const h of envio.historial) {
+      t.push({
+        at: h.at || h.fecha || envio.fecha,
+        estado: h.estado || h.status || '',
+        descripcion: h.descripcion || h.desc || '',
+        source: h.source || 'sistema',
+        actor_name: h.actor_name || ''
+      });
+    }
+  }
+  if (Array.isArray(envio.eventos)) {
+    for (const h of envio.eventos) {
+      t.push({
+        at: h.at || h.date || h.fecha || envio.fecha,
+        estado: h.estado || h.status || h.title || '',
+        descripcion: h.descripcion || h.message || '',
+        source: h.source || 'meli',
+        actor_name: h.actor_name || ''
+      });
+    }
+  }
+  t.sort((a,b) => new Date(a.at) - new Date(b.at));
+  return t;
+}
+
 // Buscar por tracking del sistema (id_venta) o por meli_id
 exports.getEnvioByTracking = async (req, res) => {
   try {
@@ -103,7 +131,10 @@ exports.getEnvioByTracking = async (req, res) => {
     const full = await Envio.findById(envio._id)
       .populate('cliente_id', 'nombre codigo_cliente')
       .lean();
-
+    
+    const timeline = buildTimeline(full);
+    const chofer_mostrar = full?.chofer?.nombre || full.chofer_nombre || '';
+ 
     return res.json({
       _id: full._id,
       id_venta: full.id_venta,
@@ -114,7 +145,9 @@ exports.getEnvioByTracking = async (req, res) => {
       codigo_postal: full.codigo_postal,
       partido: full.partido,
       estado: full.estado || 'pendiente',
-      label_url: full.label_url || null
+      label_url: full.label_url || null,
+      chofer_mostrar,
+      timeline
     });
   } catch (err) {
     console.error('getEnvioByTracking error:', err);
