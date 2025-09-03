@@ -357,6 +357,36 @@ async function ensureCoords(envio) {
     return envio; // nunca lanzar
   }
 }
+
+// Une historial interno + eventos de MELI y los ordena
+function buildTimeline(envio) {
+  const t = [];
+  if (Array.isArray(envio.historial)) {
+    for (const h of envio.historial) {
+      t.push({
+        at: h.at || h.fecha || envio.fecha,
+        estado: h.estado || h.status || '',
+        descripcion: h.descripcion || h.desc || '',
+        source: h.source || 'sistema',
+        actor_name: h.actor_name || ''
+      });
+    }
+  }
+  if (Array.isArray(envio.eventos)) {
+    for (const h of envio.eventos) {
+      t.push({
+        at: h.at || h.date || h.fecha || envio.fecha,
+        estado: h.estado || h.status || h.title || '',
+        descripcion: h.descripcion || h.message || '',
+        source: h.source || 'meli',
+        actor_name: h.actor_name || ''
+      });
+    }
+  }
+  t.sort((a,b) => new Date(a.at) - new Date(b.at));
+  return t;
+}
+
 // GET /envios/:id
 router.get('/:id', async (req, res) => {
   try {
@@ -374,6 +404,10 @@ router.get('/:id', async (req, res) => {
     }
 
     await ensureCoords(envio);   // ⬅️ completa lat/lng si faltan
+    // alias seguro para mostrar chofer
+    envio.chofer_mostrar = envio?.chofer?.nombre || envio.chofer_nombre || '';
+    // timeline unificado para el modal
+    envio.timeline = buildTimeline(envio);
     res.json(envio);
   } catch (err) {
     console.error('Error al obtener envío:', err);
