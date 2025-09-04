@@ -5,36 +5,85 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>📦 Escáner de Paquetes</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Intenta local y si falla usa CDN -->
-<script>
-  (function loadHtml5QR() {
-    const urls = [
-      '/libs/html5-qrcode.min.js',
-      'https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js',
-      'https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js'
-    ];
-    function tryNext(i){
-      if (i >= urls.length) { console.warn('html5-qrcode NO disponible'); return; }
-      const s = document.createElement('script');
-      s.src = urls[i];
-      s.defer = true;
-      s.crossOrigin = 'anonymous';
-      s.onload = () => console.log('html5-qrcode OK ->', urls[i]);
-      s.onerror = () => { console.warn('falló', urls[i]); tryNext(i+1); };
-      document.head.appendChild(s);
-    }
-    tryNext(0);
-  })();
-</script>
+
+  <!-- Carga html5-qrcode (local -> CDN fallback) -->
+  <script>
+    (function loadHtml5QR() {
+      const urls = [
+        '/libs/html5-qrcode.min.js',
+        'https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js',
+        'https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js'
+      ];
+      function tryNext(i){
+        if (i >= urls.length) { console.warn('html5-qrcode NO disponible'); return; }
+        const s = document.createElement('script');
+        s.src = urls[i];
+        s.defer = true;
+        s.crossOrigin = 'anonymous';
+        s.onload = () => console.log('html5-qrcode OK ->', urls[i]);
+        s.onerror = () => { console.warn('falló', urls[i]); tryNext(i+1); };
+        document.head.appendChild(s);
+      }
+      tryNext(0);
+    })();
+  </script>
+
   <style>
-    #reader { width: 100%; max-width: 520px; margin: 0 auto; }
+    /* Lienzo del lector */
+    #reader { width: 100%; max-width: 520px; margin: 0 auto; position: relative; }
+
+    /* Overlay guía */
+    .scan-overlay {
+      --qrbox-size: 320px; /* se ajusta por JS en runtime */
+      position: absolute; inset: 0; pointer-events: none;
+      display: grid; place-items: center;
+    }
+    .reticle {
+      width: var(--qrbox-size); height: var(--qrbox-size);
+      border: 2px solid rgba(255,255,255,.7);
+      border-radius: 16px;
+      box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); /* oscurece el resto */
+      position: relative; overflow: hidden;
+    }
+    /* esquinas “gamer” */
+    .reticle:before, .reticle:after {
+      content:""; position:absolute; inset:0; border-radius:16px;
+      border: 2px solid rgba(0,255,128,.25);
+      clip-path: polygon(0 0, 14% 0, 14% 2px, 2px 2px, 2px 14%, 0 14%, 0 0,
+                         86% 0, 100% 0, 100% 14%, 98% 14%, 98% 2px, 86% 2px, 86% 0,
+                         100% 86%, 100% 100%, 86% 100%, 86% 98%, 98% 98%, 98% 86%, 100% 86%,
+                         0 86%, 0 100%, 14% 100%, 14% 98%, 2px 98%, 2px 86%, 0 86%);
+    }
+    /* línea de escaneo */
+    .scanline {
+      position:absolute; left:0; right:0; height:2px; top:0;
+      background: linear-gradient(to right, transparent, rgba(0,255,128,.9), transparent);
+      animation: scan 2.4s linear infinite;
+    }
+    @keyframes scan {
+      0% { transform: translateY(8px); opacity:.9; }
+      50% { transform: translateY(calc(var(--qrbox-size) - 10px)); opacity:.6; }
+      100% { transform: translateY(8px); opacity:.9; }
+    }
+
+    /* Pulso de éxito */
+    .hit-pulse {
+      position:absolute; inset:0; display:grid; place-items:center; pointer-events:none;
+    }
+    .hit-pulse .ring {
+      width: 32px; height: 32px; border: 3px solid #22c55e; border-radius: 999px;
+      opacity: 0; transform: scale(0.2);
+      animation: pulse .6s ease-out forwards;
+      box-shadow: 0 0 16px rgba(34,197,94,.6);
+    }
+    @keyframes pulse {
+      to { opacity: 0; transform: scale(8); }
+    }
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
   <div class="max-w-3xl mx-auto px-4 py-6">
-    <h1 class="text-2xl font-bold flex items-center gap-2">
-      📦 Escáner de Paquetes
-    </h1>
+    <h1 class="text-2xl font-bold flex items-center gap-2">📦 Escáner de Paquetes</h1>
 
     <!-- Modo de entrada -->
     <div class="mt-4 flex flex-wrap items-center gap-6">
@@ -48,15 +97,19 @@
       </label>
     </div>
 
-    <!-- Cámara -->
+    <!-- Controles de cámara -->
     <div id="camaraContainer" class="mt-4">
       <div class="bg-white rounded-lg shadow p-4">
-        <div class="flex gap-2 mb-3">
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <select id="selectCam" class="border rounded px-3 py-2 min-w-[220px]"></select>
+          <button id="torchBtn" class="px-3 py-2 rounded border">Linterna</button>
+          <div class="grow"></div>
           <button id="startBtn" class="bg-green-600 text-white px-4 py-2 rounded">Iniciar cámara</button>
           <button id="stopBtn"  class="bg-red-600 text-white px-4 py-2 rounded" disabled>Detener</button>
         </div>
-        <div id="reader" class="rounded overflow-hidden border"></div>
-        <p id="status" class="text-center text-sm text-gray-600 mt-2">Listo.</p>
+
+        <div id="reader" class="rounded overflow-hidden border relative"></div>
+        <p id="status" class="text-center text-sm text-gray-600 mt-2">Listo. Alineá el código dentro del recuadro y mantené 15–25 cm.</p>
       </div>
     </div>
 
@@ -76,7 +129,7 @@
     <div id="scanList" class="grid gap-3"></div>
   </div>
 
-  <!-- DEBUG en pantalla: activar con ?debug=1 -->
+  <!-- DEBUG en pantalla (?debug=1) -->
   <script>
     (function () {
       try {
@@ -96,6 +149,7 @@
     })();
   </script>
 
+  <!-- Tu lógica de escaneo -->
   <script src="/js/escanear.js" defer></script>
 </body>
 </html>
