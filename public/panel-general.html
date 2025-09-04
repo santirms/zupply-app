@@ -521,7 +521,7 @@ tr.innerHTML = `
 
           
       // Historial (si el backend lo envía en el objeto)
-      const hist = envio.timeline || envio.historial || envio.eventos || [];
+      const hist = data.timeline || data.historial || data.eventos || [];
       renderHistorial(hist);
 
         // Aseguramos que por default esté la pestaña Detalle
