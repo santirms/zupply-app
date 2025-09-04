@@ -4,80 +4,161 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Zupply | Login</title>
+  <!-- Versión sin barra · tonos web (ámbar) · accesible -->
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background:#0f172a; color:#e2e8f0; display:grid; place-items:center; height:100dvh; margin:0;}
-    .card { background:#111827; padding:24px; border-radius:16px; width:min(360px, 92vw); box-shadow:0 8px 30px rgba(0,0,0,.35); }
-    h1 { margin:0 0 16px; font-size:1.25rem; }
-    label { display:block; font-size:.9rem; margin:10px 0 6px; color:#cbd5e1; }
-    input { width:100%; padding:10px 12px; border-radius:10px; border:1px solid #334155; background:#0b1220; color:#e2e8f0; outline:none; }
-    button { width:100%; margin-top:14px; padding:12px; border:0; border-radius:10px; background:#6d28d9; color:white; font-weight:600; cursor:pointer; }
-    button:disabled { opacity:.6; cursor:not-allowed; }
-    .err { color:#fca5a5; margin-top:10px; min-height:1.2em; }
-    .hint { margin-top:10px; font-size:.85rem; color:#94a3b8; text-align:center; }
+    :root{
+      --amber: #F59E0B;        /* ámbar 500 (botón) */
+      --amber-dark: #D97706;   /* ámbar 600 (hover) */
+      --bg: #0f172a;           /* fondo oscuro */
+      --card: #111827;         /* panel */
+      --text: #e2e8f0;         /* texto principal */
+      --muted: #94a3b8;        /* texto secundario */
+      --label: #cbd5e1;        /* labels */
+      --input-bg: #0b1220;     /* fondo input */
+      --input-bd: #334155;     /* borde input */
+      --shadow: 0 8px 30px rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: var(--bg);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      min-height: 100dvh;
+      margin: 0;
+      padding: 16px;
+    }
+    .brand { display:grid; place-items:center; gap:10px; margin-bottom: 14px; }
+    .brand img { width:72px; height:72px; object-fit:contain }
+    .mono {
+      display:none; width:72px; height:72px; border-radius:12px;
+      background: linear-gradient(135deg,#F6B64A,var(--amber),var(--amber-dark));
+      color:#fff; font-weight:900; font-size:34px; place-items:center;
+    }
+
+    .card {
+      background: var(--card);
+      padding: 24px;
+      border-radius: 16px;
+      width: min(380px, 92vw);
+      box-shadow: var(--shadow);
+    }
+    h1 { margin: 6px 0 16px; font-size: 1.25rem; }
+    label { display:block; font-size:.9rem; margin:10px 0 6px; color: var(--label); }
+    input {
+      width:100%; padding:10px 12px; border-radius:10px;
+      border:1px solid var(--input-bd); background: var(--input-bg);
+      color: var(--text); outline:none;
+    }
+    input:focus {
+      border-color: var(--amber);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--amber) 25%, transparent);
+    }
+    button {
+      width:100%; margin-top:14px; padding:12px; border:0; border-radius:10px;
+      background: linear-gradient(180deg, #F6B64A, var(--amber));
+      color:#111827; font-weight:700; cursor:pointer;
+      box-shadow: 0 6px 18px rgba(245,158,11,.25);
+    }
+    button:hover { background: var(--amber-dark); color:#0b1220 }
+    button:disabled { opacity:.6; cursor:not-allowed }
+    .err { color:#fca5a5; margin-top:10px; min-height:1.2em }
+    .hint { margin-top:10px; font-size:.85rem; color: var(--muted); text-align:center }
+    .actions { display:flex; justify-content:space-between; gap:12px; margin-top:8px; font-size:.85rem; color:var(--muted) }
+    .actions a { color:var(--muted); text-decoration:none }
+    .actions a:hover { text-decoration:underline }
   </style>
 </head>
 <body>
   <div class="card">
+    <div class="brand">
+      <!-- Cambiá la ruta si tu SVG está en otro lado -->
+      <img id="logo" src="/assets/logo-zupply.svg" alt="Zupply" onerror="this.style.display='none';document.getElementById('mono').style.display='grid';">
+      <div id="mono" class="mono">Z</div>
+    </div>
+
     <h1>Ingresar a Zupply</h1>
-    <form id="f">
+
+    <form id="f" novalidate>
       <label>Email</label>
       <input id="email" type="email" autocomplete="username" required />
+
       <label>Contraseña</label>
       <input id="password" type="password" autocomplete="current-password" required />
+
       <button id="btn" type="submit">Entrar</button>
+
+      <div class="actions">
+        <label><input id="remember" type="checkbox" style="vertical-align:middle"> Recordarme</label>
+        <a href="/auth/forgot">¿Olvidaste tu contraseña?</a>
+      </div>
+
       <div id="err" class="err"></div>
-      <div class="hint">Usa las credenciales sembradas o creadas por el admin.</div>
+      <div class="hint">Usá las credenciales sembradas o creadas por el admin.</div>
     </form>
   </div>
 
   <script>
-     const f = document.getElementById('f');
-  const btn = document.getElementById('btn');
-  const err = document.getElementById('err');
+    const f   = document.getElementById('f');
+    const btn = document.getElementById('btn');
+    const err = document.getElementById('err');
+    const emailEl = document.getElementById('email');
+    const passEl  = document.getElementById('password');
+    const remember = document.getElementById('remember');
 
-  f.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    err.textContent = '';
-    btn.disabled = true;
-
+    // Autocompletar recordarme (opcional)
     try {
-      const r = await fetch('/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({
-          // puede ser email o username
-          identifier: document.getElementById('email').value.trim(),
-          password: document.getElementById('password').value
-        })
-      });
+      const last = localStorage.getItem('zpl_last_user');
+      if (last) { emailEl.value = last; remember.checked = true; }
+    } catch {}
 
-      const text = await r.text(); // leemos como texto primero
-      let data;
-      try { data = JSON.parse(text); } catch { data = null; }
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.textContent = '';
+      btn.disabled = true;
 
-      console.log('login status', r.status, 'body:', text);
+      try {
+        const r = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            // puede ser email o username
+            identifier: emailEl.value.trim(),
+            password: passEl.value
+          })
+        });
 
-      if (!r.ok) {
-        err.textContent = (data && data.error) ? data.error : `Error ${r.status}`;
+        const text = await r.text();
+        let data; try { data = JSON.parse(text); } catch { data = null; }
+        console.log('login status', r.status, 'body:', text);
+
+        if (!r.ok) {
+          err.textContent = (data && data.error) ? data.error : `Error ${r.status}`;
+          btn.disabled = false;
+          return;
+        }
+        if (!data || data.ok !== true) {
+          err.textContent = 'Respuesta inesperada del servidor';
+          btn.disabled = false;
+          return;
+        }
+
+        // Guardar usuario si corresponde
+        try {
+          if (remember.checked) localStorage.setItem('zpl_last_user', emailEl.value.trim());
+          else localStorage.removeItem('zpl_last_user');
+        } catch {}
+
+        // OK → al panel principal
+        location.href = '/index.html';
+      } catch (e2) {
+        console.error(e2);
+        err.textContent = 'Error de red';
         btn.disabled = false;
-        return;
       }
-      if (!data || data.ok !== true) {
-        // el server respondió HTML (por ejemplo, la misma página)
-        err.textContent = 'Respuesta inesperada del servidor';
-        btn.disabled = false;
-        return;
-      }
-
-      // OK → al panel principal
-      location.href = '/index.html';
-    } catch (e) {
-      console.error(e);
-      err.textContent = 'Error de red';
-      btn.disabled = false;
-    }
-  });
+    });
   </script>
 </body>
 </html>
