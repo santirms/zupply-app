@@ -3,51 +3,280 @@
 <head>
   <meta charset="UTF-8" />
   <title>Zupply - Panel Principal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Tailwind CDN (dark por clase) -->
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: "class" };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Set inicial de tema: por defecto “system” (no forzamos dark/light) -->
+  <script>
+    (function () {
+      try {
+        const saved = localStorage.getItem('zpl_theme'); // 'light' | 'dark' | 'system'
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark = (saved === 'dark') || (!saved || saved === 'system') && prefersDark;
+        document.documentElement.classList.toggle('dark', wantDark);
+        if (!saved) localStorage.setItem('zpl_theme','system');
+      } catch {}
+    })();
+  </script>
+
   <style>
-    body { font-family: sans-serif; padding: 40px; max-width: 600px; margin: auto; }
-    h1 { text-align: center; color: #333; }
-    ul { list-style: none; padding: 0; }
-    li { margin: 15px 0; }
-    a {
-      display: block;
-      background: #4a00e0;
-      color: white;
-      text-decoration: none;
-      padding: 12px 20px;
-      border-radius: 5px;
-      font-size: 18px;
-      text-align: center;
-    }
-    a:hover {
-      background: #7f00ff;
+    :root{
+      --z-primary: #F59E0B;       /* ámbar suave */
+      --z-primary-dark: #D97706;  /* hover */
+      --z-primary-fg: #111827;    /* texto sobre ámbar */
     }
   </style>
 </head>
- <body>
-  <h1>Panel Principal</h1>
-  <ul>
-    
-  <li data-allow="admin,coordinador"><a href="/panel-general.html">📊 Panel General de Envíos</a></li>
-  <li data-allow="admin,coordinador"><a href="/scanner.html">📷 Escanear Paquetes</a></li>
-  <li data-allow="admin,coordinador"><a href="/subir-etiquetas.html">📥 Subir Etiquetas</a></li>
-  <li data-allow="admin,coordinador"><a href="/ingreso-manual.html">👨🏻‍💻 Ingreso Manual</a></li>
-  <li data-allow="admin,coordinador"><a href="/choferes.html">🚐 Panel Choferes</a></li>
 
-  <!-- Solo admin -->
-  <li data-allow="admin"><a href="/clientes.html">👥 Clientes</a></li>
-  <li data-allow="admin"><a href="/facturacion-general.html">💰 Facturación</a></li>
-  <li data-allow="admin"><a href="/panel-zonas-listas.html">🗺️ Zonas y Listas de Precios</a></li>
-  <li data-allow="admin"><a href="/panel-usuarios.html">👤 Usuarios</a></li>
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+  <div class="max-w-7xl mx-auto p-6">
 
-  </ul>
-   
-   <script>
-  fetch('/me').then(r=>r.json()).then(me=>{
-    document.querySelectorAll('[data-allow]').forEach(el=>{
-      const allow = el.getAttribute('data-allow').split(',').map(s=>s.trim());
-      if (!allow.includes(me.role)) el.style.display='none';
-    });
-  }).catch(()=>location.href='/auth/login');
-</script>
-   </body>
+    <!-- TOPBAR -->
+    <header class="sticky top-0 z-40 mb-6">
+      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
+        <!-- Logo / Home -->
+        <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+          <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)">
+            <span class="text-white font-black">Z</span>
+          </div>
+          <img src="/assets/logo-zupply.svg" alt="Zupply" class="h-5 hidden sm:block" onerror="this.remove()">
+          <span class="sm:hidden font-semibold tracking-wide text-amber-500">zupply</span>
+        </a>
+
+        <!-- Fecha/Hora (suave) -->
+        <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
+        <div class="flex items-center gap-3 text-sm opacity-80">
+          <span id="fecha" class="hidden sm:inline">—</span>
+          <span id="hora">—</span>
+        </div>
+
+        <!-- Menú usuario + Tema -->
+        <div class="ml-auto flex items-center gap-2">
+          <div class="relative" id="userMenuWrap">
+            <button id="userBtn"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
+              <span id="username" class="max-w-[160px] truncate">Usuario</span>
+              <span class="opacity-70">▾</span>
+            </button>
+            <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
+              <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
+              <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
+            </div>
+          </div>
+
+          <button id="themeBtn"
+            class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 text-slate-700 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100">
+            Tema: auto
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- HOME -->
+    <main>
+      <!-- Mini-KPIs (placeholders, sin lógica) -->
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+          <div class="text-xs opacity-70">Pendientes</div>
+          <div class="text-3xl font-semibold mt-1 tracking-tight text-amber-600">—</div>
+        </div>
+        <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+          <div class="text-xs opacity-70">En ruta</div>
+          <div class="text-3xl font-semibold mt-1 tracking-tight text-sky-600 dark:text-sky-300">—</div>
+        </div>
+        <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+          <div class="text-xs opacity-70">Entregados</div>
+          <div class="text-3xl font-semibold mt-1 tracking-tight text-emerald-600 dark:text-emerald-300">—</div>
+        </div>
+        <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+          <div class="text-xs opacity-70">Incidencias</div>
+          <div class="text-3xl font-semibold mt-1 tracking-tight text-rose-600 dark:text-rose-300">—</div>
+        </div>
+      </section>
+
+      <!-- Grid de módulos (visibilidad por rol con data-allow) -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Coordinación / Admin -->
+        <a data-allow="admin,coordinador" href="/panel-general.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">📊</div>
+            <div class="text-lg font-medium">Panel General de Envíos</div>
+            <div class="ml-auto text-xs opacity-70">1</div>
+          </div>
+        </a>
+
+        <a data-allow="admin,coordinador" href="/scanner.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">📷</div>
+            <div class="text-lg font-medium">Escanear Paquetes</div>
+            <div class="ml-auto text-xs opacity-70">2</div>
+          </div>
+        </a>
+
+        <a data-allow="admin,coordinador" href="/subir-etiquetas.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">🏷️</div>
+            <div class="text-lg font-medium">Subir Etiquetas</div>
+            <div class="ml-auto text-xs opacity-70">3</div>
+          </div>
+        </a>
+
+        <a data-allow="admin,coordinador" href="/ingreso-manual.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">✍️</div>
+            <div class="text-lg font-medium">Ingreso Manual</div>
+            <div class="ml-auto text-xs opacity-70">4</div>
+          </div>
+        </a>
+
+        <a data-allow="admin,coordinador" href="/choferes.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">🚚</div>
+            <div class="text-lg font-medium">Panel Choferes</div>
+            <div class="ml-auto text-xs opacity-70">5</div>
+          </div>
+        </a>
+
+        <!-- Solo admin -->
+        <a data-allow="admin" href="/clientes.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">👥</div>
+            <div class="text-lg font-medium">Clientes</div>
+            <div class="ml-auto text-xs opacity-70">6</div>
+          </div>
+        </a>
+
+        <a data-allow="admin" href="/facturacion-general.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">💳</div>
+            <div class="text-lg font-medium">Facturación</div>
+            <div class="ml-auto text-xs opacity-70">7</div>
+          </div>
+        </a>
+
+        <a data-allow="admin" href="/panel-zonas-listas.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">🗺️</div>
+            <div class="text-lg font-medium">Zonas y Listas de Precios</div>
+            <div class="ml-auto text-xs opacity-70">8</div>
+          </div>
+        </a>
+
+        <a data-allow="admin" href="/panel-usuarios.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">👤</div>
+            <div class="text-lg font-medium">Usuarios</div>
+            <div class="ml-auto text-xs opacity-70">9</div>
+          </div>
+        </a>
+      </section>
+
+      <!-- Si querés desactivar por completo los KPIs en build:
+      <section class="hidden">
+        … (KPIs)
+      </section>
+      -->
+    </main>
+
+    <footer class="py-6 text-center text-xs opacity-60">© <span id="anio"></span> Zupply</footer>
+  </div>
+
+  <script>
+    // ====== Fecha / hora en topbar ======
+    (function tick(){
+      try {
+        const now = new Date();
+        const fmtFecha = new Intl.DateTimeFormat('es-AR', { weekday:'short', day:'2-digit', month:'short', year:'numeric' }).format(now);
+        const fmtHora  = new Intl.DateTimeFormat('es-AR', { hour:'2-digit', minute:'2-digit', second:'2-digit' }).format(now);
+        document.getElementById('fecha').textContent = fmtFecha;
+        document.getElementById('hora').textContent  = fmtHora;
+        document.getElementById('anio').textContent  = now.getFullYear();
+      } catch {}
+      setTimeout(tick, 1000);
+    })();
+
+    // ====== Menú usuario ======
+    (function userMenu(){
+      const btn = document.getElementById('userBtn');
+      const menu = document.getElementById('userMenu');
+      const wrap = document.getElementById('userMenuWrap');
+      btn.addEventListener('click', ()=> menu.classList.toggle('hidden'));
+      document.addEventListener('click', (e)=>{
+        if (!wrap.contains(e.target)) menu.classList.add('hidden');
+      });
+      document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+        try { await fetch('/auth/logout', { method:'POST' }); } catch {}
+        try { localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username'); } catch {}
+        location.href = '/auth/login';
+      });
+    })();
+
+    // ====== Tema: cycle light/dark/system (default system) ======
+    (function themeToggle(){
+      const order = ['light','dark','system'];
+      const btn = document.getElementById('themeBtn');
+      const apply = (mode) => {
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark = mode === 'dark' || (mode === 'system' && prefersDark);
+        document.documentElement.classList.toggle('dark', wantDark);
+        localStorage.setItem('zpl_theme', mode);
+        btn.textContent = 'Tema: ' + (mode === 'system' ? 'auto' : mode);
+      };
+      // init label
+      apply(localStorage.getItem('zpl_theme') || 'system');
+      btn.addEventListener('click', ()=>{
+        const current = localStorage.getItem('zpl_theme') || 'system';
+        const next = order[(order.indexOf(current)+1)%order.length];
+        apply(next);
+      });
+    })();
+
+    // ====== Visibilidad por rol + nombre de usuario ======
+    fetch('/me', { cache:'no-store' })
+      .then(r => {
+        if (!r.ok) throw new Error('unauth');
+        return r.json();
+      })
+      .then(me => {
+        // Nombre en topbar
+        const name = me.name || me.username || me.email || 'Usuario';
+        document.getElementById('username').textContent = name;
+        try { localStorage.setItem('zpl_username', name); } catch {}
+
+        // Mostrar/ocultar módulos por rol
+        document.querySelectorAll('[data-allow]').forEach(el=>{
+          const allow = el.getAttribute('data-allow').split(',').map(s=>s.trim());
+          if (!allow.includes(me.role)) el.style.display='none';
+        });
+      })
+      .catch(()=> location.href='/auth/login');
+  </script>
+</body>
 </html>
+
