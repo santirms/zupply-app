@@ -519,11 +519,13 @@ tr.innerHTML = `
       const zonaFact = data.zona?.trim?.()    || '-';
       const precioFmt = (typeof data.precio === 'number') ? `$ ${data.precio.toFixed(2)}` : '-';
 
+      document.getElementById('txtChofer').textContent = envio.chofer_mostrar || '-';
+    
       // Historial (si el backend lo envía en el objeto)
       const hist = envio.timeline || envio.historial || envio.eventos || [];
       renderHistorial(hist);
 
-      // Aseguramos que por default esté la pestaña Detalle
+        // Aseguramos que por default esté la pestaña Detalle
       switchTab('detalle');
 
 
