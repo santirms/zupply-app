@@ -1,4 +1,4 @@
-// public/js/escanear.js  (tu versión + overlay / beep / pulse / tips)
+// public/js/escanear.js  (tu versión + overlay / beep / pulse / tips / fixes Android)
 const qs  = s => document.querySelector(s);
 const qsa = s => Array.from(document.querySelectorAll(s));
 const DEBUG = new URLSearchParams(location.search).has('debug');
@@ -14,7 +14,8 @@ function ensureOverlayStyles() {
   if (document.getElementById('scan-overlay-styles')) return;
   const css = `
   #reader { position: relative; }
-  .scan-overlay { --qrbox-size: 320px; position:absolute; inset:0; pointer-events:none; display:grid; place-items:center; }
+  /* forzar stacking por encima del <video> en Android */
+  .scan-overlay { --qrbox-size: 320px; position:absolute; inset:0; pointer-events:none; display:grid; place-items:center; z-index: 50; }
   .reticle { width:var(--qrbox-size); height:var(--qrbox-size); border:2px solid rgba(255,255,255,.7); border-radius:16px; box-shadow:0 0 0 100vmax rgba(0,0,0,.35); position:relative; overflow:hidden; }
   .reticle:before,.reticle:after{content:"";position:absolute;inset:0;border-radius:16px;border:2px solid rgba(0,255,128,.25);
     clip-path: polygon(0 0, 14% 0, 14% 2px, 2px 2px, 2px 14%, 0 14%, 0 0,
@@ -23,25 +24,29 @@ function ensureOverlayStyles() {
                        0 86%, 0 100%, 14% 100%, 14% 98%, 2px 98%, 2px 86%, 0 86%); }
   .scanline{position:absolute;left:0;right:0;height:2px;top:0;background:linear-gradient(to right,transparent,rgba(0,255,128,.9),transparent);animation:scan 2.4s linear infinite;}
   @keyframes scan{0%{transform:translateY(8px);opacity:.9;}50%{transform:translateY(calc(var(--qrbox-size) - 10px));opacity:.6;}100%{transform:translateY(8px);opacity:.9;}}
-  .hit-pulse{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;}
+  .hit-pulse{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:60;}
   .hit-pulse .ring{width:32px;height:32px;border:3px solid #22c55e;border-radius:999px;opacity:0;transform:scale(.2);animation:pulse .6s ease-out forwards;box-shadow:0 0 16px rgba(34,197,94,.6);}
-  @keyframes pulse{to{opacity:0;transform:scale(8);}}`;
+  @keyframes pulse{to{opacity:0;transform:scale(8);}}
+  `;
   const style = document.createElement('style');
   style.id = 'scan-overlay-styles';
   style.textContent = css;
   document.head.appendChild(style);
 }
 
-function ensureOverlay(readerEl) {
-  if (!readerEl || readerEl.querySelector('.scan-overlay')) return;
-  const overlay = document.createElement('div');
-  overlay.className = 'scan-overlay';
-  overlay.innerHTML = `
-    <div class="reticle"><div class="scanline"></div></div>
-    <div class="hit-pulse" style="display:none"><div class="ring"></div></div>
-  `;
-  readerEl.appendChild(overlay);
-  // Tamaño coherente con qrbox dinámico
+function ensureOverlay(readerEl, moveToTop = false) {
+  if (!readerEl) return;
+  let overlay = readerEl.querySelector('.scan-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.className = 'scan-overlay';
+    overlay.innerHTML = `
+      <div class="reticle"><div class="scanline"></div></div>
+      <div class="hit-pulse" style="display:none"><div class="ring"></div></div>
+    `;
+    readerEl.appendChild(overlay);
+  }
+  // Ajustar tamaño según ancho disponible
   function updateQrboxSize(){
     const max = Math.min(readerEl.clientWidth || 320, 520);
     const size = Math.round(Math.min(Math.max(max * 0.7, 240), 420));
@@ -49,6 +54,10 @@ function ensureOverlay(readerEl) {
   }
   updateQrboxSize();
   window.addEventListener('resize', updateQrboxSize);
+
+  // En Android algunos navegadores dibujan el video al tope del stacking;
+  // re-apendemos para garantizar que el overlay quede último.
+  if (moveToTop) readerEl.appendChild(overlay);
 }
 
 function showHitPulse(readerEl){
@@ -74,6 +83,10 @@ function beep(freq = 920, ms = 120) {
     osc.stop(ctx.currentTime + ms/1000 + 0.02);
     setTimeout(() => ctx.close(), ms + 100);
   } catch {}
+}
+
+function haptic() {
+  try { if (navigator.vibrate) navigator.vibrate([60]); } catch {}
 }
 
 // ---------- Tu parsing/render original ----------
@@ -187,7 +200,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       tecladoContainer.classList.toggle('hidden', cam);
       if (!cam) inputTeclado?.focus();
       if (scanning) stopScanner();
-      if (cam) statusText.textContent = 'Listo. Alineá el código en el recuadro y mantené 15–25 cm.';
+      if (cam) statusText.textContent = 'Listo. Alineá el código y mantené 15–25 cm.';
     });
   });
 
@@ -195,7 +208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   startBtn?.addEventListener('click', startScanner);
   stopBtn?.addEventListener('click', stopScanner);
 
-  // Lector/pegar texto: Enter dispara parse
+  // Modo lector/pegar texto
   inputTeclado?.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       const code = inputTeclado.value.trim();
@@ -204,6 +217,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // -------- Helper: elegir cámara trasera sin selector --------
+  async function pickBackCameraId() {
+    try {
+      const cams = await Html5Qrcode.getCameras();
+      const back = cams.find(d => /back|environment|rear|trasera/i.test(d.label));
+      return (back || cams[0])?.id || null;
+    } catch { return null; }
+  }
+
+  // compute qrbox en sync con overlay
   function computeQrbox(viewW, viewH) {
     const max = Math.min(viewW, 520);
     const size = Math.round(Math.min(Math.max(max * 0.7, 240), 420));
@@ -216,26 +239,44 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     statusText.textContent = 'Iniciando cámara…';
+
+    // 1) Intentar por deviceId (trasera), 2) fallback a facingMode:environment
+    let started = false;
     try {
-      await html5QrCode.start(
-        { facingMode: 'environment' },
-        {
-          fps: 12,
-          qrbox: computeQrbox,     // <- tamaño dinámico coherente con la mira
-          aspectRatio: 1.777,
-          experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-        },
-        (decodedText) => onScanSuccess(decodedText, reader, statusText),
-        () => onScanFail(statusText)
-      );
-      scanning = true;
-      startBtn.disabled = true;
-      stopBtn.disabled  = false;
-      statusText.textContent = 'Escaneando… Tip: que el QR ocupe ~70% del recuadro.';
-    } catch (e) {
-      console.error('Error iniciando cámara:', e);
-      statusText.textContent = 'No se pudo iniciar cámara.';
+      const backId = await pickBackCameraId();
+      if (backId) {
+        await html5QrCode.start(
+          { deviceId: { exact: backId } },
+          { fps: 12, qrbox: computeQrbox, aspectRatio: 1.777, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
+          (t)=>onScanSuccess(t, reader, statusText),
+          ()=>onScanFail(statusText)
+        );
+        started = true;
+      }
+    } catch(e){ dlog('deviceId start fail:', e); }
+
+    if (!started) {
+      try {
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          { fps: 12, qrbox: computeQrbox, aspectRatio: 1.777, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
+          (t)=>onScanSuccess(t, reader, statusText),
+          ()=>onScanFail(statusText)
+        );
+        started = true;
+      } catch(e){
+        console.error('Error iniciando cámara:', e);
+        statusText.textContent = 'No se pudo iniciar la cámara. Revisá permisos del sitio.';
+        return;
+      }
     }
+
+    scanning = true;
+    startBtn.disabled = true;
+    stopBtn.disabled  = false;
+    statusText.textContent = 'Escaneando… Tip: que el QR ocupe ~70% del recuadro.';
+    // mover overlay al tope por si el video queda encima
+    ensureOverlay(reader, true);
   }
 
   async function stopScanner() {
@@ -256,10 +297,9 @@ function onScanSuccess(decodedText, readerEl, statusEl) {
   if (seen.has(decodedText)) return;
   seen.add(decodedText);
 
-  // Feedback
   showHitPulse(readerEl);
   beep(940, 120);
-  if (navigator.vibrate) navigator.vibrate(80);
+  haptic(); // vibración (si el dispositivo/permiso lo permite)
   statusEl.textContent = '¡Código leído! Podés seguir escaneando.';
 
   const payload = parseQrPayload(decodedText);
@@ -270,12 +310,18 @@ function onScanSuccess(decodedText, readerEl, statusEl) {
   renderScanCard(payload);
 }
 
+// Tips rotativos (incluye “pliegues”/arrugas)
+const TIPS = [
+  'acercá hasta que ocupe ~70% del recuadro',
+  'alejalo 5–10 cm si se ve borroso',
+  'incliná 10–15° para evitar reflejos',
+  'alisá la etiqueta: sin pliegues/arrugas ni cinta brillante'
+];
+
 function onScanFail(statusEl) {
   failCount++;
   if (failCount % 60 === 0) {
-    const tip = (failCount/60) % 3;
-    if (tip === 1) statusEl.textContent = 'Tip: acercá hasta ~70% del recuadro.';
-    else if (tip === 2) statusEl.textContent = 'Tip: alejalo 5–10 cm si se ve borroso.';
-    else statusEl.textContent = 'Tip: incliná 10–15° para evitar reflejos.';
+    const tip = TIPS[(failCount/60) % TIPS.length | 0];
+    statusEl.textContent = 'Tip: ' + tip + '.';
   }
 }
