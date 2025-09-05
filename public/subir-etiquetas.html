@@ -1,164 +1,317 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Subir Etiquetas</title>
+  <meta charset="UTF-8" />
+  <title>Zupply | Subir Etiquetas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Tailwind (dark por clase) -->
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: "class" };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Tema inicial: por defecto "system" -->
+  <script>
+    (function(){
+      try {
+        const saved = localStorage.getItem('zpl_theme'); // 'light'|'dark'|'system'
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark = (saved === 'dark') || (!saved || saved === 'system') && prefersDark;
+        document.documentElement.classList.toggle('dark', wantDark);
+        if (!saved) localStorage.setItem('zpl_theme','system');
+      } catch {}
+    })();
+  </script>
+
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-    }
-
-    h1 {
-      color: #333;
-    }
-
-    .drop-area {
-      border: 2px dashed #aaa;
-      border-radius: 10px;
-      padding: 30px;
-      text-align: center;
-      color: #888;
-      margin-bottom: 20px;
-    }
-
-    .resumen-etiquetas {
-      margin-top: 20px;
-    }
-
-    .tarjeta-etiqueta {
-      background: #f9f9f9;
-      border: 1px solid #ddd;
-      padding: 15px;
-      border-radius: 6px;
-      margin-bottom: 20px;
-      font-family: Arial, sans-serif;
-    }
-
-    .tarjeta-etiqueta p {
-      margin: 4px 0;
-    }
-
-    .tarjeta-etiqueta hr {
-      margin-top: 10px;
-      border: none;
-      border-top: 1px dashed #aaa;
-    }
-
-    button {
-      padding: 10px 20px;
-      background: #007bff;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      margin-top: 10px;
+    :root{
+      --z-primary: #F59E0B;       /* ámbar suave */
+      --z-primary-dark: #D97706;  /* hover */
+      --z-primary-fg: #111827;    /* texto sobre ámbar */
     }
   </style>
 </head>
-<body>
 
-  <h1>Subir etiquetas PDF</h1>
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+  <div class="max-w-7xl mx-auto p-4 md:p-6">
 
-  <div class="drop-area" id="drop-area">
-    Arrastrá acá el archivo PDF de etiquetas o hacé clic para seleccionar
-    <input type="file" id="fileElem" accept="application/pdf" style="display:none">
+    <!-- TOPBAR (sticky) -->
+    <header class="sticky top-0 z-40 mb-4">
+      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
+        <!-- Logo/Home -->
+        <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+          <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)">
+            <span class="text-white font-black">Z</span>
+          </div>
+          <img src="/assets/logo-zupply.svg" alt="Zupply" class="h-5 hidden sm:block" onerror="this.remove()">
+          <span class="sm:hidden font-semibold tracking-wide text-amber-500">zupply</span>
+        </a>
+
+        <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
+        <span class="text-sm opacity-80">Subir etiquetas PDF</span>
+
+        <!-- Usuario + Tema -->
+        <div class="ml-auto flex items-center gap-2">
+          <div class="relative" id="userMenuWrap">
+            <button id="userBtn"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
+              <span id="username" class="max-w-[160px] truncate">Usuario</span>
+              <span class="opacity-70">▾</span>
+            </button>
+            <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
+              <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
+              <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
+            </div>
+          </div>
+
+          <button id="themeBtn"
+            class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 text-slate-700 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100">
+            Tema: auto
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- CONTENIDO -->
+    <main>
+      <!-- Dropzone -->
+      <section class="rounded-2xl border border-dashed border-slate-300 dark:border-white/15 bg-white dark:bg-white/5 p-6 grid place-items-center text-center">
+        <div id="drop-area" class="w-full max-w-3xl cursor-pointer p-6 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/60 dark:bg-white/0 transition">
+          <div class="text-3xl mb-2">📄</div>
+          <div class="font-medium mb-1">Arrastrá acá el PDF de etiquetas</div>
+          <div class="text-sm opacity-70">o hacé clic para seleccionar un archivo</div>
+          <input id="fileElem" type="file" accept="application/pdf" class="hidden" />
+          <div id="fileInfo" class="mt-3 text-xs text-slate-500 dark:text-slate-300"></div>
+
+          <div class="mt-4 flex items-center justify-center gap-2">
+            <button id="selectBtn"
+              class="px-4 py-2 rounded-xl font-medium shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">
+              Elegir PDF
+            </button>
+            <button id="clearBtn"
+              class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 bg-white hover:bg-slate-50
+                     dark:border-white/10 dark:text-slate-100 dark:bg-white/10 dark:hover:bg-white/15 hidden">
+              Limpiar
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Resumen -->
+      <section class="mt-6">
+        <h2 class="text-lg font-semibold mb-2">Resumen de etiquetas detectadas</h2>
+        <div id="resumen-etiquetas" class="grid gap-3">
+          <!-- cards dinámicas -->
+        </div>
+
+        <!-- Confirmar -->
+        <div class="mt-4">
+          <button id="confirmar-btn"
+            class="px-4 py-2.5 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)] disabled:opacity-50 disabled:cursor-not-allowed hidden">
+            Confirmar subida de envíos
+          </button>
+        </div>
+      </section>
+
+      <!-- Si querés dejar cards “comentadas” para no romper build:
+      <section class="hidden">
+        <div class="rounded-2xl p-4 border bg-white dark:bg-white/5">Card placeholder…</div>
+      </section>
+      -->
+    </main>
+
+    <footer class="py-6 text-center text-xs opacity-60">© <span id="anio"></span> Zupply</footer>
   </div>
 
-  <div id="resumen-etiquetas" class="resumen-etiquetas"></div>
+<script>
+  // ====== Año en footer ======
+  document.getElementById('anio').textContent = new Date().getFullYear();
 
-  <button id="confirmar-btn" style="display:none;">Confirmar subida de envíos</button>
+  // ====== Usuario + rol / logout ======
+  (function userMenu(){
+    const btn  = document.getElementById('userBtn');
+    const menu = document.getElementById('userMenu');
+    const wrap = document.getElementById('userMenuWrap');
+    btn.addEventListener('click', ()=> menu.classList.toggle('hidden'));
+    document.addEventListener('click', (e)=>{ if (!wrap.contains(e.target)) menu.classList.add('hidden'); });
 
-  <script>
-    const dropArea = document.getElementById('drop-area');
-    const fileElem = document.getElementById('fileElem');
-    const resumenContainer = document.getElementById('resumen-etiquetas');
-    const confirmarBtn = document.getElementById('confirmar-btn');
-    let datosEtiquetas = [];
-
-    dropArea.addEventListener('click', () => fileElem.click());
-
-    dropArea.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropArea.classList.add('highlight');
+    document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+      try { await fetch('/auth/logout', { method:'POST' }); } catch {}
+      try { localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username'); } catch {}
+      location.href = '/auth/login';
     });
 
-    dropArea.addEventListener('dragleave', () => {
-      dropArea.classList.remove('highlight');
-    });
+    fetch('/me', { cache:'no-store' })
+      .then(r => { if (!r.ok) throw new Error('unauth'); return r.json(); })
+      .then(me => {
+        const name = me.name || me.username || me.email || 'Usuario';
+        document.getElementById('username').textContent = name;
+        try { localStorage.setItem('zpl_username', name); } catch {}
+      })
+      .catch(()=> location.href='/auth/login');
+  })();
 
-    dropArea.addEventListener('drop', (e) => {
-      e.preventDefault();
-      const file = e.dataTransfer.files[0];
-      procesarArchivo(file);
+  // ====== Tema: cycle light/dark/system (default system) ======
+  (function themeToggle(){
+    const order = ['light','dark','system'];
+    const btn = document.getElementById('themeBtn');
+    const apply = (mode) => {
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const wantDark = mode === 'dark' || (mode === 'system' && prefersDark);
+      document.documentElement.classList.toggle('dark', wantDark);
+      localStorage.setItem('zpl_theme', mode);
+      btn.textContent = 'Tema: ' + (mode === 'system' ? 'auto' : mode);
+    };
+    apply(localStorage.getItem('zpl_theme') || 'system');
+    btn.addEventListener('click', ()=>{
+      const current = localStorage.getItem('zpl_theme') || 'system';
+      const next = order[(order.indexOf(current)+1)%order.length];
+      apply(next);
     });
+  })();
 
-    fileElem.addEventListener('change', () => {
-      if (fileElem.files.length > 0) {
-        procesarArchivo(fileElem.files[0]);
-      }
-    });
+  // ====== Drag & Drop / Upload ======
+  const dropArea   = document.getElementById('drop-area');
+  const fileElem   = document.getElementById('fileElem');
+  const selectBtn  = document.getElementById('selectBtn');
+  const clearBtn   = document.getElementById('clearBtn');
+  const fileInfo   = document.getElementById('fileInfo');
+  const resumenEl  = document.getElementById('resumen-etiquetas');
+  const confirmar  = document.getElementById('confirmar-btn');
 
-    function procesarArchivo(file) {
+  let datosEtiquetas = [];
+  let lastFile = null;
+
+  function setHighlight(on){
+    dropArea.classList.toggle('ring-2', on);
+    dropArea.classList.toggle('ring-amber-500/40', on);
+    dropArea.classList.toggle('bg-amber-500/5', on);
+    dropArea.classList.toggle('border-amber-400/60', on);
+    dropArea.classList.toggle('text-amber-600', on);
+  }
+
+  function fmtSize(bytes){
+    if (!bytes && bytes !== 0) return '';
+    const units = ['B','KB','MB','GB'];
+    let i=0; let n=bytes;
+    while(n>=1024 && i<units.length-1){ n/=1024; i++; }
+    return `${n.toFixed(1)} ${units[i]}`;
+  }
+
+  function showFileInfo(file){
+    if (!file) { fileInfo.textContent=''; return; }
+    fileInfo.textContent = `Archivo: ${file.name} · ${fmtSize(file.size)}`;
+  }
+
+  function limpiarTodo(){
+    datosEtiquetas = [];
+    lastFile = null;
+    fileElem.value = '';
+    showFileInfo(null);
+    resumenEl.innerHTML = '';
+    confirmar.classList.add('hidden');
+    clearBtn.classList.add('hidden');
+  }
+
+  selectBtn.addEventListener('click', ()=> fileElem.click());
+  clearBtn.addEventListener('click', limpiarTodo);
+
+  ['dragenter','dragover'].forEach(ev => {
+    dropArea.addEventListener(ev, (e)=>{ e.preventDefault(); setHighlight(true); });
+  });
+  ;['dragleave','drop'].forEach(ev => {
+    dropArea.addEventListener(ev, (e)=>{ e.preventDefault(); setHighlight(false); });
+  });
+  dropArea.addEventListener('click', ()=> fileElem.click());
+
+  dropArea.addEventListener('drop', (e)=>{
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) procesarArchivo(file);
+  });
+  fileElem.addEventListener('change', ()=>{
+    const file = fileElem.files && fileElem.files[0];
+    if (file) procesarArchivo(file);
+  });
+
+  async function procesarArchivo(file){
+    try {
+      showFileInfo(file);
+      lastFile = file;
       const formData = new FormData();
       formData.append('etiqueta', file);
 
-      fetch('/leer-etiquetas', {
-        method: 'POST',
-        body: formData
-      })
-      .then(res => res.json())
-      .then(data => {
-        datosEtiquetas = data.etiquetas || [];
-        mostrarResumen(datosEtiquetas);
-        confirmarBtn.style.display = 'inline-block';
-      })
-      .catch(err => {
-        console.error('Error al procesar el archivo:', err);
-      });
+      // Podés mostrar un “procesando…” sutil:
+      resumenEl.innerHTML = `<div class="text-sm opacity-70">Procesando ${file.name}…</div>`;
+
+      const res = await fetch('/leer-etiquetas', { method: 'POST', body: formData });
+      const data = await res.json();
+      datosEtiquetas = Array.isArray(data.etiquetas) ? data.etiquetas : [];
+      renderResumen(datosEtiquetas);
+
+      if (datosEtiquetas.length) {
+        confirmar.classList.remove('hidden');
+        clearBtn.classList.remove('hidden');
+      } else {
+        confirmar.classList.add('hidden');
+      }
+    } catch (err) {
+      console.error('Error al procesar el archivo:', err);
+      resumenEl.innerHTML = `<div class="text-sm text-rose-500">No se pudo leer el PDF. Probá de nuevo.</div>`;
+      confirmar.classList.add('hidden');
     }
+  }
 
-    function mostrarResumen(etiquetas) {
-      resumenContainer.innerHTML = '<h2>Resumen de etiquetas detectadas:</h2>';
-
-      etiquetas.forEach(etiqueta => {
-        const tarjeta = document.createElement('div');
-        tarjeta.className = 'tarjeta-etiqueta';
-        tarjeta.innerHTML = `
-          <p><strong>Tracking ID:</strong> ${etiqueta.tracking_id}</p>
-          <p><strong>Sender ID:</strong> ${etiqueta.sender_id}</p>
-          <p><strong>Fecha:</strong> ${etiqueta.fecha}</p>
-          <p><strong>Código Postal:</strong> ${etiqueta.codigo_postal}</p>
-          <p><strong>Partido:</strong> ${etiqueta.partido}</p>
-          <p><strong>Localidad:</strong> ${etiqueta.localidad}</p>
-          <p><strong>Dirección:</strong> ${etiqueta.direccion}</p>
-          <p><strong>Referencia:</strong> ${etiqueta.referencia}</p>
-          <p><strong>Destinatario:</strong> ${etiqueta.destinatario}</p>
-          <hr>
-        `;
-        resumenContainer.appendChild(tarjeta);
-      });
+  function renderResumen(etiquetas){
+    if (!etiquetas.length) {
+      resumenEl.innerHTML = `<div class="text-sm opacity-70">No se detectaron etiquetas.</div>`;
+      return;
     }
+    const cards = etiquetas.map(etiqueta => {
+      const li = document.createElement('div');
+      li.className = "rounded-2xl p-4 border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5";
+      li.innerHTML = `
+        <div class="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+          <p><span class="opacity-60">Tracking:</span> <span class="font-medium">${etiqueta.tracking_id || '-'}</span></p>
+          <p><span class="opacity-60">Sender ID:</span> ${etiqueta.sender_id || '-'}</p>
+          <p><span class="opacity-60">Fecha:</span> ${etiqueta.fecha || '-'}</p>
+          <p><span class="opacity-60">CP:</span> ${etiqueta.codigo_postal || '-'}</p>
+          <p><span class="opacity-60">Partido:</span> ${etiqueta.partido || '-'}</p>
+          <p><span class="opacity-60">Localidad:</span> ${etiqueta.localidad || '-'}</p>
+          <p class="sm:col-span-2"><span class="opacity-60">Dirección:</span> ${etiqueta.direccion || '-'}</p>
+          <p class="sm:col-span-2"><span class="opacity-60">Referencia:</span> ${etiqueta.referencia || '-'}</p>
+          <p class="sm:col-span-2"><span class="opacity-60">Destinatario:</span> ${etiqueta.destinatario || '-'}</p>
+        </div>
+      `;
+      return li;
+    });
+    resumenEl.innerHTML = '';
+    cards.forEach(c => resumenEl.appendChild(c));
+  }
 
-    confirmarBtn.addEventListener('click', () => {
-      fetch('/envios/cargar-masivo', {
+  confirmar.addEventListener('click', async ()=>{
+    try {
+      confirmar.disabled = true;
+      const res = await fetch('/envios/cargar-masivo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ envios: datosEtiquetas })
-      })
-      .then(res => res.json())
-      .then(data => {
-        alert('Envíos cargados correctamente.');
-        resumenContainer.innerHTML = '';
-        confirmarBtn.style.display = 'none';
-      })
-      .catch(err => {
-        console.error('Error al confirmar carga:', err);
-        alert('Ocurrió un error al cargar los envíos.');
       });
-    });
-  </script>
-
+      const data = await res.json();
+      alert('Envíos cargados correctamente.');
+      // Reset UI
+      limpiarTodo();
+    } catch (err) {
+      console.error('Error al confirmar carga:', err);
+      alert('Ocurrió un error al cargar los envíos.');
+    } finally {
+      confirmar.disabled = false;
+    }
+  });
+</script>
 </body>
 </html>
+
