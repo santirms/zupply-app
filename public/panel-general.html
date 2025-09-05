@@ -671,7 +671,7 @@ document.addEventListener('keydown', (e) => {
 // render
 function renderListaNotas(notas = []) {
   const box = document.getElementById('listaNotas');
-  if (!Array.isArray(not as) || !not as.length) {
+  if (!Array.isArray(notas) || !notas.length) {
     box.innerHTML = `<div class="text-sm text-gray-500">Aún no hay notas para este envío.</div>`;
     return;
   }
