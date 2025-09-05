@@ -157,6 +157,38 @@
   </div>
 </div>
 
+<!-- Modal Notas -->
+<div id="modalNotas" class="fixed inset-0 z-50 bg-black/50 hidden items-center justify-center">
+  <div class="bg-white w-11/12 md:w-[640px] rounded-lg shadow-lg p-0">
+    <div class="flex items-center justify-between px-5 py-3 border-b">
+      <h3 class="text-lg font-semibold">Notas del envío</h3>
+      <button class="text-gray-500 hover:text-gray-700" onclick="cerrarModalNotas()">✕</button>
+    </div>
+
+    <div class="p-5 space-y-4">
+      <!-- Lista de notas -->
+      <div id="listaNotas" class="space-y-3 max-h-72 overflow-auto">
+        <div class="text-sm text-gray-500">Cargando notas…</div>
+      </div>
+
+      <!-- Nueva nota -->
+      <div>
+        <label for="notaTexto" class="block text-sm font-medium mb-1">Agregar nota</label>
+        <textarea id="notaTexto" rows="3"
+          class="w-full border rounded p-2 text-sm"
+          placeholder="Describe la incidencia, domicilio incorrecto, reprogramado por cliente, etc."></textarea>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2 px-5 py-3 border-t">
+      <button class="px-4 py-2 rounded border" onclick="cerrarModalNotas()">Cancelar</button>
+      <button id="btnGuardarNota" class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">
+        Guardar nota
+      </button>
+    </div>
+  </div>
+</div>
+  
 <script>
     
   // =================== Estado ===================
@@ -489,6 +521,12 @@ tr.innerHTML = `
   <td class="px-4 py-2">
     <button class="text-red-600 hover:text-red-700" title="Eliminar"
             onclick="abrirModalEliminar('${e._id}')">🗑</button>
+   <td class="px-4 py-2">
+  <button class="text-gray-600 hover:text-gray-800 mr-2" title="Notas"
+          onclick="abrirModalNotas('${e._id}')">📝</button>
+  <button class="text-red-600 hover:text-red-700" title="Eliminar"
+          onclick="abrirModalEliminar('${e._id}')">🗑</button>
+</td>         
   </td>
 `;
     tbody.appendChild(tr);
@@ -602,7 +640,117 @@ tr.innerHTML = `
     }
   });
 
+  // ===== Notas =====
+let envioNotasId = null;
+const IS_ADMIN = (window.USER_ROLE === 'admin');
+
+// abrir/cerrar
+function abrirModalNotas(id) {
+  envioNotasId = id;
+  document.getElementById('modalNotas').classList.remove('hidden');
+  document.getElementById('modalNotas').classList.add('flex');
+  document.body.classList.add('overflow-hidden');
+  document.getElementById('notaTexto').value = '';
+  cargarNotas();
+}
+function cerrarModalNotas() {
+  envioNotasId = null;
+  document.getElementById('modalNotas').classList.add('hidden');
+  document.getElementById('modalNotas').classList.remove('flex');
+  document.body.classList.remove('overflow-hidden');
+}
+
+// click afuera / ESC
+document.getElementById('modalNotas').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) cerrarModalNotas();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') cerrarModalNotas();
+});
+
+// render
+function renderListaNotas(not as = []) {
+  const box = document.getElementById('listaNotas');
+  if (!Array.isArray(not as) || !not as.length) {
+    box.innerHTML = `<div class="text-sm text-gray-500">Aún no hay notas para este envío.</div>`;
+    return;
+  }
+  box.innerHTML = not as.map(n => {
+    const fecha = n.at ? new Date(n.at).toLocaleString() : '';
+    const autor = n.actor_name || '—';
+    const texto = (n.texto || n.note || '').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const delBtn = IS_ADMIN ? `
+      <button class="text-red-600 hover:text-red-700 text-xs"
+              onclick="eliminarNota('${n._id}')">Eliminar</button>` : '';
+    return `
+      <div class="border rounded p-3">
+        <div class="flex justify-between text-xs text-gray-500">
+          <span>${fecha}</span>
+          <span>${autor}</span>
+        </div>
+        <div class="mt-1 text-sm text-gray-800 whitespace-pre-wrap">${texto}</div>
+        <div class="mt-2">${delBtn}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// cargar
+async function cargarNotas() {
+  const box = document.getElementById('listaNotas');
+  try {
+    const r = await fetch(`/api/envios/${envioNotasId}/notas`, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json(); // array de notas
+    renderListaNotas(data);
+  } catch (e) {
+    console.error('Notas GET error', e);
+    box.innerHTML = `<div class="text-sm text-red-600">No se pudieron cargar las notas.</div>`;
+  }
+}
+
+// guardar
+document.getElementById('btnGuardarNota').addEventListener('click', async () => {
+  const texto = document.getElementById('notaTexto').value.trim();
+  if (!texto) return alert('Escribí una nota.');
+  try {
+    const r = await fetch(`/api/envios/${envioNotasId}/notas`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto })
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    document.getElementById('notaTexto').value = '';
+    await cargarNotas();
+
+    // si el modal de detalle está abierto, refrescar historial
+    const abierto = !document.getElementById('modalDetalle').classList.contains('hidden');
+    if (abierto) await mostrarDetalle(envioNotasId);
+  } catch (e) {
+    console.error('Notas POST error', e);
+    alert('No se pudo guardar la nota.');
+  }
+});
+
+// eliminar (solo admin en UI; backend valida igual)
+async function eliminarNota(notaId) {
+  if (!IS_ADMIN) return;
+  if (!confirm('¿Eliminar esta nota?')) return;
+  try {
+    const r = await fetch(`/api/envios/${envioNotasId}/notas/${notaId}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    await cargarNotas();
+    const abierto = !document.getElementById('modalDetalle').classList.contains('hidden');
+    if (abierto) await mostrarDetalle(envioNotasId);
+  } catch (e) {
+    console.error('Notas DELETE error', e);
+    alert('No se pudo eliminar la nota.');
+  }
+}
+
   // Exponer funciones para los onclick del HTML
+  window.abrirModalNotas = abrirModalNotas;
+  window.cerrarModalNotas = cerrarModalNotas;
   window.aplicarFiltro = aplicarFiltro;
   window.limpiarFiltros = limpiarFiltros;
   window.cambiarPagina = cambiarPagina;
