@@ -699,10 +699,10 @@ function renderHistorial(histArray = []) {
 
     // Cerrar modales por click afuera / ESC
     document.getElementById('modalDetalle').addEventListener('click', (e) => {
-      if (e.target.id === 'modalDetalle') cerrarModalDetalle();
+    if (e.target === e.currentTarget) cerrarModalDetalle();
     });
     document.getElementById('modalEliminar').addEventListener('click', (e) => {
-      if (e.target.id === 'modalEliminar') cerrarModalEliminar();
+    if (e.target === e.currentTarget) cerrarModalEliminar();
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { cerrarModalDetalle(); cerrarModalEliminar(); }
