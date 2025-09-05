@@ -12,6 +12,7 @@ const { buildLabelPDF } = require('../utils/labelService');
 
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
 const { getEnvioByTracking, labelByTracking } = require('../controllers/envioController');
+const ctrl   = require('../controllers/envioController');
 
 // ⬇️ NUEVO: middlewares
 const { requireAuth, restrictMethodsForRoles, requireRole } = require('../middlewares/auth');
