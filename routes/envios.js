@@ -278,11 +278,6 @@ router.post('/manual', async (req, res) => {
 router.get('/tracking/:tracking', getEnvioByTracking);
 router.get('/tracking/:tracking/label', labelByTracking);
 
-// ========= NOTAS (PONER ANTES DE '/:id') =========
-router.get('/:id/notas',            /*auth.requireUser,*/  ctrl.listarNotas);
-router.post('/:id/notas',           /*auth.requireUser,*/  ctrl.agregarNota);
-router.delete('/:id/notas/:nid',    /*auth.requireAdmin,*/ ctrl.eliminarNota);
-
 // GET /del-dia
 router.get('/del-dia', async (req, res) => {
   try {
