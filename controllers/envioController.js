@@ -219,3 +219,69 @@ exports.asignados = async (req, res) => {
     res.status(500).json({ error: 'Error al obtener asignados' });
   }
 };
+
+// GET /api/envios/:id/notas
+exports.listarNotas = async (req, res) => {
+  try {
+    const envio = await Envio.findById(req.params.id).select('notas').lean();
+    if (!envio) return res.status(404).json({ error: 'not found' });
+    res.json(envio.notas || []);
+  } catch (e) {
+    res.status(500).json({ error: 'server', detail: e.message });
+  }
+};
+
+// POST /api/envios/:id/notas
+exports.agregarNota = async (req, res) => {
+  try {
+    const { texto } = req.body || {};
+    if (!texto || !texto.trim()) return res.status(400).json({ error: 'texto requerido' });
+
+    const envio = await Envio.findById(req.params.id);
+    if (!envio) return res.status(404).json({ error: 'not found' });
+
+    const actor_name = (req.user?.name || req.user?.email || '—');
+    const actor_role = (req.user?.role || null);
+
+    const nota = { texto: texto.trim(), actor_name, actor_role };
+    if (!Array.isArray(envio.notas)) envio.notas = [];
+    envio.notas.push(nota);
+
+    // también guardamos en historial para que aparezca con fecha/hora
+    if (!Array.isArray(envio.historial)) envio.historial = [];
+    envio.historial.push({
+      at: new Date(),
+      estado: 'nota',
+      actor_name,
+      note: texto.trim(),
+      source: 'panel'
+    });
+
+    await envio.save();
+    const creada = envio.notas[envio.notas.length - 1];
+    res.json(creada);
+  } catch (e) {
+    res.status(500).json({ error: 'server', detail: e.message });
+  }
+};
+
+// DELETE /api/envios/:id/notas/:nid
+exports.eliminarNota = async (req, res) => {
+  try {
+    // Validación de permisos (cuando tengas auth):
+    // if (req.user?.role !== 'admin') return res.status(403).json({ error: 'forbidden' });
+
+    const envio = await Envio.findById(req.params.id);
+    if (!envio) return res.status(404).json({ error: 'not found' });
+
+    const sub = envio.notas?.id(req.params.nid);
+    if (!sub) return res.status(404).json({ error: 'nota not found' });
+
+    sub.deleteOne(); // quita el subdocumento
+    await envio.save();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: 'server', detail: e.message });
+  }
+};
+
