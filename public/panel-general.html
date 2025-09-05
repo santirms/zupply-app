@@ -803,8 +803,17 @@ function renderHistorial(histArray = []) {
              : '-';
 
       // Badge + substatus usando tu UI unificada
-      const { key, label, substatus } = uiStatus({ estado: h.estado, estado_meli: h.estado_meli });
-      const badge = estadoBadge(key, label) + (substatus ? substatusChip(substatus) : '');
+     let badge = '';
+     let detalleNota = '';
+
+     if ((h.estado && h.estado.toLowerCase() === 'nota') || h.note) {
+     badge = `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border bg-gray-100 text-gray-700">Nota</span>`;
+     const safe = (h.note || '').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
+     detalleNota = `<div class="mt-1 text-xs italic text-gray-600 whitespace-pre-wrap">${safe}</div>`;
+     } else {
+     const { key, label, substatus } = uiStatus({ estado: h.estado, estado_meli: h.estado_meli });
+     badge = estadoBadge(key, label) + (substatus ? substatusChip(substatus) : '');
+   }
 
       // actor_name (backend) o usuario (por si lo agregaste así)
       const usuario = h.actor_name || h.usuario || '—';
@@ -814,6 +823,7 @@ function renderHistorial(histArray = []) {
           <td class="px-3 py-2 whitespace-nowrap">${fechaStr}</td>
           <td class="px-3 py-2">${badge}</td>
           <td class="px-3 py-2 whitespace-nowrap text-gray-700">${usuario}</td>
+          <td class="px-3 py-2">${badge}${detalleNota}</td>
         </tr>
       `;
     })
