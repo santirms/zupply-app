@@ -521,13 +521,13 @@ tr.innerHTML = `
   <td class="px-4 py-2">
     <button class="text-red-600 hover:text-red-700" title="Eliminar"
             onclick="abrirModalEliminar('${e._id}')">🗑</button>
-   <td class="px-4 py-2">
+  <td class="px-4 py-2 whitespace-nowrap">
   <button class="text-gray-600 hover:text-gray-800 mr-2" title="Notas"
           onclick="abrirModalNotas('${e._id}')">📝</button>
   <button class="text-red-600 hover:text-red-700" title="Eliminar"
           onclick="abrirModalEliminar('${e._id}')">🗑</button>
-</td>         
-  </td>
+</td>       
+  
 `;
     tbody.appendChild(tr);
   });
@@ -669,13 +669,13 @@ document.addEventListener('keydown', (e) => {
 });
 
 // render
-function renderListaNotas(not as = []) {
+function renderListaNotas(notas = []) {
   const box = document.getElementById('listaNotas');
   if (!Array.isArray(not as) || !not as.length) {
     box.innerHTML = `<div class="text-sm text-gray-500">Aún no hay notas para este envío.</div>`;
     return;
   }
-  box.innerHTML = not as.map(n => {
+  box.innerHTML = notas.map(n => {
     const fecha = n.at ? new Date(n.at).toLocaleString() : '';
     const autor = n.actor_name || '—';
     const texto = (n.texto || n.note || '').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
