@@ -72,12 +72,20 @@ const envioSchema = new Schema({
   historial:  { type: [HistItemSchema], default: [] }  // <<< aquí
   }, { timestamps: false });
 
+const NotaSchema = new Schema({
+  at:         { type: Date, default: Date.now },
+  texto:      { type: String, required: true },
+  actor_name: { type: String, default: null },
+  actor_role: { type: String, default: null },
+}, { _id: true }); // importante: _id para poder borrar
+
 /**
  * Índice de idempotencia:
  * Único sólo cuando meli_id existe y no es vacío.
  */
 envioSchema.add({
-historial: { type: [HistItemSchema], default: [] }
+historial: { type: [HistItemSchema], default: [] },
+  notas: [NotaSchema]
 });
 
 envioSchema.index(
