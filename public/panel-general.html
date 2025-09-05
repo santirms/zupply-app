@@ -818,14 +818,17 @@ function renderHistorial(histArray = []) {
       // actor_name (backend) o usuario (por si lo agregaste así)
       const usuario = h.actor_name || h.usuario || '—';
 
-      return `
-        <tr class="border-b">
-          <td class="px-3 py-2 whitespace-nowrap">${fechaStr}</td>
-          <td class="px-3 py-2">${badge}</td>
-          <td class="px-3 py-2 whitespace-nowrap text-gray-700">${usuario}</td>
-          <td class="px-3 py-2">${badge}${detalleNota}</td>
-        </tr>
-      `;
+    return `
+      <tr class="border-b align-top">
+      <td class="px-3 py-2 whitespace-nowrap">${fechaStr}</td>
+      <td class="px-3 py-2">
+      ${badge}
+      ${detalleNota}
+      </td>
+      <td class="px-3 py-2 whitespace-nowrap text-gray-700">${usuario}</td>
+     </tr>
+    `;
+
     })
     .join('');
 
