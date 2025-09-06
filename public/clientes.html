@@ -1,110 +1,206 @@
+<!-- public/clientes.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Clientes</title>
+  <title>Zupply | Clientes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Tailwind (dark por clase) -->
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: "class" };
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Tema inicial: por defecto “system” -->
+  <script>
+    (function(){
+      try{
+        const saved = localStorage.getItem('zpl_theme'); // 'light'|'dark'|'system'
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark = (saved === 'dark') || (!saved || saved === 'system') && prefersDark;
+        document.documentElement.classList.toggle('dark', wantDark);
+        if(!saved) localStorage.setItem('zpl_theme','system');
+      }catch{}
+    })();
+  </script>
+
+  <style>
+    :root{
+      --z-primary:#F59E0B;      /* ámbar suave */
+      --z-primary-dark:#D97706; /* hover */
+      --z-primary-fg:#111827;   /* texto sobre ámbar */
+    }
+    /* FIX select oscuro reutilizable */
+    .dark .select-dark{ color-scheme: dark; }
+    .dark .select-dark option,
+    .dark .select-dark optgroup{
+      background-color:#0B1020 !important;
+      color:#e5e7eb !important;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 p-6">
-  <div class="max-w-4xl mx-auto">
-    <div class="flex justify-between items-center mb-4">
-      <h1 class="text-2xl font-bold">Clientes</h1>
-      <button id="btnNuevo" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700">
-        + Agregar cliente
-      </button>
+
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+  <div class="max-w-7xl mx-auto p-4 md:p-6">
+
+    <!-- TOPBAR -->
+    <header class="sticky top-0 z-40 mb-4">
+      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
+        <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+          <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)">
+            <span class="text-white font-black">Z</span>
+          </div>
+          <img src="/assets/logo-zupply.svg" class="h-5 hidden sm:block" alt="Zupply" onerror="this.remove()">
+          <span class="sm:hidden font-semibold tracking-wide text-amber-500">zupply</span>
+        </a>
+
+        <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
+        <span class="text-sm opacity-80">Clientes</span>
+
+        <div class="ml-auto flex items-center gap-2">
+          <div class="relative" id="userMenuWrap">
+            <button id="userBtn"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
+              <span id="username" class="max-w-[160px] truncate">Usuario</span>
+              <span class="opacity-70">▾</span>
+            </button>
+            <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
+              <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
+              <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
+            </div>
+          </div>
+
+          <button id="themeBtn"
+            class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 text-slate-700 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100">
+            Tema: auto
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- CONTENIDO -->
+    <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-4 md:p-6 shadow-sm">
+      <div class="flex justify-between items-center mb-4">
+        <h1 class="text-2xl md:text-3xl font-bold">Clientes</h1>
+        <button id="btnNuevo"
+          class="px-4 py-2 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">
+          + Agregar cliente
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-white/10">
+          <thead class="bg-slate-50 dark:bg-white/5">
+            <tr>
+              <th class="px-4 py-2 text-left font-semibold">Código</th>
+              <th class="px-4 py-2 text-left font-semibold">Nombre</th>
+              <th class="px-4 py-2 text-left font-semibold">CUIT</th>
+              <th class="px-4 py-2 text-left font-semibold">Razón Social</th>
+              <th class="px-4 py-2 text-left font-semibold">IVA</th>
+              <th class="px-4 py-2 text-left font-semibold">Corte</th>
+              <th class="px-4 py-2 text-left font-semibold">Lista precios</th>
+              <th class="px-4 py-2 text-left font-semibold">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="clientes-body" class="divide-y divide-slate-200 dark:divide-white/10">
+            <tr><td colspan="8" class="text-center py-4 opacity-70">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
-    <table class="min-w-full bg-white shadow rounded-lg overflow-hidden">
-      <thead class="bg-gray-200">
-        <tr>
-          <th class="px-4 py-2">Código</th>
-          <th class="px-4 py-2">Nombre</th>
-          <th class="px-4 py-2">CUIT</th>
-          <th class="px-4 py-2">Razón Social</th>
-          <th class="px-4 py-2">IVA</th>
-          <th class="px-4 py-2">Corte</th>
-          <th class="px-4 py-2">Lista precios</th>
-          <th class="px-4 py-2">Acciones</th>
-        </tr>
-      </thead>
-      <tbody id="clientes-body" class="text-gray-700">
-        <tr><td colspan="8" class="text-center py-4">Cargando...</td></tr>
-      </tbody>
-    </table>
+
+    <footer class="py-6 text-center text-xs opacity-60">© <span id="anio"></span> Zupply</footer>
   </div>
 
   <!-- Modal -->
-  <div id="modalOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
-      <div class="flex border-b mb-4">
-        <button data-tab="general" class="px-4 py-2 border-b-2 border-blue-600">General</button>
-        <button data-tab="cuentas" class="px-4 py-2 text-gray-600">Cuentas</button>
+  <div id="modalOverlay" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white dark:bg-[#0B1020] rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl w-full max-w-2xl p-6">
+      <!-- Tabs -->
+      <div class="flex gap-2 border-b border-slate-200 dark:border-white/10 mb-4">
+        <button data-tab="general"
+          class="px-4 py-2 rounded-t-xl border-b-2 border-amber-600 text-amber-700 dark:text-amber-300">General</button>
+        <button data-tab="cuentas"
+          class="px-4 py-2 rounded-t-xl text-slate-600 dark:text-slate-300">Cuentas</button>
       </div>
+
       <form id="formCliente" class="space-y-4">
-        <!-- Pestaña General -->
+        <!-- GENERAL -->
         <div id="tab-general">
           <input type="hidden" name="id">
-          <label class="block">
+          <label class="block text-sm">
             Código interno:
-            <input type="text" name="codigo_cliente" readonly class="mt-1 w-full border rounded px-2 py-1 bg-gray-100"/>
+            <input type="text" name="codigo_cliente" readonly
+                   class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-white/5"/>
           </label>
-          <label class="block">
+          <label class="block text-sm">
             Nombre:
-            <input type="text" name="nombre" required class="mt-1 w-full border rounded px-2 py-1"/>
+            <input type="text" name="nombre" required
+                   class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
           </label>
-          <label class="block">
+          <label class="block text-sm">
             CUIT:
-            <input type="text" name="cuit" required class="mt-1 w-full border rounded px-2 py-1"/>
+            <input type="text" name="cuit" required
+                   class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
           </label>
-          <label class="block">
+          <label class="block text-sm">
             Razón Social:
-            <input type="text" name="razon_social" required class="mt-1 w-full border rounded px-2 py-1"/>
+            <input type="text" name="razon_social" required
+                   class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
           </label>
-          <label class="block">
+          <label class="block text-sm">
             Condición IVA:
-            <select name="condicion_iva" required class="mt-1 w-full border rounded px-2 py-1">
+            <select name="condicion_iva" required
+                    class="select-dark mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]">
               <option>Responsable Inscripto</option>
               <option>Monotributo</option>
               <option>Exento</option>
             </select>
           </label>
-          <label class="block">
+          <label class="block text-sm">
             Horario de corte:
-            <input type="time" name="horario_de_corte" required class="mt-1 w-full border rounded px-2 py-1"/>
+            <input type="time" name="horario_de_corte" required
+                   class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
           </label>
-          <label class="block">
-           <select
-           id="selectListasPrecios"
-           name="lista_precios"
-           required
-           class="mt-1 w-full border rounded px-2 py-1"></select>
-              <!-- Se carga dinámicamente -->
-            </select>
+          <label class="block text-sm">
+            Lista de precios:
+            <select id="selectListasPrecios" name="lista_precios" required
+                    class="select-dark mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]"></select>
           </label>
         </div>
 
-        <!-- Pestaña Cuentas -->
+        <!-- CUENTAS -->
         <div id="tab-cuentas" class="hidden">
-          <!-- Controles de auto-ingesta y prueba de token -->
-       <div class="flex items-center justify-between bg-gray-50 p-3 rounded border mb-3">
-       <label for="chkAutoIngesta" class="font-medium">Ingreso Automatico de envíos </label>
-       <input id="chkAutoIngesta" type="checkbox" class="w-5 h-5">
-       </div>
+          <div class="flex items-center justify-between bg-slate-50 dark:bg-white/5 p-3 rounded-xl border border-slate-200 dark:border-white/10 mb-3">
+            <label for="chkAutoIngesta" class="font-medium">Ingreso Automático de envíos</label>
+            <input id="chkAutoIngesta" type="checkbox" class="w-5 h-5 accent-amber-600">
+          </div>
 
-       <div class="flex items-center gap-3 mb-4">
-       <button type="button" id="btnProbarToken" class="bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700">
-       Probar token MeLi
-       </button>
-       <span id="pingStatus" class="text-sm text-gray-600"></span>
-       </div>
+          <div class="flex items-center gap-3 mb-4">
+            <button type="button" id="btnProbarToken"
+              class="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white">
+              Probar token MeLi
+            </button>
+            <span id="pingStatus" class="text-sm opacity-80"></span>
+          </div>
 
           <div id="cuentasContainer" class="space-y-2"></div>
-          <button type="button" id="btnAgregarCuenta"class="mt-2 bg-green-600 text-white px-3 py-1 rounded">Agregar cuenta</button>
+
+          <button type="button" id="btnAgregarCuenta"
+                  class="mt-2 px-3 py-1 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">
+            Agregar cuenta
           </button>
         </div>
 
-        <div class="flex justify-end space-x-2 pt-4 border-t">
-          <button type="button" id="btnCerrar" class="px-4 py-2 rounded border">Cerrar</button>
-          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Guardar</button>
+        <div class="flex justify-end gap-2 pt-4 border-t border-slate-200 dark:border-white/10">
+          <button type="button" id="btnCerrar" class="px-4 py-2 rounded-xl border border-slate-300 dark:border-white/10">Cerrar</button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">
+            Guardar
+          </button>
         </div>
       </form>
     </div>
