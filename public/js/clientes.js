@@ -2,24 +2,17 @@
 const qs  = s => document.querySelector(s);
 const qsa = s => Array.from(document.querySelectorAll(s));
 
-let BASE = ''; // se detecta en init: '' o '/api'
-const CANDIDATES = ['', '/api'];
-
+let BASE = ''; const CANDIDATES = ['', '/api'];
 const apiURL  = p => `${BASE}${p}`;
 const API_CLIENTES = () => apiURL('/clientes');
 const API_LISTAS   = () => apiURL('/listas-de-precios');
 
-// ------------------------ utils ------------------------
+// --------- helpers ---------
 async function detectBase() {
   for (const pre of CANDIDATES) {
-    try {
-      const r = await fetch(`${pre}/clientes`, { method: 'GET' });
-      if (r.ok) { BASE = pre; return; }
-    } catch (_) {}
+    try { const r = await fetch(`${pre}/clientes`, { method:'GET' }); if (r.ok) { BASE = pre; return; } } catch {}
   }
-  // si nada respondió 200, dejamos BASE = '' para no romper
 }
-
 async function fetchJSON(url, opts) {
   const res = await fetch(url, opts);
   if (!res.ok) {
@@ -29,22 +22,59 @@ async function fetchJSON(url, opts) {
   }
   return res.json();
 }
-
 async function copy(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    alert('Enlace copiado al portapapeles ✅');
-  } catch {
-    // fallback
-    prompt('Copiá el enlace:', text);
-  }
+  try { await navigator.clipboard.writeText(text); alert('Enlace copiado ✅'); }
+  catch { prompt('Copiá el enlace:', text); }
 }
 
-// ------------------------ arranque ------------------------
-window.addEventListener('DOMContentLoaded', init);
+// --------- topbar (usuario + tema) ---------
+function initTopbar(){
+  // usuario
+  (function(){
+    const btn=qs('#userBtn'), menu=qs('#userMenu'), wrap=qs('#userMenuWrap');
+    if(btn&&menu&&wrap){
+      btn.addEventListener('click', ()=>menu.classList.toggle('hidden'));
+      document.addEventListener('click', e=>{ if(!wrap.contains(e.target)) menu.classList.add('hidden'); });
+    }
+    qs('#logoutBtn')?.addEventListener('click', async ()=>{
+      try { await fetch('/auth/logout', { method:'POST' }); } catch {}
+      try { localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username'); } catch {}
+      location.href='/auth/login';
+    });
+    fetch('/me',{cache:'no-store'})
+      .then(r=>{ if(!r.ok) throw 0; return r.json(); })
+      .then(me=>{ const n=me.name||me.username||me.email||'Usuario'; const u=qs('#username'); if(u) u.textContent=n; })
+      .catch(()=> location.href='/auth/login');
+  })();
 
+  // tema
+  (function(){
+    const order=['light','dark','system']; const btn=qs('#themeBtn');
+    if(!btn) return;
+    const apply=(mode)=>{
+      const prefersDark=window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const wantDark=(mode==='dark')||(mode==='system'&&prefersDark);
+      document.documentElement.classList.toggle('dark', wantDark);
+      localStorage.setItem('zpl_theme', mode);
+      btn.textContent='Tema: ' + (mode==='system'?'auto':mode);
+    };
+    apply(localStorage.getItem('zpl_theme')||'system');
+    btn.addEventListener('click', ()=>{
+      const cur=localStorage.getItem('zpl_theme')||'system';
+      const next=order[(order.indexOf(cur)+1)%order.length];
+      apply(next);
+    });
+  })();
+
+  // footer año
+  const y=qs('#anio'); if(y) y.textContent = new Date().getFullYear();
+}
+
+// --------- init ---------
+window.addEventListener('DOMContentLoaded', init);
 async function init() {
   try {
+    initTopbar();
     await detectBase();
     await cargarListasPrecios();
     await cargarClientes();
@@ -54,7 +84,7 @@ async function init() {
   }
 }
 
-// ------------------------ data ------------------------
+// --------- data ---------
 async function cargarListasPrecios() {
   try {
     const listas = await fetchJSON(API_LISTAS());
@@ -72,26 +102,25 @@ async function cargarListasPrecios() {
 async function cargarClientes() {
   try {
     const clientes = await fetchJSON(API_CLIENTES());
-    const tbody = qs('#clientes-body');
-    if (!tbody) return;
+    const tbody = qs('#clientes-body'); if (!tbody) return;
 
     if (!clientes.length) {
-      tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4">No hay clientes</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 opacity-70">No hay clientes</td></tr>`;
       return;
     }
 
     tbody.innerHTML = clientes.map(c => `
-      <tr>
-        <td class="border px-4 py-2">${c.codigo_cliente||''}</td>
-        <td class="border px-4 py-2">${c.nombre||''}</td>
-        <td class="border px-4 py-2">${c.cuit||''}</td>
-        <td class="border px-4 py-2">${c.razon_social||''}</td>
-        <td class="border px-4 py-2">${c.condicion_iva||''}</td>
-        <td class="border px-4 py-2">${c.horario_de_corte||''}</td>
-        <td class="border px-4 py-2">${c.lista_precios?.nombre||''}</td>
-        <td class="border px-4 py-2 space-x-2">
-          <button onclick="abrirModal('${c._id}')" class="text-blue-600">✏️</button>
-          <button onclick="borrarCliente('${c._id}')" class="text-red-600">🗑️</button>
+      <tr class="hover:bg-slate-50 dark:hover:bg-white/10">
+        <td class="px-4 py-2">${c.codigo_cliente||''}</td>
+        <td class="px-4 py-2">${c.nombre||''}</td>
+        <td class="px-4 py-2">${c.cuit||''}</td>
+        <td class="px-4 py-2">${c.razon_social||''}</td>
+        <td class="px-4 py-2">${c.condicion_iva||''}</td>
+        <td class="px-4 py-2">${c.horario_de_corte||''}</td>
+        <td class="px-4 py-2">${c.lista_precios?.nombre||''}</td>
+        <td class="px-4 py-2 space-x-2">
+          <button onclick="abrirModal('${c._id}')" class="px-2 py-1 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">✏️</button>
+          <button onclick="borrarCliente('${c._id}')" class="px-2 py-1 rounded-lg border border-rose-400/30 text-rose-600 dark:text-rose-300 hover:bg-rose-400/10">🗑️</button>
         </td>
       </tr>
     `).join('');
@@ -100,30 +129,34 @@ async function cargarClientes() {
   }
 }
 
-// ------------------------ modal ------------------------
+// --------- modal ---------
 function configurarModal() {
-  // pestañas
   const tabBtns = qsa('[data-tab]');
   const panes = { general: qs('#tab-general'), cuentas: qs('#tab-cuentas') };
+
+  const activate = (btn) => {
+    tabBtns.forEach(b => {
+      b.classList.remove('border-b-2','border-amber-600','text-amber-700','dark:text-amber-300');
+      b.classList.add('text-slate-600','dark:text-slate-300');
+    });
+    btn.classList.remove('text-slate-600','dark:text-slate-300');
+    btn.classList.add('border-b-2','border-amber-600','text-amber-700','dark:text-amber-300');
+  };
 
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const sel = btn.dataset.tab;
       Object.entries(panes).forEach(([k, el]) => el?.classList.toggle('hidden', k !== sel));
-      tabBtns.forEach(b => b.classList.remove('border-b-2','border-blue-600'));
-      btn.classList.add('border-b-2','border-blue-600');
+      activate(btn);
     });
   });
 
-  // botones modal
   qs('#btnNuevo')?.addEventListener('click', () => abrirModal());
   qs('#btnCerrar')?.addEventListener('click', cerrarModal);
   qs('#btnAgregarCuenta')?.addEventListener('click', () => agregarSenderInput());
 
-  // submit
   qs('#formCliente')?.addEventListener('submit', guardarCliente);
 
-  // toggle auto-ingesta (si existe en el HTML)
   const chkAI = qs('#chkAutoIngesta');
   if (chkAI) {
     chkAI.addEventListener('change', async () => {
@@ -143,46 +176,33 @@ function configurarModal() {
   }
 }
 
-function cerrarModal() {
-  qs('#modalOverlay')?.classList.add('hidden');
-}
+function cerrarModal() { qs('#modalOverlay')?.classList.add('hidden'); }
 
-function agregarSenderInput(value = '') {
-  const cont = qs('#cuentasContainer');
-  if (!cont) return;
-
+function agregarSenderInput(value='') {
+  const cont = qs('#cuentasContainer'); if (!cont) return;
   const div = document.createElement('div');
   div.className = 'sender-group flex items-center gap-2 mb-2';
   div.innerHTML = `
-    <input type="text" name="sender_id" value="${value||''}"
-           placeholder="Sender ID" class="border p-1 flex-1"/>
-    <button type="button" class="btn-vincular px-2 py-1 bg-blue-500 text-white rounded">
-      Vincular
-    </button>
-    <button type="button" class="btn-ping px-2 py-1 bg-indigo-500 text-white rounded">
-      Probar
-    </button>
-    <button type="button" class="btn-remove px-2 py-1 bg-red-500 text-white rounded">
-      🗑️
-    </button>
+    <input type="text" name="sender_id" value="${value||''}" placeholder="Sender ID"
+           class="border border-slate-300 dark:border-white/10 rounded-xl p-2 flex-1 bg-white dark:bg-transparent"/>
+    <button type="button" class="btn-vincular px-3 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white">Vincular</button>
+    <button type="button" class="btn-ping px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white">Probar</button>
+    <button type="button" class="btn-remove px-3 py-1 rounded-xl border border-rose-400/30 text-rose-600 dark:text-rose-300 hover:bg-rose-400/10">🗑️</button>
   `;
 
-  // Vincular (genera link para copiar)
   div.querySelector('.btn-vincular')?.addEventListener('click', async () => {
     const clientId = qs('input[name="id"]').value;
     const sid      = div.querySelector('input[name="sender_id"]').value.trim();
     if (!clientId || !sid) return;
-
     try {
       const { url } = await fetchJSON(`${API_CLIENTES()}/${clientId}/meli-link?sender_id=${encodeURIComponent(sid)}`);
       await copy(url);
     } catch (err) {
-      console.error('Error al generar link de vinculación:', err);
-      alert('No se pudo generar el enlace de vinculación:\n' + err.message);
+      console.error('Error generando link:', err);
+      alert('No se pudo generar el enlace:\n' + err.message);
     }
   });
 
-  // Probar token (opcional; si no hay user_id aún, devolverá error)
   div.querySelector('.btn-ping')?.addEventListener('click', async () => {
     const clientId = qs('input[name="id"]').value;
     if (!clientId) return;
@@ -194,39 +214,30 @@ function agregarSenderInput(value = '') {
     }
   });
 
-  // Eliminar input sender
   div.querySelector('.btn-remove')?.addEventListener('click', () => div.remove());
-
   cont.appendChild(div);
 }
 
-async function abrirModal(id = null) {
-  const form = qs('#formCliente');
-  if (!form) return;
-
-  form.reset();
-  form.elements['id'].value = id || '';
-
+async function abrirModal(id=null) {
+  const form = qs('#formCliente'); if (!form) return;
+  form.reset(); form.elements['id'].value = id || '';
   await cargarListasPrecios();
 
-  // volver a "General"
+  // volver a GENERAL
   qsa('[data-tab]').forEach(b => {
-    const t = b.dataset.tab;
-    qs(`#tab-${t}`)?.classList.toggle('hidden', t !== 'general');
-    b.classList.toggle('border-b-2', t === 'general');
+    const t=b.dataset.tab;
+    qs(`#tab-${t}`)?.classList.toggle('hidden', t!=='general');
+    b.classList.toggle('border-b-2', t==='general');
+    b.classList.toggle('border-amber-600', t==='general');
   });
 
   qs('#cuentasContainer').innerHTML = '';
   qs('#modalOverlay')?.classList.remove('hidden');
 
-  if (!id) {
-    agregarSenderInput();
-    return;
-  }
+  if (!id) { agregarSenderInput(); return; }
 
   try {
     const data = await fetchJSON(`${API_CLIENTES()}/${id}`);
-
     form.elements['codigo_cliente'].value   = data.codigo_cliente || '';
     form.elements['nombre'].value           = data.nombre || '';
     form.elements['cuit'].value             = data.cuit || '';
@@ -234,11 +245,7 @@ async function abrirModal(id = null) {
     form.elements['condicion_iva'].value    = data.condicion_iva || '';
     form.elements['horario_de_corte'].value = data.horario_de_corte || '';
     form.elements['lista_precios'].value    = data.lista_precios?._id || '';
-
-    // auto-ingesta (si hay checkbox)
-    const chkAI = qs('#chkAutoIngesta');
-    if (chkAI) chkAI.checked = !!data.auto_ingesta;
-
+    const chkAI = qs('#chkAutoIngesta'); if (chkAI) chkAI.checked = !!data.auto_ingesta;
     (data.sender_id || []).forEach(sid => agregarSenderInput(sid));
   } catch (e) {
     console.error('Error al obtener cliente:', e);
@@ -256,29 +263,19 @@ async function guardarCliente(ev) {
   const lista_precios    = form.querySelector('select[name="lista_precios"]').value;
 
   if (!nombre || !condicion_iva || !horario_de_corte || !lista_precios) {
-    return alert('Completa Nombre, IVA, Horario de Corte y Lista de Precios.');
+    return alert('Completá Nombre, IVA, Horario de Corte y Lista de Precios.');
   }
 
   const cuit         = form.querySelector('input[name="cuit"]').value.trim();
   const razon_social = form.querySelector('input[name="razon_social"]').value.trim();
-  const sids = qsa('#cuentasContainer input[name="sender_id"]')
-    .map(i => i.value.trim()).filter(Boolean);
+  const sids = qsa('#cuentasContainer input[name="sender_id"]').map(i => i.value.trim()).filter(Boolean);
 
   const body = {
-    nombre,
-    sender_id: sids,
-    lista_precios,
-    cuit:          cuit || undefined,
-    razon_social:  razon_social || undefined,
-    condicion_iva,
-    horario_de_corte
+    nombre, sender_id: sids, lista_precios,
+    cuit: cuit || undefined, razon_social: razon_social || undefined,
+    condicion_iva, horario_de_corte
   };
-
-  // si hay checkbox auto_ingesta, lo enviamos en PUT
-  const chkAI = qs('#chkAutoIngesta');
-  if (chkAI && id) body.auto_ingesta = chkAI.checked;
-
-  // Si edito y hay código, lo envío (server validará)
+  const chkAI = qs('#chkAutoIngesta'); if (chkAI && id) body.auto_ingesta = chkAI.checked;
   if (id) {
     const codigo = form.querySelector('input[name="codigo_cliente"]').value.trim();
     if (codigo) body.codigo_cliente = codigo;
@@ -290,8 +287,7 @@ async function guardarCliente(ev) {
       headers: { 'Content-Type':'application/json' },
       body: JSON.stringify(body)
     });
-    cerrarModal();
-    cargarClientes();
+    cerrarModal(); cargarClientes();
   } catch (e) {
     console.error('Error al guardar cliente:', e);
     alert('Error al guardar cliente: ' + e.message);
@@ -300,12 +296,6 @@ async function guardarCliente(ev) {
 
 async function borrarCliente(id) {
   if (!confirm('¿Eliminar cliente?')) return;
-  try {
-    await fetchJSON(`${API_CLIENTES()}/${id}`, { method: 'DELETE' });
-    cargarClientes();
-  } catch (e) {
-    console.error('Error borrando cliente:', e);
-    alert('No se pudo eliminar el cliente');
-  }
+  try { await fetchJSON(`${API_CLIENTES()}/${id}`, { method:'DELETE' }); cargarClientes(); }
+  catch (e) { console.error('Error borrando cliente:', e); alert('No se pudo eliminar'); }
 }
-
