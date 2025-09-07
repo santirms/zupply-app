@@ -1,9 +1,8 @@
-// public/js/panel-usuarios.js
+// public/js/panel-usuarios.js (actualizado: sin columna ID + ocultar admins)
 const $ = (s) => document.querySelector(s);
 
-// ========== Topbar (usuario + tema) ==========
+// ========== Topbar ==========
 (function initTopbar(){
-  // Usuario
   (function(){
     const btn=$('#userBtn'), menu=$('#userMenu'), wrap=$('#userMenuWrap');
     if(btn&&menu&&wrap){
@@ -15,14 +14,12 @@ const $ = (s) => document.querySelector(s);
       try{ localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username'); }catch{}
       location.href='/auth/login';
     });
-
     fetch('/me',{cache:'no-store'})
       .then(r=>{ if(!r.ok) throw 0; return r.json(); })
       .then(me=>{ const n=me.name||me.username||me.email||'Usuario'; const u=$('#username'); if(u) u.textContent=n; })
       .catch(()=> location.href='/auth/login');
   })();
 
-  // Tema
   (function(){
     const order=['light','dark','system'];
     const btn=$('#themeBtn');
@@ -45,7 +42,7 @@ const $ = (s) => document.querySelector(s);
   const y=document.getElementById('anio'); if(y) y.textContent=new Date().getFullYear();
 })();
 
-// ========== UI lógica del formulario ==========
+// ========== UI del formulario ==========
 const roleSel = document.getElementById('role');
 const adminFields  = document.getElementById('adminFields');
 const coorFields   = document.getElementById('coorFields');
@@ -56,18 +53,23 @@ const showByRole = (role)=>{
   coorFields.classList.toggle('hidden', role!=='coordinador');
   choferFields.classList.toggle('hidden', role!=='chofer');
 };
-
 roleSel.addEventListener('change', ()=> showByRole(roleSel.value));
 showByRole(roleSel.value);
 
-// ========== Carga de usuarios ==========
+// ========== Carga de usuarios (sin admins) ==========
 async function load() {
   const r = await fetch('/users', { cache:'no-store' });
   const { users=[] } = await r.json();
+  const visible = users.filter(u => u.role !== 'admin'); // ocultar admins
   const tb = document.querySelector('#tbl tbody');
-  tb.innerHTML = users.map(u => `
+
+  if (!visible.length) {
+    tb.innerHTML = `<tr><td colspan="4" class="px-3 py-4 text-center opacity-70">No hay usuarios para mostrar</td></tr>`;
+    return;
+  }
+
+  tb.innerHTML = visible.map(u => `
     <tr class="hover:bg-slate-50 dark:hover:bg-white/10">
-      <td class="px-3 py-2">${u._id}</td>
       <td class="px-3 py-2">${u.email || ''}</td>
       <td class="px-3 py-2">${u.username || ''}</td>
       <td class="px-3 py-2">${u.role}</td>
