@@ -1,80 +1,162 @@
+<!-- public/panel-usuarios.html -->
 <!doctype html>
-<meta charset="utf-8">
-<title>Usuarios</title>
-<h1>Usuarios</h1>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Zupply | Usuarios</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<section style="margin:16px 0; padding:12px; border:1px solid #ccc;">
-  <h3>Crear usuario</h3>
-  <label>Rol:
-    <select id="role">
-      <option value="admin">admin</option>
-      <option value="coordinador">coordinador</option>
-      <option value="chofer">chofer</option>
-    </select>
-  </label>
-  <div id="adminFields">
-    <div><label>Email: <input id="email" type="email"></label></div>
-    <div><label>Contraseña: <input id="password" type="password" placeholder="opcional"></label></div>
-  </div>
-  <div id="coorFields" style="display:none">
-    <div><label>Email: <input id="emailC" type="email"></label></div>
-    <div><label>Contraseña: <input id="passwordC" type="password" placeholder="opcional"></label></div>
-  </div>
-  <div id="choferFields" style="display:none">
-    <div><label>Nombre (username): <input id="chofer_nombre" placeholder="Juan Pérez"></label></div>
-    <div><label>Teléfono (será la contraseña inicial): <input id="chofer_telefono"></label></div>
-  </div>
-  <button id="crear">Crear</button>
-  <div id="msg"></div>
-</section>
+  <!-- Tailwind (dark por clase) -->
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: "class" };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
 
-<section>
-  <h3>Listado</h3>
-  <table border="1" cellpadding="6" id="tbl"><thead><tr><th>id</th><th>email</th><th>username</th><th>rol</th><th>activo</th></tr></thead><tbody></tbody></table>
-</section>
+  <!-- Tema inicial: por defecto “system” -->
+  <script>
+    (function(){
+      try{
+        const saved = localStorage.getItem('zpl_theme'); // 'light'|'dark'|'system'
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark = (saved === 'dark') || (!saved || saved === 'system') && prefersDark;
+        document.documentElement.classList.toggle('dark', wantDark);
+        if(!saved) localStorage.setItem('zpl_theme','system');
+      }catch{}
+    })();
+  </script>
 
-<script>
-const roleSel = document.getElementById('role');
-const fields = {
-  admin:  ()=>{ adminFields.style.display='block'; coorFields.style.display='none'; choferFields.style.display='none'; },
-  coordinador: ()=>{ adminFields.style.display='none'; coorFields.style.display='block'; choferFields.style.display='none'; },
-  chofer: ()=>{ adminFields.style.display='none'; coorFields.style.display='none'; choferFields.style.display='block'; }
-};
-roleSel.onchange = ()=> (fields[roleSel.value]||fields.admin)();
-(fields[roleSel.value]||fields.admin)();
-
-async function load() {
-  const r = await fetch('/users'); const {users=[]} = await r.json();
-  const tb = document.querySelector('#tbl tbody'); tb.innerHTML='';
-  for (const u of users) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${u._id}</td><td>${u.email||''}</td><td>${u.username||''}</td><td>${u.role}</td><td>${u.is_active?'✔':'✖'}</td>`;
-    tb.appendChild(tr);
-  }
-}
-load();
-
-document.getElementById('crear').onclick = async () => {
-  try {
-    const role = roleSel.value;
-    let body={ role };
-    if (role==='admin') {
-      body.email = document.getElementById('email').value.trim();
-      body.password = document.getElementById('password').value;
-    } else if (role==='coordinador') {
-      body.email = document.getElementById('emailC').value.trim();
-      body.password = document.getElementById('passwordC').value;
-    } else {
-      body.chofer_nombre   = document.getElementById('chofer_nombre').value.trim();
-      body.chofer_telefono = document.getElementById('chofer_telefono').value.trim();
+  <style>
+    :root{
+      --z-primary:#F59E0B;      /* ámbar suave */
+      --z-primary-dark:#D97706; /* hover */
+      --z-primary-fg:#111827;   /* texto sobre ámbar */
     }
-    const r = await fetch('/users', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'Error al crear');
-    document.getElementById('msg').textContent = role==='chofer'
-      ? `Chofer creado. Usuario: ${data.username || '(ver en listado)'}`
-      : `Usuario creado.`;
-    load();
-  } catch(e) { document.getElementById('msg').textContent = e.message; }
-};
-</script>
+    /* Select oscuro (Chrome) */
+    .select-dark{ appearance:auto; }
+    .dark .select-dark{ color-scheme: dark; }
+    .dark .select-dark option{ background:#0B1020 !important; color:#e5e7eb !important; }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+  <div class="max-w-7xl mx-auto p-4 md:p-6">
+
+    <!-- TOPBAR -->
+    <header class="sticky top-0 z-40 mb-4">
+      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
+        <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+          <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)">
+            <span class="text-white font-black">Z</span>
+          </div>
+          <img src="/assets/logo-zupply.svg" alt="Zupply" class="h-5 hidden sm:block" onerror="this.remove()">
+          <span class="sm:hidden font-semibold tracking-wide text-amber-500">zupply</span>
+        </a>
+
+        <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
+        <span class="text-sm opacity-80">Usuarios</span>
+
+        <div class="ml-auto flex items-center gap-2">
+          <div class="relative" id="userMenuWrap">
+            <button id="userBtn"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
+              <span id="username" class="max-w-[160px] truncate">Usuario</span>
+              <span class="opacity-70">▾</span>
+            </button>
+            <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
+              <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
+              <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
+            </div>
+          </div>
+
+          <button id="themeBtn"
+            class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 text-slate-700 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100">
+            Tema: auto
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- CONTENIDO -->
+    <div class="grid gap-6">
+      <!-- Crear usuario -->
+      <section class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-4 md:p-6 shadow-sm">
+        <h2 class="text-xl md:text-2xl font-bold mb-4">Crear usuario</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+          <label class="text-sm">
+            Rol
+            <select id="role" class="select-dark mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]">
+              <option value="admin">admin</option>
+              <option value="coordinador">coordinador</option>
+              <option value="chofer">chofer</option>
+            </select>
+          </label>
+        </div>
+
+        <!-- Campos admin / coordinador -->
+        <div id="adminFields" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label class="text-sm">Email
+            <input id="email" type="email" class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent">
+          </label>
+          <label class="text-sm">Contraseña (opcional)
+            <input id="password" type="password" class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent" placeholder="opcional">
+          </label>
+        </div>
+
+        <div id="coorFields" class="grid grid-cols-1 md:grid-cols-3 gap-3 hidden">
+          <label class="text-sm">Email
+            <input id="emailC" type="email" class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent">
+          </label>
+          <label class="text-sm">Contraseña (opcional)
+            <input id="passwordC" type="password" class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent" placeholder="opcional">
+          </label>
+        </div>
+
+        <!-- Campos chofer -->
+        <div id="choferFields" class="grid grid-cols-1 md:grid-cols-3 gap-3 hidden">
+          <label class="text-sm">Nombre (username)
+            <input id="chofer_nombre" class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent" placeholder="Juan Pérez">
+          </label>
+          <label class="text-sm">Teléfono (será la contraseña inicial)
+            <input id="chofer_telefono" class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent">
+          </label>
+        </div>
+
+        <div class="mt-4 flex items-center gap-3">
+          <button id="crear"
+                  class="px-4 py-2 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">
+            Crear
+          </button>
+          <span id="msg" class="text-sm opacity-80"></span>
+        </div>
+      </section>
+
+      <!-- Listado -->
+      <section class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-4 md:p-6 shadow-sm">
+        <h2 class="text-xl md:text-2xl font-bold mb-4">Listado</h2>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-sm divide-y divide-slate-200 dark:divide-white/10" id="tbl">
+            <thead class="bg-slate-50 dark:bg-white/5">
+              <tr>
+                <th class="px-3 py-2 text-left font-semibold">ID</th>
+                <th class="px-3 py-2 text-left font-semibold">Email</th>
+                <th class="px-3 py-2 text-left font-semibold">Username</th>
+                <th class="px-3 py-2 text-left font-semibold">Rol</th>
+                <th class="px-3 py-2 text-left font-semibold">Activo</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-white/10"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <footer class="py-6 text-center text-xs opacity-60">© <span id="anio"></span> Zupply</footer>
+  </div>
+
+  <script src="/js/panel-usuarios.js" defer></script>
+</body>
+</html>
