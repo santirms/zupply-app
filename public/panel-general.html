@@ -740,10 +740,17 @@ document.getElementById('btnGuardarNota').addEventListener('click', async () => 
 
 // eliminar (solo admin en UI; backend valida igual)
 async function eliminarNota(notaId) {
-  if (!IS_ADMIN) return;
+  if (!IS_ADMIN) {
+    alert('Solo administradores pueden eliminar notas.');
+    return;
+  }
   if (!confirm('¿Eliminar esta nota?')) return;
   try {
     const r = await fetch(`/api/envios/${envioNotasId}/notas/${notaId}`, { method: 'DELETE' });
+    if (r.status === 403) {
+      alert('No tenés permisos para eliminar notas.');
+      return;
+    }
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     await cargarNotas();
     const abierto = !document.getElementById('modalDetalle').classList.contains('hidden');
@@ -753,6 +760,7 @@ async function eliminarNota(notaId) {
     alert('No se pudo eliminar la nota.');
   }
 }
+
 
   // Exponer funciones para los onclick del HTML
   window.abrirModalNotas = abrirModalNotas;
