@@ -64,6 +64,7 @@ class="absolute z-10 mt-1 bg-white border rounded shadow w-64 p-2 hidden max-h-6
 <option value="pendiente">Pendiente</option>
 <option value="asignado">Asignado</option>
 <option value="en_camino">En camino</option>
+<option value="comprador_ausente">Comprador ausente</option>
 <option value="demorado">Demorado</option>
 <option value="reprogramado">Reprogramado</option>
 <option value="no_entregado">No entregado</option>
@@ -263,6 +264,7 @@ demorado:      'bg-red-100    text-red-700    border-red-200',
 reprogramado:  'bg-blue-100   text-blue-700   border-blue-200',
 no_entregado:  'bg-amber-100  text-amber-700  border-amber-200',
 cancelado:     'bg-slate-200  text-slate-700  border-slate-300',
+comprador_ausente:  'bg-amber-100  text-amber-700  border-amber-200',
 }[key] || 'bg-gray-100 text-gray-700 border-gray-200';
 
 return `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${css}">${label}</span>`;
@@ -288,8 +290,13 @@ cancelled: 'cancelado'
 })[raw] || raw || 'pendiente';
 
 // 👇 si viene substatus, manda:
-if (sub.includes('resched')) norm = 'reprogramado';
-else if (sub.includes('delay')) norm = 'demorado';
+  if (/receiver[_\s-]?absent/.test(subRaw)) {
+    norm = 'comprador_ausente';         // << estado principal
+  } else if (/resched/.test(subRaw)) {
+    norm = 'reprogramado';
+  } else if (/delay/.test(subRaw)) {
+    norm = 'demorado';
+  }
 
 const label = ({
 // Etiquetas en español (una sola lista)
@@ -300,11 +307,13 @@ demorado: 'Demorado',
 reprogramado: 'Reprogramado',
 no_entregado: 'No entregado',
 entregado: 'Entregado',
-cancelado: 'Cancelado'
+cancelado: 'Cancelado',
+comprador_ausente: 'Comprador ausente',
 })[norm] || 'Pendiente';
 
 return { key: norm, label, substatus: sub.replace(/_/g,' ') };
 }  
+       
 // =================== Partidos (checklist + "Todos") ===================
 async function cargarPartidos() {
 try {
