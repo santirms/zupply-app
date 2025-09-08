@@ -497,7 +497,9 @@ const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
 
 // Estado (badge + substatus)
 const { key: eKey, label: eLabel, substatus } = uiStatus(e);
-const estadoHTML = estadoBadge(eKey, eLabel) + substatusChip(substatus);
+const estadoHTML = (eKey === 'comprador_ausente')
+  ? estadoBadge(eKey, eLabel)
+  : estadoBadge(eKey, eLabel) + substatusChip(substatus);
 
 // Partido visible y zona para tooltip (limpia sufijos N/E/… si los hubiera)
 const partidoUI = (e.partido && e.partido.trim()) ? e.partido : '-';
@@ -566,6 +568,7 @@ const partido  = data.partido?.trim?.() || '-';
 const zonaFact = data.zona?.trim?.()    || '-';
 const precioFmt = (typeof data.precio === 'number') ? `$ ${data.precio.toFixed(2)}` : '-';
 
+const s = uiStatus(data);
 
 // Historial (si el backend lo envía en el objeto)
 const hist = data.timeline || data.historial || data.eventos || [];
@@ -581,7 +584,7 @@ cd.innerHTML = `
        <p><strong>Dirección:</strong> ${data.direccion || '-'}</p>
        <p><strong>Tracking (ML):</strong> ${data.meli_id || '-'}</p>
        <p><strong>ID de venta:</strong> ${data.id_venta || '-'}</p>
-       <p><strong>Estado:</strong> ${data.estado || data.status || '-'}</p>
+       <p><strong>Estado:</strong> ${estadoBadge(s.key, s.label)}${s.key==='comprador_ausente' ? '' : ' ' + substatusChip(s.substatus)}</p>
        <p><strong>CP:</strong> ${data.codigo_postal || '-'}</p>
        <p><strong>Partido:</strong> ${partido}</p>
        <!--p><strong>Zona (facturación):</strong> ${zonaFact}</p-->
