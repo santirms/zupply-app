@@ -1,70 +1,141 @@
+<!-- public/ingreso-manual.html (nuevo estilo) -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Ingreso Manual</title>
+  <title>Zupply | Ingreso Manual</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Tailwind (dark por clase) -->
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: "class" };
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Tema inicial: por defecto “system” -->
+  <script>
+    (function(){
+      try{
+        const saved = localStorage.getItem('zpl_theme'); // 'light'|'dark'|'system'
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark = (saved === 'dark') || (!saved || saved === 'system') && prefersDark;
+        document.documentElement.classList.toggle('dark', wantDark);
+        if(!saved) localStorage.setItem('zpl_theme','system');
+      }catch{}
+    })();
+  </script>
+
+  <style>
+    :root{
+      --z-primary:#F59E0B;      /* ámbar suave */
+      --z-primary-dark:#D97706; /* hover */
+      --z-primary-fg:#111827;   /* texto sobre ámbar */
+    }
+    /* Selects legibles en dark (Chrome) */
+    .dark .select-dark{ color-scheme: dark; background-color:#0B1020; color:#e5e7eb; }
+    .dark .select-dark option{ background:#0B1020 !important; color:#e5e7eb !important; }
+  </style>
 </head>
-<body class="bg-gray-50 p-6">
-  <div class="container mx-auto bg-white p-6 rounded-lg shadow-lg max-w-3xl">
-    <h1 class="text-2xl font-bold mb-6">Ingreso Manual de Envíos</h1>
 
-    <!-- Cliente y Código Interno -->
-    <div class="grid grid-cols-2 gap-4 mb-4">
-      <label class="block">
-        Cliente:
-        <select id="cliente" name="cliente_id" required
-          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-        </select>
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+  <div class="max-w-7xl mx-auto p-4 md:p-6">
+
+    <!-- TOPBAR -->
+    <header class="sticky top-0 z-40 mb-4">
+      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
+        <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+          <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)">
+            <span class="text-white font-black">Z</span>
+          </div>
+          <span class="hidden sm:inline font-semibold tracking-wide text-amber-500">zupply</span>
+        </a>
+
+        <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
+        <span class="text-sm opacity-80">Ingreso manual de envíos</span>
+
+        <div class="ml-auto flex items-center gap-2">
+          <div class="relative" id="userMenuWrap">
+            <button id="userBtn"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
+              <span id="username" class="max-w-[160px] truncate">Usuario</span>
+              <span class="opacity-70">▾</span>
+            </button>
+            <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
+              <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
+              <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
+            </div>
+          </div>
+
+          <button id="themeBtn"
+            class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 text-slate-700 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100">
+            Tema: auto
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- CONTENIDO -->
+    <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-4 md:p-6 shadow-sm max-w-4xl mx-auto">
+      <h1 class="text-2xl md:text-3xl font-bold mb-6">Ingreso Manual de Envíos</h1>
+
+      <!-- Cliente y Código Interno -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <label class="block text-sm">
+          Cliente
+          <select id="cliente" name="cliente_id" required
+                  class="select-dark mt-1 block w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]"></select>
+        </label>
+        <label class="block text-sm">
+          Código Interno
+          <input id="codigo_interno" type="text" readonly
+                 class="mt-1 block w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-white/5"/>
+        </label>
+      </div>
+
+      <!-- Referencia -->
+      <label class="block text-sm mb-6">
+        Referencia
+        <input id="referencia" name="referencia" type="text" placeholder="Ej: Entrega urgente" required
+               class="mt-1 block w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
       </label>
-      <label class="block">
-        Código Interno:
-        <input id="codigo_interno" type="text" readonly
-          class="mt-1 block w-full border-gray-300 rounded-md bg-gray-100"/>
-      </label>
-    </div>
 
-    <!-- Referencia general -->
-    <label class="block mb-6">
-      Referencia:
-      <input id="referencia" name="referencia" type="text" placeholder="Ej: Entrega urgente" required
-        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"/>
-    </label>
+      <!-- Paquetes -->
+      <div id="paquetes" class="space-y-4 mb-6"></div>
 
-    <!-- Aquí van los paquetes -->
-    <div id="paquetes" class="space-y-4 mb-6"></div>
-
-    <!-- Botones de acción -->
-    <div class="flex space-x-2">
-      <button type="button" onclick="agregarPaquete()"
-        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-        + Agregar Paquete
-      </button>
-      <button type="button" onclick="guardar()"
-        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-        Guardar Todos
-      </button>
+      <!-- Acciones -->
+      <div class="flex flex-wrap gap-2">
+        <button type="button" onclick="agregarPaquete()"
+                class="px-4 py-2 rounded-2xl font-semibold shadow-sm bg-[var(--z-primary)] text-[var(--z-primary-fg)] hover:bg-[var(--z-primary-dark)]">
+          + Agregar paquete
+        </button>
+        <button type="button" onclick="guardar()"
+                class="px-4 py-2 rounded-2xl font-semibold border border-[var(--z-primary)] text-[var(--z-primary)] hover:bg-[var(--z-primary)]/10">
+          Guardar todos
+        </button>
+      </div>
     </div>
   </div>
 
   <!-- Modal resultados -->
-<div id="modal-resultados" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-  <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl">
-    <div class="flex justify-between items-center mb-4">
-      <h2 class="text-xl font-bold">Envíos creados</h2>
-      <button onclick="closeModalResultados()" class="text-gray-500 hover:text-black">✕</button>
-    </div>
-    <ul id="res-list" class="max-h-[60vh] overflow-auto"></ul>
-    <div class="mt-4 flex justify-end gap-2">
-      <button onclick="closeModalResultados()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-        Listo
-      </button>
+  <div id="modal-resultados" class="hidden fixed inset-0 bg-black/50 items-center justify-center z-50">
+    <div class="bg-white dark:bg-[#0B1020] rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl w-full max-w-2xl p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold">Envíos creados</h2>
+        <button onclick="closeModalResultados()" class="px-2.5 py-1 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">✕</button>
+      </div>
+      <ul id="res-list" class="max-h-[60vh] overflow-auto space-y-3"></ul>
+      <div class="mt-4 flex justify-end gap-2">
+        <button onclick="closeModalResultados()"
+                class="px-4 py-2 rounded-2xl font-semibold bg-[var(--z-primary)] text-[var(--z-primary-fg)] hover:bg-[var(--z-primary-dark)]">
+          Listo
+        </button>
+      </div>
     </div>
   </div>
-</div>
-  
-  <!-- Código JS -->
-  <script src="/js/ingreso-manual.js" defer></script>
 
+  <script src="/js/ingreso-manual.js" defer></script>
 </body>
 </html>
