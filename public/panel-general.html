@@ -740,18 +740,27 @@ alert('No se pudo guardar la nota.');
 
 // eliminar (solo admin en UI; backend valida igual)
 async function eliminarNota(notaId) {
-  if (!IS_ADMIN) return;
   if (!IS_ADMIN) {
     alert('Solo administradores pueden eliminar notas.');
     return;
   }
-if (!confirm('¿Eliminar esta nota?')) return;
-try {
-const r = await fetch(`/api/envios/${envioNotasId}/notas/${notaId}`, { method: 'DELETE' });
+  if (!confirm('¿Eliminar esta nota?')) return;
+  try {
+    const r = await fetch(`/api/envios/${envioNotasId}/notas/${notaId}`, { method: 'DELETE' });
     if (r.status === 403) {
       alert('No tenés permisos para eliminar notas.');
       return;
     }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    await cargarNotas();
+    const abierto = !document.getElementById('modalDetalle').classList.contains('hidden');
+    if (abierto) await mostrarDetalle(envioNotasId);
+  } catch (e) {
+    console.error('Notas DELETE error', e);
+    alert('No se pudo eliminar la nota.');
+  }
+}
+       
 if (!r.ok) throw new Error(`HTTP ${r.status}`);
 await cargarNotas();
 const abierto = !document.getElementById('modalDetalle').classList.contains('hidden');
