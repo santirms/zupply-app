@@ -283,6 +283,89 @@ router.post('/sync-pending', assertCronAuth, async (req, res) => {
   }
 });
 
+ router.post('/hydrate-today', assertCronAuth, async (req, res) => {
+  try {
+    const hours = Number(req.query.hours || 24);
+    const since = new Date();
+    since.setHours(since.getHours() - hours, 0, 0, 0);
+
+    const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
+    const endOfToday   = new Date(); endOfToday.setHours(23,59,59,999);
+
+    const envios = await Envio.find({
+      meli_id: { $ne: null },
+      fecha:   { $gte: since }
+    }).limit(1000);
+
+    for (const e of envios) {
+      try {
+        const cliente = await Cliente.findById(e.cliente_id);
+        if (!cliente?.user_id) continue;
+        const token = await getValidToken(cliente.user_id);
+        await ensureMeliHistory(e, { token, force: true });
+        await new Promise(r => setTimeout(r, 120)); // rate-limit suave
+      } catch (err) {
+        console.warn('hydrate-today item fail:', e._id, err.message);
+      }
+    }
+
+    const refreshed = await Envio.find({ _id: { $in: envios.map(v => v._id) } })
+      .select('_id meli_id estado estado_meli historial fecha')
+      .lean();
+
+    const noActualizadosHoy = [];
+    const resumen = [];
+
+    for (const e of refreshed) {
+      const eventosHoy = (e.historial || []).filter(h =>
+        h.source === 'meli-history' &&
+        h.at >= startOfToday && h.at <= endOfToday
+      );
+
+      const lastMeli = (e.historial || [])
+        .filter(h => h.source === 'meli-history')
+        .sort((a,b) => new Date(b.at) - new Date(a.at))[0];
+
+      if (eventosHoy.length === 0) {
+        noActualizadosHoy.push({
+          _id: e._id,
+          meli_id: e.meli_id,
+          fecha: e.fecha,
+          estado_db: e.estado,
+          estado_meli_db: e.estado_meli?.status || null,
+          last_meli_event: lastMeli ? {
+            at: lastMeli.at,
+            status: lastMeli.estado_meli?.status || lastMeli.estado,
+            substatus: lastMeli.estado_meli?.substatus || null
+          } : null
+        });
+      }
+
+      if (lastMeli) {
+        resumen.push({
+          _id: e._id,
+          meli_id: e.meli_id,
+          last_event_at: lastMeli.at,
+          last_status: lastMeli.estado_meli?.status || lastMeli.estado,
+          last_substatus: lastMeli.estado_meli?.substatus || null
+        });
+      }
+    }
+
+    res.json({
+      ok: true,
+      scanned: envios.length,
+      updated: refreshed.length,
+      noActualizadosHoy_count: noActualizadosHoy.length,
+      noActualizadosHoy,
+      sampleUltimos: resumen.slice(0, 20)
+    });
+  } catch (err) {
+    console.error('hydrate-today error:', err);
+    res.status(500).json({ ok:false, error: err.message });
+  }
+});
+
 /* -------------------------------------------
  * (OPCIONAL) Backfill de id_venta para envíos antiguos
  * POST /api/auth/meli/backfill-order-id
