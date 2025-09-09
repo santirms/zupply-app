@@ -16,6 +16,68 @@ const CLIENT_ID     = process.env.MERCADOLIBRE_CLIENT_ID;
 const CLIENT_SECRET = process.env.MERCADOLIBRE_CLIENT_SECRET;
 const REDIRECT_URI  = process.env.MERCADOLIBRE_REDIRECT_URI;
 
+// --- MeLi History helpers (hora REAL desde /shipments/{id}/history) ---
+const HYDRATE_TTL_MIN = 15;
+
+function shouldHydrate(envio) {
+  if (!envio?.meli_id) return false;
+  const last  = envio.meli_history_last_sync ? +new Date(envio.meli_history_last_sync) : 0;
+  const fresh = Date.now() - last < HYDRATE_TTL_MIN * 60 * 1000;
+  const pobre = !Array.isArray(envio.historial) || envio.historial.length < 2;
+  return !fresh || pobre;
+}
+
+function mapMeliHistory(items = []) {
+  return items.map(e => ({
+    at: new Date(e.date), // ← HORA REAL reportada por MeLi
+    estado: e.status,
+    estado_meli: { status: e.status, substatus: e.substatus || '' },
+    actor_name: 'MeLi',
+    source: 'meli-history',
+  }));
+}
+
+function mergeHistorial(existing = [], incoming = []) {
+  const key = h =>
+    `${+new Date(h.at || h.updatedAt || 0)}|${(h.estado||'').toLowerCase()}|${(h.estado_meli?.substatus||'').toLowerCase()}`;
+  const seen = new Set(existing.map(key));
+  const out = existing.slice();
+  for (const h of incoming) if (!seen.has(key(h))) out.push(h);
+  out.sort((a,b)=> new Date(a.at || a.updatedAt || 0) - new Date(b.at || b.updatedAt || 0));
+  return out;
+}
+
+/**
+ * Hidrata el historial del envío con la hora real de MeLi.
+ * - Usa `token` si se lo pasás; si no, lo resuelve con getValidToken(cliente.user_id).
+ * - `force:true` ignora el TTL y rehidrata siempre.
+ */
+async function ensureMeliHistory(envioDoc, { token, force = false } = {}) {
+  if (!force && !shouldHydrate(envioDoc)) return;
+
+  let accessToken = token;
+  if (!accessToken) {
+    // resolver token por cliente del envío
+    const cliente = await Cliente.findById(envioDoc.cliente_id).lean();
+    if (!cliente?.user_id) return;
+    accessToken = await getValidToken(cliente.user_id);
+  }
+
+  if (!accessToken) return;
+
+  const { data } = await axios.get(
+    `https://api.mercadolibre.com/shipments/${envioDoc.meli_id}/history`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  const items  = Array.isArray(data) ? data : (data.results || []);
+  const mapped = mapMeliHistory(items);
+
+  envioDoc.historial = mergeHistorial(envioDoc.historial || [], mapped);
+  envioDoc.meli_history_last_sync = new Date();
+  await envioDoc.save();
+}
+
 /* -------------------------------------------
  * OAuth callback MeLi
  * ----------------------------------------- */
@@ -167,6 +229,9 @@ router.post('/force-sync/:meli_id', async (req, res) => {
     const updated = await ingestShipment({ shipmentId: meli_id, cliente });
     // Traer historial con hora REAL desde MeLi inmediatamente
     try { await ensureMeliHistory(envio, { force: true }); } 
+    // token por cliente para evitar lookups extra
+    const token = await getValidToken(cliente.user_id);
+    try { await ensureMeliHistory(envio, { token, force: true }); }   
     catch (e) { console.warn('ensureMeliHistory/force-sync:', e.message); }
  
     // (opcional) devolver el doc fresco desde DB
@@ -202,6 +267,8 @@ router.post('/sync-pending', assertCronAuth, async (req, res) => {
         await ingestShipment({ shipmentId: e.meli_id, cliente });
          // Hidratar historial (hora real de MeLi)
         try { await ensureMeliHistory(e, { force: true }); }
+        const token = await getValidToken(cliente.user_id);
+        try { await ensureMeliHistory(e, { token, force: true }); }
         catch (err2) { console.warn('ensureMeliHistory/sync-pending:', e._id, err2.message); }
         
         ok++;
