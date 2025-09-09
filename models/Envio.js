@@ -69,7 +69,7 @@ const envioSchema = new Schema({
 
   label_url:  { type: String }, // /labels/<id_venta>.pdf
   qr_png:     { type: String }, // DataURL para previsualizar QR
-  historial:  { type: [HistItemSchema], default: [] }  // <<< aquí
+  meli_history_last_sync: { type: Date, default: null }     // <<< NUEVO
   }, { timestamps: false });
 
 const NotaSchema = new Schema({
