@@ -23,6 +23,59 @@ router.use(requireAuth);
 // ⬇️ COORDINADOR = SOLO LECTURA EN ESTE PANEL
 router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE']));
 
+// ——— Meli history on-demand con hora real ———
+const HYDRATE_TTL_MIN = 15;  // re-hidratar si pasaron >15'
+
+async function getMeliAccessTokenForEnvio(envio) {
+  // TODO: reemplazar por tu forma real de obtener token por cliente
+  return process.env.MELI_ACCESS_TOKEN; // placeholder para probar
+}
+
+function shouldHydrate(envio) {
+  if (!envio.meli_id) return false;
+  const last = envio.meli_history_last_sync ? +new Date(envio.meli_history_last_sync) : 0;
+  const fresh = Date.now() - last < HYDRATE_TTL_MIN * 60 * 1000;
+  const pobre = !Array.isArray(envio.historial) || envio.historial.length < 2;
+  return !fresh || pobre;
+}
+
+function mapMeliHistory(items = []) {
+  return items.map(e => ({
+    at: new Date(e.date),                                     // ← HORA REAL
+    estado: e.status,
+    estado_meli: { status: e.status, substatus: e.substatus || '' },
+    actor_name: 'MeLi',
+    source: 'meli-history'
+  }));
+}
+
+function mergeHistorial(existing = [], incoming = []) {
+  const key = h =>
+    `${+new Date(h.at || h.updatedAt || 0)}|${(h.estado || '').toLowerCase()}|${(h.estado_meli?.substatus || '').toLowerCase()}`;
+  const seen = new Set(existing.map(key));
+  const out = existing.slice();
+  for (const h of incoming) if (!seen.has(key(h))) out.push(h);
+  out.sort((a,b)=> new Date(a.at || a.updatedAt || 0) - new Date(b.at || b.updatedAt || 0));
+  return out;
+}
+
+async function ensureMeliHistory(envioDoc) {
+  if (!shouldHydrate(envioDoc)) return;
+  const token = await getMeliAccessTokenForEnvio(envioDoc);
+  if (!token) return; // sin token, no hidratamos
+
+  const { data } = await axios.get(
+    `https://api.mercadolibre.com/shipments/${envioDoc.meli_id}/history`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const items  = Array.isArray(data) ? data : (data.results || []);
+  const mapped = mapMeliHistory(items);
+
+  envioDoc.historial = mergeHistorial(envioDoc.historial || [], mapped);
+  envioDoc.meli_history_last_sync = new Date();
+  await envioDoc.save();
+}
+
 // GET /envios
 router.get('/', async (req, res) => {
   try {
@@ -401,20 +454,16 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    const envio = await Envio.findById(id)
-      .populate('cliente_id')
-      .lean();
+    let envio = await Envio.findById(id).populate('cliente_id'); // doc vivo (sin lean)
 
-    if (!envio) {
-      return res.status(404).json({ error: 'Envío no encontrado' });
-    }
 
-    await ensureCoords(envio);   // ⬅️ completa lat/lng si faltan
-    // alias seguro para mostrar chofer
-    envio.chofer_mostrar = envio?.chofer?.nombre || envio.chofer_nombre || '';
-    // timeline unificado para el modal
-    envio.timeline = buildTimeline(envio);
-    res.json(envio);
+    envio = await ensureCoords(envio);   // ⬅️ usá el retorno
+    // ⬇️ hidratar historial desde MeLi con HORA REAL (history.date)
+    try { await ensureMeliHistory(envio); } catch (e) { console.warn('meli-history skip:', e.message); }
+
+    const plain = envio.toObject();         // ahora sí lean
+    plain.timeline = buildTimeline(plain);  // usa historial ya hidratado
+    res.json(plain);
   } catch (err) {
     console.error('Error al obtener envío:', err);
     res.status(500).json({ error: 'Error al obtener envío' });
