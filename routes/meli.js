@@ -11,6 +11,7 @@ const { getValidToken } = require('../utils/meliUtils');     // usado en /ping
 const { ingestShipment } = require('../services/meliIngest'); // ÚNICA fuente de verdad
 const { assertCronAuth } = require('../middlewares/cronAuth');
 const { backfillCliente } = require('../services/meliBackfill');
+const { ensureMeliHistory } = require('../services/meliHistory');
 
 const CLIENT_ID     = process.env.MERCADOLIBRE_CLIENT_ID;
 const CLIENT_SECRET = process.env.MERCADOLIBRE_CLIENT_SECRET;
@@ -269,8 +270,7 @@ router.post('/force-sync/:meli_id', async (req, res) => {
 
     // Única fuente de verdad: esto también persiste id_venta (order_id)
     const updated = await ingestShipment({ shipmentId: meli_id, cliente });
-    // token por cliente para evitar lookups extra
-    const token = await getValidToken(cliente.user_id);
+    // hidratar historial con horas reales
     try { await ensureMeliHistory(envio, { token, force: true }); }   
     catch (e) { console.warn('ensureMeliHistory/force-sync:', e.message); }
  
@@ -306,7 +306,6 @@ router.post('/sync-pending', assertCronAuth, async (req, res) => {
 
         await ingestShipment({ shipmentId: e.meli_id, cliente });
          // Hidratar historial (hora real de MeLi)
-        const token = await getValidToken(cliente.user_id);
         try { await ensureMeliHistory(e, { token, force: true }); }
         catch (err2) { console.warn('ensureMeliHistory/sync-pending:', e._id, err2.message); }
         
