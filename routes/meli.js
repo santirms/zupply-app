@@ -235,7 +235,7 @@ router.post('/force-sync/:meli_id', async (req, res) => {
     // (opcional) devolver el doc fresco desde DB
     const latest = await Envio.findById(envio._id).lean();
     res.json({ ok: true, envio: latest || updated });
- } catch (err) {
+  } catch (err) {
     console.error('force-sync error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Error al sincronizar' });
   }
@@ -264,7 +264,6 @@ router.post('/sync-pending', assertCronAuth, async (req, res) => {
 
         await ingestShipment({ shipmentId: e.meli_id, cliente });
          // Hidratar historial (hora real de MeLi)
-        try { await ensureMeliHistory(e, { force: true }); }
         const token = await getValidToken(cliente.user_id);
         try { await ensureMeliHistory(e, { token, force: true }); }
         catch (err2) { console.warn('ensureMeliHistory/sync-pending:', e._id, err2.message); }
