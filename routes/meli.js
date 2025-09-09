@@ -227,8 +227,6 @@ router.post('/force-sync/:meli_id', async (req, res) => {
 
     // Única fuente de verdad: esto también persiste id_venta (order_id)
     const updated = await ingestShipment({ shipmentId: meli_id, cliente });
-    // Traer historial con hora REAL desde MeLi inmediatamente
-    try { await ensureMeliHistory(envio, { force: true }); } 
     // token por cliente para evitar lookups extra
     const token = await getValidToken(cliente.user_id);
     try { await ensureMeliHistory(envio, { token, force: true }); }   
