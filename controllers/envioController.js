@@ -2,6 +2,62 @@
 const Envio = require('../models/Envio');
 const QRCode = require('qrcode');
 const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
+const axios = require('axios');
+
+// ——— CONFIG ———
+const HYDRATE_TTL_MIN = 15; // re-hidratar si pasaron > 15 min
+
+// ⚠️ Adaptá esto a cómo obtenés el token por cliente/envío
+async function getMeliAccessTokenForEnvio(envio) {
+  // p.ej.: return await tokenService.getAccessToken(envio.cliente_id)
+  return process.env.MELI_ACCESS_TOKEN; // placeholder para probar
+}
+
+function shouldHydrate(envio) {
+  if (!envio.meli_id) return false;
+  const last = envio.meli_history_last_sync ? +new Date(envio.meli_history_last_sync) : 0;
+  const fresh = Date.now() - last < HYDRATE_TTL_MIN * 60 * 1000;
+  const pobre = !Array.isArray(envio.historial) || envio.historial.length < 2;
+  return !fresh || pobre;
+}
+
+// Mapea exactamente con la HORA REAL del evento (e.date)
+function mapMeliHistory(items = []) {
+  return items.map(e => ({
+    at: new Date(e.date), // ← timestamp real reportado por MeLi
+    estado: e.status,
+    estado_meli: { status: e.status, substatus: e.substatus || '' },
+    actor_name: 'MeLi',
+    source: 'meli-history'
+  }));
+}
+
+function mergeHistorial(existing = [], incoming = []) {
+  const key = h =>
+    `${+new Date(h.at || h.updatedAt || 0)}|${(h.estado || '').toLowerCase()}|${(h.estado_meli?.substatus || '').toLowerCase()}`;
+  const seen = new Set(existing.map(key));
+  const out = existing.slice();
+  for (const h of incoming) if (!seen.has(key(h))) out.push(h);
+  out.sort((a, b) => new Date(a.at || a.updatedAt || 0) - new Date(b.at || b.updatedAt || 0));
+  return out;
+}
+
+async function ensureMeliHistory(envio) {
+  if (!shouldHydrate(envio)) return;
+  const token = await getMeliAccessTokenForEnvio(envio);
+  if (!token) return;
+
+  const { data } = await axios.get(
+    `https://api.mercadolibre.com/shipments/${envio.meli_id}/history`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const items = Array.isArray(data) ? data : (data.results || []);
+  const mapped = mapMeliHistory(items);
+
+  envio.historial = mergeHistorial(envio.historial || [], mapped);
+  envio.meli_history_last_sync = new Date();
+  await envio.save();
+}
 
 // Usa tu util real; en tus otros archivos es geocodeDireccion desde ../utils/geocode
 let geocodeDireccion = async () => ({ lat: null, lon: null });
