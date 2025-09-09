@@ -172,7 +172,10 @@ exports.getEnvioByTracking = async (req, res) => {
       $or: [{ id_venta: tracking }, { meli_id: tracking }]
     });
     if (!envio) return res.status(404).json({ msg: 'Envío no encontrado' });
-
+    
+    / 👇 nuevo: traer history de MeLi y guardarlo con la hora real
+    try { await ensureMeliHistory(envio); } catch (e) { console.warn('meli-history skip:', e.message); }
+    
     // 2) si no tiene etiqueta, generarla (si usás eso)
     if (!envio.label_url) {
       const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
