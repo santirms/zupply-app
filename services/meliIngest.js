@@ -1,12 +1,14 @@
 // services/meliIngest.js
-const axios = require('axios');
-const Envio = require('../models/Envio');
-const Zona  = require('../models/Zona');
-const { getValidToken } = require('../utils/meliUtils');
-const { mapMeliToInterno } = require('../utils/meliStatus');
-const detectarZona = require('../utils/detectarZona');
+'use strict';
 
-/** Precio por zona usando la lista de precios del cliente */
+const axios  = require('axios');
+const Envio  = require('../models/Envio');
+const Zona   = require('../models/Zona');
+const { getValidToken }   = require('../utils/meliUtils');
+const { mapMeliToInterno }= require('../utils/meliStatus');
+const detectarZona        = require('../utils/detectarZona');
+
+// ---------- precio por zona ----------
 async function precioPorZona(cliente, zonaNombre) {
   try {
     if (!cliente?.lista_precios || !zonaNombre) return 0;
@@ -15,22 +17,29 @@ async function precioPorZona(cliente, zonaNombre) {
     const zp = (cliente.lista_precios.zonas || [])
       .find(z => String(z.zona) === String(zonaDoc._id));
     return zp?.precio ?? 0;
-  } catch {
-    return 0;
-  }
+  } catch { return 0; }
 }
 
-/** GET /shipments/:id */
+// ---------- fetch ML ----------
 async function fetchShipment(shipmentId, user_id) {
   const access_token = await getValidToken(user_id);
   const { data } = await axios.get(
     `https://api.mercadolibre.com/shipments/${shipmentId}`,
     { headers: { Authorization: `Bearer ${access_token}` } }
   );
-  return data;
+  return data || {};
 }
 
-/** GET /orders/:id -> pack_id (para “id de venta” 2000...) */
+async function fetchShipmentHistory(shipmentId, user_id) {
+  const access_token = await getValidToken(user_id);
+  const { data } = await axios.get(
+    `https://api.mercadolibre.com/shipments/${shipmentId}/history`,
+    { headers: { Authorization: `Bearer ${access_token}` } }
+  );
+  // Puede venir como array o como {results:[...]}
+  return Array.isArray(data) ? data : (data?.results || []);
+}
+
 async function fetchPackIdFromOrder(orderId, user_id) {
   if (!orderId) return null;
   const access_token = await getValidToken(user_id);
@@ -41,36 +50,63 @@ async function fetchPackIdFromOrder(orderId, user_id) {
   return order?.pack_id || null;
 }
 
-/** Determina si el envío es Flex (self_service) */
+// ---------- util ML ----------
 function esFlexDeVerdad(sh) {
   const lt = (sh?.shipping_option?.logistic_type || sh?.logistic_type || '').toLowerCase();
   const tags = [
     ...(Array.isArray(sh?.shipping_option?.tags) ? sh.shipping_option.tags : []),
     ...(Array.isArray(sh?.tags) ? sh.tags : []),
   ].map(t => String(t).toLowerCase());
-
   if (lt === 'self_service') return true;
   if (tags.some(t => /(^|_)self_service(_|$)|flex/.test(t))) return true;
   return false;
 }
 
+function mapHistory(items = []) {
+  // items: [{date, status, substatus, ...}]
+  return items.map(e => {
+    const status = (e.status || '').toLowerCase();
+    const sub    = (e.substatus || '').toLowerCase() || null;
+    return {
+      at: new Date(e.date),                  // <-- HORA REAL de MeLi
+      estado: mapMeliToInterno(status, sub),
+      estado_meli: { status, substatus: sub },
+      source: 'meli-history',
+      actor_name: 'MeLi',
+      note: ''
+    };
+  });
+}
+
+function mergeHistorial(existing = [], incoming = []) {
+  const key = (h) =>
+    `${+new Date(h.at || h.updatedAt || 0)}|${(h.estado_meli?.status||'')}|${(h.estado_meli?.substatus||'')}`;
+  const seen = new Set(existing.map(key));
+  const out  = existing.slice();
+  for (const h of incoming) {
+    const k = key(h);
+    if (!seen.has(k)) { out.push(h); seen.add(k); }
+  }
+  out.sort((a,b)=> new Date(a.at || 0) - new Date(b.at || 0));
+  return out;
+}
+
 /**
  * Ingesta/actualización idempotente de un shipment de MeLi.
- * - Mapea estado ML -> interno
- * - Calcula partido/zona/precio
- * - Setea id_venta (pack_id > order_id)
- * - Escribe historial si cambió el estado
+ * - Trae /shipments y /shipments/history
+ * - Actualiza estado visible con el ULTIMO evento real
+ * - Guarda historial con hora real de ML y mergea sin duplicar
+ * - Completa id_venta (pack_id > order_id) si falta
  */
 async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor_name = null }) {
-  // 1) Traer shipment
+  // 1) MeLi: shipment + history
   const sh = await fetchShipment(shipmentId, cliente.user_id);
+  if (!esFlexDeVerdad(sh)) return { skipped: true, reason: 'non_flex', shipmentId };
 
-  // 2) Filtrar NO-Flex
-  if (!esFlexDeVerdad(sh)) {
-    return { skipped: true, reason: 'non_flex', shipmentId };
-  }
+  const histRaw = await fetchShipmentHistory(sh.id, cliente.user_id);
+  const histMap = mapHistory(histRaw);
 
-  // 3) Dirección
+  // 2) Datos de dirección/cliente
   const cp      = sh?.receiver_address?.zip_code || '';
   const dest    = sh?.receiver_address?.receiver_name || '';
   const street  = sh?.receiver_address?.street_name || '';
@@ -78,45 +114,34 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
   const address = [street, number].filter(Boolean).join(' ').trim();
   const ref     = sh?.receiver_address?.comment || '';
 
-  // 4) Partido / Zona
+  // 3) Partido / Zona / Precio
   const { partido = '', zona: zonaNom = '' } = await detectarZona(cp) || {};
-
-  // 5) Precio por zona/lista
   const precio = await precioPorZona(cliente, zonaNom);
 
-  // 6) Estado ML e interno
-  const estado_meli = {
-    status:    sh.status || null,
-    substatus: sh.substatus || null,
-    updatedAt: new Date()
-  };
-  const estado_interno = mapMeliToInterno(sh.status, sh.substatus);
-
-  // 7) IDs de venta (prioridad pack_id)
-  //    En /shipments/:id a veces viene order_id; si no, intenta en sh.orders[0].id
+  // 4) order/pack para id_venta
   const order_id = sh?.order_id || (Array.isArray(sh?.orders) ? sh.orders[0]?.id : null) || null;
-  let pack_id = null;
-  try {
-    pack_id = await fetchPackIdFromOrder(order_id, cliente.user_id);
-  } catch {
-    // no romper si falla orders
-  }
+  let pack_id = null; try { pack_id = await fetchPackIdFromOrder(order_id, cliente.user_id); } catch {}
   const id_venta = pack_id || order_id || null;
 
-  // 8) Chequear cambios de estado para “historial”
-  const prev = await Envio.findOne(
-    { meli_id: String(sh.id) },
-    { estado: 1, 'estado_meli.status': 1, 'estado_meli.substatus': 1 }
-  ).lean();
+  // 5) Último evento real (o fallback a shipment.last_updated)
+  const last = histMap.slice().sort((a,b)=> new Date(b.at) - new Date(a.at))[0] || {
+    at: new Date(sh.last_updated || sh.date_created || Date.now()),
+    estado: mapMeliToInterno(sh.status, sh.substatus),
+    estado_meli: {
+      status: (sh.status || '').toLowerCase(),
+      substatus: (sh.substatus || '').toLowerCase() || null
+    }
+  };
 
-  const changed =
-    (prev?.estado ?? null) !== estado_interno ||
-    (prev?.estado_meli?.status ?? null) !== estado_meli.status ||
-    (prev?.estado_meli?.substatus ?? null) !== estado_meli.substatus;
+  // 6) Merge de historial
+  const existing = await Envio.findOne({ meli_id: String(sh.id) }).lean();
+  const historialMerged = existing?.historial?.length
+    ? mergeHistorial(existing.historial, histMap)
+    : histMap;
 
-  // 9) Upsert
+  // 7) Upsert con hora real en estado_meli.updatedAt
   const update = {
-    $setOnInsert: { fecha: new Date() },
+    $setOnInsert: { fecha: new Date(sh.date_created || Date.now()) },
     $set: {
       meli_id:       String(sh.id),
       sender_id:     String(cliente.codigo_cliente || cliente.sender_id?.[0] || cliente.user_id),
@@ -128,25 +153,18 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
       direccion:     address,
       referencia:    ref,
       precio,
-      estado_meli,
-      estado:        estado_interno,
       id_venta,
       order_id,
-      pack_id
+      pack_id,
+      estado: last.estado,  // interno (pendiente/en_camino/entregado/…)
+      estado_meli: {
+        status:    last.estado_meli.status,
+        substatus: last.estado_meli.substatus,
+        updatedAt: new Date(last.at)          // <-- HORA REAL
+      },
+      historial: historialMerged             // <-- reemplazo mergeado
     }
   };
-
-  if (changed) {
-    update.$push = {
-      historial: {
-        at: new Date(),
-        estado: estado_interno,
-        estado_meli: { status: estado_meli.status, substatus: estado_meli.substatus },
-        source,
-        actor_name // para ML suele quedar null
-      }
-    };
-  }
 
   const updated = await Envio.findOneAndUpdate(
     { meli_id: String(sh.id) },
