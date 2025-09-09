@@ -78,6 +78,46 @@ async function ensureMeliHistory(envioDoc, { token, force = false } = {}) {
   await envioDoc.save();
 }
 
+// Normaliza status/substatus de MeLi a tu estado interno
+function mapToInterno(status, substatus) {
+  const s = (status || '').toLowerCase();
+  const sub = (substatus || '').toLowerCase();
+
+  if (s === 'delivered')               return 'entregado';
+  if (s === 'cancelled')               return 'cancelado';
+  if (s === 'not_delivered') {
+    if (/receiver[_\s-]?absent/.test(sub)) return 'comprador_ausente';
+    return 'no_entregado';
+  }
+  if (s === 'shipped')                 return 'en_camino';
+  if (s === 'ready_to_ship' || s === 'handling') return 'pendiente';
+
+  // substatus prioritarios
+  if (/resched/.test(sub))            return 'reprogramado';
+  if (/delay/.test(sub))              return 'demorado';
+
+  return 'pendiente';
+}
+
+// Toma el último evento meli-history y lo “promociona” a estado/updatedAt
+async function promoteLastHistoryToEstado(envioDoc) {
+  const events = (envioDoc.historial || []).filter(h => h.source === 'meli-history');
+  if (!events.length) return;
+
+  const last = events.reduce((a,b) => (new Date(a.at) > new Date(b.at) ? a : b));
+  const status    = last?.estado_meli?.status || last?.estado || '';
+  const substatus = last?.estado_meli?.substatus || '';
+  const interno   = mapToInterno(status, substatus);
+
+  envioDoc.estado = interno;
+  envioDoc.estado_meli = {
+    status,
+    substatus,
+    updatedAt: last.at ? new Date(last.at) : new Date(),
+  };
+  await envioDoc.save();
+}
+
 /* -------------------------------------------
  * OAuth callback MeLi
  * ----------------------------------------- */
