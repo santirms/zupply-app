@@ -76,6 +76,8 @@ async function ensureMeliHistory(envioDoc, { token, force = false } = {}) {
   envioDoc.historial = mergeHistorial(envioDoc.historial || [], mapped);
   envioDoc.meli_history_last_sync = new Date();
   await envioDoc.save();
+  // <<< NUEVO: subí el “último evento” a estado/updatedAt
+  await promoteLastHistoryToEstado(envioDoc);
 }
 
 // Normaliza status/substatus de MeLi a tu estado interno
