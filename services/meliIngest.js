@@ -140,31 +140,32 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
     : histMap;
 
   // 7) Upsert con hora real en estado_meli.updatedAt
-  const update = {
-    $setOnInsert: { fecha: new Date(sh.date_created || Date.now()) },
-    $set: {
-      meli_id:       String(sh.id),
-      sender_id:     String(cliente.codigo_cliente || cliente.sender_id?.[0] || cliente.user_id),
-      cliente_id:    cliente._id,
-      codigo_postal: cp,
-      partido,
-      zona:          zonaNom,
-      destinatario:  dest,
-      direccion:     address,
-      referencia:    ref,
-      precio,
-      id_venta,
-      order_id,
-      pack_id,
-      estado: last.estado,  // interno (pendiente/en_camino/entregado/…)
-      estado_meli: {
-        status:    last.estado_meli.status,
-        substatus: last.estado_meli.substatus,
-        updatedAt: new Date(last.at)          // <-- HORA REAL
-      },
-      historial: historialMerged             // <-- reemplazo mergeado
+ const update = {
+  $setOnInsert: { fecha: new Date(sh.date_created || Date.now()) },
+  $set: {
+    meli_id:       String(sh.id),
+    sender_id:     String(cliente.codigo_cliente || cliente.sender_id?.[0] || cliente.user_id),
+    cliente_id:    cliente._id,
+    codigo_postal: cp,
+    partido,
+    zona:          zonaNom,
+    destinatario:  dest,
+    direccion:     address,
+    referencia:    ref,
+    precio,
+    id_venta,
+    order_id,
+    pack_id,
+    // Estado "actual" (lo afinamos luego con ensureMeliHistory)
+    estado: mapMeliToInterno(sh.status, sh.substatus),
+    estado_meli: {
+      status:    sh.status || null,
+      substatus: sh.substatus || null,
+      updatedAt: new Date()   // luego se corrige con la hora real de MeLi
     }
-  };
+  }
+};
+
 
   const updated = await Envio.findOneAndUpdate(
     { meli_id: String(sh.id) },
