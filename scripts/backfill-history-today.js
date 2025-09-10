@@ -6,8 +6,8 @@ const Cliente = require('../models/Cliente');
 const { ingestShipment } = require('../services/meliIngest');
 
 async function run() {
-  const uri = process.env.MONGODB_URI || process.env.MONGO_URL;
-  if (!uri) throw new Error('Falta MONGODB_URI');
+  const uri = process.env.MONGO_URI || process.env.MONGO_URL;
+  if (!uri) throw new Error('Falta MONGO_URI');
 
   await mongoose.connect(uri);
   const hoy = new Date();
