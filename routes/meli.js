@@ -167,12 +167,12 @@ router.post('/force-sync/:meli_id', async (req, res) => {
 
     // Única fuente de verdad: esto también persiste id_venta (order_id)
     const updated = await ingestShipment({ shipmentId: meli_id, cliente });
-    // hidratar historial con horas reales
-    try { await ensureMeliHistory(envio, { token, force: true }); }   
+    // hidratar historial con horas reales (no hace falta token aquí)
+    try { await ensureMeliHistory(updated._id || envio._id); }
     catch (e) { console.warn('ensureMeliHistory/force-sync:', e.message); }
  
     // (opcional) devolver el doc fresco desde DB
-    const latest = await Envio.findById(envio._id).lean();
+    const latest = await Envio.findById(updated._id || envio._id).lean();
     res.json({ ok: true, envio: latest || updated });
   } catch (err) {
     console.error('force-sync error:', err.response?.data || err.message);
@@ -201,10 +201,9 @@ router.post('/sync-pending', assertCronAuth, async (req, res) => {
         const cliente = await Cliente.findById(e.cliente_id).populate('lista_precios');
         if (!cliente?.user_id) { fail++; continue; }
 
-        await ingestShipment({ shipmentId: e.meli_id, cliente });
-         // Hidratar historial (hora real de MeLi)
-        try { await ensureMeliHistory(e, { token, force: true }); }
-        catch (err2) { console.warn('ensureMeliHistory/sync-pending:', e._id, err2.message); }
+       await ingestShipment({ shipmentId: e.meli_id, cliente });
+       try { await ensureMeliHistory(e._id); }
+       catch (err2) { console.warn('ensureMeliHistory/sync-pending:', e._id, err2.message); }
         
         ok++;
       } catch (err) {
@@ -239,8 +238,7 @@ router.post('/sync-pending', assertCronAuth, async (req, res) => {
       try {
         const cliente = await Cliente.findById(e.cliente_id);
         if (!cliente?.user_id) continue;
-        const token = await getValidToken(cliente.user_id);
-        await ensureMeliHistory(e, { token, force: true });
+        await ensureMeliHistory(e._id);
         await new Promise(r => setTimeout(r, 120)); // rate-limit suave
       } catch (err) {
         console.warn('hydrate-today item fail:', e._id, err.message);
