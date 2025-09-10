@@ -1,79 +1,89 @@
 // services/meliHistory.js
-const axios  = require('axios');
-const Envio  = require('../models/Envio');
+const axios = require('axios');
+const Envio = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const { getValidToken } = require('../utils/meliUtils');
-const { mapMeliToInterno } = require('../utils/meliStatus');
 
-async function fetchShipmentHistory(meli_id, user_id) {
-  const access_token = await getValidToken(user_id);
+const HYDRATE_TTL_MIN = 15;
+
+function keyOf(h) {
+  const ts = +new Date(h.at || h.updatedAt || 0);
+  const st = (h.estado || '').toLowerCase();
+  const sub = (h.estado_meli?.substatus || '').toLowerCase();
+  return `${ts}|${st}|${sub}`;
+}
+
+function mapHistory(items = []) {
+  return items.map(e => ({
+    at: new Date(e.date),
+    estado: e.status,
+    estado_meli: { status: e.status, substatus: e.substatus || '' },
+    actor_name: 'MeLi',
+    source: 'meli-history',
+  }));
+}
+
+function mapToInterno(status, substatus) {
+  const s = (status || '').toLowerCase();
+  const sub = (substatus || '').toLowerCase();
+  if (s === 'delivered') return 'entregado';
+  if (s === 'cancelled') return 'cancelado';
+  if (s === 'not_delivered') return /receiver[_\s-]?absent/.test(sub) ? 'comprador_ausente' : 'no_entregado';
+  if (s === 'shipped') return 'en_camino';
+  if (s === 'ready_to_ship' || s === 'handling') return 'pendiente';
+  if (/resched/.test(sub)) return 'reprogramado';
+  if (/delay/.test(sub))   return 'demorado';
+  return 'pendiente';
+}
+
+async function ensureMeliHistory(envioOrId, { token, force = false } = {}) {
+  const envio = typeof envioOrId === 'string'
+    ? await Envio.findById(envioOrId).lean()
+    : (envioOrId.toObject ? envioOrId.toObject() : envioOrId);
+
+  if (!envio?.meli_id) return;
+
+  const last = envio.meli_history_last_sync ? +new Date(envio.meli_history_last_sync) : 0;
+  const fresh = Date.now() - last < HYDRATE_TTL_MIN * 60 * 1000;
+  const pobre = !Array.isArray(envio.historial) || envio.historial.length < 2;
+  if (!force && fresh && !pobre) return;
+
+  // token
+  let access = token;
+  if (!access) {
+    const cliente = await Cliente.findById(envio.cliente_id).lean();
+    if (!cliente?.user_id) return;
+    access = await getValidToken(cliente.user_id);
+  }
+
+  // history
   const { data } = await axios.get(
-    `https://api.mercadolibre.com/shipments/${meli_id}/history`,
-    { headers: { Authorization: `Bearer ${access_token}` } }
+    `https://api.mercadolibre.com/shipments/${envio.meli_id}/history`,
+    { headers: { Authorization: `Bearer ${access}` } }
   );
-  // ML puede devolver array directo o dentro de results
-  return Array.isArray(data) ? data : (data?.results || []);
-}
+  const raw = Array.isArray(data) ? data : (data.results || []);
+  const mapped = mapHistory(raw);
 
-function normalizeHistoryItem(h) {
-  const status    = String(h.status || h.new || h.state || '').toLowerCase();
-  const substatus = String(h.substatus || h.sub_status || '').toLowerCase();
-  const at        = new Date(h.date || h.created || h.updated || Date.now());
-  return {
-    at,
-    estado: mapMeliToInterno(status, substatus),
-    estado_meli: { status, substatus },
-    source: 'meli:history',
-    actor_name: null
+  // traer historial actual y deduplicar
+  const current = (await Envio.findById(envio._id).select('historial').lean())?.historial || [];
+  const seen = new Set(current.map(keyOf));
+  const toAdd = mapped.filter(h => !seen.has(keyOf(h)));
+  const lastEvt = mapped.sort((a,b) => new Date(b.at) - new Date(a.at))[0];
+
+  const update = {
+    $set: { meli_history_last_sync: new Date() }
   };
-}
+  if (toAdd.length) {
+    update.$push = { historial: { $each: toAdd } };
+  }
+  if (lastEvt) {
+    const st  = lastEvt.estado_meli?.status || lastEvt.estado;
+    const sub = lastEvt.estado_meli?.substatus || '';
+    update.$set.estado = mapToInterno(st, sub);
+    update.$set.estado_meli = { status: st, substatus: sub, updatedAt: lastEvt.at };
+  }
 
-function mergeUnique(existing = [], incoming = []) {
-  const k = x => `${x.estado_meli?.status || ''}|${x.estado_meli?.substatus || ''}|${new Date(x.at).toISOString()}`;
-  const m = new Map();
-  for (const it of existing) m.set(k(it), it);
-  for (const it of incoming) m.set(k(it), it);
-  return [...m.values()].sort((a,b) => new Date(a.at) - new Date(b.at));
-}
-
-async function ensureMeliHistory(envioOrId) {
-  const envio = typeof envioOrId === 'object' && envioOrId._id
-    ? envioOrId
-    : await Envio.findById(envioOrId).lean();
-
-  if (!envio)              throw new Error('envio not found');
-  if (!envio.meli_id)      return { skipped: true, reason: 'no_meli_id' };
-
-  const cliente = await Cliente.findById(envio.cliente_id).select('user_id').lean();
-  if (!cliente?.user_id)   return { skipped: true, reason: 'cliente_not_linked' };
-
-  const raw = await fetchShipmentHistory(envio.meli_id, cliente.user_id);
-  const items = raw.map(normalizeHistoryItem);
-
-  const merged = mergeUnique(envio.historial || [], items);
-  const last   = merged[merged.length - 1];
-
-  // ⚠️ IMPORTANTE: sólo UPDATE, sin upsert y sin crear doc nuevo.
-  await Envio.updateOne(
-    { _id: envio._id },
-    {
-      $set: {
-        historial: merged,
-        ...(last ? {
-          estado: last.estado,
-          estado_meli: {
-            status:    last.estado_meli.status,
-            substatus: last.estado_meli.substatus,
-            updatedAt: last.at
-          }
-        } : {}),
-        meli_history_last_sync: new Date(),
-      }
-    },
-    { runValidators: false } // <- evita que la validación de `required` salte acá
-  );
-
-  return { ok: true, total: merged.length };
+  await Envio.updateOne({ _id: envio._id }, update);
 }
 
 module.exports = { ensureMeliHistory };
