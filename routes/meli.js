@@ -127,29 +127,29 @@ router.get('/ping/:clienteId', async (req, res) => {
  * Webhook (topic: shipments)
  * POST /api/auth/meli/webhook
  * ----------------------------------------- */
+// routes/meli.js  (webhook)
 router.post('/webhook', async (req, res) => {
   try {
     const { user_id, resource, topic } = req.body || {};
-
-    // Responder rápido para evitar reintentos de MeLi
-    res.status(200).json({ ok: true });
+    res.status(200).json({ ok: true });           // respondé rápido
 
     if (topic !== 'shipments' || !resource || !user_id) return;
 
-    // Cliente con lista de precios
     const cliente = await Cliente.findOne({ user_id }).populate('lista_precios');
     if (!cliente || !cliente.auto_ingesta) return;
 
     const shipmentId = String(resource.split('/').pop());
-
-    // Ingesta idempotente (crea/actualiza, mapea estado, precio, id_venta, etc.)
     await ingestShipment({ shipmentId, cliente });
 
+    // ✅ hidratar historial con horas reales de MeLi
+    const token = await getValidToken(cliente.user_id);
+    const envio = await Envio.findOne({ meli_id: shipmentId }).lean();
+    if (envio) await ensureMeliHistory(envio._id, { token, force: true });
   } catch (err) {
     console.error('Webhook ML error:', err?.response?.data || err.message);
-    // ya respondimos 200
   }
 });
+
 
 /* -------------------------------------------
  * Forzar sync de un envío por meli_id
