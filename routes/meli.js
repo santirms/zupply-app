@@ -161,18 +161,15 @@ router.post('/force-sync/:meli_id', async (req, res) => {
     const envio = await Envio.findOne({ meli_id }).populate('cliente_id');
     if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
 
-    // Traer cliente con lista de precios
     const cliente = await Cliente.findById(envio.cliente_id).populate('lista_precios');
     if (!cliente?.user_id) return res.status(400).json({ error: 'Cliente sin user_id MeLi' });
 
-    // Única fuente de verdad: esto también persiste id_venta (order_id)
     const updated = await ingestShipment({ shipmentId: meli_id, cliente });
-    // hidratar historial con horas reales (no hace falta token aquí)
-    try { await ensureMeliHistory(updated._id || envio._id); }
-    catch (e) { console.warn('ensureMeliHistory/force-sync:', e.message); }
- 
-    // (opcional) devolver el doc fresco desde DB
-    const latest = await Envio.findById(updated._id || envio._id).lean();
+
+    const token = await getValidToken(cliente.user_id);     // <<< DEFINIDO
+    await ensureMeliHistory(envio._id, { token, force: true });
+
+    const latest = await Envio.findById(envio._id).lean();
     res.json({ ok: true, envio: latest || updated });
   } catch (err) {
     console.error('force-sync error:', err.response?.data || err.message);
@@ -186,7 +183,6 @@ router.post('/force-sync/:meli_id', async (req, res) => {
  * ----------------------------------------- */
 router.post('/sync-pending', assertCronAuth, async (req, res) => {
   try {
-    // Traer envíos no terminales (internos) o sin estado terminal de MeLi
     const pendientes = await Envio.find({
       meli_id: { $ne: null },
       $or: [
@@ -195,30 +191,31 @@ router.post('/sync-pending', assertCronAuth, async (req, res) => {
       ]
     }).limit(100);
 
-    let ok = 0, fail = 0;
+    let ok = 0, fail = 0, hist = 0;
     for (const e of pendientes) {
       try {
         const cliente = await Cliente.findById(e.cliente_id).populate('lista_precios');
         if (!cliente?.user_id) { fail++; continue; }
 
-       await ingestShipment({ shipmentId: e.meli_id, cliente });
-       try { await ensureMeliHistory(e._id); }
-       catch (err2) { console.warn('ensureMeliHistory/sync-pending:', e._id, err2.message); }
-        
+        await ingestShipment({ shipmentId: e.meli_id, cliente });
+
+        const token = await getValidToken(cliente.user_id);  // <<< DEFINIDO
+        await ensureMeliHistory(e._id, { token, force: true });
+        hist++;
         ok++;
       } catch (err) {
         fail++;
         console.error('sync item error:', e._id, err?.response?.data || err.message);
       }
-      // rate limit suave
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 150)); // rate limit suave
     }
-    res.json({ ok, fail, total: pendientes.length });
+    res.json({ ok, fail, hist, total: pendientes.length });
   } catch (err) {
     console.error('sync-pending error:', err);
     res.status(500).json({ error: 'Error en sync-pending' });
   }
 });
+
 
  router.post('/hydrate-today', assertCronAuth, async (req, res) => {
   try {
@@ -238,7 +235,8 @@ router.post('/sync-pending', assertCronAuth, async (req, res) => {
       try {
         const cliente = await Cliente.findById(e.cliente_id);
         if (!cliente?.user_id) continue;
-        await ensureMeliHistory(e._id);
+        const token = await getValidToken(cliente.user_id);
+        await ensureMeliHistory(e._id, { token, force: true });
         await new Promise(r => setTimeout(r, 120)); // rate-limit suave
       } catch (err) {
         console.warn('hydrate-today item fail:', e._id, err.message);
