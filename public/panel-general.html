@@ -189,7 +189,19 @@ Guardar nota
 </div>
 </div>
 </div>
-
+  
+<!-- Mini-modal QR (oculto por defecto) -->
+<div id="qrViewModal" class="fixed inset-0 hidden bg-black/60 z-50 grid place-items-center p-4">
+  <div class="bg-white p-4 rounded-lg w-full max-w-sm">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="font-semibold">QR de respaldo</h3>
+      <button id="qrViewClose" class="px-2 py-1 border rounded text-sm">Cerrar</button>
+    </div>
+    <img id="qrViewImg" alt="QR" class="w-full h-auto rounded border" />
+    <p id="qrViewHint" class="text-xs text-gray-500 mt-2">Disponible 7 días desde el último escaneo.</p>
+  </div>
+</div>
+  
 <script>
 window.USER_ROLE = window.USER_ROLE || 'admin';
 // =================== Estado ===================
@@ -617,7 +629,36 @@ mapaInstancia.remove();
 mapaInstancia = null;
 }
 }
+  
+function openQrModal(url){
+  const m = document.getElementById('qrViewModal');
+  const img = document.getElementById('qrViewImg');
+  img.src = url;
+  m.classList.remove('hidden');
+}
+function closeQrModal(){
+  const m = document.getElementById('qrViewModal');
+  const img = document.getElementById('qrViewImg');
+  img.src = '';
+  m.classList.add('hidden');
+}
+document.getElementById('qrViewClose')?.addEventListener('click', closeQrModal);
 
+async function cargarQrRespaldo(envioId){
+  try {
+    const r = await fetch(`/api/scan-meli/latest-render/${envioId}`);
+    const j = await r.json();
+    if (!r.ok || !j.ok || !j.url) {
+      (window.uiToast ? uiToast('Sin QR vinculado o vencido') : alert('Sin QR vinculado o vencido'));
+      return;
+    }
+    openQrModal(j.url);
+  } catch (e) {
+    console.error(e);
+    (window.uiToast ? uiToast('No se pudo obtener el QR') : alert('No se pudo obtener el QR'));
+  }
+}
+  
 let envioAEliminar = null;
 function abrirModalEliminar(id) {
 envioAEliminar = id;
