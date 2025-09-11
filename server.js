@@ -1,4 +1,4 @@
-require('dotenv').config();
++require('dotenv').config();
 const path = require('path');
 const fs   = require('fs');
 const express = require('express');
@@ -140,7 +140,6 @@ app.use('/users',                require('./routes/users')); // detrás del guar
 app.use('/api/envios',           require('./routes/envios'));
 
 app.use('/api/scan-meli',        require('./routes/scan-meli'));   // POST /  y  GET /latest-render/:id
-app.use('/api/qr-scans',         require('./routes/qrScans'));   // POST /attach  y  GET /by-envio/:id
 
 // Módulos permitidos a admin + coordinador (crear/ingresar/subir)
 app.use('/api/ingreso',          require('./routes/ingreso'));     // /manual, /guardar-masivo
