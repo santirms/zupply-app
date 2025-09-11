@@ -2,19 +2,38 @@
 const QRCode = require('qrcode');
 const Envio  = require('../models/Envio');
 const QrScan = require('../models/QrScan');
-const { getMeliAccessToken, parseQrPayload, extractKeys, fetchShipmentFromMeli } = require('../utils/meliUtils');
+const {
+  parseQrPayload, extractKeys,
+  getTokenByClienteId, getTokenBySenderId, fetchShipmentFromMeli
+} = require('../utils/meliUtils');
 
 const { ensureObject, presignGet } = require('../utils/s3');
 
 exports.scanAndUpsert = async (req, res) => {
   try {
     const { raw_text, cliente_id } = req.body;
-    if (!raw_text || !cliente_id) return res.status(400).json({ ok:false, error:'raw_text y cliente_id requeridos' });
+    if (!raw_text) return res.status(400).json({ ok:false, error:'raw_text requerido' });
 
     const parsed = parseQrPayload(raw_text);
     const { tracking, id_venta, sender_id } = extractKeys(parsed);
-    const text_hash = QrScan.hashText(raw_text);
-    const now = new Date();
+    if (!tracking && !id_venta)
+      return res.status(400).json({ ok:false, error:'El QR no trae tracking ni id_venta' });
+
+    // 🔑 Obtener contexto de token: por cliente_id o, si no viene, por sender_id del QR
+    let auth = null;
+    try {
+      if (cliente_id) {
+        const t = await getTokenByClienteId(cliente_id);
+        auth = { access_token: t.access_token, user_id: t.user_id, cliente: t.cliente };
+      } else if (sender_id) {
+        const t = await getTokenBySenderId(String(sender_id));
+        auth = { access_token: t.access_token, user_id: t.cliente.user_id, cliente: t.cliente };
+      } else {
+        return res.status(400).json({ ok:false, error:'Falta cliente_id o sender_id en el QR' });
+      }
+    } catch (e) {
+      return res.status(400).json({ ok:false, error:'No hay token MeLi para este cliente/sender' });
+    }
 
     // 1) ¿Ya existe el envío?
     let envio = null;
@@ -55,7 +74,9 @@ exports.scanAndUpsert = async (req, res) => {
     if (!envio) {
       try {
         const { access_token, user_id } = await getTokenByClienteId(cliente_id);
-        const meliShipment = await fetchShipmentFromMeli({ tracking, id_venta, user_id });
+        const meliShipment = await fetchShipmentFromMeli({
+      tracking, id_venta, user_id: auth.user_id
+    });
 
         // Mapeo base (ajustá a tu esquema real)
         const base = {
