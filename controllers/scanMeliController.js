@@ -2,8 +2,10 @@
 const QRCode = require('qrcode');
 const Envio  = require('../models/Envio');
 const QrScan = require('../models/QrScan');
+const { getMeliAccessToken, parseQrPayload, extractKeys, fetchShipmentFromMeli } = require('../utils/meliUtils');
+
 const { ensureObject, presignGet } = require('../utils/s3');
-const { getMeliAccessToken, parseQrPayload, extractKeys, fetchShipmentFromMeli } = require('../utils/meli');
+const QRCode = require('qrcode');
 
 exports.scanAndUpsert = async (req, res) => {
   try {
@@ -53,8 +55,8 @@ exports.scanAndUpsert = async (req, res) => {
     let created = false;
     if (!envio) {
       try {
-        const token = await getMeliAccessToken(cliente_id);
-        const meliData = await fetchShipmentFromMeli({ tracking, id_venta, access_token: token });
+        const { access_token, user_id } = await getTokenByClienteId(cliente_id);
+        const meliShipment = await fetchShipmentFromMeli({ tracking, id_venta, user_id });
 
         // Mapeo base (ajustá a tu esquema real)
         const base = {
