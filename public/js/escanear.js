@@ -109,10 +109,15 @@ function parseQrPayload(text) {
   return { raw, meli_id, sender_id, hash_code, security_digit, destinatario, direccion, codigo_postal };
 }
 
-function renderScanCard(payload) {
+// NUEVA versión
+function renderScanCard(payload, rawStr) {
   const list = qs('#scanList');
   const card = document.createElement('div');
   card.className = 'bg-white p-4 rounded-lg shadow flex flex-col gap-2';
+
+  // guardamos el QR crudo para el POST
+  card.dataset.rawText = rawStr || JSON.stringify(payload.raw);
+
   card.innerHTML = `
     <p><strong>Sender ID:</strong> ${payload.sender_id ?? '(?)'}</p>
     <p><strong>Tracking ID:</strong> ${payload.meli_id ?? '(?)'}</p>
@@ -120,50 +125,50 @@ function renderScanCard(payload) {
     <p class="text-xs text-gray-500 break-all">RAW: ${escapeHtml(JSON.stringify(payload.raw))}</p>
     <div class="mt-2 flex gap-2 items-center">
       <button class="btn-save px-3 py-1 bg-blue-600 text-white rounded">Guardar</button>
+      <button class="btn-view-qr px-3 py-1 border rounded" disabled>Ver QR</button>
       <span class="text-sm text-gray-500 save-status"></span>
     </div>
   `;
   list.prepend(card);
 
   const btnSave = card.querySelector('.btn-save');
+  const btnView = card.querySelector('.btn-view-qr');
   const txt     = card.querySelector('.save-status');
 
   btnSave.addEventListener('click', async () => {
     btnSave.disabled = true;
     txt.textContent  = 'Guardando…';
-    try {
-      const usarMeli = !!payload.meli_id && !!payload.sender_id;
-      const endpoint = usarMeli ? '/escanear/meli' : '/escanear/manual';
-      const body = usarMeli
-        ? { meli_id: payload.meli_id, sender_id: payload.sender_id }
-        : {
-            sender_id:     payload.sender_id,
-            tracking_id:   payload.meli_id,
-            codigo_postal: payload.codigo_postal,
-            destinatario:  payload.destinatario,
-            direccion:     payload.direccion
-          };
 
-      dlog('[guardar] POST', endpoint, body);
-      const res = await fetch(endpoint, {
+    try {
+      // Endpoint unificado: crea/actualiza envío + adjunta PNG del QR (TTL 7d)
+      const res  = await fetch('/api/scan-meli', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify({ raw_text: card.dataset.rawText })
       });
+      const data = await res.json();
 
-      if (!res.ok) {
-        let msg = '';
-        try { msg = (await res.json()).error || ''; } catch {}
-        throw new Error(msg || `HTTP ${res.status}`);
+      if (!res.ok || !data.ok) {
+        const msg = data?.error || `HTTP ${res.status}`;
+        throw new Error(msg);
       }
-      txt.textContent = '✅ Guardado';
+
+      txt.textContent = data.created
+        ? '✅ Envío creado + QR adjuntado'
+        : '✅ QR adjuntado';
+
+      if (data.qr_url) {
+        btnView.disabled = false;
+        btnView.onclick = () => window.open(data.qr_url, '_blank'); // o tu modal propio
+      }
     } catch (err) {
       console.error('Error guardando envío:', err);
-      txt.textContent = '❌ Error';
+      txt.textContent = '❌ Error guardando';
       btnSave.disabled = false;
     }
   });
 }
+
 
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (m) =>
@@ -307,7 +312,7 @@ function onScanSuccess(decodedText, readerEl, statusEl) {
     console.warn('QR no es JSON válido');
     return;
   }
-  renderScanCard(payload);
+  renderScanCard(payload, decodedText);
 }
 
 // Tips rotativos (incluye “pliegues”/arrugas)
