@@ -527,6 +527,9 @@ tr.innerHTML = `
      title="Ver detalle"
    >
      ${e.meli_id || e.id_venta || '(sin id)'}
+     ${ (e.qr_meta?.valid_until && new Date(e.qr_meta.valid_until) > new Date())
+    ? `<span class="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">QR</span>`
+    : '' }
    </button>
    ${e.meli_id ? `
      <button
@@ -603,6 +606,27 @@ cd.innerHTML = `
        <!--p><strong>Precio:</strong> ${precioFmt}</p-->
      `;
 
+  // === Botón "Ver QR de respaldo (7 días)" en el modal de detalle ===
+(() => {
+  const cd = document.getElementById('contenidoDetalle');
+  if (!cd) return;
+
+  // Evita duplicados si abrís varios envíos
+  let btn = document.getElementById('btnVerQrRespaldo');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'btnVerQrRespaldo';
+    btn.type = 'button';
+    btn.className = 'mt-3 px-3 py-2 border rounded text-sm hover:bg-gray-50';
+    btn.textContent = 'Ver QR de respaldo (7 días)';
+    cd.appendChild(btn);
+  }
+
+  // Habilitá el click para el envío actual
+  btn.disabled = false; // si querés, podés deshabilitarlo por qr_meta vencido
+  btn.onclick = () => cargarQrRespaldo(data._id);
+})();
+  
 const modal = document.getElementById('modalDetalle');
 modal.classList.remove('hidden');
 modal.classList.add('flex');
@@ -643,6 +667,9 @@ function closeQrModal(){
   m.classList.add('hidden');
 }
 document.getElementById('qrViewClose')?.addEventListener('click', closeQrModal);
+document.getElementById('qrViewModal')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeQrModal();
+});
 
 async function cargarQrRespaldo(envioId){
   try {
