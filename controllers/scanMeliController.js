@@ -5,7 +5,6 @@ const QrScan = require('../models/QrScan');
 const { getMeliAccessToken, parseQrPayload, extractKeys, fetchShipmentFromMeli } = require('../utils/meliUtils');
 
 const { ensureObject, presignGet } = require('../utils/s3');
-const QRCode = require('qrcode');
 
 exports.scanAndUpsert = async (req, res) => {
   try {
