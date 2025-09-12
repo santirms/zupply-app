@@ -4,18 +4,38 @@ const User = require('../models/User');
 
 (async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGO_URL);
 
-    try { await User.collection.dropIndex('email_1'); } 
-    catch (e) { if (e.codeName !== 'IndexNotFound') console.error(e); }
+    // 1) listar actuales
+    const before = await User.collection.indexes();
+    console.log('Índices ANTES:', before);
 
-    try { await User.collection.dropIndex('username_1'); } 
-    catch (e) { if (e.codeName !== 'IndexNotFound') console.error(e); }
+    // 2) dropear los viejos si existen
+    const dropIf = async (name) => {
+      try { await User.collection.dropIndex(name); console.log('Drop idx', name); }
+      catch (e) { if (e.codeName !== 'IndexNotFound') console.warn('No drop', name, e.codeName||e.message); }
+    };
+    await dropIf('email_1');
+    await dropIf('username_1');
+    await dropIf('driver_id_1');
 
-    // recrea según tu schema (asegurate de tener los índices parciales en el schema)
-    await User.syncIndexes();
+    // 3) crear nuevos compatibles
+    await User.collection.createIndex(
+      { email: 1 },
+      { name: 'email_unique_exists', unique: true, partialFilterExpression: { email: { $exists: true } } }
+    );
+    await User.collection.createIndex(
+      { username: 1 },
+      { name: 'username_unique_exists', unique: true, partialFilterExpression: { username: { $exists: true } } }
+    );
+    await User.collection.createIndex(
+      { driver_id: 1 },
+      { name: 'driver_unique_exists', unique: true, partialFilterExpression: { driver_id: { $exists: true } } }
+    );
 
-    console.log('Índices actuales:', await User.collection.indexes());
+    // 4) mostrar resultado
+    const after = await User.collection.indexes();
+    console.log('Índices DESPUÉS:', after);
     process.exit(0);
   } catch (e) {
     console.error('fix-user-indexes error:', e);
