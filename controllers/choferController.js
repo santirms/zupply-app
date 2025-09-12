@@ -37,16 +37,20 @@ exports.crearChofer = async (req, res) => {
     // 3) Preparar User (rol chofer). Si tu esquema exige email, usamos el provisto;
     //    si no viene, dejamos undefined (ver #2 abajo para esquema).
     const password_hash = await bcrypt.hash(String(telefono), 12);
+
+    const emailNorm = (email && String(email).trim()) ? String(email).toLowerCase() : undefined;
+    const usernameNorm = (username && String(username).trim()) ? String(username).toLowerCase() : undefined;
+    
     const [user] = await User.create([{
-      username,
-      email: email ? String(email).toLowerCase() : undefined,
-      phone: String(telefono),
-      role: 'chofer',
-      driver_id: choferId,
-      password_hash,
-      is_active: true,
-      must_change_password: true
-    }], { session });
+    email: emailNorm,            // undefined si no hay
+    username: usernameNorm,      // undefined si no hay
+    phone: String(telefono),
+    role: 'chofer',
+    driver_id: choferId,
+    password_hash,
+    is_active: true,
+    must_change_password: true
+}], { session });
 
     await session.commitTransaction();
     session.endSession();
