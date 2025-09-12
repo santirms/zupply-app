@@ -108,7 +108,8 @@ exports.asignarViaQR = async (req, res) => {
             estado_meli: null,
             source: 'zupply:qr',
             actor_name: actor
-          }
+          },
+          $currentDate: { updatedAt: true }
         }
       }
     );
@@ -322,7 +323,8 @@ exports.quitarEnvios = async (req, res) => {
 
   // marcar envíos como pendientes
   const ids = removed.map(x => x.envio);
-  await Envio.updateMany({ _id: { $in: ids } }, { $set: { estado: 'pendiente', chofer: null } });
+  await Envio.updateMany({ _id: { $in: ids } }, { $set: { estado: 'pendiente', chofer: null }, $currentDate: { updatedAt: true } });
+
 
   // regenerar PDF
   const chofer = await Chofer.findById(asg.chofer).lean();
@@ -362,7 +364,7 @@ exports.moverEnvios = async (req, res) => {
   });
 
   // actualizar estado de envíos
-  await Envio.updateMany({ _id: { $in: mov.map(x=>x.envio) } }, { $set: { estado: 'asignado', chofer: chofer_destino } });
+  await Envio.updateMany({ _id: { $in: mov.map(x=>x.envio) } }, { $set: { estado: 'asignado', chofer: chofer_destino }, $currentDate: { updatedAt: true } });
 
   // regenerar ambos PDFs
   const { buildRemitoPDF } = require('../utils/remitoService');
@@ -449,7 +451,8 @@ exports.agregarEnvios = async (req, res) => {
       { _id: { $in: subdocs.map(x => x.envio) } },
       { 
         $set: { estado: 'en_ruta', chofer: asignacion.chofer },
-        $push: { eventos: { tipo:'en_ruta', origen:'sistema', detalle:`agregado a ${asignacion._id}` } }
+        $push: { eventos: { tipo:'en_ruta', origen:'sistema', detalle:`agregado a ${asignacion._id}` } },
+        $currentDate: { updatedAt: true }
       }
     );
 
