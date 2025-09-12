@@ -15,9 +15,10 @@ const { getEnvioByTracking, labelByTracking } = require('../controllers/envioCon
 const ctrl   = require('../controllers/envioController');
 
 // ⬇️ NUEVO: middlewares
-const {
-  requireAuth,
+ const {
+   requireAuth,
    requireRole,
+   restrictMethodsForRoles,
    onlyOwnShipments,
    onlyManualOrEtiqueta
  } = require('../middlewares/auth');
