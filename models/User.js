@@ -12,16 +12,27 @@ const UserSchema = new mongoose.Schema({
   last_login: { type: Date }
 }, { timestamps: true });
 
-// índices
+// índices (parciales, sin $nin/$ne)
 UserSchema.index(
   { email: 1 },
-  { unique: true, partialFilterExpression: { email: { $exists: true, $nin: [null, ''] } } }
+  { unique: true, partialFilterExpression: { email: { $exists: true } } }
 );
 UserSchema.index(
   { username: 1 },
-  { unique: true, partialFilterExpression: { username: { $exists: true, $nin: [null, ''] } } }
+  { unique: true, partialFilterExpression: { username: { $exists: true } } }
 );
-UserSchema.index({ driver_id: 1 }, { unique: true, partialFilterExpression: { driver_id: { $exists: true, $ne: null } } });
+// opcional: 1 usuario por chofer
+UserSchema.index(
+  { driver_id: 1 },
+  { unique: true, partialFilterExpression: { driver_id: { $exists: true } } }
+);
+
+UserSchema.pre('validate', function(next) {
+  if (this.email === ''  || this.email == null)   this.email = undefined;
+  if (this.username === '' || this.username == null) this.username = undefined;
+  if (this.driver_id === null) this.driver_id = undefined;
+  next();
+});
 
 module.exports = mongoose.model('User', UserSchema);
 
