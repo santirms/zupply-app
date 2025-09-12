@@ -9,6 +9,6 @@ router.post('/asignar-desde-mapa', requireRole('admin','coordinador'), ctrl.asig
 
 // CRUD choferes
 router.get('/',  ctrl.listarChoferes);
-router.post('/', ctrl.crearChofer);
+router.post('/', requireRole('admin','coordinador'), ctrl.crearChofer);
 
 module.exports = router;
