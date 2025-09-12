@@ -552,29 +552,38 @@ router.patch('/:id/asignar', async (req, res) => {
 });
 
 //front que ven los choferes
-router.get('/mis',
-  requireAuth,
-  requireRole('chofer'),
-  async (req, res, next) => {
-    try {
-      const u = req.session?.user;
-      const choferId = u?.driver_id;
-      if (!choferId) return res.status(403).json({ error:'Perfil chofer no vinculado' });
+router.get('/mis', requireAuth, requireRole('chofer'), async (req, res, next) => {
+  try {
+    const u = req.session?.user;
+    const choferId = u?.driver_id;
+    if (!choferId || !mongoose.isValidObjectId(choferId)) {
+      return res.status(403).json({ error: 'Perfil chofer no vinculado' });
+    }
 
-      const { desde, hasta } = req.query;
-      const q = { chofer_id: choferId };          // usa el campo que realmente guardás
-      if (desde || hasta) {
-        q.fecha = {};                              // o fecha_asignacion / updatedAt según tu modelo
-        if (desde) q.fecha.$gte = new Date(desde);
-        if (hasta) q.fecha.$lte = new Date(hasta + 'T23:59:59.999Z');
-      }
+    const { desde, hasta } = req.query;
 
-      const Envios = require('../models/Envio');
-      const envios = await Envios.find(q).sort({ updatedAt: -1 }).lean();
-      res.json({ ok:true, envios });
-    } catch (e) { next(e); }
-  }
-);
+    // filtro base: envíos asignados a este chofer
+    const qBase = { $or: [ { chofer: choferId }, { chofer_id: choferId } ] };
+
+    // estados que le interesan al chofer (ajustá a tus estados reales)
+    const estados = ['asignado', 'en_ruta', 'pendiente', 'entregado'];
+    qBase.estado = { $in: estados };
+
+    // fechas opcionales: si vienen, se aplican sobre updatedAt
+    if (desde || hasta) {
+      qBase.updatedAt = {};
+      if (desde) qBase.updatedAt.$gte = new Date(desde);
+      if (hasta) qBase.updatedAt.$lte = new Date(`${hasta}T23:59:59.999Z`);
+    }
+
+    const envios = await Envio.find(qBase)
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    return res.json({ ok: true, envios });
+  } catch (e) { next(e); }
+});
+
 
 // marcar entregado (solo si es propio y manual/etiqueta)
 router.patch('/:id/entregar',
