@@ -556,6 +556,7 @@ router.patch('/:id/asignar', async (req, res) => {
 router.get('/mis', requireAuth, requireRole('chofer'), async (req, res, next) => {
   try {
     const choferId = req.session?.user?.driver_id;
+   console.log('[mis] session:', req.session?.user, 'query:', req.query);
     if (!choferId || !mongoose.isValidObjectId(choferId)) {
       // si falta driver_id en sesión, devolvé 403 (no 400)
       return res.status(403).json({ error: 'Perfil chofer no vinculado' });
