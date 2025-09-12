@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const slugify = require('../utils/slugify');
 const Envio  = require('../models/Envio');
@@ -14,38 +15,58 @@ exports.listarChoferes = async (_req, res) => {
 
 /* ====== NUEVO: crear chofer + usuario (rol chofer) ====== */
 exports.crearChofer = async (req, res) => {
-  const { nombre, telefono } = req.body || {};
-  if (!nombre || !telefono) return res.status(400).json({ msg: 'Faltan nombre o teléfono' });
-
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
-    // 1) Crear Chofer
-    const nuevo = new Chofer({ nombre, telefono });
-    await nuevo.save();
+    const { nombre, telefono, email } = req.body || {};
+    if (!nombre || !telefono) {
+      await session.abortTransaction(); session.endSession();
+      return res.status(400).json({ msg: 'Faltan nombre o teléfono' });
+    }
 
-    // 2) Generar username único a partir del nombre
+    // 1) Crear Chofer (en sesión)
+    const [{ _id: choferId }] = await Chofer.create([{ nombre, telefono }], { session });
+
+    // 2) username único slugificado
     const base = slugify(nombre);
-    let username = base;
-    let i = 1;
-    while (await User.findOne({ username })) {
+    let username = base, i = 1;
+    while (await User.findOne({ username }).session(session)) {
       username = `${base}${++i}`;
     }
 
-    // 3) Crear usuario "chofer", password = teléfono (hasheado)
+    // 3) Preparar User (rol chofer). Si tu esquema exige email, usamos el provisto;
+    //    si no viene, dejamos undefined (ver #2 abajo para esquema).
     const password_hash = await bcrypt.hash(String(telefono), 12);
-    await User.create({
+    const [user] = await User.create([{
       username,
+      email: email ? String(email).toLowerCase() : undefined,
       phone: String(telefono),
       role: 'chofer',
+      driver_id: choferId,
       password_hash,
-      driver_id: nuevo._id,
       is_active: true,
-      must_change_password: true // opcional: forzar cambio en primer login
+      must_change_password: true
+    }], { session });
+
+    await session.commitTransaction();
+    session.endSession();
+    return res.status(201).json({
+      ok: true,
+      chofer: { _id: choferId, nombre, telefono },
+      user:   { _id: user._id, username: user.username, role: user.role }
     });
 
-    res.status(201).json({ chofer: nuevo, user: { username, role: 'chofer' } });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: 'Error al crear chofer' });
+    await session.abortTransaction();
+    session.endSession();
+    // Manejo elegante de duplicados
+    if (err && err.code === 11000) {
+      // intenta identificar el campo duplicado
+      const campo = Object.keys(err.keyPattern || {})[0] || 'campo único';
+      return res.status(409).json({ ok:false, error:`Duplicado en ${campo}` });
+    }
+    console.error('crearChofer error:', err);
+    return res.status(500).json({ ok:false, error: 'Error al crear chofer', detail: err.message });
   }
 };
 
