@@ -1,4 +1,4 @@
-+require('dotenv').config();
+require('dotenv').config();
 const path = require('path');
 const fs   = require('fs');
 const express = require('express');
@@ -22,6 +22,13 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'cambialo-en-produccion',
   resave: false,
   saveUninitialized: false,
+  store: MongoStore.create({
+  mongoUrl: process.env.MONGO_URI || process.env.MONGO_URI,
+  collectionName: 'sessions',
+  ttl: 60 * 60 * 8, // 8h
+  autoRemove: 'interval',
+  autoRemoveInterval: 10
+  }),
   cookie: {
     httpOnly: true,
     sameSite: 'lax',
@@ -44,7 +51,13 @@ app.use('/auth', require('./routes/auth'));
 app.use((req, res, next) => {
   // Permitir auth y archivos públicos
   if (req.path.startsWith('/auth')) return next();
-  if (req.path.startsWith('/public')) return next();
+  // assets públicos necesarios para el login
+  if (
+    req.path.startsWith('/assets') ||
+    req.path === '/favicon.ico' ||
+    req.path === '/robots.txt' ||
+    req.path === '/manifest.json'
+  ) return next();
   if (req.session?.user) return next();
 
   // HTML → redirige a login, API → 401 JSON
@@ -85,6 +98,10 @@ const pagesAdminCoord = [
   '/index'                 // alias si lo usás
 ];
 
+const pagesChofer = [
+  '/mis-envios.html'
+];
+
 // Gateo por rol (estas rutas deben ir ANTES del static)
 pagesAdminOnly.forEach(p =>
   app.get(p, requireAuthPage, requireRolePage('admin'),
@@ -93,6 +110,11 @@ pagesAdminOnly.forEach(p =>
 
 pagesAdminCoord.forEach(p =>
   app.get(p, requireAuthPage, requireRolePage('admin','coordinador'),
+    (req, res) => res.sendFile(path.join(__dirname, 'public', p.replace(/^\//,''))))
+);
+
+pagesChofer.forEach(p =>
+  app.get(p, requireAuthPage, requireRolePage('chofer'),
     (req, res) => res.sendFile(path.join(__dirname, 'public', p.replace(/^\//,''))))
 );
 
@@ -111,8 +133,14 @@ app.get('/index', (req, res) => {
   return res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+app.get('/', (req, res) => {
+  const u = req.session?.user;
+  if (!u?.authenticated) return res.redirect('/auth/login');
+  const map = { chofer: '/mis-envios.html', coordinador: '/choferes.html', admin: '/index.html' };
+  return res.redirect(map[u.role] || '/index.html');
+});
+
 const pages = {
-  '/':                 'index.html',
   '/panel-general':    'index.html',
   '/panel/envios':     'panel-general.html',
   '/panel/ingreso':    'ingreso-manual.html',
