@@ -2,22 +2,19 @@
 const bcrypt = require('bcryptjs');
 const User   = require('../models/User');
 
-exports.login = async (req, res, next) => {
+async function login(req, res, next) {
   try {
     const { identifier, password } = req.body || {};
-    if (!identifier || !password) {
-      return res.status(400).json({ error: 'Faltan credenciales' });
-    }
+    if (!identifier || !password) return res.status(400).json({ error: 'Faltan credenciales' });
 
-    // email vs username (y opcionalmente phone si querés)
     const id = String(identifier).trim().toLowerCase();
     const isEmail = id.includes('@');
 
     const query = isEmail
       ? { email: id }
-      : { $or: [ { username: id }, { username: id.toLowerCase() } ] }; // podrías sumar { phone: identifier }
+      : { $or: [ { username: id }, { phone: identifier }, { phone: identifier.replace(/\D/g,'') } ] };
 
-    // 👇 MUY IMPORTANTE: traer el hash explícitamente
+    // OJO: password_hash tiene select:false en el schema
     const user = await User.findOne(query)
       .select('+password_hash +role +driver_id +is_active +email +username');
 
@@ -27,7 +24,6 @@ exports.login = async (req, res, next) => {
     const ok = await bcrypt.compare(String(password), user.password_hash || '');
     if (!ok) return res.status(401).json({ error: 'Usuario o contraseña inválidos' });
 
-    // sesión
     req.session.user = {
       authenticated: true,
       _id: user._id,
@@ -40,8 +36,19 @@ exports.login = async (req, res, next) => {
     user.last_login = new Date();
     await user.save();
 
-    return res.json({ ok: true, role: user.role });
-  } catch (e) {
-    next(e);
-  }
-};
+    res.json({ ok: true, role: user.role });
+  } catch (e) { next(e); }
+}
+
+async function logout(req, res) {
+  req.session.destroy?.(()=>{});
+  res.json({ ok: true });
+}
+
+async function me(req, res) {
+  const u = req.session?.user;
+  if (!u?.authenticated) return res.status(401).json({ error: 'No autenticado' });
+  res.json({ ok: true, user: u });
+}
+
+module.exports = { login, logout, me };
