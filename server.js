@@ -120,6 +120,7 @@ const pages = {
   '/panel/etiquetas':  'panel-etiquetas.html',
   '/panel/choferes':   'choferes.html',
   '/panel/facturacion':'facturacion-general.html'
+  '/panel/mis-envios' :'mis-envios.html',
 };
 
 for (const [route, file] of Object.entries(pages)) {
