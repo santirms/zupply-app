@@ -453,7 +453,6 @@ function buildTimeline(envio) {
 }
 
 router.get('/mis', requireAuth, requireRole('chofer'), async (req, res, next) => {
- console.log('[GET /api/envios/mis] hit', req.session?.user);
   try {
     const choferId = req.session?.user?.driver_id;
     if (!choferId || !mongoose.isValidObjectId(choferId)) {
@@ -463,17 +462,39 @@ router.get('/mis', requireAuth, requireRole('chofer'), async (req, res, next) =>
     const desde = req.query.desde || req.query.from || '';
     const hasta = req.query.hasta || req.query.to   || '';
 
-    const q = { $or: [{ chofer: choferId }, { chofer_id: choferId }] };
+    const base = { $or: [{ chofer: choferId }, { chofer_id: choferId }] };
+
     if (desde || hasta) {
-      q.updatedAt = {};
-      if (desde) q.updatedAt.$gte = new Date(desde);
-      if (hasta) q.updatedAt.$lte = new Date(`${hasta}T23:59:59.999Z`);
+      const start = desde ? new Date(desde) : null;
+      const end   = hasta ? new Date(`${hasta}T23:59:59.999Z`) : null;
+
+      const inRange = f => {
+        const o = {};
+        if (start) o.$gte = start;
+        if (end)   o.$lte = end;
+        return o;
+      };
+
+      // match por updatedAt o por historial.at
+      return res.json({
+        ok: true,
+        envios: await Envio.find({
+          $and: [
+            base,
+            { $or: [
+              { updatedAt: inRange('updatedAt') },
+              { 'historial.at': inRange('historial.at') }
+            ]}
+          ]
+        }).sort({ updatedAt: -1 }).lean()
+      });
     }
 
-    const envios = await Envio.find(q).sort({ updatedAt: -1 }).lean();
-    return res.json({ ok: true, envios });
+    const envios = await Envio.find(base).sort({ updatedAt: -1 }).lean();
+    res.json({ ok: true, envios });
   } catch (e) { next(e); }
 });
+
 
 // GET /envios/:id
 router.get('/:id', async (req, res) => {
