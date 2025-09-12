@@ -452,6 +452,29 @@ function buildTimeline(envio) {
   return t;
 }
 
+router.get('/mis', requireAuth, requireRole('chofer'), async (req, res, next) => {
+ console.log('[GET /api/envios/mis] hit', req.session?.user);
+  try {
+    const choferId = req.session?.user?.driver_id;
+    if (!choferId || !mongoose.isValidObjectId(choferId)) {
+      return res.status(403).json({ error: 'Perfil chofer no vinculado' });
+    }
+
+    const desde = req.query.desde || req.query.from || '';
+    const hasta = req.query.hasta || req.query.to   || '';
+
+    const q = { $or: [{ chofer: choferId }, { chofer_id: choferId }] };
+    if (desde || hasta) {
+      q.updatedAt = {};
+      if (desde) q.updatedAt.$gte = new Date(desde);
+      if (hasta) q.updatedAt.$lte = new Date(`${hasta}T23:59:59.999Z`);
+    }
+
+    const envios = await Envio.find(q).sort({ updatedAt: -1 }).lean();
+    return res.json({ ok: true, envios });
+  } catch (e) { next(e); }
+});
+
 // GET /envios/:id
 router.get('/:id', async (req, res) => {
   try {
@@ -551,38 +574,6 @@ router.patch('/:id/asignar', async (req, res) => {
   }
 });
 
-//front que ven los choferes
-
-router.get('/mis', requireAuth, requireRole('chofer'), async (req, res, next) => {
-  try {
-    const choferId = req.session?.user?.driver_id;
-   console.log('[mis] session:', req.session?.user, 'query:', req.query);
-    if (!choferId || !mongoose.isValidObjectId(choferId)) {
-      // si falta driver_id en sesión, devolvé 403 (no 400)
-      return res.status(403).json({ error: 'Perfil chofer no vinculado' });
-    }
-
-    // acepta 'desde'/'hasta' o 'from'/'to'
-    const desde = req.query.desde || req.query.from || '';
-    const hasta = req.query.hasta || req.query.to || '';
-
-    const q = {
-      $or: [{ chofer: choferId }, { chofer_id: choferId }],
-      // ajustá si querés limitar estados
-      // estado: { $in: ['pendiente','asignado','en_ruta','entregado'] }
-    };
-
-    if (desde || hasta) {
-      q.updatedAt = {};
-      if (desde) q.updatedAt.$gte = new Date(desde);
-      if (hasta) q.updatedAt.$lte = new Date(`${hasta}T23:59:59.999Z`);
-    }
-
-    const envios = await Envio.find(q).sort({ updatedAt: -1 }).lean();
-    return res.json({ ok: true, envios });
-  } catch (e) { next(e); }
-});
-
 // marcar entregado (solo si es propio y manual/etiqueta)
 router.patch('/:id/entregar',
   requireAuth, requireRole('chofer'), onlyOwnShipments, onlyManualOrEtiqueta,
@@ -611,7 +602,6 @@ router.post('/:id/nota',
     } catch(e){ next(e); }
   }
 );
-
 
 // DELETE /envios/:id
 router.delete('/:id', async (req, res) => {
