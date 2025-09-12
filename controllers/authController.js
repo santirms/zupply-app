@@ -36,8 +36,10 @@ async function login(req, res, next) {
     user.last_login = new Date();
     await user.save();
 
-    res.json({ ok: true, role: user.role });
-  } catch (e) { next(e); }
+    // al final del login, antes de responder:
+    const map = { chofer: '/mis-envios.html', coordinador: '/choferes.html', admin: '/index.html' };
+    return res.json({ ok: true, role: user.role, redirectTo: map[user.role] || '/index.html' });
+    } catch (e) { next(e); }
 }
 
 async function logout(req, res) {
