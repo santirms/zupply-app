@@ -25,24 +25,31 @@ async function load() {
   const p = new URLSearchParams();
   if (d) p.set('desde', d);
   if (h) p.set('hasta', h);
-  const r = await fetch('/api/envios/mis?' + p.toString(), { credentials: 'same-origin' });
-  const data = await r.json();
-  const list = document.getElementById('list');
-  if (!r.ok || !data?.envios) { list.innerHTML = '<p class="p-3 text-red-600">Error cargando</p>'; return; }
 
-  list.innerHTML = data.envios.map(e => `
+  const r = await fetch('/api/envios/mis?' + p.toString(), { credentials: 'same-origin' });
+  const text = await r.text();
+  let data; try { data = JSON.parse(text); } catch { data = null; }
+
+  const list = document.getElementById('list');
+  if (!r.ok || !data?.ok) {
+    console.error('mis-envios error', r.status, text);
+    list.innerHTML = '<p class="p-3 text-red-600">Error cargando</p>';
+    return;
+  }
+
+  const envios = data.envios || [];
+  list.innerHTML = envios.map(e => `
     <div class="p-3 flex items-start gap-3">
       <div class="flex-1">
-        <div class="font-medium">${e.id_venta || e.meli_id || '(sin tracking)'} · <span class="text-sm text-gray-600">${e.estado || 'pendiente'}</span></div>
+        <div class="font-medium">${e.id_venta || e.meli_id || '(sin tracking)'} ·
+          <span class="text-sm text-gray-600">${e.estado || 'pendiente'}</span></div>
         <div class="text-sm text-gray-700">${e.destinatario || ''}</div>
         <div class="text-sm text-gray-600">${e.direccion || ''} ${e.codigo_postal || ''} ${e.partido || ''}</div>
       </div>
-      <div class="flex flex-col gap-2">
-        <button class="px-3 py-1 rounded bg-green-600 text-white" data-entregar="${e._id}">Entregado</button>
-        <button class="px-3 py-1 rounded bg-gray-200" data-nota="${e._id}">Nota</button>
-      </div>
     </div>
   `).join('') || '<p class="p-3 text-gray-500">Sin envíos</p>';
+}
+
 
   // acciones
   list.querySelectorAll('[data-entregar]').forEach(btn => {
