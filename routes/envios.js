@@ -15,12 +15,12 @@ const { getEnvioByTracking, labelByTracking } = require('../controllers/envioCon
 const ctrl   = require('../controllers/envioController');
 
 // ⬇️ NUEVO: middlewares
-const { + const {
-+   requireAuth,
-+   requireRole,
-+   onlyOwnShipments,
-+   onlyManualOrEtiqueta
-+ } = require('../middlewares/auth');
+const {  const {
+  requireAuth,
+   requireRole,
+   onlyOwnShipments,
+   onlyManualOrEtiqueta
+ } = require('../middlewares/auth');
 
 // ⬇️ TODO EL PANEL GENERAL REQUIERE LOGIN
 router.use(requireAuth);
