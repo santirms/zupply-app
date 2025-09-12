@@ -81,8 +81,8 @@
     <h1>Ingresar a Zupply</h1>
 
     <form id="f" novalidate>
-      <label>Email</label>
-      <input id="email" type="email" autocomplete="username" required />
+      <label>Email o Usuario</label>
+      <input id="email" type="text" autocomplete="username" required />
 
       <label>Contraseña</label>
       <input id="password" type="password" autocomplete="current-password" required />
@@ -151,8 +151,12 @@
           else localStorage.removeItem('zpl_last_user');
         } catch {}
 
-        // OK → al panel principal
-        location.href = '/index.html';
+       // OK → redirigir según rol (o usar redirectTo si viene del backend)
+         const map = { chofer: '/mis-envios.html', coordinador: '/choferes.html', admin: '/index.html' };
+         const dest = (data && typeof data.redirectTo === 'string')
+           ? data.redirectTo
+           : map[data.role] || '/index.html';
+         window.location.assign(dest);
       } catch (e2) {
         console.error(e2);
         err.textContent = 'Error de red';
