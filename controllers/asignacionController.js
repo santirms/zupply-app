@@ -458,9 +458,12 @@ exports.agregarEnvios = async (req, res) => {
     const { url } = await buildRemitoPDF({ asignacion, chofer, envios: asignacion.envios, listaNombre: asignacion.lista_nombre });
     await Asignacion.updateOne({ _id: asignacion._id }, { $set: { remito_url: url } });
 
-    return res.json({ ok:true, remito_url: url, total: asignacion.total_paquetes });
-    // al final de agregarEnvios:
-   return res.json({ ok:true, remito_url: url, total: asignacion.total_paquetes, agregados: subdocs.length });
+     return res.json({
+       ok: true,
+       remito_url: url,
+       total: asignacion.total_paquetes,
+       agregados: subdocs.length
+     });
   } catch (err) {
     console.error('agregarEnvios error:', err);
     return res.status(500).json({ error: 'No se pudo agregar' });
