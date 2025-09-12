@@ -545,6 +545,7 @@ router.patch('/:id/asignar', async (req, res) => {
   }
 });
 
+//front que ven los choferes
 router.get('/mis',
   requireAuth,
   requireRole('chofer'),
@@ -568,6 +569,36 @@ router.get('/mis',
     } catch (e) { next(e); }
   }
 );
+
+// marcar entregado (solo si es propio y manual/etiqueta)
+router.patch('/:id/entregar',
+  requireAuth, requireRole('chofer'), onlyOwnShipments, onlyManualOrEtiqueta,
+  async (req,res,next)=>{
+    try {
+      await Envio.findByIdAndUpdate(req.params.id, {
+        $set: { estado:'entregado', deliveredAt: new Date() },
+        $push: { historial: { at:new Date(), estado:'entregado', source:'chofer:panel' } }
+      });
+      res.json({ ok:true });
+    } catch(e){ next(e); }
+  }
+);
+
+// agregar nota (solo propio)
+router.post('/:id/nota',
+  requireAuth, requireRole('chofer'), onlyOwnShipments,
+  async (req,res,next)=>{
+    try {
+      const note = String(req.body.note||'').trim();
+      if (!note) return res.status(400).json({ error:'Nota vacía' });
+      await Envio.findByIdAndUpdate(req.params.id, {
+        $push: { historial: { at:new Date(), estado:'nota', source:'chofer:panel', note } }
+      });
+      res.json({ ok:true });
+    } catch(e){ next(e); }
+  }
+);
+
 
 // DELETE /envios/:id
 router.delete('/:id', async (req, res) => {
