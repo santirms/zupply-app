@@ -102,6 +102,7 @@ exports.asignarPorQR = async (req, res, next) => {
     if (chofer_id) update.$set.chofer_id = chofer_id;
     if (chofer_nombre) update.$set.chofer_nombre = chofer_nombre;
 
+    update.$currentDate = { updatedAt: true };
     const updated = await Envio.findByIdAndUpdate(envio._id, update, { new: true });
     res.json({ ok: true, envio: updated });
   } catch (e) { next(e); }
