@@ -1,54 +1,47 @@
+// controllers/authController.js
 const bcrypt = require('bcryptjs');
-const User = require('../models/User');
+const User   = require('../models/User');
 
-exports.login = async (req, res) => {
+exports.login = async (req, res, next) => {
   try {
-    const identifier = String(req.body.identifier || req.body.email || req.body.username || '')
-      .trim().toLowerCase();
-    const password = String(req.body.password || '');
-
+    const { identifier, password } = req.body || {};
     if (!identifier || !password) {
       return res.status(400).json({ error: 'Faltan credenciales' });
     }
 
-    const query = identifier.includes('@') ? { email: identifier } : { username: identifier };
-    let u = await User.findOne({ ...query, is_active: true });
-    if (!u && !identifier.includes('@')) {
-      u = await User.findOne({ email: identifier, is_active: true });
-    }
-    if (!u) return res.status(400).json({ error: 'Credenciales inválidas' });
+    // email vs username (y opcionalmente phone si querés)
+    const id = String(identifier).trim().toLowerCase();
+    const isEmail = id.includes('@');
 
-    const ok = await bcrypt.compare(password, u.password_hash);
-    if (!ok) return res.status(400).json({ error: 'Credenciales inválidas' });
+    const query = isEmail
+      ? { email: id }
+      : { $or: [ { username: id }, { username: id.toLowerCase() } ] }; // podrías sumar { phone: identifier }
 
-    // Regenerar la sesión evita fixation y asegura nuevo SID
-    req.session.regenerate(async (err) => {
-      if (err) return res.status(500).json({ error: 'No se pudo iniciar sesión' });
+    // 👇 MUY IMPORTANTE: traer el hash explícitamente
+    const user = await User.findOne(query)
+      .select('+password_hash +role +driver_id +is_active +email +username');
 
-      req.session.user = {
-        id: u._id.toString(),
-        email: u.email,
-        role: u.role,
-        driver_id: u.driver_id || null,
-        authenticated: true
-      };
+    if (!user) return res.status(401).json({ error: 'Usuario o contraseña inválidos' });
+    if (!user.is_active) return res.status(403).json({ error: 'Usuario inactivo' });
 
-      u.last_login = new Date();
-      await u.save();
+    const ok = await bcrypt.compare(String(password), user.password_hash || '');
+    if (!ok) return res.status(401).json({ error: 'Usuario o contraseña inválidos' });
 
-      // Guardar la sesión antes de responder
-      req.session.save((err2) => {
-        if (err2) return res.status(500).json({ error: 'No se pudo guardar la sesión' });
-        return res.json({ ok: true, role: u.role, must_change_password: !!u.must_change_password });
-      });
-    });
+    // sesión
+    req.session.user = {
+      authenticated: true,
+      _id: user._id,
+      role: user.role,
+      email: user.email,
+      username: user.username,
+      driver_id: user.driver_id || null
+    };
+
+    user.last_login = new Date();
+    await user.save();
+
+    return res.json({ ok: true, role: user.role });
   } catch (e) {
-    console.error('POST /auth/login error', e);
-    return res.status(500).json({ error: 'Error en login' });
+    next(e);
   }
 };
-
-exports.logout = (req, res) => {
-  req.session.destroy(() => res.json({ ok: true }));
-};
-
