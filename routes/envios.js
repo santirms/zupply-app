@@ -545,6 +545,29 @@ router.patch('/:id/asignar', async (req, res) => {
   }
 });
 
+router.get('/mis',
+  requireAuth,
+  requireRole('chofer'),
+  async (req, res, next) => {
+    try {
+      const u = req.session?.user;
+      const choferId = u?.driver_id;
+      if (!choferId) return res.status(403).json({ error:'Perfil chofer no vinculado' });
+
+      const { desde, hasta } = req.query;
+      const q = { chofer_id: choferId };          // usa el campo que realmente guardás
+      if (desde || hasta) {
+        q.fecha = {};                              // o fecha_asignacion / updatedAt según tu modelo
+        if (desde) q.fecha.$gte = new Date(desde);
+        if (hasta) q.fecha.$lte = new Date(hasta + 'T23:59:59.999Z');
+      }
+
+      const Envios = require('../models/Envio');
+      const envios = await Envios.find(q).sort({ updatedAt: -1 }).lean();
+      res.json({ ok:true, envios });
+    } catch (e) { next(e); }
+  }
+);
 
 // DELETE /envios/:id
 router.delete('/:id', async (req, res) => {
