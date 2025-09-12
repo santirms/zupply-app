@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Mis envíos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-4">
+  <div class="max-w-3xl mx-auto bg-white rounded shadow p-4">
+    <h1 class="text-xl font-bold mb-4">Mis envíos</h1>
+
+    <div class="flex gap-2 mb-4">
+      <input id="fDesde" type="date" class="border rounded px-2 py-1" />
+      <input id="fHasta" type="date" class="border rounded px-2 py-1" />
+      <button id="btnFiltrar" class="bg-blue-600 text-white px-3 py-1 rounded">Filtrar</button>
+    </div>
+
+    <div id="list" class="divide-y"></div>
+  </div>
+
+<script>
+async function load() {
+  const d = document.getElementById('fDesde').value;
+  const h = document.getElementById('fHasta').value;
+  const p = new URLSearchParams();
+  if (d) p.set('desde', d);
+  if (h) p.set('hasta', h);
+  const r = await fetch('/api/envios/mis?' + p.toString(), { credentials: 'same-origin' });
+  const data = await r.json();
+  const list = document.getElementById('list');
+  if (!r.ok || !data?.envios) { list.innerHTML = '<p class="p-3 text-red-600">Error cargando</p>'; return; }
+
+  list.innerHTML = data.envios.map(e => `
+    <div class="p-3 flex items-start gap-3">
+      <div class="flex-1">
+        <div class="font-medium">${e.id_venta || e.meli_id || '(sin tracking)'} · <span class="text-sm text-gray-600">${e.estado || 'pendiente'}</span></div>
+        <div class="text-sm text-gray-700">${e.destinatario || ''}</div>
+        <div class="text-sm text-gray-600">${e.direccion || ''} ${e.codigo_postal || ''} ${e.partido || ''}</div>
+      </div>
+      <div class="flex flex-col gap-2">
+        <button class="px-3 py-1 rounded bg-green-600 text-white" data-entregar="${e._id}">Entregado</button>
+        <button class="px-3 py-1 rounded bg-gray-200" data-nota="${e._id}">Nota</button>
+      </div>
+    </div>
+  `).join('') || '<p class="p-3 text-gray-500">Sin envíos</p>';
+
+  // acciones
+  list.querySelectorAll('[data-entregar]').forEach(btn => {
+    btn.onclick = async () => {
+      const id = btn.getAttribute('data-entregar');
+      if (!confirm('¿Marcar como entregado?')) return;
+      const r = await fetch('/api/envios/'+id+'/entregar', { method:'PATCH', headers:{'Content-Type':'application/json'} });
+      const j = await r.json();
+      if (!r.ok || !j.ok) return alert(j.error || 'No se pudo marcar');
+      load();
+    };
+  });
+  list.querySelectorAll('[data-nota]').forEach(btn => {
+    btn.onclick = async () => {
+      const id = btn.getAttribute('data-nota');
+      const note = prompt('Agregar nota (visible para coordinación):');
+      if (!note) return;
+      const r = await fetch('/api/envios/'+id+'/nota', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ note }) });
+      const j = await r.json();
+      if (!r.ok || !j.ok) return alert(j.error || 'No se pudo guardar nota');
+      load();
+    };
+  });
+}
+
+document.getElementById('btnFiltrar').onclick = load;
+document.addEventListener('DOMContentLoaded', load);
+</script>
+</body>
+</html>
