@@ -4,7 +4,7 @@ const User = require('../models/User');
 
 (async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URL);
+    await mongoose.connect(process.env.MONGO_URI);
 
     try { await User.collection.dropIndex('email_1'); } 
     catch (e) { if (e.codeName !== 'IndexNotFound') console.error(e); }
