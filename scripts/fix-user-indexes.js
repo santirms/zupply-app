@@ -4,7 +4,7 @@ const User = require('../models/User');
 
 (async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URL);
+    await mongoose.connect(process.env.MONGO_URI);
 
     // 1) listar actuales
     const before = await User.collection.indexes();
