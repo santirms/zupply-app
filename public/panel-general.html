@@ -423,8 +423,7 @@ const idVentaTxt = idVentaRaw.trim().toLowerCase().replace(/\s+/g, '');
 
 
 try {
-if (!enviosCargados.length) {
-const res = await fetch('/api/envios', { cache: 'no-store' });
+const res = await fetch(`/api/envios?ts=${Date.now()}`, { cache: 'no-store' });
 enviosCargados = await res.json();
 }
 
