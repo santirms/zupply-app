@@ -32,11 +32,26 @@ exports.asignarViaQR = async (req, res) => {
       zona,
       cliente_id
     } = req.body || {};
+     const {
+    chofer_id, chofer_nombre, lista_chofer_id, lista_nombre,
+    tracking_ids, tracking, id_venta, meli_id, zona,
+    cliente_id,                 // legado (global)
+    items                       // [{ tracking, sender_id }]
+  } = req.body || {};
 
     // Normalizo los códigos a un array
-    const tracks = (Array.isArray(tracking_ids) && tracking_ids.length)
-      ? tracking_ids
-      : [tracking, id_venta, meli_id].filter(Boolean);
+  let tracks = (Array.isArray(tracking_ids) && tracking_ids.length)
+    ? tracking_ids
+    : [tracking, id_venta, meli_id].filter(Boolean);
+  const senderByTrack = new Map();
+  if (Array.isArray(items)) {
+    for (const it of items) {
+      const t = String(it?.tracking || '').trim();
+      if (!t) continue;
+      if (!tracks.includes(t)) tracks.push(t);
+      if (it?.sender_id) senderByTrack.set(t, String(it.sender_id));
+    }
+   }
 
     if ((!chofer_id && !chofer_nombre) || !tracks.length) {
       return res.status(400).json({ error: 'Faltan datos' });
