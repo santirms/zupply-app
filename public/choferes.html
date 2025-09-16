@@ -5,26 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Panel de Choferes</title>
 
-  <!-- Tailwind CDN (si tu CSP lo bloquea, usa tu CSS local de Tailwind) -->
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Leaflet (si usás la pestaña mapa más adelante) -->
+  <!-- Leaflet CSS (por si activás el mapa luego) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
   <!-- html5-qrcode -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
-    /* Forzamos legibilidad de <select> en dark */
-    html.dark select,
-    html.dark select option {
-      background-color: #0b1020;
-      color: #e5e7eb;
-    }
-    /* Botón flotante de scan en mobile */
-    @media (max-width: 640px){
-      #btnStartScan { width:64px; height:64px; font-size:24px; }
-    }
+    html.dark select, html.dark select option { background-color:#0b1020; color:#e5e7eb; }
+    @media (max-width: 640px){ #btnStartScan { width:64px; height:64px; font-size:24px; } }
   </style>
 
   <script>
@@ -37,6 +29,7 @@
       document.documentElement.classList.toggle('dark', dark);
       document.addEventListener('DOMContentLoaded', () => {
         const btn = document.getElementById('themeBtn');
+        if (!btn) return;
         const order = ['light', 'dark', 'system'];
         let current = saved;
         btn.textContent = 'Tema: ' + (current === 'system' ? 'auto' : current);
@@ -122,7 +115,7 @@
       </div>
     </section>
 
-    <!-- TAB: MAPA (placeholder responsivo) -->
+    <!-- TAB: MAPA -->
     <section id="tab-mapa" class="tab hidden">
       <div class="grid sm:grid-cols-2 gap-3 mb-3">
         <select id="choferSelMapa" class="border rounded px-2 py-2"></select>
@@ -137,27 +130,27 @@
   <script>
     "use strict";
 
-    // ===== Helpers básicos
+    // ===== Helpers
     const $  = (s) => document.querySelector(s);
     const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-    // Estado QR
+    // Estado
     const CLIENTES_MAP = new Map();
     const stateQR = { items: [], seen: new Set() };
 
-    // ===== Tabs (sin onclick inline)
+    // ===== Tabs
     function mostrarTab(name) {
       $$('.tab').forEach(t => t.classList.add('hidden'));
       $('#tab-' + name).classList.remove('hidden');
       $$('.tab-btn').forEach(b => b.classList.remove('bg-amber-500','text-white'));
       const btn = $(`.tab-btn[data-tab="${name}"]`);
-      if (btn) { btn.classList.add('bg-amber-500','text-white'); }
+      if (btn) btn.classList.add('bg-amber-500','text-white');
     }
     document.addEventListener('DOMContentLoaded', () => {
       $$('.tab-btn').forEach(b => b.addEventListener('click', () => mostrarTab(b.dataset.tab)));
     });
 
-    // ===== Cargar dropdowns seguros (sin template literals frágiles)
+    // ===== Cargar dropdowns
     async function cargarDropdowns() {
       try {
         const [choferRes, listaRes, cliRes] = await Promise.all([
@@ -166,17 +159,16 @@
           fetch('/api/clientes', { credentials: 'same-origin' })
         ]);
 
-        const [choferes, listas, clientes] = await Promise.all([
-          choferRes.ok ? choferRes.json() : [],
-          listaRes.ok  ? listaRes.json()  : [],
-          cliRes.ok    ? cliRes.json()    : []
-        ]);
+        const choferes = choferRes.ok ? await choferRes.json() : [];
+        const listas   = listaRes.ok  ? await listaRes.json()  : [];
+        const clientes = cliRes.ok    ? await cliRes.json()    : [];
 
         // cache clientes
         CLIENTES_MAP.clear();
         for (const c of clientes) CLIENTES_MAP.set(String(c._id), c.nombre || '');
 
         function fillSelect(sel, arr, firstLabel) {
+          if (!sel) return;
           sel.innerHTML = '';
           if (firstLabel) {
             const opt = document.createElement('option');
@@ -201,12 +193,13 @@
       }
     }
 
-    // ===== Lector QR
+    // ===== QR Scanner
     function initQrScanner() {
       const readerDiv = $('#qr-reader');
       let scanner = null;
+
       $('#btnStartScan').addEventListener('click', async () => {
-        // HTTPS/localhost requerido
+        // HTTPS/localhost requerido por cámara
         if (!window.isSecureContext && location.hostname !== 'localhost') {
           alert('La cámara requiere HTTPS o localhost.');
           return;
@@ -254,13 +247,13 @@
       });
     }
 
-    // ===== Parse de payload (URL/JSON/plano)
+    // ===== Parse de payload
     function extractPayload(raw) {
       const out = { tracking: '', sender_id: null };
       if (!raw) return out;
       const s = String(raw).trim();
 
-      // JSON en QR
+      // JSON
       if (s.startsWith('{') && s.endsWith('}')) {
         try {
           const o = JSON.parse(s);
@@ -297,7 +290,7 @@
       return out;
     }
 
-    // ===== Lista QR (render + asignar)
+    // ===== Lista QR
     function renderListQR() {
       const tb = $('#tblQR');
       tb.innerHTML = stateQR.items.map(it => `
@@ -370,25 +363,34 @@
       const lista_nombre    = $('#listaSel')?.selectedOptions?.[0]?.text?.trim() || '';
       const zona            = $('#inputZonaQR')?.value?.trim() || '';
 
-      const tracking_ids = stateQR.items.map(x => x.tracking).filter(Boolean);
-      const items = stateQR.items.map(x => ({ tracking: x.tracking, sender_id: x.sender_id || null }));
+      // trackings únicos (por las dudas)
+      const tracking_ids = Array.from(new Set(stateQR.items.map(x => x.tracking).filter(Boolean)));
+      const items        = stateQR.items.map(x => ({ tracking: x.tracking, sender_id: x.sender_id || null }));
+
+      // fallback de cliente_id global para externos (si todos pertenecen al mismo remitente)
+      const firstSender  = (stateQR.items.find(x => x.sender_id) || {}).sender_id || null;
 
       if (!chofer_id) return alert('Elegí un chofer');
       if (!tracking_ids.length) return alert('Escaneá o pegá al menos un tracking');
       if (!confirm(`Asignar ${tracking_ids.length} paquete(s)?`)) return;
 
       try {
+        const payload = { chofer_id, lista_chofer_id, lista_nombre, tracking_ids, items, zona };
+        if (firstSender) payload.cliente_id = firstSender; // ayuda al backend para externos
         const r = await fetch('/api/asignaciones/qr', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ chofer_id, lista_chofer_id, lista_nombre, tracking_ids, items, zona })
+          body: JSON.stringify(payload)
         });
-        const data = await r.json().catch(()=>({}));
-        if (!r.ok || !data.ok) {
-          console.error('Asignaciones/qr error:', data);
-          return alert(data.error || `Error ${r.status}`);
+
+        const text = await r.text();
+        let data; try { data = JSON.parse(text); } catch { data = null; }
+        if (!r.ok || !data || !data.ok) {
+          console.error('Asignaciones/qr error:', r.status, text);
+          return alert((data && data.error) ? data.error : `Error ${r.status}`);
         }
+
         const btnRemito = $('#btnRemito');
         const btnWA     = $('#btnWA');
         if (data.remito_url && btnRemito) { btnRemito.href = data.remito_url; btnRemito.classList.remove('hidden'); }
@@ -397,7 +399,8 @@
         alert(`Asignados: ${data.total}`);
         stateQR.items.length = 0; stateQR.seen.clear(); renderListQR();
       } catch (e) {
-        console.error(e); alert('Error de red');
+        console.error(e);
+        alert('Error de red');
       }
     }
 
