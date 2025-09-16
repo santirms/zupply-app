@@ -424,7 +424,7 @@ const idVentaTxt = idVentaRaw.trim().toLowerCase().replace(/\s+/g, '');
 try {  
 const res = await fetch(`/api/envios?ts=${Date.now()}`, { cache: 'no-store' });
 enviosCargados = await res.json();
-}
+
   
 enviosFiltrados = enviosCargados.filter(e => {
 // Cliente / sender
