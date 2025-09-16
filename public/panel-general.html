@@ -237,7 +237,41 @@ function hasQr(envio) {
   if (vu) return new Date(vu) > new Date();
   return !!(envio?.qr_meta?.last_hash || envio?.qr_last_hash || envio?.has_qr);
 }
-  
+
+  function qrIconButtonHtml(envioId) {
+  return `
+    <button
+      class="ml-2 inline-flex items-center gap-1 text-emerald-700 bg-emerald-100 border border-emerald-200 rounded px-1.5 py-0.5 text-[11px]"
+      title="QR de respaldo disponible — abrir"
+      onclick="cargarQrRespaldo('${envioId}')"
+    >
+      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="currentColor" aria-hidden="true">
+        <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+        <path d="M14 14h3v3h-3zM18 14h3v3h-3zM18 18h3v3h-3zM14 18h3v3h-3z"></path>
+      </svg>
+      QR
+    </button>`;
+}
+ async function probeQrButtons() {
+  const slots = Array.from(document.querySelectorAll('[data-qr-probe]'));
+  await Promise.all(slots.map(async slot => {
+    const id = slot.getAttribute('data-qr-probe');
+    try {
+      const r = await fetch(`/api/scan-meli/latest-render/${id}`, { cache: 'no-store' });
+      const j = await r.json().catch(()=>null);
+      if (r.ok && j && j.ok && j.url) {
+        slot.outerHTML = qrIconButtonHtml(id); // reemplaza el placeholder por el botón
+      } else {
+        slot.remove(); // no hay QR → borramos el placeholder
+      }
+    } catch {
+      slot.remove();
+    }
+  }));
+}
+
 // =================== Mapa ===================
 function initMapa(lat, lng) {
 const cont = document.getElementById('mapa');
@@ -552,18 +586,25 @@ function renderTabla() {
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="px-4 py-2">
-        <button
-          class="text-indigo-600 hover:underline"
-          data-id="${e._id}"
-          onclick="mostrarDetalle(this.dataset.id)"
-          title="Ver detalle"
-        >
-          ${e.meli_id || e.id_venta || '(sin id)'}
-        </button>
-        ${qrButton}
-        ${syncBtn}
-      </td>
+  <td class="px-4 py-2">
+  <button
+    class="text-indigo-600 hover:underline"
+    data-id="${e._id}"
+    onclick="mostrarDetalle(this.dataset.id)"
+    title="Ver detalle"
+  >
+    ${e.meli_id || e.id_venta || '(sin id)'}
+  </button>
+
+  ${ hasQr(e) ? qrIconButtonHtml(e._id) : `<span class="inline-block align-middle" data-qr-probe="${e._id}"></span>` }
+
+  ${ e.meli_id ? `
+    <button
+      class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-gray-50"
+      onclick="forceSyncMeli('${e.meli_id}')"
+      title="Actualizar estado desde MeLi"
+    >↻</button>` : '' }
+</td>
       <td class="px-4 py-2 font-mono">${e.id_venta || '-'}</td>
       <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
       <td class="px-4 py-2">${fecha}</td>
@@ -579,6 +620,7 @@ function renderTabla() {
     `;
     tbody.appendChild(tr);
   });
+  probeQrButtons();
 }
 
 function renderPaginacion() {
