@@ -493,84 +493,90 @@ renderPaginacion();
 
 // =================== Tabla / Paginación ===================
 function renderTabla() {
-const tbody = document.getElementById('tablaEnvios');
-tbody.innerHTML = '';
+  const tbody = document.getElementById('tablaEnvios');
+  tbody.innerHTML = '';
 
-if (!enviosFiltrados.length) {
-const tr = document.createElement('tr');
-tr.innerHTML =
-`<td class="px-4 py-6 text-center text-gray-500" colspan="8">No hay envíos para los filtros seleccionados</td>`;
-tbody.appendChild(tr);
-return;
-}
+  if (!enviosFiltrados.length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="px-4 py-6 text-center text-gray-500" colspan="8">
+      No hay envíos para los filtros seleccionados
+    </td>`;
+    tbody.appendChild(tr);
+    return;
+  }
 
-const start = (currentPage - 1) * pageSize;
-const page = enviosFiltrados.slice(start, start + pageSize);
+  const start = (currentPage - 1) * pageSize;
+  const page = enviosFiltrados.slice(start, start + pageSize);
 
-page.forEach(e => {
-const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
+  page.forEach(e => {
+    const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
 
-// Estado (badge + substatus)
-const { key: eKey, label: eLabel, substatus } = uiStatus(e);
-const estadoHTML = (eKey === 'comprador_ausente')
-  ? estadoBadge(eKey, eLabel)
-  : estadoBadge(eKey, eLabel) + substatusChip(substatus);
+    // Estado (badge + substatus)
+    const { key: eKey, label: eLabel, substatus } = uiStatus(e);
+    const estadoHTML = (eKey === 'comprador_ausente')
+      ? estadoBadge(eKey, eLabel)
+      : estadoBadge(eKey, eLabel) + substatusChip(substatus);
 
-// Partido visible y zona para tooltip (limpia sufijos N/E/… si los hubiera)
-const partidoUI = (e.partido && e.partido.trim()) ? e.partido : '-';
-const zonaFact  = (e.zona && e.zona.trim()) ? cleanZona(e.zona) : '';
+    // Partido visible y zona para tooltip
+    const partidoUI = (e.partido && e.partido.trim()) ? e.partido : '-';
+    const zonaFact  = (e.zona && e.zona.trim()) ? cleanZona(e.zona) : '';
 
-const tr = document.createElement('tr');
-tr.innerHTML = `
- <td class="px-4 py-2">
-   <button
-     class="text-indigo-600 hover:underline"
-     data-id="${e._id}"
-     onclick="mostrarDetalle(this.dataset.id)"
-     title="Ver detalle"
-   >
-     ${e.meli_id || e.id_venta || '(sin id)'}
-     </button>
+    // --- Partes opcionales para no romper el template ---
+    const qrButton = hasQr(e)
+      ? `
+        <button
+          class="ml-2 inline-flex items-center gap-1 text-emerald-700 bg-emerald-100 border border-emerald-200 rounded px-1.5 py-0.5 text-[11px]"
+          title="QR de respaldo disponible — abrir"
+          onclick="cargarQrRespaldo('${e._id}')"
+        >
+          <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="currentColor" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+            <path d="M14 14h3v3h-3zM18 14h3v3h-3zM18 18h3v3h-3zM14 18h3v3h-3z"></path>
+          </svg>
+          QR
+        </button>`
+      : '';
 
-   ${ hasQr(e) ? `
-     <button
-       class="ml-2 inline-flex items-center gap-1 text-emerald-700 bg-emerald-100 border border-emerald-200 rounded px-1.5 py-0.5 text-[11px]"
-       title="QR de respaldo disponible — abrir"
-       onclick="cargarQrRespaldo('${e._id}')"
-     >
-      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="currentColor" aria-hidden="true">
-         <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-         <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-         <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-         <path d="M14 14h3v3h-3zM18 14h3v3h-3zM18 18h3v3h-3zM14 18h3v3h-3z"></path>
-       </svg>
-       QR
-     </button>
-   ` : '' }
-    
-   ${e.meli_id ? `
-     <button
-       class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-gray-50"
-       onclick="forceSyncMeli('${e.meli_id}')"
-       title="Actualizar estado desde MeLi">↻</button>
-   ` : ''}
- </td>
- <td class="px-4 py-2 font-mono">${e.id_venta || '-'}</td>   <!-- ✅ ahora es otra celda -->
- <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
- <td class="px-4 py-2">${fecha}</td>
- <td class="px-4 py-2" title="${zonaFact}">${partidoUI}</td>
- <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
- <td class="px-4 py-2">${estadoHTML}</td>
- <td class="px-4 py-2">
-   <button class="text-red-600 hover:text-red-700" title="Eliminar"
-           onclick="abrirModalEliminar('${e._id}')">🗑</button>
- <button class="text-gray-600 hover:text-gray-800 mr-2" title="Notas"
-         onclick="abrirModalNotas('${e._id}')">📝</button>
-</td>       
- 
-`;
-tbody.appendChild(tr);
-});
+    const syncBtn = e.meli_id
+      ? `
+        <button
+          class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-gray-50"
+          onclick="forceSyncMeli('${e.meli_id}')"
+          title="Actualizar estado desde MeLi"
+        >↻</button>`
+      : '';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-4 py-2">
+        <button
+          class="text-indigo-600 hover:underline"
+          data-id="${e._id}"
+          onclick="mostrarDetalle(this.dataset.id)"
+          title="Ver detalle"
+        >
+          ${e.meli_id || e.id_venta || '(sin id)'}
+        </button>
+        ${qrButton}
+        ${syncBtn}
+      </td>
+      <td class="px-4 py-2 font-mono">${e.id_venta || '-'}</td>
+      <td class="px-4 py-2">${e.cliente_id?.nombre || ('ID:' + (e.sender_id || '-'))}</td>
+      <td class="px-4 py-2">${fecha}</td>
+      <td class="px-4 py-2" title="${zonaFact}">${partidoUI}</td>
+      <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
+      <td class="px-4 py-2">${estadoHTML}</td>
+      <td class="px-4 py-2">
+        <button class="text-red-600 hover:text-red-700" title="Eliminar"
+                onclick="abrirModalEliminar('${e._id}')">🗑</button>
+        <button class="text-gray-600 hover:text-gray-800 mr-2" title="Notas"
+                onclick="abrirModalNotas('${e._id}')">📝</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 
 function renderPaginacion() {
