@@ -3,7 +3,11 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const asignacionEnvioSchema = new Schema({
-  envio:         { type: Schema.Types.ObjectId, ref: 'Envio', required: true },
+  // Si el envío existe en la base
+  envio:         { type: Schema.Types.ObjectId, ref: 'Envio', required: false },
+  // Si NO existe: guardamos el tracking "crudo"
+  tracking:      { type: String, index: true },
+  externo:       { type: Boolean, default: false }, // marcamos placeholder
   id_venta:      { type: String },
   meli_id:       { type: String },
   cliente_id:    { type: Schema.Types.ObjectId, ref: 'Cliente' },
