@@ -171,6 +171,8 @@
   </div>
 
   <script>
+    // al principio del script:
+    const CLIENTES_MAP = new Map();
     // Tabs
     function mostrarTab(tab) {
       document.querySelectorAll('.tab').forEach(t => t.classList.add('hidden'));
@@ -208,12 +210,15 @@
     // Dropdowns iniciales
 async function cargarDropdowns() {
   try {
-    const [choferRes, listaRes] = await Promise.all([
+    const [choferRes, listaRes, cliRes] = await Promise.all([
       fetch('/api/choferes', { credentials: 'same-origin' }),
       fetch('/api/listas-de-precios?prefix=Choferes', { credentials: 'same-origin' })
     ]);
     const choferes = await choferRes.json().catch(() => []);
     const listas   = await listaRes.json().catch(() => []);
+      // cache clientes para lookup por id (sin mostrar nada en UI)
+    CLIENTES_MAP.clear();
+    for (const c of clientes) CLIENTES_MAP.set(String(c._id), c.nombre || '');
 
     const optsChofer = choferes.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
     const optsLista  = listas.map(l => `<option value="${l._id}">${l.nombre}</option>`).join('');
@@ -250,12 +255,12 @@ async function cargarDropdowns() {
           { facingMode: "environment" },
           { fps: 10, qrbox: 250 },
           msg => {
-            const trk = extractTracking(msg);
-            if (!trk) return;
+            const { tracking, sender_id } = extractPayload(msg);
+            if (!tracking) return;
             const now = Date.now();
-            if (trk === lastTrk && (now - lastAt) < 1200) return;
-            lastTrk = trk; lastAt = now;
-            addTrackingQR(trk);
+             if (tracking === lastTrk && (now - lastAt) < 1200) return;
+             lastTrk = tracking; lastAt = now;
+             addTrackingQR({ tracking, sender_id });
             if (navigator.vibrate) navigator.vibrate(40);
           },
           err => console.warn('QR error:', err)
@@ -267,9 +272,9 @@ async function cargarDropdowns() {
     document.addEventListener('keydown', e => {
       if (e.target && e.target.id === 'inpManualTrk' && e.key === 'Enter') {
         e.preventDefault();
-        const trk = extractTracking(e.target.value);
-        if (!trk) return alert('Tracking inválido');
-        addTrackingQR(trk);
+        const { tracking, sender_id } = extractPayload(e.target.value);
+        if (!tracking) return alert('Tracking inválido');
+        addTrackingQR({ tracking, sender_id });        
         e.target.value = '';
       }
     });
@@ -310,7 +315,7 @@ async function cargarDropdowns() {
       const tb = $('#tblQR');
       tb.innerHTML = stateQR.items.map(it => `
         <tr class="border-b">
-          <td class="p-1">${it.tracking}</td>
+          <td class="p-1">${it.tracking}${it.externo ? ' <em class="text-amber-600">(externo)</em>' : ''}</td>
           <td class="p-1">${it.cliente||''}</td>
           <td class="p-1">${it.direccion||''}</td>
           <td class="p-1">${[it.codigo_postal||'', it.partido||''].filter(Boolean).join(' ')}</td>
@@ -328,36 +333,53 @@ async function cargarDropdowns() {
       });
     }
 
-    function extractTracking(raw) {
-      if (!raw) return '';
-      const s = String(raw).trim();
-      if (s.startsWith('{') && s.endsWith('}')) {
-        try {
-          const obj = JSON.parse(s);
-          return String(
-            obj.id || obj.tracking || obj.tracking_id || obj.id_venta ||
-            obj.meli_id || obj.code || obj.shipment_id || ''
-          ).trim();
-        } catch (_) {}
-      }
-      if (/^https?:\/\//i.test(s)) {
-        try {
-          const u = new URL(s);
-          const p = u.searchParams.get('id') || u.searchParams.get('tracking') ||
-                    u.searchParams.get('tracking_id') || u.searchParams.get('shipment_id') ||
-                    u.searchParams.get('meli_id');
-          if (p) return String(p).trim();
-          const seg = u.pathname.split('/').filter(Boolean).reverse().find(x => /^\d{5,}$/.test(x));
-          if (seg) return seg;
-        } catch (_) {}
-      }
-      const m = s.match(/\d{5,}/);
-      if (m) return m[0];
-      return s;
-    }
+   function extractPayload(raw) {
+  // Devuelve { tracking, sender_id } (sender_id puede venir como cliente_id)
+  const out = { tracking: '', sender_id: null };
 
-    async function addTrackingQR(trk) {
-      trk = (trk||'').trim();
+  if (!raw) return out;
+  const s = String(raw).trim();
+
+  // JSON en QR
+  if (s.startsWith('{') && s.endsWith('}')) {
+    try {
+      const obj = JSON.parse(s);
+      out.tracking  = String(
+        obj.tracking_id || obj.tracking || obj.id || obj.id_venta || obj.meli_id || obj.code || obj.shipment_id || ''
+      ).trim();
+      out.sender_id = String(obj.sender_id || obj.cliente_id || obj.sender || '').trim() || null;
+      return out;
+    } catch (_) {}
+  }
+
+  // URL con params
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s);
+      out.tracking  = String(
+        u.searchParams.get('tracking_id') || u.searchParams.get('tracking') || u.searchParams.get('id') ||
+        u.searchParams.get('id_venta')    || u.searchParams.get('meli_id')   || u.searchParams.get('shipment_id') || ''
+      ).trim();
+      out.sender_id = String(
+        u.searchParams.get('sender_id') || u.searchParams.get('cliente_id') || u.searchParams.get('sender') || ''
+      ).trim() || null;
+      if (!out.tracking) {
+        const seg = u.pathname.split('/').filter(Boolean).reverse().find(x => /^\w{5,}$/.test(x));
+        if (seg) out.tracking = seg;
+      }
+      return out;
+    } catch (_) {}
+  }
+
+  // plano: primer “código” con 5+ chars; no hay sender_id
+  const m = s.match(/[\w-]{5,}/);
+  out.tracking = m ? m[0] : s;
+  return out;
+}
+
+     async function addTrackingQR(payload) {
+      const trk = String(payload?.tracking || '').trim();
+      const sender_id = payload?.sender_id ? String(payload.sender_id) : null;
       if (!trk || stateQR.seen.has(trk)) return;
 
       const r = await fetch(`/api/envios/tracking/${encodeURIComponent(trk)}`);
@@ -372,9 +394,26 @@ async function cargarDropdowns() {
         cliente: e.cliente_id?.nombre || '',
         direccion: e.direccion,
         codigo_postal: e.codigo_postal,
-        partido: e.partido
+        partido: e.partido,
+        sender_id: e.cliente_id?._id || sender_id || null,
+        externo: false
       });
-      renderListQR();
+      } else {
+      // externo: mostramos nombre del cliente si lo tenemos en cache
+     const nombreCli = sender_id ? (CLIENTES_MAP.get(sender_id) || `Cliente ${sender_id.slice(-4)}`) : '(externo)';
+      stateQR.seen.add(trk);
+      stateQR.items.push({
+        _id: null,
+        tracking: trk,
+        cliente: nombreCli,
+        direccion: '',
+        codigo_postal: '',
+        partido: '',
+        sender_id,
+        externo: true
+      });
+    }
+    renderListQR();
     }
 async function asignarQR() {
   const selChofer = document.getElementById('choferSel');   // 👈 tus IDs
@@ -386,6 +425,7 @@ async function asignarQR() {
   const lista_nombre    = selLista?.selectedOptions?.[0]?.text?.trim() || '';
 
   const tracking_ids = stateQR.items.map(x => x.tracking).filter(Boolean);
+  const items = stateQR.items.map(x => ({ tracking: x.tracking, sender_id: x.sender_id || null }));
 
   if (!chofer_id) return alert('Elegí un chofer');
   if (!tracking_ids.length) return alert('Escaneá o pegá al menos un tracking');
@@ -395,8 +435,8 @@ async function asignarQR() {
     const r = await fetch('/api/asignaciones/qr', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({ chofer_id, lista_chofer_id, lista_nombre, tracking_ids, zona })
+      credentials: 'same-origin',     
+      body: JSON.stringify({ chofer_id, lista_chofer_id, lista_nombre, tracking_ids, items, zona })
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok || !data.ok) {
