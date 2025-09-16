@@ -551,11 +551,7 @@ tr.innerHTML = `
        QR
      </button>
    ` : '' }
-     
-     ${ (e.qr_meta?.valid_until && new Date(e.qr_meta.valid_until) > new Date())
-    ? `<span class="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">QR</span>`
-    : '' }
-   </button>
+    
    ${e.meli_id ? `
      <button
        class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-gray-50"
