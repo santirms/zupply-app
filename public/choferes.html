@@ -2,325 +2,162 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Zupply | Panel de Choferes</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Panel de Choferes</title>
 
-  <!-- Tailwind con dark por clase -->
-  <script>
-    window.tailwind = window.tailwind || {};
-    window.tailwind.config = { darkMode: "class" };
-  </script>
+  <!-- Tailwind CDN (si tu CSP lo bloquea, usa tu CSS local de Tailwind) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Map/QR -->
+  <!-- Leaflet (si usás la pestaña mapa más adelante) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+  <!-- html5-qrcode -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
-    :root{
-      --z-primary:#F59E0B;
-      --z-primary-dark:#D97706;
-      --z-primary-fg:#111827;
+    /* Forzamos legibilidad de <select> en dark */
+    html.dark select,
+    html.dark select option {
+      background-color: #0b1020;
+      color: #e5e7eb;
     }
-    /* Select legible en dark (Chrome iOS/Android) */
-    .dark .select-dark{ color-scheme: dark; background:#0B1020; color:#e5e7eb; }
-    .dark .select-dark option{ background:#0B1020 !important; color:#e5e7eb !important; }
+    /* Botón flotante de scan en mobile */
+    @media (max-width: 640px){
+      #btnStartScan { width:64px; height:64px; font-size:24px; }
+    }
   </style>
 
-  <!-- Tema: por defecto "system" -->
   <script>
-    (function(){
-      const saved = localStorage.getItem('zpl_theme') || 'system';
+    // ====== Tema system por defecto (auto) ======
+    (function () {
+      const key = 'zpl_theme';
+      const saved = localStorage.getItem(key) || 'system';
       const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
-      const dark = saved==='dark' || (saved==='system' && prefersDark);
+      const dark = saved === 'dark' || (saved === 'system' && prefersDark);
       document.documentElement.classList.toggle('dark', dark);
-      if(!localStorage.getItem('zpl_theme')) localStorage.setItem('zpl_theme','system');
+      document.addEventListener('DOMContentLoaded', () => {
+        const btn = document.getElementById('themeBtn');
+        const order = ['light', 'dark', 'system'];
+        let current = saved;
+        btn.textContent = 'Tema: ' + (current === 'system' ? 'auto' : current);
+        btn.addEventListener('click', () => {
+          current = order[(order.indexOf(current) + 1) % order.length];
+          localStorage.setItem(key, current);
+          const darkNow = current === 'dark' || (current === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', darkNow);
+          btn.textContent = 'Tema: ' + (current === 'system' ? 'auto' : current);
+        });
+      });
     })();
   </script>
 </head>
 
-<body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 min-h-screen">
-  <div class="max-w-7xl mx-auto p-3 sm:p-4">
-
-    <!-- TOPBAR -->
-    <header class="sticky top-0 z-40 mb-3">
-      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/85 dark:bg-[#0B1020]/75 backdrop-blur px-3 sm:px-4 py-2.5 flex items-center gap-2">
-        <a href="/index.html" class="flex items-center gap-2" title="Inicio">
-          <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)"><span class="text-white font-black">Z</span></div>
-          <span class="hidden sm:inline font-semibold tracking-wide text-amber-500">zupply</span>
-        </a>
-
-        <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
-        <span class="text-sm opacity-85">Gestión de Choferes</span>
-
-        <div class="ml-auto flex items-center gap-2">
-          <!-- usuario -->
-          <div class="relative" id="userMenuWrap">
-            <button id="userBtn"
-              class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
-              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
-              <span id="username" class="max-w-[140px] truncate">Usuario</span>
-              <span class="opacity-70">▾</span>
-            </button>
-            <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
-              <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
-              <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
-              <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
-            </div>
-          </div>
-
-          <!-- tema -->
-          <button id="themeBtn"
-            class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
-            Tema: auto
-          </button>
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0A0D16] dark:text-slate-100">
+  <!-- Topbar -->
+  <header class="sticky top-0 z-30 border-b border-black/5 dark:border-white/10 bg-white/70 dark:bg-[#0B1020]/80 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+      <a href="/index.html" class="flex items-center gap-2">
+        <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#FFB74D,#FF9800,#F57C00);">
+          <span class="text-white font-bold">Z</span>
         </div>
-      </div>
-    </header>
-
-    <!-- BODY -->
-    <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-3 sm:p-4 shadow-sm">
-      <h1 class="text-xl sm:text-2xl font-bold mb-3 text-center sm:text-left">Panel de Choferes</h1>
-
-      <!-- Tabs -->
-      <div class="flex flex-wrap gap-2 mb-4">
-        <button onclick="mostrarTab('qr')" class="tab-btn px-4 py-2 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30">Asignación por QR</button>
-        <button onclick="mostrarTab('mapa')" class="tab-btn px-4 py-2 rounded-2xl border border-white/10 hover:bg-white/10">Asignación desde el mapa</button>
-      </div>
-
-      <!-- TAB: QR -->
-      <div id="tab-qr" class="tab">
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-          <label class="text-sm">Chofer
-            <select id="choferSel" class="select-dark mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]"></select>
-          </label>
-          <label class="text-sm">Lista (pago chofer)
-            <select id="listaSel" class="select-dark mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]"></select>
-          </label>
-          <input id="inputZonaQR" type="hidden" value="">
-        </div>
-
-        <div class="flex flex-wrap items-center gap-3 mb-3">
-          <button id="btnStartScan" class="flex-1 sm:flex-none h-14 px-4 bg-white dark:bg-white/10 border border-slate-300 dark:border-white/10 rounded-2xl shadow-sm">
-            📷 <span class="ml-1">Escanear</span>
-          </button>
-          <input id="inpManualTrk" class="flex-[2] min-w-[220px] p-2 rounded-2xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent" placeholder="Pegar tracking y Enter" />
-          <div id="countQR" class="ml-auto text-sm opacity-70"></div>
-        </div>
-
-        <div id="qr-reader" class="w-full max-w-[520px] mx-auto hidden rounded-xl overflow-hidden border border-slate-200 dark:border-white/10"></div>
-
-        <div class="rounded-2xl border border-slate-200 dark:border-white/10 overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-slate-50 dark:bg-white/5">
-                <tr class="border-b border-slate-200 dark:border-white/10">
-                  <th class="text-left p-2">Tracking</th>
-                  <th class="text-left p-2">Cliente</th>
-                  <th class="text-left p-2">Dirección</th>
-                  <th class="text-left p-2">CP/Partido</th>
-                  <th class="text-left p-2"></th>
-                </tr>
-              </thead>
-              <tbody id="tblQR"></tbody>
-            </table>
-          </div>
-
-          <!-- Barra de acciones sticky (útil en celular) -->
-          <div class="p-2 sm:p-3 bg-white/80 dark:bg-[#0B1020]/80 backdrop-blur border-t border-slate-200 dark:border-white/10 sticky bottom-0 flex gap-2 justify-end">
-            <a id="btnWA" class="hidden px-4 py-2 rounded-2xl bg-green-600 text-white" target="_blank" rel="noopener">WhatsApp</a>
-            <a id="btnRemito" class="hidden px-4 py-2 rounded-2xl bg-slate-700 text-white" target="_blank" rel="noopener">Ver remito</a>
-            <button id="btnAsignarQR" class="px-4 py-2 rounded-2xl font-semibold bg-[var(--z-primary)] text-[var(--z-primary-fg)] hover:bg-[var(--z-primary-dark)]">Asignar</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- TAB: MAPA -->
-      <div id="tab-mapa" class="tab hidden">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-          <select id="choferSelMapa" class="select-dark p-2 rounded-2xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]"></select>
-          <select id="selectListaMapa" class="select-dark p-2 rounded-2xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]"></select>
-        </div>
-        <div id="mapaEnvios" class="w-full h-[55vh] sm:h-[480px] bg-slate-200 dark:bg-white/10 rounded-2xl mb-3"></div>
-        <button class="w-full sm:w-auto bg-emerald-600 text-white px-4 py-2 rounded-2xl">Asignar envíos seleccionados</button>
-      </div>
-
-      <!-- Botones para abrir modales -->
-      <div class="mt-6 flex flex-col sm:flex-row gap-2 justify-between">
-        <button onclick="abrirModal('modalChofer')" class="bg-indigo-600 text-white px-4 py-2 rounded-2xl">Agregar chofer</button>
-        <button onclick="abrirModal('modalRemitos')" class="bg-slate-600 text-white px-4 py-2 rounded-2xl">Historial de remitos</button>
+        <span class="font-semibold tracking-wide text-amber-500">zupply</span>
+      </a>
+      <span class="opacity-60">Choferes</span>
+      <div class="ml-auto flex items-center gap-2">
+        <a href="/index.html" class="px-3 py-1.5 rounded-xl text-sm border border-black/10 dark:border-white/10 hover:bg-black/[.04] dark:hover:bg-white/[.06]">🏠 Home</a>
+        <button id="themeBtn" class="px-3 py-1.5 rounded-xl text-sm border border-black/10 dark:border-white/10 hover:bg-black/[.04] dark:hover:bg-white/[.06]">Tema</button>
       </div>
     </div>
-  </div>
+  </header>
 
-  <!-- MODAL: Agregar Chofer -->
-  <div id="modalChofer" class="modal hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <form id="formAddChofer" class="bg-white dark:bg-[#0B1020] border border-slate-200 dark:border-white/10 p-5 rounded-2xl w-[92vw] max-w-md">
-      <h2 class="text-lg font-bold mb-3">Agregar chofer</h2>
-      <label class="text-sm">Nombre
-        <input name="nombre" type="text" class="mt-1 w-full border border-slate-300 dark:border-white/10 rounded-xl p-2 bg-white dark:bg-transparent" required />
-      </label>
-      <label class="text-sm block mt-2">Teléfono
-        <input name="telefono" type="text" class="mt-1 w-full border border-slate-300 dark:border-white/10 rounded-xl p-2 bg-white dark:bg-transparent" required />
-      </label>
-      <div class="text-right mt-4">
-        <button type="button" onclick="cerrarModal('modalChofer')" class="mr-2 px-4 py-2 rounded-xl border border-slate-300 dark:border-white/10">Cancelar</button>
-        <button type="submit" class="px-4 py-2 rounded-xl bg-[var(--z-primary)] text-[var(--z-primary-fg)] hover:bg-[var(--z-primary-dark)]">Guardar</button>
-      </div>
-    </form>
-  </div>
+  <main class="max-w-6xl mx-auto p-4">
+    <h1 class="text-2xl font-bold mb-4 text-center">Gestión de Choferes</h1>
 
-  <!-- MODAL: Historial Remitos -->
-  <div id="modalRemitos" class="modal hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div class="bg-white dark:bg-[#0B1020] border border-slate-200 dark:border-white/10 p-4 rounded-2xl w-[96vw] max-w-[900px] max-h-[85vh] overflow-auto">
-      <div class="flex justify-between items-center mb-3">
-        <h2 class="text-lg font-bold">Historial de remitos</h2>
-        <button onclick="cerrarModal('modalRemitos')" class="px-3 py-1 rounded-lg border border-slate-300 dark:border-white/10">✕</button>
-      </div>
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-        <input id="fDesde" type="date" class="p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent">
-        <input id="fHasta" type="date" class="p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent">
-        <select id="fChofer" class="select-dark p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]"></select>
-        <button id="btnFiltrarRemitos" class="px-3 py-2 rounded-2xl bg-[var(--z-primary)] text-[var(--z-primary-fg)] hover:bg-[var(--z-primary-dark)]">Filtrar</button>
-      </div>
-      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
-        <table class="w-full text-sm">
-          <thead class="bg-slate-50 dark:bg-white/5">
-            <tr class="border-b border-slate-200 dark:border-white/10">
-              <th class="text-left p-2">Fecha</th>
-              <th class="text-left p-2">Chofer</th>
-              <th class="text-left p-2">Zona</th>
-              <th class="text-left p-2">Total</th>
-              <th class="text-left p-2">Edición</th>
-              <th class="text-left p-2">PDF</th>
-            </tr>
-          </thead>
-          <tbody id="tblRemitos"></tbody>
-        </table>
-      </div>
+    <!-- Tabs -->
+    <div class="flex gap-3 mb-4">
+      <button data-tab="qr"   class="tab-btn px-4 py-2 rounded bg-amber-500 text-white">Asignación por QR</button>
+      <button data-tab="mapa" class="tab-btn px-4 py-2 rounded bg-slate-200 dark:bg-slate-700">Asignación desde el mapa</button>
     </div>
-  </div>
 
-  <!-- MODAL: Editor Remito -->
-  <div id="modalEditorRemito" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-    <div class="bg-white dark:bg-[#0B1020] border border-slate-200 dark:border-white/10 rounded-2xl w-[96vw] max-w-[980px] max-h-[88vh] overflow-auto p-4">
-      <div class="flex justify-between items-center mb-2">
-        <h3 class="text-lg font-bold">Editar remito</h3>
-        <button onclick="cerrarModal('modalEditorRemito')" class="px-3 py-1 rounded-lg border border-slate-300 dark:border-white/10">✕</button>
+    <!-- TAB: QR -->
+    <section id="tab-qr" class="tab">
+      <div class="grid sm:grid-cols-3 gap-3 mb-3">
+        <label class="text-sm">Chofer
+          <select id="choferSel" class="w-full mt-1 border rounded px-2 py-2"></select>
+        </label>
+        <label class="text-sm">Lista (pago chofer)
+          <select id="listaSel" class="w-full mt-1 border rounded px-2 py-2"></select>
+        </label>
+        <input id="inputZonaQR" type="hidden" value="">
       </div>
 
-      <div id="remitoInfo" class="text-sm opacity-80 mb-3"></div>
-
-      <div class="flex flex-wrap items-center gap-2 mb-3">
-        <button id="btnScanEditor" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10">📷 Escanear</button>
-        <input id="inpAddTrk" class="p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent" placeholder="Pegar tracking y Enter" />
-        <select id="selChoferDestino" class="select-dark p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]"></select>
-        <select id="selListaDestino" class="select-dark p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]"></select>
-        <button id="btnMoverSel" class="px-3 py-2 rounded-2xl bg-amber-600 text-white">Mover seleccionados</button>
-        <button id="btnQuitarSel" class="px-3 py-2 rounded-2xl bg-red-600 text-white ml-auto">Quitar seleccionados</button>
+      <div class="flex items-center gap-3 mb-3">
+        <button id="btnStartScan" class="rounded bg-slate-200 dark:bg-slate-700 px-4 py-3">📷</button>
+        <input id="inpManualTrk" class="flex-1 border rounded px-3 py-2" placeholder="Pegar tracking y Enter" />
+        <div id="countQR" class="ml-auto text-sm opacity-70"></div>
       </div>
 
-      <div id="qr-reader-editor" class="hidden w-full max-w-xs rounded-xl overflow-hidden border border-slate-200 dark:border-white/10"></div>
+      <div id="qr-reader" class="w-full max-w-xs mx-auto hidden"></div>
 
-      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/10">
-        <table class="w-full text-sm">
-          <thead class="bg-slate-50 dark:bg-white/5">
-            <tr class="border-b border-slate-200 dark:border-white/10">
-              <th class="p-2"><input type="checkbox" id="chkAllRows" /></th>
-              <th class="text-left p-2">Tracking</th>
-              <th class="text-left p-2">Cliente</th>
-              <th class="text-left p-2">Dirección</th>
-              <th class="text-left p-2">CP/Partido</th>
-            </tr>
-          </thead>
-          <tbody id="tblEditorRows"></tbody>
-        </table>
-      </div>
-
-      <div class="mt-3 flex flex-wrap gap-2 items-center justify-between">
-        <div id="editorCount" class="text-sm"></div>
-        <div class="flex items-center gap-3">
-          <a id="linkRemitoPDF" class="text-amber-600 underline" target="_blank">Ver PDF</a>
-          <button id="btnReenviarWA" class="px-3 py-2 rounded-2xl bg-green-600 text-white">Reenviar WhatsApp</button>
-          <button id="btnEliminarRemito" class="px-3 py-2 rounded-2xl bg-red-700 text-white">Eliminar remito</button>
+      <div class="border rounded p-3 bg-white dark:bg-white/5">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-black/10 dark:border-white/10">
+                <th class="text-left p-1">Tracking</th>
+                <th class="text-left p-1">Cliente</th>
+                <th class="text-left p-1">Dirección</th>
+                <th class="text-left p-1">CP/Partido</th>
+                <th class="text-left p-1"></th>
+              </tr>
+            </thead>
+            <tbody id="tblQR"></tbody>
+          </table>
+        </div>
+        <div class="mt-3 flex gap-2 justify-end">
+          <a id="btnWA" class="hidden px-4 py-2 rounded bg-green-600 text-white" target="_blank" rel="noopener">WhatsApp</a>
+          <a id="btnRemito" class="hidden px-4 py-2 rounded bg-slate-700 text-white" target="_blank" rel="noopener">Ver remito</a>
+          <button id="btnAsignarQR" class="px-4 py-2 rounded bg-amber-500 text-white">Asignar</button>
         </div>
       </div>
-    </div>
-  </div>
+    </section>
 
-  <!-- ======= SCRIPT: tu lógica + mejoras (tema/usuario) ======= -->
+    <!-- TAB: MAPA (placeholder responsivo) -->
+    <section id="tab-mapa" class="tab hidden">
+      <div class="grid sm:grid-cols-2 gap-3 mb-3">
+        <select id="choferSelMapa" class="border rounded px-2 py-2"></select>
+        <select id="selectListaMapa" class="border rounded px-2 py-2"></select>
+      </div>
+      <div class="rounded border border-dashed h-80 grid place-items-center text-sm opacity-70">
+        Mapa aquí (wireframe)
+      </div>
+    </section>
+  </main>
+
   <script>
-    // ===== usuario + theme =====
-    (function(){
-      const btn=document.getElementById('userBtn'), menu=document.getElementById('userMenu'), wrap=document.getElementById('userMenuWrap');
-      if(btn&&menu&&wrap){
-        btn.addEventListener('click', ()=>menu.classList.toggle('hidden'));
-        document.addEventListener('click', e=>{ if(!wrap.contains(e.target)) menu.classList.add('hidden'); });
-      }
-      document.getElementById('logoutBtn')?.addEventListener('click', async ()=>{
-        try{ await fetch('/auth/logout',{method:'POST'}) }catch(e){}
-        localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username');
-        location.href='/auth/login';
-      });
-      fetch('/me',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()).then(me=>{
-        document.getElementById('username').textContent = me.name || me.username || me.email || 'Usuario';
-      }).catch(()=> location.href='/auth/login');
+    "use strict";
 
-      const order=['light','dark','system'];
-      const themeBtn=document.getElementById('themeBtn');
-      const apply=(m)=>{ const pd=matchMedia('(prefers-color-scheme: dark)').matches; const dark = (m==='dark') || (m==='system' && pd);
-        document.documentElement.classList.toggle('dark', dark); localStorage.setItem('zpl_theme', m);
-        themeBtn.textContent='Tema: '+(m==='system'?'auto':m);
-      };
-      apply(localStorage.getItem('zpl_theme')||'system');
-      themeBtn.addEventListener('click', ()=>{ const cur=localStorage.getItem('zpl_theme')||'system'; const next=order[(order.indexOf(cur)+1)%order.length]; apply(next); });
-    })();
-  </script>
+    // ===== Helpers básicos
+    const $  = (s) => document.querySelector(s);
+    const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  <!-- ======= TU JS original (con mismos IDs/funciones) ======= -->
-  <script>
-    /* --- tu script intacto, solo con estilos responsive ya aplicados --- */
-
+    // Estado QR
     const CLIENTES_MAP = new Map();
+    const stateQR = { items: [], seen: new Set() };
 
-    function mostrarTab(tab) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.add('hidden'));
-      document.getElementById(\`tab-\${tab}\`).classList.remove('hidden');
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('bg-amber-500/20','text-amber-600','dark:text-amber-300','border','border-amber-500/30'));
-      // resaltar actual
-      if (window.event && window.event.target) {
-        const el = window.event.target;
-        el.classList.add('bg-amber-500/20','text-amber-600','dark:text-amber-300','border','border-amber-500/30');
-      }
+    // ===== Tabs (sin onclick inline)
+    function mostrarTab(name) {
+      $$('.tab').forEach(t => t.classList.add('hidden'));
+      $('#tab-' + name).classList.remove('hidden');
+      $$('.tab-btn').forEach(b => b.classList.remove('bg-amber-500','text-white'));
+      const btn = $(`.tab-btn[data-tab="${name}"]`);
+      if (btn) { btn.classList.add('bg-amber-500','text-white'); }
     }
+    document.addEventListener('DOMContentLoaded', () => {
+      $$('.tab-btn').forEach(b => b.addEventListener('click', () => mostrarTab(b.dataset.tab)));
+    });
 
-    function cerrarModal(id) {
-      document.getElementById(id).classList.add('hidden');
-    }
-
-    function extractTracking(s){ return extractPayload(s).tracking; }
-
-    window.abrirModal = async function abrirModal(id) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.classList.remove('hidden');
-
-      if (id === 'modalRemitos') {
-        try {
-          const res = await fetch('/api/choferes', { credentials: 'same-origin' });
-          const arr = await res.json();
-          const sel = document.getElementById('fChofer');
-          if (sel) {
-            sel.innerHTML = '<option value=\"\">(todos)</option>' + arr.map(c => \`<option value="\${c._id}">\${c.nombre}</option>\`).join('');
-          }
-          await cargarRemitos();
-        } catch (err) { console.error('Error remitos/choferes:', err); }
-      }
-    };
-
+    // ===== Cargar dropdowns seguros (sin template literals frágiles)
     async function cargarDropdowns() {
       try {
         const [choferRes, listaRes, cliRes] = await Promise.all([
@@ -329,101 +166,150 @@
           fetch('/api/clientes', { credentials: 'same-origin' })
         ]);
 
-        const [choferTxt, listaTxt, cliTxt] = await Promise.all([ choferRes.text(), listaRes.text(), cliRes.text() ]);
+        const [choferes, listas, clientes] = await Promise.all([
+          choferRes.ok ? choferRes.json() : [],
+          listaRes.ok  ? listaRes.json()  : [],
+          cliRes.ok    ? cliRes.json()    : []
+        ]);
 
-        const choferes = choferRes.ok ? JSON.parse(choferTxt) : [];
-        const listas   = listaRes.ok  ? JSON.parse(listaTxt)  : [];
-        const clientes = cliRes.ok    ? JSON.parse(cliTxt)    : [];
-
+        // cache clientes
         CLIENTES_MAP.clear();
         for (const c of clientes) CLIENTES_MAP.set(String(c._id), c.nombre || '');
 
-        const optsChofer = choferes.map(c => \`<option value="\${c._id}">\${c.nombre}</option>\`).join('');
-        const optsLista  = listas.map(l  => \`<option value="\${l._id}">\${l.nombre}</option>\`).join('');
+        function fillSelect(sel, arr, firstLabel) {
+          sel.innerHTML = '';
+          if (firstLabel) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = firstLabel;
+            sel.appendChild(opt);
+          }
+          for (const it of arr) {
+            const opt = document.createElement('option');
+            opt.value = it._id || '';
+            opt.textContent = it.nombre || '(sin nombre)';
+            sel.appendChild(opt);
+          }
+        }
 
-        const selChoferQR   = document.getElementById('choferSel');
-        const selChoferMapa = document.getElementById('choferSelMapa');
-        const selListaQR    = document.getElementById('listaSel');
-        const selListaMapa  = document.getElementById('selectListaMapa');
-
-        if (selChoferQR)   selChoferQR.innerHTML   = optsChofer || '<option value=\"\">(sin choferes)</option>';
-        if (selChoferMapa) selChoferMapa.innerHTML = optsChofer || '<option value=\"\">(sin choferes)</option>';
-
-        const listaHTML = '<option value=\"\">(sin lista)</option>' + optsLista;
-        if (selListaQR)   selListaQR.innerHTML   = listaHTML;
-        if (selListaMapa) selListaMapa.innerHTML = listaHTML;
-      } catch (e) { console.error('cargarDropdowns error:', e); }
+        fillSelect($('#choferSel'), choferes, '(Elegir chofer)');
+        fillSelect($('#choferSelMapa'), choferes, '(Elegir chofer)');
+        fillSelect($('#listaSel'), listas, '(sin lista)');
+        fillSelect($('#selectListaMapa'), listas, '(sin lista)');
+      } catch (e) {
+        console.error('cargarDropdowns error:', e);
+      }
     }
 
+    // ===== Lector QR
     function initQrScanner() {
-      const readerDiv = document.getElementById('qr-reader');
-      const html5QrCode = new Html5Qrcode("qr-reader");
-      let lastTrk = null, lastAt = 0;
-
-      document.getElementById('btnStartScan').addEventListener('click', async () => {
+      const readerDiv = $('#qr-reader');
+      let scanner = null;
+      $('#btnStartScan').addEventListener('click', async () => {
+        // HTTPS/localhost requerido
+        if (!window.isSecureContext && location.hostname !== 'localhost') {
+          alert('La cámara requiere HTTPS o localhost.');
+          return;
+        }
         const visible = !readerDiv.classList.contains('hidden');
-        if (visible) { await html5QrCode.stop().catch(()=>{}); readerDiv.classList.add('hidden'); return; }
-
+        if (visible) {
+          if (scanner) await scanner.stop().catch(()=>{});
+          readerDiv.classList.add('hidden');
+          return;
+        }
         readerDiv.classList.remove('hidden');
-        html5QrCode.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: 280 },
-          msg => {
-            const { tracking, sender_id } = extractPayload(msg);
-            if (!tracking) return;
-            const now = Date.now();
-            if (tracking === lastTrk && (now - lastAt) < 1200) return;
-            lastTrk = tracking; lastAt = now;
-            addTrackingQR({ tracking, sender_id });
-            if (navigator.vibrate) navigator.vibrate(40);
-          },
-          err => console.warn('QR error:', err)
-        ).catch(err => { console.error('No se pudo iniciar QR:', err); readerDiv.classList.add('hidden'); });
-      });
-    }
 
-    document.addEventListener('keydown', e => {
-      if (e.target && e.target.id === 'inpManualTrk' && e.key === 'Enter') {
+        try {
+          scanner = new Html5Qrcode('qr-reader');
+          let last='', lastAt=0;
+          await scanner.start(
+            { facingMode: 'environment' },
+            { fps: 10, qrbox: 250 },
+            (msg) => {
+              const { tracking, sender_id } = extractPayload(msg);
+              const now = Date.now();
+              if (!tracking) return;
+              if (tracking === last && now - lastAt < 1200) return;
+              last = tracking; lastAt = now;
+              addTrackingQR({ tracking, sender_id });
+              if (navigator.vibrate) navigator.vibrate(40);
+            },
+            (err) => console.warn('QR error:', err)
+          );
+        } catch (e) {
+          console.error('No se pudo iniciar QR:', e);
+          alert('No se pudo iniciar la cámara. Revisá permisos/HTTPS.');
+          readerDiv.classList.add('hidden');
+        }
+      });
+
+      // Pegar a mano y Enter
+      $('#inpManualTrk').addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
         e.preventDefault();
         const { tracking, sender_id } = extractPayload(e.target.value);
         if (!tracking) return alert('Tracking inválido');
         addTrackingQR({ tracking, sender_id });
         e.target.value = '';
-      }
-    });
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const form = document.getElementById('formAddChofer');
-      if (!form) return;
-      form.addEventListener('submit', async e => {
-        e.preventDefault();
-        const nombre   = form.nombre.value.trim();
-        const telefono = form.telefono.value.trim();
-        if (!nombre || !telefono) return alert('Completá nombre y teléfono');
-
-        try {
-          const res = await fetch('/api/choferes', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ nombre, telefono }) });
-          if (!res.ok) throw new Error(await res.text());
-          form.reset(); cerrarModal('modalChofer'); await cargarDropdowns(); alert('Chofer creado');
-        } catch (err) { console.error('crear chofer:', err); alert('No se pudo crear'); }
       });
-    });
+    }
 
-    const $ = s => document.querySelector(s);
-    const stateQR = { items: [], seen: new Set() };
+    // ===== Parse de payload (URL/JSON/plano)
+    function extractPayload(raw) {
+      const out = { tracking: '', sender_id: null };
+      if (!raw) return out;
+      const s = String(raw).trim();
 
+      // JSON en QR
+      if (s.startsWith('{') && s.endsWith('}')) {
+        try {
+          const o = JSON.parse(s);
+          out.tracking = String(
+            o.tracking_id || o.tracking || o.id || o.id_venta || o.meli_id || o.code || o.shipment_id || ''
+          ).trim();
+          out.sender_id = String(o.sender_id || o.cliente_id || o.sender || '').trim() || null;
+          return out;
+        } catch {}
+      }
+
+      // URL con params
+      if (/^https?:\/\//i.test(s)) {
+        try {
+          const u = new URL(s);
+          out.tracking = String(
+            u.searchParams.get('tracking_id') || u.searchParams.get('tracking') || u.searchParams.get('id') ||
+            u.searchParams.get('id_venta') || u.searchParams.get('meli_id') || u.searchParams.get('shipment_id') || ''
+          ).trim();
+          out.sender_id = String(
+            u.searchParams.get('sender_id') || u.searchParams.get('cliente_id') || u.searchParams.get('sender') || ''
+          ).trim() || null;
+          if (!out.tracking) {
+            const seg = u.pathname.split('/').filter(Boolean).reverse().find(x => /^\w{5,}$/.test(x));
+            if (seg) out.tracking = seg;
+          }
+          return out;
+        } catch {}
+      }
+
+      // Plano: primer token con 5+ chars
+      const m = s.match(/[\w-]{5,}/);
+      out.tracking = m ? m[0] : s;
+      return out;
+    }
+
+    // ===== Lista QR (render + asignar)
     function renderListQR() {
       const tb = $('#tblQR');
       tb.innerHTML = stateQR.items.map(it => `
-        <tr class="border-b border-slate-200 dark:border-white/10">
-          <td class="p-2">${it.tracking}${it.externo ? ' <em class="text-amber-600">(externo)</em>' : ''}</td>
-          <td class="p-2">${it.cliente||''}</td>
-          <td class="p-2">${it.direccion||''}</td>
-          <td class="p-2">${[it.codigo_postal||'', it.partido||''].filter(Boolean).join(' ')}</td>
-          <td class="p-2 text-right"><button class="text-rose-600 hover:underline" data-trk="${'${it.tracking}'}">Quitar</button></td>
+        <tr class="border-b border-black/10 dark:border-white/10">
+          <td class="p-1">${it.tracking}${it.externo ? ' <em class="text-amber-600">(externo)</em>' : ''}</td>
+          <td class="p-1">${it.cliente||''}</td>
+          <td class="p-1">${it.direccion||''}</td>
+          <td class="p-1">${[it.codigo_postal||'', it.partido||''].filter(Boolean).join(' ')}</td>
+          <td class="p-1 text-right"><button class="text-red-600 hover:underline" data-trk="${it.tracking}">Quitar</button></td>
         </tr>
       `).join('');
-      $('#countQR').textContent = \`Total: \${stateQR.items.length}\`;
+      $('#countQR').textContent = `Total: ${stateQR.items.length}`;
       tb.querySelectorAll('button[data-trk]').forEach(btn=>{
         btn.onclick = () => {
           const trk = btn.getAttribute('data-trk');
@@ -433,33 +319,6 @@
         };
       });
     }
-    
-    function extractPayload(raw) {
-      const out = { tracking: '', sender_id: null };
-      if (!raw) return out;
-      const s = String(raw).trim();
-
-      if (s.startsWith('{') && s.endsWith('}')) {
-        try {
-          const obj = JSON.parse(s);
-          out.tracking  = String(obj.tracking_id || obj.tracking || obj.id || obj.id_venta || obj.meli_id || obj.code || obj.shipment_id || '').trim();
-          out.sender_id = String(obj.sender_id || obj.cliente_id || obj.sender || '').trim() || null;
-          return out;
-        } catch(_) {}
-      }
-      if (/^https?:\/\//i.test(s)) {
-        try {
-          const u = new URL(s);
-          out.tracking  = String(u.searchParams.get('tracking_id') || u.searchParams.get('tracking') || u.searchParams.get('id') || u.searchParams.get('id_venta') || u.searchParams.get('meli_id') || u.searchParams.get('shipment_id') || '').trim();
-          out.sender_id = String(u.searchParams.get('sender_id') || u.searchParams.get('cliente_id') || u.searchParams.get('sender') || '').trim() || null;
-          if (!out.tracking) {
-            const seg = u.pathname.split('/').filter(Boolean).reverse().find(x => /^\w{5,}$/.test(x)); if (seg) out.tracking = seg;
-          }
-          return out;
-        } catch(_) {}
-      }
-      const m = s.match(/[\w-]{5,}/); out.tracking = m ? m[0] : s; return out;
-    }
 
     async function addTrackingQR(payload) {
       const trk = String(payload?.tracking || '').trim();
@@ -468,12 +327,15 @@
 
       let interno = null;
       try {
-        const r = await fetch('/api/envios/tracking/' + encodeURIComponent(trk), { credentials:'same-origin' });
+        const r = await fetch(`/api/envios/tracking/${encodeURIComponent(trk)}`, { credentials: 'same-origin' });
         if (r.ok) interno = await r.json();
-      } catch(e){}
+      } catch {}
 
       if (interno) {
-        if ((interno.estado || 'pendiente') !== 'pendiente') { alert('Ya asignado: ' + trk); return; }
+        if ((interno.estado || 'pendiente') !== 'pendiente') {
+          alert(`Ya asignado: ${trk}`);
+          return;
+        }
         stateQR.seen.add(trk);
         stateQR.items.push({
           _id: interno._id,
@@ -486,28 +348,34 @@
           externo: false
         });
       } else {
-        const nombreCli = sender_id ? (CLIENTES_MAP.get(sender_id) || \`Cliente \${String(sender_id).slice(-4)}\`) : '(externo)';
+        const nombreCli = sender_id ? (CLIENTES_MAP.get(sender_id) || `Cliente ${sender_id.slice(-4)}`) : '(externo)';
         stateQR.seen.add(trk);
-        stateQR.items.push({_id:null, tracking:trk, cliente:nombreCli, direccion:'', codigo_postal:'', partido:'', sender_id, externo:true});
+        stateQR.items.push({
+          _id: null,
+          tracking: trk,
+          cliente: nombreCli,
+          direccion: '',
+          codigo_postal: '',
+          partido: '',
+          sender_id,
+          externo: true
+        });
       }
       renderListQR();
     }
 
     async function asignarQR() {
-      const selChofer = document.getElementById('choferSel');
-      const selLista  = document.getElementById('listaSel');
-      const zona      = document.getElementById('inputZonaQR')?.value?.trim() || '';
-
-      const chofer_id       = selChofer?.value || '';
-      const lista_chofer_id = selLista?.value || null;
-      const lista_nombre    = selLista?.selectedOptions?.[0]?.text?.trim() || '';
+      const chofer_id       = $('#choferSel')?.value || '';
+      const lista_chofer_id = $('#listaSel')?.value || null;
+      const lista_nombre    = $('#listaSel')?.selectedOptions?.[0]?.text?.trim() || '';
+      const zona            = $('#inputZonaQR')?.value?.trim() || '';
 
       const tracking_ids = stateQR.items.map(x => x.tracking).filter(Boolean);
       const items = stateQR.items.map(x => ({ tracking: x.tracking, sender_id: x.sender_id || null }));
 
       if (!chofer_id) return alert('Elegí un chofer');
       if (!tracking_ids.length) return alert('Escaneá o pegá al menos un tracking');
-      if (!confirm(\`Asignar \${tracking_ids.length} paquete(s)?\`)) return;
+      if (!confirm(`Asignar ${tracking_ids.length} paquete(s)?`)) return;
 
       try {
         const r = await fetch('/api/asignaciones/qr', {
@@ -516,230 +384,30 @@
           credentials: 'same-origin',
           body: JSON.stringify({ chofer_id, lista_chofer_id, lista_nombre, tracking_ids, items, zona })
         });
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok || !data.ok) { console.error('Asignaciones/qr error:', data); return alert(data.error || \`Error \${r.status}\`); }
-
-        const btnRemito = document.getElementById('btnRemito');
-        const btnWA     = document.getElementById('btnWA');
+        const data = await r.json().catch(()=>({}));
+        if (!r.ok || !data.ok) {
+          console.error('Asignaciones/qr error:', data);
+          return alert(data.error || `Error ${r.status}`);
+        }
+        const btnRemito = $('#btnRemito');
+        const btnWA     = $('#btnWA');
         if (data.remito_url && btnRemito) { btnRemito.href = data.remito_url; btnRemito.classList.remove('hidden'); }
         if (data.whatsapp_url && btnWA)   { btnWA.href     = data.whatsapp_url; btnWA.classList.remove('hidden'); }
 
-        alert('Asignados: ' + data.total);
+        alert(`Asignados: ${data.total}`);
         stateQR.items.length = 0; stateQR.seen.clear(); renderListQR();
-      } catch (e) { console.error(e); alert('Error de red'); }
-    }
-
-    async function cargarRemitos() {
-      const p = new URLSearchParams();
-      const d = document.querySelector('#fDesde')?.value;
-      const h = document.querySelector('#fHasta')?.value;
-      const c = document.querySelector('#fChofer')?.value;
-      if (d) p.set('desde', d); if (h) p.set('hasta', h); if (c) p.set('chofer_id', c);
-
-      const r = await fetch('/api/asignaciones?' + p.toString());
-      const rows = await r.json();
-
-      const tbody = document.getElementById('tblRemitos');
-      if (!tbody) return;
-
-      tbody.innerHTML = rows.map(x => `
-        <tr class="border-b border-slate-200 dark:border-white/10">
-          <td class="p-2">${new Date(x.fecha).toLocaleString()}</td>
-          <td class="p-2">${x.chofer?.nombre || ''}</td>
-          <td class="p-2">${x.lista_nombre || x.lista?.nombre || x.zona || '-'}</td>
-          <td class="p-2">${x.total_paquetes ?? x.total ?? (x.envios?.length || 0)}</td>
-          <td class="p-2"><button type="button" class="text-amber-600 underline" data-edit="${'${x._id}'}">Editar</button></td>
-          <td class="p-2">${x.remito_url ? '<a href="'+x.remito_url+'" target="_blank" rel="noopener">Descargar</a>' : '-'}</td>
-        </tr>
-      `).join('');
-
-      tbody.querySelectorAll('[data-edit]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const id = btn.getAttribute('data-edit');
-          if (!id) return;
-          window.abrirEditorRemito(id);
-        });
-      });
-    }
-    document.getElementById('btnFiltrarRemitos').onclick = cargarRemitos;
-
-    const editorState = { id:null, rows:[], seen:new Set(), remito_url:null, lista_nombre:'', chofer_id:null };
-
-    window.abrirEditorRemito = async function (asgId) {
-      editorState.id = asgId;
-
-      const r = await fetch('/api/asignaciones/' + asgId);
-      if (!r.ok) return alert('No se pudo cargar el remito');
-      const asg = await r.json();
-
-      editorState.rows = (asg.envios || []).map(e => ({
-        tracking:   e.id_venta || e.meli_id,
-        cliente:    e.cliente_id?.nombre || '',
-        direccion:  e.direccion || '',
-        cp:         e.codigo_postal || '',
-        partido:    e.partido || ''
-      }));
-      editorState.seen = new Set(editorState.rows.map(x=>x.tracking));
-      editorState.remito_url  = asg.remito_url || null;
-      editorState.lista_nombre = asg.lista_nombre || '';
-      editorState.chofer_id    = asg.chofer?._id || asg.chofer || null;
-
-      document.getElementById('remitoInfo').innerHTML =
-        'Chofer: <b>'+(asg.chofer?.nombre || '')+'</b> · Lista: <b>'+(asg.lista_nombre || '-')+'</b> · Fecha: '+ new Date(asg.fecha).toLocaleString();
-
-      const a = document.getElementById('linkRemitoPDF');
-      if (editorState.remito_url) { a.href = editorState.remito_url; a.classList.remove('pointer-events-none'); }
-      else { a.removeAttribute('href'); a.classList.add('pointer-events-none'); }
-
-      renderEditorRows();
-
-      const [choferes, listas] = await Promise.all([
-        fetch('/api/choferes').then(x=>x.json()),
-        fetch('/api/listas-de-precios?prefix=Choferes').then(x=>x.json())
-      ]);
-      document.getElementById('selChoferDestino').innerHTML =
-        '<option value=\"\">(Elegir chofer destino)</option>' + choferes.map(c=>'<option value="'+c._id+'">'+c.nombre+'</option>').join('');
-      document.getElementById('selListaDestino').innerHTML =
-        '<option value=\"\">(Misma lista)</option>' + listas.map(l=>'<option value="'+l._id+'">'+l.nombre+'</option>').join('');
-
-      document.getElementById('modalEditorRemito').classList.remove('hidden');
-    };
-
-    function renderEditorRows(){
-      const tb = document.getElementById('tblEditorRows');
-      tb.innerHTML = editorState.rows.map(r=>`
-        <tr class="border-b border-slate-200 dark:border-white/10">
-          <td class="p-2"><input type="checkbox" data-trk="${'${r.tracking}'}"></td>
-          <td class="p-2">${r.tracking}</td>
-          <td class="p-2">${r.cliente}</td>
-          <td class="p-2">${r.direccion}</td>
-          <td class="p-2">${[r.cp, r.partido].filter(Boolean).join(' ')}</td>
-        </tr>
-      `).join('');
-      document.getElementById('editorCount').textContent = 'Total: ' + editorState.rows.length;
-      const chkAll = document.getElementById('chkAllRows');
-      chkAll.checked = false;
-      chkAll.onchange = () => { tb.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = chkAll.checked); };
-    }
-
-    document.addEventListener('keydown', e=>{
-      if (e.target && e.target.id === 'inpAddTrk' && e.key === 'Enter') {
-        e.preventDefault();
-        const trk = extractTracking(e.target.value);
-        e.target.value = '';
-        if (!trk || editorState.seen.has(trk)) return;
-        agregarAlRemito([trk]);
+      } catch (e) {
+        console.error(e); alert('Error de red');
       }
-    });
-
-    (function(){
-      let scanner = null;
-      const reader = document.getElementById('qr-reader-editor');
-      const btn = document.getElementById('btnScanEditor');
-      if (!btn) return;
-      btn.onclick = async () => {
-        if (reader.classList.contains('hidden')) {
-          reader.classList.remove('hidden');
-          scanner = new Html5Qrcode('qr-reader-editor');
-          let last='', lastAt=0;
-          await scanner.start({ facingMode:'environment' }, { fps:10, qrbox:250 }, msg=>{
-            const trk = extractTracking(msg);
-            const now = Date.now();
-            if (!trk) return;
-            if (trk===last && now-lastAt<1200) return;
-            last = trk; lastAt = now;
-            agregarAlRemito([trk]);
-            if (navigator.vibrate) navigator.vibrate(40);
-          });
-        } else {
-          await scanner.stop().catch(()=>{}); reader.classList.add('hidden');
-        }
-      };
-    })();
-
-    async function agregarAlRemito(trackingList){
-      const r = await fetch('/api/asignaciones/' + editorState.id + '/add', {
-        method:'PATCH', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ tracking_ids: trackingList, force_move: true })
-      });
-      const data = await r.json();
-      if (!r.ok || !data.ok) { alert(data.error || 'No se pudo agregar'); return; }
-
-      if (data.agregados) {
-        try {
-          const rr = await fetch('/api/asignaciones/' + editorState.id + '/whatsapp?tipo=agregados&cantidad=' + data.agregados);
-          const ww = await rr.json();
-          if (ww.whatsapp_url) window.open(ww.whatsapp_url, '_blank');
-        } catch {}
-      }
-      await window.abrirEditorRemito(editorState.id);
     }
 
-    document.getElementById('btnQuitarSel').onclick = async ()=>{
-      const sel = Array.from(document.querySelectorAll('#tblEditorRows input[type=checkbox]:checked')).map(c => c.getAttribute('data-trk'));
-      if (!sel.length) return alert('Seleccioná al menos uno');
-      if (!confirm('Quitar ' + sel.length + ' del remito?')) return;
-
-      const r = await fetch('/api/asignaciones/' + editorState.id + '/remove', {
-        method:'PATCH', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ tracking_ids: sel })
-      });
-      const data = await r.json();
-      if (!r.ok || !data.ok) { alert(data.error || 'No se pudo quitar'); return; }
-
-      if (data.quitados) {
-        try {
-          const rr = await fetch('/api/asignaciones/' + editorState.id + '/whatsapp?tipo=quitados&cantidad=' + data.quitados);
-          const ww = await rr.json();
-          if (ww.whatsapp_url) window.open(ww.whatsapp_url, '_blank');
-        } catch {}
-      }
-      await window.abrirEditorRemito(editorState.id);
-    };
-
-    document.getElementById('btnMoverSel').onclick = async ()=>{
-      const sel = Array.from(document.querySelectorAll('#tblEditorRows input[type=checkbox]:checked')).map(c => c.getAttribute('data-trk'));
-      const chofer_destino = document.getElementById('selChoferDestino').value;
-      const lista_chofer_id = document.getElementById('selListaDestino').value || null;
-      const lista_nombre = document.querySelector('#selListaDestino option:checked')?.textContent || '';
-      if (!sel.length) return alert('Seleccioná al menos uno');
-      if (!chofer_destino) return alert('Elegí chofer destino');
-
-      const r = await fetch('/api/asignaciones/' + editorState.id + '/move', {
-        method:'PATCH', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ tracking_ids: sel, chofer_destino, lista_chofer_id, lista_nombre })
-      });
-      const data = await r.json();
-      if (!r.ok || !data.ok) { alert(data.error || 'No se pudo mover'); return; }
-      await window.abrirEditorRemito(editorState.id);
-    };
-
-    document.getElementById('btnReenviarWA').onclick = async () => {
-      if (!editorState.id) return;
-      const r = await fetch('/api/asignaciones/' + editorState.id + '/whatsapp');
-      const data = await r.json();
-      if (!r.ok || !data.ok || !data.whatsapp_url) return alert('No se pudo generar WhatsApp');
-      window.open(data.whatsapp_url, '_blank');
-    };
-
-    document.getElementById('btnEliminarRemito').onclick = async () => {
-      if (!editorState.id) return;
-      const total = editorState.rows.length;
-      let url = '/api/asignaciones/' + editorState.id;
-      if (total > 0) { if (!confirm(\`Este remito tiene \${total} paquete(s). ¿Eliminar y devolver a "pendiente"?\`)) return; url += '?force=true'; }
-      else { if (!confirm('¿Eliminar remito vacío?')) return; }
-      const r = await fetch(url, { method:'DELETE' });
-      const data = await r.json();
-      if (!r.ok || !data.ok) return alert(data.error || 'No se pudo eliminar');
-      cerrarModal('modalEditorRemito'); await cargarRemitos();
-    };
-
+    // ===== Init
     document.addEventListener('DOMContentLoaded', () => {
+      mostrarTab('qr');
       cargarDropdowns();
       initQrScanner();
       renderListQR();
-      document.getElementById('btnAsignarQR').addEventListener('click', asignarQR);
+      $('#btnAsignarQR').addEventListener('click', asignarQR);
     });
   </script>
 </body>
