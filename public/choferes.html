@@ -376,7 +376,7 @@
 
       try {
         const payload = { chofer_id, lista_chofer_id, lista_nombre, tracking_ids, items, zona };
-        if (firstSender) payload.cliente_id = firstSender; // ayuda al backend para externos
+        if (firstSender) payload.sender_id_hint = firstSender; // ✅ nombre nuevo, no se castea a _id
         const r = await fetch('/api/asignaciones/qr', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
