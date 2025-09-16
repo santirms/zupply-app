@@ -185,6 +185,9 @@
       document.getElementById(id).classList.add('hidden');
     }
 
+    function extractTracking(s) {
+  return extractPayload(s).tracking;
+}
     // Modal genérico (async) — carga historial cuando corresponde
  window.abrirModal = async function abrirModal(id) {
   const el = document.getElementById(id);
@@ -212,24 +215,36 @@ async function cargarDropdowns() {
   try {
     const [choferRes, listaRes, cliRes] = await Promise.all([
       fetch('/api/choferes', { credentials: 'same-origin' }),
-      fetch('/api/listas-de-precios?prefix=Choferes', { credentials: 'same-origin' })
+      fetch('/api/listas-de-precios?prefix=Choferes', { credentials: 'same-origin' }),
+      fetch('/api/clientes', { credentials: 'same-origin' }) // ← tercer fetch
     ]);
-    const choferes = await choferRes.json().catch(() => []);
-    const listas   = await listaRes.json().catch(() => []);
-      // cache clientes para lookup por id (sin mostrar nada en UI)
+
+    const [choferTxt, listaTxt, cliTxt] = await Promise.all([
+      choferRes.text(), listaRes.text(), cliRes.text()
+    ]);
+
+    if (!choferRes.ok) console.error('[choferes] status', choferRes.status, 'body:', choferTxt);
+    if (!listaRes.ok)  console.error('[listas]   status',  listaRes.status,  'body:', listaTxt);
+    if (!cliRes.ok)    console.error('[clientes] status',  cliRes.status,    'body:', cliTxt);
+
+    const choferes = choferRes.ok ? JSON.parse(choferTxt) : [];
+    const listas   = listaRes.ok  ? JSON.parse(listaTxt)  : [];
+    const clientes = cliRes.ok    ? JSON.parse(cliTxt)    : [];
+
+    // cache clientes para lookup por id (sin mostrar nada en UI)
     CLIENTES_MAP.clear();
     for (const c of clientes) CLIENTES_MAP.set(String(c._id), c.nombre || '');
 
     const optsChofer = choferes.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
     const optsLista  = listas.map(l => `<option value="${l._id}">${l.nombre}</option>`).join('');
 
-    const selChoferQR   = document.getElementById('choferSel');      // 👈 tus IDs
+    const selChoferQR   = document.getElementById('choferSel');
     const selChoferMapa = document.getElementById('choferSelMapa');
-    const selListaQR    = document.getElementById('listaSel');       // 👈 tus IDs
+    const selListaQR    = document.getElementById('listaSel');
     const selListaMapa  = document.getElementById('selectListaMapa');
 
-    if (selChoferQR)   selChoferQR.innerHTML   = optsChofer;
-    if (selChoferMapa) selChoferMapa.innerHTML = optsChofer;
+    if (selChoferQR)   selChoferQR.innerHTML   = optsChofer || `<option value="">(sin choferes)</option>`;
+    if (selChoferMapa) selChoferMapa.innerHTML = optsChofer || `<option value="">(sin choferes)</option>`;
 
     const listaHTML = `<option value="">(sin lista)</option>${optsLista}`;
     if (selListaQR)   selListaQR.innerHTML   = listaHTML;
@@ -238,7 +253,6 @@ async function cargarDropdowns() {
     console.error('cargarDropdowns error:', e);
   }
 }
-
 
     // Lector QR (pestaña principal)
     function initQrScanner() {
@@ -376,45 +390,54 @@ async function cargarDropdowns() {
   out.tracking = m ? m[0] : s;
   return out;
 }
+    
+async function addTrackingQR(payload) {
+  const trk = String(payload?.tracking || '').trim();
+  const sender_id = payload?.sender_id ? String(payload.sender_id) : null;
+  if (!trk || stateQR.seen.has(trk)) return;
 
-     async function addTrackingQR(payload) {
-      const trk = String(payload?.tracking || '').trim();
-      const sender_id = payload?.sender_id ? String(payload.sender_id) : null;
-      if (!trk || stateQR.seen.has(trk)) return;
+  let interno = null;
+  try {
+    const r = await fetch(`/api/envios/tracking/${encodeURIComponent(trk)}`, { credentials:'same-origin' });
+    if (r.ok) interno = await r.json();
+  } catch (e) { /* sin red ≠ frenar, caemos a externo */ }
 
-      const r = await fetch(`/api/envios/tracking/${encodeURIComponent(trk)}`);
-      if (!r.ok) return alert(`No encontrado en el sistema: ${trk}`);
-      const e = await r.json();
-      if ((e.estado || 'pendiente') !== 'pendiente') return alert(`Ya asignado: ${trk}`);
-
-      stateQR.seen.add(trk);
-      stateQR.items.push({
-        _id: e._id,
-        tracking: e.id_venta || e.meli_id,
-        cliente: e.cliente_id?.nombre || '',
-        direccion: e.direccion,
-        codigo_postal: e.codigo_postal,
-        partido: e.partido,
-        sender_id: e.cliente_id?._id || sender_id || null,
-        externo: false
-      });
-      } else {
-      // externo: mostramos nombre del cliente si lo tenemos en cache
-     const nombreCli = sender_id ? (CLIENTES_MAP.get(sender_id) || `Cliente ${sender_id.slice(-4)}`) : '(externo)';
-      stateQR.seen.add(trk);
-      stateQR.items.push({
-        _id: null,
-        tracking: trk,
-        cliente: nombreCli,
-        direccion: '',
-        codigo_postal: '',
-        partido: '',
-        sender_id,
-        externo: true
-      });
+  if (interno) {
+    if ((interno.estado || 'pendiente') !== 'pendiente') {
+      alert(`Ya asignado: ${trk}`);
+      return;
     }
-    renderListQR();
-    }
+    stateQR.seen.add(trk);
+    stateQR.items.push({
+      _id: interno._id,
+      tracking: interno.id_venta || interno.meli_id || trk,
+      cliente: interno.cliente_id?.nombre || '',
+      direccion: interno.direccion || '',
+      codigo_postal: interno.codigo_postal || '',
+      partido: interno.partido || '',
+      sender_id: interno.cliente_id?._id || sender_id || null,
+      externo: false
+    });
+  } else {
+    // Externo: mostrar nombre del cliente si lo tenemos cacheado
+    const nombreCli = sender_id ? (CLIENTES_MAP.get(sender_id) || `Cliente ${sender_id.slice(-4)}`) : '(externo)';
+    stateQR.seen.add(trk);
+    stateQR.items.push({
+      _id: null,
+      tracking: trk,
+      cliente: nombreCli,
+      direccion: '',
+      codigo_postal: '',
+      partido: '',
+      sender_id,
+      externo: true
+    });
+  }
+
+  renderListQR();
+}
+
+ 
 async function asignarQR() {
   const selChofer = document.getElementById('choferSel');   // 👈 tus IDs
   const selLista  = document.getElementById('listaSel');    // 👈 tus IDs
