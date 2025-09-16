@@ -19,7 +19,7 @@ try { ListaDePrecios = require('../models/ListaDePrecios'); } catch (_) {}
 
 exports.asignarViaQR = async (req, res) => {
   try {
-    // Acepta id o nombre del chofer, y distintos formatos de tracking
+    // 0) Entrada
     const {
       chofer_id,
       chofer_nombre,
@@ -30,54 +30,34 @@ exports.asignarViaQR = async (req, res) => {
       id_venta,
       meli_id,
       zona,
-      cliente_id
+      cliente_id,           // remitente "global" opcional
+      items                  // [{ tracking, sender_id }]
     } = req.body || {};
-     const {
-    chofer_id, chofer_nombre, lista_chofer_id, lista_nombre,
-    tracking_ids, tracking, id_venta, meli_id, zona,
-    cliente_id,                 // legado (global)
-    items                       // [{ tracking, sender_id }]
-  } = req.body || {};
 
-    // Normalizo los códigos a un array
-  let tracks = (Array.isArray(tracking_ids) && tracking_ids.length)
-    ? tracking_ids
-    : [tracking, id_venta, meli_id].filter(Boolean);
-  const senderByTrack = new Map();
-  if (Array.isArray(items)) {
-    for (const it of items) {
-      const t = String(it?.tracking || '').trim();
-      if (!t) continue;
-      if (!tracks.includes(t)) tracks.push(t);
-      if (it?.sender_id) senderByTrack.set(t, String(it.sender_id));
+    // 1) Normalizar trackings + map sender por tracking
+    let tracks = Array.isArray(tracking_ids) && tracking_ids.length
+      ? tracking_ids.slice()
+      : [tracking, id_venta, meli_id].filter(Boolean).map(String);
+
+    const senderByTrack = new Map();
+    if (Array.isArray(items)) {
+      for (const it of items) {
+        const t = String(it?.tracking || '').trim();
+        if (!t) continue;
+        if (!tracks.includes(t)) tracks.push(t);
+        const sid = String(it?.sender_id || '').trim();
+        if (sid) senderByTrack.set(t, sid);
+      }
     }
-   }
 
-    if ((!chofer_id && !chofer_nombre) || !tracks.length) {
+    if ((!chofer_id && !chofer_nombre) || tracks.length === 0) {
       return res.status(400).json({ error: 'Faltan datos' });
     }
 
-    // 1) Buscar envíos por id_venta o meli_id
-    const envios = await Envio.find({
-      $or: [{ id_venta: { $in: tracks } }, { meli_id: { $in: tracks } }]
-    }).populate('cliente_id').lean();
-
-    if (!envios.length) {
-      return res.status(404).json({ error: 'No se encontraron envíos' });
-    }
-
-    // 2) Filtrar pendientes
-    const pendientes = envios.filter(e => (e.estado || 'pendiente') === 'pendiente');
-    if (!pendientes.length) {
-      return res.status(400).json({ error: 'Todos ya estaban asignados' });
-    }
-
-    // 3) Resolver chofer (id o nombre) y validar
+    // 2) Resolver chofer
     const isValidId = v => mongoose.Types.ObjectId.isValid(String(v || ''));
     let chDoc = null;
-    if (isValidId(chofer_id)) {
-      chDoc = await Chofer.findById(chofer_id).lean();
-    }
+    if (isValidId(chofer_id)) chDoc = await Chofer.findById(chofer_id).lean();
     if (!chDoc && chofer_nombre) {
       chDoc = await Chofer.findOne({ nombre: new RegExp(`^${chofer_nombre}$`, 'i') }).lean();
     }
@@ -85,84 +65,130 @@ exports.asignarViaQR = async (req, res) => {
       return res.status(400).json({ error: 'Chofer inválido (enviar chofer_id válido o chofer_nombre existente)' });
     }
 
-     // 4) Cliente (remitente) opcional para externos
-   let clienteDoc = null;
-   if (cliente_id && mongoose.isValidObjectId(cliente_id)) {
-     try { clienteDoc = await Cliente.findById(cliente_id).select('nombre').lean(); } catch {}
-   }
-    
-    // 5) Crear Asignación
+    // 3) Buscar envíos existentes por id_venta/meli_id
+    const envios = tracks.length
+      ? await Envio.find({
+          $or: [{ id_venta: { $in: tracks } }, { meli_id: { $in: tracks } }]
+        }).populate('cliente_id').lean()
+      : [];
+
+    const foundSet = new Set(envios.map(e => String(e.id_venta || e.meli_id || '')));
+    const pendientes = envios.filter(e => (e.estado || 'pendiente') === 'pendiente');
+    const notFound = tracks.filter(t => t && !foundSet.has(String(t)));
+
+    // 4) (Opcional) cliente global y clientes por sender_id (externos)
+    const senderIds = [
+      ...new Set(
+        notFound
+          .map(t => senderByTrack.get(String(t)))
+          .filter(Boolean)
+          .concat(cliente_id ? [String(cliente_id)] : [])
+      )
+    ];
+
+    const clientes = senderIds.length
+      ? await Cliente.find({ _id: { $in: senderIds } }).select('nombre').lean()
+      : [];
+    const CLIENTE_MAP = new Map(clientes.map(c => [String(c._id), c]));
+
+    // 5) Subdocs internos + externos
+    const subdocsInternos = pendientes.map(e => ({
+      envio: e._id,
+      id_venta: e.id_venta,
+      meli_id: e.meli_id,
+      cliente_id: e.cliente_id?._id,
+      destinatario: e.destinatario,
+      direccion: e.direccion,
+      codigo_postal: e.codigo_postal,
+      partido: e.partido,
+      precio: e.precio
+    }));
+
+    const allowExternal = String(process.env.ALLOW_EXTERNAL_TRACKINGS || 'true').toLowerCase() === 'true';
+    const subdocsExternos = allowExternal
+      ? notFound.map(t => {
+          const sid = senderByTrack.get(String(t)) || cliente_id || null;
+          const c   = sid ? CLIENTE_MAP.get(String(sid)) : null;
+          return {
+            externo: true,
+            tracking: String(t),
+            id_venta: String(t),                 // para imprimir como "tracking"
+            cliente_id: c?._id || (sid || null), // almacenamos el id aunque no encontremos el doc
+            destinatario: c?.nombre || '',       // nombre del cliente si existe
+            direccion: '',
+            codigo_postal: '',
+            partido: '',
+            precio: 0
+          };
+        })
+      : [];
+
+    const total = subdocsInternos.length + subdocsExternos.length;
+    if (total === 0) {
+      return res.status(400).json({ error: 'Nada para asignar (todos ya asignados y sin externos)' });
+    }
+
+    // 6) Crear Asignación
     const asg = await Asignacion.create({
       chofer: chDoc._id,
       lista_chofer_id: lista_chofer_id || null,
-      lista_nombre: lista_nombre || '',
-      envios: pendientes.map(e => ({
-        envio: e._id,
-        id_venta: e.id_venta,
-        meli_id: e.meli_id,
-        cliente_id: e.cliente_id?._id,
-        destinatario: e.destinatario,
-        direccion: e.direccion,
-        codigo_postal: e.codigo_postal,
-        partido: e.partido,
-        precio: e.precio
-      })),
-      
-    const allowExternal = String(process.env.ALLOW_EXTERNAL_TRACKINGS || 'true').toLowerCase() === 'true';
-    const subdocsExternos = allowExternal
-     ? notFound.map(t => ({
-         externo: true,
-         tracking: String(t),
-         id_venta: String(t),                 // para que se imprima como “tracking”
-         cliente_id: clienteDoc?._id || null, // remitente si vino
-         destinatario: clienteDoc?.nombre || '', // algo visible en PDF
-         direccion: '',
-         codigo_postal: '',
-         partido: '',
-         precio: 0
-       }))
-     : [];
-         
-      total_paquetes: pendientes.length,
+      lista_nombre: (lista_nombre || '').trim(),
+      envios: [...subdocsInternos, ...subdocsExternos],
+      total_paquetes: total,
       fecha: new Date()
     });
 
-    // 6) Marcar envíos como asignados + chofer + historial
-    const actor = req.session?.user?.email || req.session?.user?.role || 'operador';
-    await Envio.updateMany(
-      { _id: { $in: pendientes.map(e => e._id) } },
-      {
-        $set: {
-          estado: 'asignado',
-          chofer: chDoc._id,            // si tu esquema usa ObjectId
-          chofer_id: chDoc._id,         // si además tenés un campo plano
-          chofer_nombre: chDoc.nombre,  // útil para la UI
-          // si TU esquema usa subdoc { chofer: { _id, nombre } }, cambia por:
-          // chofer: { _id: chDoc._id, nombre: chDoc.nombre }
-        },
-        $push: {
-          historial: {
-            at: new Date(),
+    // 7) Marcar SOLO los envíos internos como asignados
+    if (subdocsInternos.length) {
+      const actor = req.session?.user?.email || req.session?.user?.role || 'operador';
+      await Envio.updateMany(
+        { _id: { $in: subdocsInternos.map(e => e.envio) } },
+        {
+          $set: {
             estado: 'asignado',
-            estado_meli: null,
-            source: 'zupply:qr',
-            actor_name: actor
+            chofer: chDoc._id,
+            chofer_id: chDoc._id,
+            chofer_nombre: chDoc.nombre
+          },
+          $push: {
+            historial: {
+              at: new Date(),
+              estado: 'asignado',
+              estado_meli: null,
+              source: 'zupply:qr',
+              actor_name: actor
+            }
           },
           $currentDate: { updatedAt: true }
         }
-      }
-    );
+      );
+    }
 
-    // 6) Nombre visible de la lista (si no vino, lo levanto por id)
+    // 8) Resolver nombre de lista si vino solo el id
     let listaNombre = (lista_nombre || '').trim();
     if (!listaNombre && lista_chofer_id && ListaDePrecios) {
       try {
         const lp = await ListaDePrecios.findById(lista_chofer_id).lean();
         listaNombre = lp?.nombre || '';
-      } catch { /* noop */ }
+      } catch {}
     }
 
-    // 7) Generar PDF (no romper si falla)
+    // 9) PDF: combinar internos + externos
+    const enviosPDF = [
+      ...pendientes, // docs reales
+      ...subdocsExternos.map(x => ({
+        _id: null,
+        id_venta: x.id_venta,
+        meli_id: null,
+        cliente_id: x.cliente_id ? { _id: x.cliente_id, nombre: CLIENTE_MAP.get(String(x.cliente_id))?.nombre || '' } : null,
+        destinatario: x.destinatario,
+        direccion: x.direccion,
+        codigo_postal: x.codigo_postal,
+        partido: x.partido,
+        precio: x.precio
+      }))
+    ];
+
     let remito_url = null;
     try {
       const out = await buildRemitoPDF({ asignacion: asg, chofer: chDoc, envios: enviosPDF, listaNombre });
@@ -174,7 +200,7 @@ exports.asignarViaQR = async (req, res) => {
       console.error('Error al generar remito:', e);
     }
 
-    // 8) WhatsApp (opcional)
+    // 10) WhatsApp
     let whatsapp_url = null;
     try {
       const tel = String(chDoc?.telefono || '').replace(/\D/g, '');
@@ -182,21 +208,21 @@ exports.asignarViaQR = async (req, res) => {
         const now = dayjs.tz(new Date(), process.env.TZ || 'America/Argentina/Buenos_Aires');
         const mensaje =
           `Hola ${chDoc?.nombre || ''}! tu remito de hoy está listo:\n` +
-          `📦 Total paquetes: ${subdocsInternos.length + subdocsExternos.length}\n` +
+          `📦 Total paquetes: ${total}\n` +
           `📍 Zona: ${listaNombre || zona || ''}\n` +
           `📅 Fecha: ${now.format('DD/MM/YYYY')}\n` +
           `⌚ Hora: ${now.format('HH:mm')}`;
         whatsapp_url = `https://wa.me/${tel}?text=${encodeURIComponent(mensaje)}`;
       }
-    } catch { /* noop */ }
+    } catch {}
 
-    // 9) Respuesta
+    // 11) Respuesta
     return res.json({
       ok: true,
       asignacion_id: asg._id,
       remito_url,
       whatsapp_url,
-      total: subdocsInternos.length + subdocsExternos.length,
+      total,
       externos: subdocsExternos.length
     });
   } catch (err) {
@@ -204,6 +230,7 @@ exports.asignarViaQR = async (req, res) => {
     return res.status(500).json({ error: 'No se pudo crear la asignación', detail: err.message });
   }
 };
+
 
 // POST /api/asignaciones/mapa  (stub: mismo flujo pero recibe envio_ids)
 exports.asignarViaMapa = async (req, res) => {
