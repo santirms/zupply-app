@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Asignacion = require('../models/Asignacion');
 const Envio = require('../models/Envio');
 const Chofer = require('../models/Chofer');
+const Cliente = require('../models/Cliente'); // si ya lo tenés con otro nombre, ajustá
 const { buildRemitoPDF } = require('../utils/remitoService');
 const dayjs = require('dayjs');
 require('dayjs/locale/es');
@@ -28,7 +29,8 @@ exports.asignarViaQR = async (req, res) => {
       tracking,
       id_venta,
       meli_id,
-      zona
+      zona,
+      cliente_id
     } = req.body || {};
 
     // Normalizo los códigos a un array
@@ -68,7 +70,13 @@ exports.asignarViaQR = async (req, res) => {
       return res.status(400).json({ error: 'Chofer inválido (enviar chofer_id válido o chofer_nombre existente)' });
     }
 
-    // 4) Crear Asignación
+     // 4) Cliente (remitente) opcional para externos
+   let clienteDoc = null;
+   if (cliente_id && mongoose.isValidObjectId(cliente_id)) {
+     try { clienteDoc = await Cliente.findById(cliente_id).select('nombre').lean(); } catch {}
+   }
+    
+    // 5) Crear Asignación
     const asg = await Asignacion.create({
       chofer: chDoc._id,
       lista_chofer_id: lista_chofer_id || null,
@@ -84,11 +92,27 @@ exports.asignarViaQR = async (req, res) => {
         partido: e.partido,
         precio: e.precio
       })),
+      
+    const allowExternal = String(process.env.ALLOW_EXTERNAL_TRACKINGS || 'true').toLowerCase() === 'true';
+    const subdocsExternos = allowExternal
+     ? notFound.map(t => ({
+         externo: true,
+         tracking: String(t),
+         id_venta: String(t),                 // para que se imprima como “tracking”
+         cliente_id: clienteDoc?._id || null, // remitente si vino
+         destinatario: clienteDoc?.nombre || '', // algo visible en PDF
+         direccion: '',
+         codigo_postal: '',
+         partido: '',
+         precio: 0
+       }))
+     : [];
+         
       total_paquetes: pendientes.length,
       fecha: new Date()
     });
 
-    // 5) Marcar envíos como asignados + chofer + historial
+    // 6) Marcar envíos como asignados + chofer + historial
     const actor = req.session?.user?.email || req.session?.user?.role || 'operador';
     await Envio.updateMany(
       { _id: { $in: pendientes.map(e => e._id) } },
@@ -126,12 +150,7 @@ exports.asignarViaQR = async (req, res) => {
     // 7) Generar PDF (no romper si falla)
     let remito_url = null;
     try {
-      const out = await buildRemitoPDF({
-        asignacion: asg,
-        chofer: chDoc,
-        envios: pendientes,
-        listaNombre
-      });
+      const out = await buildRemitoPDF({ asignacion: asg, chofer: chDoc, envios: enviosPDF, listaNombre });
       remito_url = out?.url || null;
       if (remito_url) {
         await Asignacion.updateOne({ _id: asg._id }, { $set: { remito_url } });
@@ -148,7 +167,7 @@ exports.asignarViaQR = async (req, res) => {
         const now = dayjs.tz(new Date(), process.env.TZ || 'America/Argentina/Buenos_Aires');
         const mensaje =
           `Hola ${chDoc?.nombre || ''}! tu remito de hoy está listo:\n` +
-          `📦 Total paquetes: ${pendientes.length}\n` +
+          `📦 Total paquetes: ${subdocsInternos.length + subdocsExternos.length}\n` +
           `📍 Zona: ${listaNombre || zona || ''}\n` +
           `📅 Fecha: ${now.format('DD/MM/YYYY')}\n` +
           `⌚ Hora: ${now.format('HH:mm')}`;
@@ -162,7 +181,8 @@ exports.asignarViaQR = async (req, res) => {
       asignacion_id: asg._id,
       remito_url,
       whatsapp_url,
-      total: pendientes.length
+      total: subdocsInternos.length + subdocsExternos.length,
+      externos: subdocsExternos.length
     });
   } catch (err) {
     console.error('asignarViaQR fatal:', err);
@@ -312,7 +332,7 @@ exports.quitarEnvios = async (req, res) => {
 
   const keep = [], removed = [];
   for (const it of asg.envios) {
-    const trk = it.id_venta || it.meli_id;
+    const trk = it.id_venta || it.meli_id || it.tracking;
     if (tracking_ids.includes(trk)) removed.push(it); else keep.push(it);
   }
   if (!removed.length) return res.status(400).json({ error: 'Nada para quitar' });
@@ -344,7 +364,7 @@ exports.moverEnvios = async (req, res) => {
 
   const mov = [], keep = [];
   for (const it of origen.envios) {
-    const trk = it.id_venta || it.meli_id;
+    const trk = it.id_venta || it.meli_id || it.tracking;
     if (tracking_ids.includes(trk)) mov.push(it); else keep.push(it);
   }
   if (!mov.length) return res.status(400).json({ error: 'Nada para mover' });
@@ -381,7 +401,7 @@ exports.moverEnvios = async (req, res) => {
 exports.agregarEnvios = async (req, res) => {
   try {
     const asgId = req.params.id;
-    const { tracking_ids = [], force_move = true, lista_chofer_id, lista_nombre } = req.body;
+    const { tracking_ids = [], force_move = true, lista_chofer_id, lista_nombre, cliente_id } = req.body;
     if (!Array.isArray(tracking_ids) || !tracking_ids.length) {
       return res.status(400).json({ error: 'Sin tracking_ids' });
     }
@@ -394,7 +414,6 @@ exports.agregarEnvios = async (req, res) => {
       $or: [{ id_venta: { $in: tracking_ids } }, { meli_id: { $in: tracking_ids } }]
     }).populate('cliente_id').lean();
 
-    if (!envios.length) return res.status(404).json({ error: 'No se encontraron envíos' });
 
     // detectar duplicados ya presentes en este remito
     const ya = new Set(asignacion.envios.map(e => String(e.envio)));
@@ -403,6 +422,14 @@ exports.agregarEnvios = async (req, res) => {
     // detectar envíos que están en otra asignación
     const idsNuevos = nuevos.map(e => e._id);
     const otras = await Asignacion.find({ 'envios.envio': { $in: idsNuevos } });
+
+   // externos (trackings que no están en "envios")
+   const foundSet = new Set(envios.map(e => String(e.id_venta || e.meli_id || '')));
+   const externosCodes = tracking_ids.filter(t => t && !foundSet.has(String(t)));
+   let clienteDoc = null;
+   if (cliente_id && mongoose.isValidObjectId(cliente_id)) {
+    try { clienteDoc = await require('../models/Cliente').findById(cliente_id).select('nombre').lean(); } catch {}
+   }
 
     if (otras.length && !force_move) {
       const conflictos = [];
@@ -440,7 +467,20 @@ exports.agregarEnvios = async (req, res) => {
       precio: e.precio
     }));
 
-    asignacion.envios.push(...subdocs);
+       // subdocs externos
+    const extSubdocs = externosCodes.map(t => ({
+      externo: true,
+      tracking: String(t),
+      id_venta: String(t),
+      cliente_id: clienteDoc?._id || null,
+      destinatario: clienteDoc?.nombre || '',
+      direccion: '',
+      codigo_postal: '',
+      partido: '',
+      precio: 0
+    }));
+    
+    asignacion.envios.push(...subdocs, ...extSubdocs);
     asignacion.total_paquetes = asignacion.envios.length;
     if (lista_chofer_id) asignacion.lista_chofer_id = lista_chofer_id;
     if (lista_nombre)     asignacion.lista_nombre   = lista_nombre;  // guardamos el nombre visible de la lista
@@ -461,12 +501,14 @@ exports.agregarEnvios = async (req, res) => {
     const { url } = await buildRemitoPDF({ asignacion, chofer, envios: asignacion.envios, listaNombre: asignacion.lista_nombre });
     await Asignacion.updateOne({ _id: asignacion._id }, { $set: { remito_url: url } });
 
-     return res.json({
-       ok: true,
-       remito_url: url,
-       total: asignacion.total_paquetes,
-       agregados: subdocs.length
-     });
+    return res.json({
+      ok:true,
+      remito_url: url,
+      total: asignacion.total_paquetes,
+      agregados: subdocs.length + extSubdocs.length,
+      externos: extSubdocs.length
+    });
+    
   } catch (err) {
     console.error('agregarEnvios error:', err);
     return res.status(500).json({ error: 'No se pudo agregar' });
