@@ -231,6 +231,13 @@ const el = document.getElementById('countPartidos');
 if (el) el.textContent = !seleccionPartidos.size ? '(Todos)' : `(${seleccionPartidos.size})`;
 }
 
+function hasQr(envio) {
+  // preferimos valid_until; si no viene, usamos last_hash/has_qr como fallback
+  const vu = envio?.qr_meta?.valid_until || envio?.qr_valid_until || envio?.qrValidUntil;
+  if (vu) return new Date(vu) > new Date();
+  return !!(envio?.qr_meta?.last_hash || envio?.qr_last_hash || envio?.has_qr);
+}
+  
 // =================== Mapa ===================
 function initMapa(lat, lng) {
 const cont = document.getElementById('mapa');
@@ -527,6 +534,24 @@ tr.innerHTML = `
      title="Ver detalle"
    >
      ${e.meli_id || e.id_venta || '(sin id)'}
+     </button>
+
+   ${ hasQr(e) ? `
+     <button
+       class="ml-2 inline-flex items-center gap-1 text-emerald-700 bg-emerald-100 border border-emerald-200 rounded px-1.5 py-0.5 text-[11px]"
+       title="QR de respaldo disponible — abrir"
+       onclick="cargarQrRespaldo('${e._id}')"
+     >
+      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="currentColor" aria-hidden="true">
+         <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+         <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+         <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+         <path d="M14 14h3v3h-3zM18 14h3v3h-3zM18 18h3v3h-3zM14 18h3v3h-3z"></path>
+       </svg>
+       QR
+     </button>
+   ` : '' }
+     
      ${ (e.qr_meta?.valid_until && new Date(e.qr_meta.valid_until) > new Date())
     ? `<span class="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">QR</span>`
     : '' }
