@@ -311,8 +311,8 @@ function uiStatus(envio) {
       entregado: 'bg-green-100 text-green-700 border-green-200',
       en_camino: 'bg-sky-100 text-sky-700 border-sky-200',
       pendiente: 'bg-gray-100 text-gray-700 border-gray-200',
-      asignado: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-      demorado: 'bg-red-100 text-red-700 border-red-200',
+      asignado:  'bg-indigo-100 text-indigo-700 border-indigo-200',
+      demorado:  'bg-red-100 text-red-700 border-red-200',
       reprogramado: 'bg-blue-100 text-blue-700 border-blue-200',
       no_entregado: 'bg-amber-100 text-amber-700 border-amber-200',
       cancelado: 'bg-slate-200 text-slate-700 border-slate-300',
@@ -327,8 +327,9 @@ function uiStatus(envio) {
   };
 
   const raw    = (envio.estado || envio.status || envio.estado_meli?.status || '').toLowerCase();
-  const subRaw = (envio.estado_meli?.substatus || '').toLowerCase();   // <-- usar subRaw
+  const subRaw = (envio.estado_meli?.substatus || '').toLowerCase();
 
+  // Bucket/base
   let norm = ({
     pending: 'pendiente',
     handling: 'pendiente',
@@ -339,7 +340,7 @@ function uiStatus(envio) {
     cancelled: 'cancelado',
   })[raw] || raw || 'pendiente';
 
-  // prioridad por substatus
+  // Prioridad por substatus (bucket)
   if (/receiver[_\s-]?absent/.test(subRaw)) {
     norm = 'comprador_ausente';
   } else if (/resched/.test(subRaw)) {
@@ -348,7 +349,8 @@ function uiStatus(envio) {
     norm = 'demorado';
   }
 
-  const label = ({
+  // Label por bucket (base)
+  let cardLabel = ({
     pendiente: 'Pendiente',
     asignado: 'Asignado',
     en_camino: 'En camino',
@@ -360,11 +362,22 @@ function uiStatus(envio) {
     comprador_ausente: 'Comprador ausente',
   })[norm] || 'Pendiente';
 
-  // devolvé el substatus “lindo”; si es comprador_ausente, lo dejamos vacío para no mostrar chip
-  const subNice = norm === 'comprador_ausente' ? '' : subRaw.replace(/_/g, ' ').trim();
+  // Ajustes “finos” de presentación:
+  // 1) buyer rescheduled → “Reprogramado por comprador”
+  if (norm === 'reprogramado' && /buyer/.test(subRaw) && /resched/.test(subRaw)) {
+    cardLabel = 'Reprogramado por comprador';
+  }
 
-  return { key: norm, label, substatus: subNice };
+  // Chip de substatus (solo UI)
+  let subNice = norm === 'comprador_ausente' ? '' : subRaw.replace(/_/g, ' ').trim();
+  // 2) soon deliver → “Llega pronto”
+  if (/soon\s*deliver/.test(subRaw)) {
+    subNice = 'Llega pronto';
+  }
+
+  return { key: norm, label: cardLabel, substatus: subNice };
 }
+
        
 // =================== Partidos (checklist + "Todos") ===================
 async function cargarPartidos() {
