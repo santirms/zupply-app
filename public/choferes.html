@@ -125,6 +125,42 @@
         Mapa aquí (wireframe)
       </div>
     </section>
+<!-- Botón abrir modal -->
+<div class="mt-6 flex justify-end">
+  <button id="btnOpenHist" class="px-4 py-2 rounded bg-slate-700 text-white">Historial de remitos</button>
+</div>
+
+<!-- Modal Historial Remitos -->
+<div id="modalRemitos" class="hidden fixed inset-0 bg-black/50 z-40 grid place-items-center">
+  <div class="bg-white dark:bg-slate-900 w-[900px] max-w-[95vw] max-h-[85vh] overflow-auto rounded shadow p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-lg font-bold">Historial de remitos</h2>
+      <button class="text-xl" onclick="document.getElementById('modalRemitos').classList.add('hidden')">✕</button>
+    </div>
+
+    <div class="flex flex-wrap gap-2 mb-3">
+      <input id="fDesde" type="date" class="border rounded px-2 py-1">
+      <input id="fHasta" type="date" class="border rounded px-2 py-1">
+      <select id="fChofer" class="border rounded px-2 py-1"></select>
+      <button id="btnFiltrarRemitos" class="px-3 py-2 rounded bg-amber-500 text-white">Filtrar</button>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-black/10 dark:border-white/10">
+            <th class="text-left p-1">Fecha</th>
+            <th class="text-left p-1">Chofer</th>
+            <th class="text-left p-1">Zona</th>
+            <th class="text-left p-1">Total</th>
+            <th class="text-left p-1">PDF</th>
+          </tr>
+        </thead>
+        <tbody id="tblRemitos"></tbody>
+      </table>
+    </div>
+  </div>
+</div>  
   </main>
 
   <script>
