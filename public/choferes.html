@@ -381,7 +381,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ chofer_id, lista_chofer_id, lista_nombre, tracking_ids, items, zona, sender_id_hint: firstSender })
         });
 
         const text = await r.text();
