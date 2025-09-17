@@ -17,6 +17,37 @@ dayjs.locale('es');
 let ListaDePrecios;
 try { ListaDePrecios = require('../models/ListaDePrecios'); } catch (_) {}
 
+// helper arriba del controller (si no lo tenés)
+async function resolveClienteByAny(hint) {
+  if (!hint) return null;
+  if (mongoose.isValidObjectId(hint)) {
+    try { return await Cliente.findById(hint).select('nombre').lean(); } catch { return null; }
+  }
+  const n = Number(hint);
+  const query = {
+    $or: [
+      { sender_id: hint },
+      ...(Number.isFinite(n) ? [{ sender_id: n }] : []),
+      { meli_seller_id: hint },
+      { external_id: hint }
+    ]
+  };
+  try { return await Cliente.findOne(query).select('nombre').lean(); } catch { return null; }
+}
+  // si NO es ObjectId, probá por claves “externas”
+  // ajustá los campos a tu modelo real (sender_id, meli_seller_id, external_id, etc.)
+  const n = Number(hint);
+  const query = {
+    $or: [
+      { sender_id: hint },
+      ...(Number.isFinite(n) ? [{ sender_id: n }] : []),
+      { meli_seller_id: hint },
+      { external_id: hint }
+    ]
+  };
+  try { return await Cliente.findOne(query).select('nombre').lean(); } catch { return null; }
+}
+
 exports.asignarViaQR = async (req, res) => {
   try {
     // 0) Entrada
@@ -31,13 +62,14 @@ exports.asignarViaQR = async (req, res) => {
       meli_id,
       zona,
       cliente_id,           // remitente "global" opcional
-      items                  // [{ tracking, sender_id }]
+      sender_id_hint = null,
+      items = []                // [{ tracking, sender_id }]
     } = req.body || {};
 
     // 1) Normalizar trackings + map sender por tracking
-    let tracks = Array.isArray(tracking_ids) && tracking_ids.length
-      ? tracking_ids.slice()
-      : [tracking, id_venta, meli_id].filter(Boolean).map(String);
+    const tracks = (Array.isArray(tracking_ids) && tracking_ids.length)
+    ? tracking_ids
+    : [tracking, id_venta, meli_id].filter(Boolean);
 
     const senderByTrack = new Map();
     if (Array.isArray(items)) {
@@ -66,15 +98,13 @@ exports.asignarViaQR = async (req, res) => {
     }
 
     // 3) Buscar envíos existentes por id_venta/meli_id
-    const envios = tracks.length
-      ? await Envio.find({
-          $or: [{ id_venta: { $in: tracks } }, { meli_id: { $in: tracks } }]
-        }).populate('cliente_id').lean()
-      : [];
+    const envios = await Envio.find({
+    $or: [{ id_venta: { $in: tracks } }, { meli_id: { $in: tracks } }]
+    }).populate('cliente_id').lean();
 
-    const foundSet = new Set(envios.map(e => String(e.id_venta || e.meli_id || '')));
-    const pendientes = envios.filter(e => (e.estado || 'pendiente') === 'pendiente');
-    const notFound = tracks.filter(t => t && !foundSet.has(String(t)));
+   const internosPend = envios.filter(e => (e.estado || 'pendiente') === 'pendiente');
+   const encontrados = new Set(envios.map(e => String(e.id_venta || e.meli_id)));
+   const notFound = tracks.filter(t => !encontrados.has(String(t)));
 
     // 4) (Opcional) cliente global y clientes por sender_id (externos)
     const senderIds = [
@@ -92,36 +122,56 @@ exports.asignarViaQR = async (req, res) => {
     const CLIENTE_MAP = new Map(clientes.map(c => [String(c._id), c]));
 
     // 5) Subdocs internos + externos
-    const subdocsInternos = pendientes.map(e => ({
-      envio: e._id,
-      id_venta: e.id_venta,
-      meli_id: e.meli_id,
-      cliente_id: e.cliente_id?._id,
-      destinatario: e.destinatario,
-      direccion: e.direccion,
-      codigo_postal: e.codigo_postal,
-      partido: e.partido,
-      precio: e.precio
-    }));
+    const subdocsInternos = internosPend.map(e => ({
+  envio: e._id,
+  id_venta: e.id_venta,
+  meli_id: e.meli_id,
+  cliente_id: e.cliente_id?._id || null,
+  destinatario: e.destinatario,
+  direccion: e.direccion,
+  codigo_postal: e.codigo_postal,
+  partido: e.partido,
+  precio: e.precio
+}));
 
-    const allowExternal = String(process.env.ALLOW_EXTERNAL_TRACKINGS || 'true').toLowerCase() === 'true';
-    const subdocsExternos = allowExternal
-      ? notFound.map(t => {
-          const sid = senderByTrack.get(String(t)) || cliente_id || null;
-          const c   = sid ? CLIENTE_MAP.get(String(sid)) : null;
-          return {
-            externo: true,
-            tracking: String(t),
-            id_venta: String(t),                 // para imprimir como "tracking"
-            cliente_id: c?._id || (sid || null), // almacenamos el id aunque no encontremos el doc
-            destinatario: c?.nombre || '',       // nombre del cliente si existe
-            direccion: '',
-            codigo_postal: '',
-            partido: '',
-            precio: 0
-          };
-        })
-      : [];
+  const allowExternal = String(process.env.ALLOW_EXTERNAL_TRACKINGS ?? 'true').toLowerCase() === 'true';
+const subdocsExternos = [];
+
+if (allowExternal) {
+  for (const t of notFound) {
+    const sid = senderByTrack.get(String(t)) || sender_id_hint || null;
+    const cli = await resolveClienteByAny(sid); // ← NUNCA castea a ObjectId si no corresponde
+
+    // Creamos un Envío "stub" para cumplir required:true en asignacion.envios[].envio
+    const stub = await Envio.create({
+      id_venta: String(t),
+      meli_id: null,
+      estado: 'asignado',             // ya queda asignado al chofer
+      source: 'externo',
+      cliente_id: cli?._id || null,   // SOLO si resolvimos Cliente real
+      destinatario: cli?.nombre || '',
+      direccion: '',
+      codigo_postal: '',
+      partido: '',
+      precio: 0,
+      chofer: chDoc._id,              // opcional, útil para filtros
+      chofer_nombre: chDoc.nombre     // opcional
+    });
+
+    subdocsExternos.push({
+      envio: stub._id,                // ✅ cumple el required del schema
+      id_venta: stub.id_venta,        // se imprime como “tracking” en el remito
+      meli_id: null,
+      cliente_id: stub.cliente_id || null,
+      destinatario: stub.destinatario,
+      direccion: '',
+      codigo_postal: '',
+      partido: '',
+      precio: 0
+    });
+  }
+}
+
 
     const total = subdocsInternos.length + subdocsExternos.length;
     if (total === 0) {
