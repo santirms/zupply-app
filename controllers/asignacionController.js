@@ -46,7 +46,7 @@ async function resolveClienteByAny(hint) {
     ]
   };
   try { return await Cliente.findOne(query).select('nombre').lean(); } catch { return null; }
-}
+
 
 exports.asignarViaQR = async (req, res) => {
   try {
