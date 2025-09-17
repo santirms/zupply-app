@@ -17,36 +17,36 @@ dayjs.locale('es');
 let ListaDePrecios;
 try { ListaDePrecios = require('../models/ListaDePrecios'); } catch (_) {}
 
-// helper arriba del controller (si no lo tenés)
+// Helper: resolver Cliente por múltiples pistas SIN castear a ObjectId si no corresponde
 async function resolveClienteByAny(hint) {
   if (!hint) return null;
-  if (mongoose.isValidObjectId(hint)) {
-    try { return await Cliente.findById(hint).select('nombre').lean(); } catch { return null; }
-  }
-  const n = Number(hint);
-  const query = {
-    $or: [
-      { sender_id: hint },
-      ...(Number.isFinite(n) ? [{ sender_id: n }] : []),
-      { meli_seller_id: hint },
-      { external_id: hint }
-    ]
-  };
-  try { return await Cliente.findOne(query).select('nombre').lean(); } catch { return null; }
-}
-  // si NO es ObjectId, probá por claves “externas”
-  // ajustá los campos a tu modelo real (sender_id, meli_seller_id, external_id, etc.)
-  const n = Number(hint);
-  const query = {
-    $or: [
-      { sender_id: hint },
-      ...(Number.isFinite(n) ? [{ sender_id: n }] : []),
-      { meli_seller_id: hint },
-      { external_id: hint }
-    ]
-  };
-  try { return await Cliente.findOne(query).select('nombre').lean(); } catch { return null; }
 
+  // Si es un ObjectId válido, probá directo
+  if (mongoose.isValidObjectId(hint)) {
+    try {
+      return await Cliente.findById(hint).select('nombre').lean();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Si NO es ObjectId, buscá por claves externas que tenga tu modelo
+  const n = Number(hint);
+  const query = {
+    $or: [
+      { sender_id: hint },
+      ...(Number.isFinite(n) ? [{ sender_id: n }] : []),
+      { meli_seller_id: hint },
+      { external_id: hint }
+    ]
+  };
+
+  try {
+    return await Cliente.findOne(query).select('nombre').lean();
+  } catch (e) {
+    return null;
+  }
+}
 
 exports.asignarViaQR = async (req, res) => {
   try {
