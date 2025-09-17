@@ -368,28 +368,24 @@
       const items        = stateQR.items.map(x => ({ tracking: x.tracking, sender_id: x.sender_id || null }));
 
       // fallback de cliente_id global para externos (si todos pertenecen al mismo remitente)
-      const firstSender  = (stateQR.items.find(x => x.sender_id) || {}).sender_id || null;
+const firstSender  = (stateQR.items.find(x => x.sender_id) || {}).sender_id || null;
 
-      if (!chofer_id) return alert('Elegí un chofer');
-      if (!tracking_ids.length) return alert('Escaneá o pegá al menos un tracking');
-      if (!confirm(`Asignar ${tracking_ids.length} paquete(s)?`)) return;
+if (!chofer_id) return alert('Elegí un chofer');
+if (!tracking_ids.length) return alert('Escaneá o pegá al menos un tracking');
+if (!confirm(`Asignar ${tracking_ids.length} paquete(s)?`)) return;
 
-      try {
-        const payload = { chofer_id, lista_chofer_id, lista_nombre, tracking_ids, items, zona };
-        if (firstSender) payload.sender_id_hint = firstSender; // ✅ nombre nuevo, no se castea a _id
-        const r = await fetch('/api/asignaciones/qr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify({ chofer_id, lista_chofer_id, lista_nombre, tracking_ids, items, zona, sender_id_hint: firstSender })
-        });
+try {
+  const payload = { chofer_id, lista_chofer_id, lista_nombre, tracking_ids, items, zona };
+  if (firstSender) payload.sender_id_hint = firstSender; // ✅ pista de remitente
 
-        const text = await r.text();
-        let data; try { data = JSON.parse(text); } catch { data = null; }
-        if (!r.ok || !data || !data.ok) {
-          console.error('Asignaciones/qr error:', r.status, text);
-          return alert((data && data.error) ? data.error : `Error ${r.status}`);
-        }
+  const r = await fetch('/api/asignaciones/qr', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify(payload)
+  });
+  // ...
+} catch (e) { /* ... */ }
 
         const btnRemito = $('#btnRemito');
         const btnWA     = $('#btnWA');
