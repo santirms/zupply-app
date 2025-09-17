@@ -357,46 +357,54 @@
       renderListQR();
     }
 
-    async function asignarQR() {
-      const chofer_id       = $('#choferSel')?.value || '';
-      const lista_chofer_id = $('#listaSel')?.value || null;
-      const lista_nombre    = $('#listaSel')?.selectedOptions?.[0]?.text?.trim() || '';
-      const zona            = $('#inputZonaQR')?.value?.trim() || '';
+  async function asignarQR() {
+  const chofer_id       = $('#choferSel')?.value || '';
+  const lista_chofer_id = $('#listaSel')?.value || null;
+  const lista_nombre    = $('#listaSel')?.selectedOptions?.[0]?.text?.trim() || '';
+  const zona            = $('#inputZonaQR')?.value?.trim() || '';
 
-      // trackings únicos (por las dudas)
-      const tracking_ids = Array.from(new Set(stateQR.items.map(x => x.tracking).filter(Boolean)));
-      const items        = stateQR.items.map(x => ({ tracking: x.tracking, sender_id: x.sender_id || null }));
+  const tracking_ids = stateQR.items.map(x => x.tracking).filter(Boolean);
+  const items = stateQR.items.map(x => ({ tracking: x.tracking, sender_id: x.sender_id || null }));
 
-      // fallback de cliente_id global para externos (si todos pertenecen al mismo remitente)
-const firstSender  = (stateQR.items.find(x => x.sender_id) || {}).sender_id || null;
+  const firstSender = (stateQR.items.find(x => x.sender_id) || {}).sender_id || null;
 
-if (!chofer_id) return alert('Elegí un chofer');
-if (!tracking_ids.length) return alert('Escaneá o pegá al menos un tracking');
-if (!confirm(`Asignar ${tracking_ids.length} paquete(s)?`)) return;
+  if (!chofer_id) return alert('Elegí un chofer');
+  if (!tracking_ids.length) return alert('Escaneá o pegá al menos un tracking');
+  if (!confirm(`Asignar ${tracking_ids.length} paquete(s)?`)) return;
 
-try {
-  const payload = { chofer_id, lista_chofer_id, lista_nombre, tracking_ids, items, zona };
-  if (firstSender) payload.sender_id_hint = firstSender; // ✅ pista de remitente
+  try {
+    const r = await fetch('/api/asignaciones/qr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',             // 👈 asegura cookie si servís desde otro origen
+      body: JSON.stringify({
+        chofer_id, lista_chofer_id, lista_nombre, tracking_ids, items, zona,
+        sender_id_hint: firstSender || null
+      })
+    });
 
-  const r = await fetch('/api/asignaciones/qr', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',
-    body: JSON.stringify(payload)
-  });
+    const raw = await r.text();           // 👈 nunca explota por HTML/redirects
+    let data; try { data = JSON.parse(raw) } catch { data = null }
 
-        const btnRemito = $('#btnRemito');
-        const btnWA     = $('#btnWA');
-        if (data.remito_url && btnRemito) { btnRemito.href = data.remito_url; btnRemito.classList.remove('hidden'); }
-        if (data.whatsapp_url && btnWA)   { btnWA.href     = data.whatsapp_url; btnWA.classList.remove('hidden'); }
+    console.log('POST /api/asignaciones/qr ->', r.status, raw);
 
-        alert(`Asignados: ${data.total}`);
-        stateQR.items.length = 0; stateQR.seen.clear(); renderListQR();
-      } catch (e) {
-        console.error(e);
-        alert('Error de red');
-      }
+    if (!r.ok || !data || data.ok !== true) {
+      const msg = (data && (data.error || data.detail)) || `HTTP ${r.status}`;
+      alert('No se pudo asignar: ' + msg);
+      return;
     }
+
+    if (data.remito_url) { $('#btnRemito').href = data.remito_url; $('#btnRemito').classList.remove('hidden'); }
+    if (data.whatsapp_url) { $('#btnWA').href = data.whatsapp_url; $('#btnWA').classList.remove('hidden'); }
+
+    alert(`Asignados: ${data.total}`);
+    stateQR.items.length = 0; stateQR.seen.clear(); renderListQR();
+  } catch (e) {
+    console.error('asignarQR fetch error:', e);
+    alert('Error de red (revisá consola/red de DevTools)');
+  }
+}
+
 
     // ===== Init
     document.addEventListener('DOMContentLoaded', () => {
