@@ -20,17 +20,9 @@ try { ListaDePrecios = require('../models/ListaDePrecios'); } catch (_) {}
 // Helper: resolver Cliente por múltiples pistas SIN castear a ObjectId si no corresponde
 async function resolveClienteByAny(hint) {
   if (!hint) return null;
-
-  // Si es un ObjectId válido, probá directo
   if (mongoose.isValidObjectId(hint)) {
-    try {
-      return await Cliente.findById(hint).select('nombre').lean();
-    } catch (e) {
-      return null;
-    }
+    try { return await Cliente.findById(hint).select('nombre').lean(); } catch { return null; }
   }
-
-  // Si NO es ObjectId, buscá por claves externas que tenga tu modelo
   const n = Number(hint);
   const query = {
     $or: [
@@ -40,12 +32,7 @@ async function resolveClienteByAny(hint) {
       { external_id: hint }
     ]
   };
-
-  try {
-    return await Cliente.findOne(query).select('nombre').lean();
-  } catch (e) {
-    return null;
-  }
+  try { return await Cliente.findOne(query).select('nombre').lean(); } catch { return null; }
 }
 
 exports.asignarViaQR = async (req, res) => {
@@ -61,25 +48,23 @@ exports.asignarViaQR = async (req, res) => {
       id_venta,
       meli_id,
       zona,
-      cliente_id,           // remitente "global" opcional
-      sender_id_hint = null,
-      items = []                // [{ tracking, sender_id }]
+      cliente_id,            // pista opcional (puede NO ser ObjectId)
+      sender_id_hint = null, // pista global externa
+      items = []             // [{ tracking, sender_id }]
     } = req.body || {};
 
     // 1) Normalizar trackings + map sender por tracking
     const tracks = (Array.isArray(tracking_ids) && tracking_ids.length)
-    ? tracking_ids
-    : [tracking, id_venta, meli_id].filter(Boolean);
+      ? tracking_ids.slice()
+      : [tracking, id_venta, meli_id].filter(Boolean);
 
     const senderByTrack = new Map();
-    if (Array.isArray(items)) {
-      for (const it of items) {
-        const t = String(it?.tracking || '').trim();
-        if (!t) continue;
-        if (!tracks.includes(t)) tracks.push(t);
-        const sid = String(it?.sender_id || '').trim();
-        if (sid) senderByTrack.set(t, sid);
-      }
+    for (const it of items) {
+      const t = String(it?.tracking || '').trim();
+      if (!t) continue;
+      if (!tracks.includes(t)) tracks.push(t);
+      const sid = String(it?.sender_id || '').trim();
+      if (sid) senderByTrack.set(t, sid);
     }
 
     if ((!chofer_id && !chofer_nombre) || tracks.length === 0) {
@@ -99,79 +84,75 @@ exports.asignarViaQR = async (req, res) => {
 
     // 3) Buscar envíos existentes por id_venta/meli_id
     const envios = await Envio.find({
-    $or: [{ id_venta: { $in: tracks } }, { meli_id: { $in: tracks } }]
+      $or: [{ id_venta: { $in: tracks } }, { meli_id: { $in: tracks } }]
     }).populate('cliente_id').lean();
 
-   const internosPend = envios.filter(e => (e.estado || 'pendiente') === 'pendiente');
-   const encontrados = new Set(envios.map(e => String(e.id_venta || e.meli_id)));
-   const notFound = tracks.filter(t => !encontrados.has(String(t)));
+    const internosPend = envios.filter(e => (e.estado || 'pendiente') === 'pendiente');
+    const encontrados  = new Set(envios.map(e => String(e.id_venta || e.meli_id)));
+    const notFound     = tracks.filter(t => !encontrados.has(String(t)));
 
-    // 4) (Opcional) cliente global y clientes por sender_id (externos)
-    const senderIds = [
-      ...new Set(
-        notFound
-          .map(t => senderByTrack.get(String(t)))
-          .filter(Boolean)
-          .concat(cliente_id ? [String(cliente_id)] : [])
-      )
-    ];
-
-    const clientes = senderIds.length
-      ? await Cliente.find({ _id: { $in: senderIds } }).select('nombre').lean()
-      : [];
-    const CLIENTE_MAP = new Map(clientes.map(c => [String(c._id), c]));
+    // 4) NO consultar Cliente por _id con valores externos → armamos un MAP al vuelo
+    // (si querés, podés resolver una pista global por única vez)
+    const CLIENTE_MAP = new Map();
+    const resolveCliente = async (hint) => {
+      const cli = await resolveClienteByAny(hint);
+      if (cli) CLIENTE_MAP.set(String(cli._id), cli);
+      return cli;
+    };
 
     // 5) Subdocs internos + externos
     const subdocsInternos = internosPend.map(e => ({
-  envio: e._id,
-  id_venta: e.id_venta,
-  meli_id: e.meli_id,
-  cliente_id: e.cliente_id?._id || null,
-  destinatario: e.destinatario,
-  direccion: e.direccion,
-  codigo_postal: e.codigo_postal,
-  partido: e.partido,
-  precio: e.precio
-}));
+      envio: e._id,
+      id_venta: e.id_venta,
+      meli_id: e.meli_id,
+      cliente_id: e.cliente_id?._id || null,
+      destinatario: e.destinatario,
+      direccion: e.direccion,
+      codigo_postal: e.codigo_postal,
+      partido: e.partido,
+      precio: e.precio
+    }));
 
-  const allowExternal = String(process.env.ALLOW_EXTERNAL_TRACKINGS ?? 'true').toLowerCase() === 'true';
-const subdocsExternos = [];
+    const allowExternal = String(process.env.ALLOW_EXTERNAL_TRACKINGS ?? 'true').toLowerCase() === 'true';
+    const subdocsExternos = [];
 
-if (allowExternal) {
-  for (const t of notFound) {
-    const sid = senderByTrack.get(String(t)) || sender_id_hint || null;
-    const cli = await resolveClienteByAny(sid); // ← NUNCA castea a ObjectId si no corresponde
+    if (allowExternal) {
+      for (const t of notFound) {
+        // prioridad: sender específico del ítem → pista global → pista cliente_id
+        const sid = senderByTrack.get(String(t)) || sender_id_hint || cliente_id || null;
+        const cli = sid ? await resolveCliente(sid) : null;
 
-    // Creamos un Envío "stub" para cumplir required:true en asignacion.envios[].envio
-    const stub = await Envio.create({
-      id_venta: String(t),
-      meli_id: null,
-      estado: 'asignado',             // ya queda asignado al chofer
-      source: 'externo',
-      cliente_id: cli?._id || null,   // SOLO si resolvimos Cliente real
-      destinatario: cli?.nombre || '',
-      direccion: '',
-      codigo_postal: '',
-      partido: '',
-      precio: 0,
-      chofer: chDoc._id,              // opcional, útil para filtros
-      chofer_nombre: chDoc.nombre     // opcional
-    });
+        // Creamos un Envío "stub" para cumplir required:true en asignacion.envios[].envio
+        const stub = await Envio.create({
+          id_venta: String(t),
+          meli_id: null,
+          estado: 'asignado',           // ya queda asignado al chofer
+          source: 'externo',
+          cliente_id: cli?._id || null, // SOLO si resolvimos Cliente real
+          destinatario: cli?.nombre || '',
+          direccion: '',
+          codigo_postal: '',
+          partido: '',
+          precio: 0,
+          chofer: chDoc._id,
+          chofer_nombre: chDoc.nombre
+        });
 
-    subdocsExternos.push({
-      envio: stub._id,                // ✅ cumple el required del schema
-      id_venta: stub.id_venta,        // se imprime como “tracking” en el remito
-      meli_id: null,
-      cliente_id: stub.cliente_id || null,
-      destinatario: stub.destinatario,
-      direccion: '',
-      codigo_postal: '',
-      partido: '',
-      precio: 0
-    });
-  }
-}
-
+        subdocsExternos.push({
+          envio: stub._id,                // ✅ cumple el required del schema
+          id_venta: stub.id_venta,        // se imprime como “tracking” en el remito
+          meli_id: null,
+          cliente_id: stub.cliente_id || null,
+          cliente_nombre: cli?.nombre || '',
+          destinatario: cli?.nombre || '',
+          direccion: '',
+          codigo_postal: '',
+          partido: '',
+          precio: 0,
+          externo: true
+        });
+      }
+    }
 
     const total = subdocsInternos.length + subdocsExternos.length;
     if (total === 0) {
@@ -225,12 +206,12 @@ if (allowExternal) {
 
     // 9) PDF: combinar internos + externos
     const enviosPDF = [
-      ...pendientes, // docs reales
+      ...internosPend, // ✅ eran "internosPend", no "pendientes"
       ...subdocsExternos.map(x => ({
-        _id: null,
+        _id: x.envio,
         id_venta: x.id_venta,
         meli_id: null,
-        cliente_id: x.cliente_id ? { _id: x.cliente_id, nombre: CLIENTE_MAP.get(String(x.cliente_id))?.nombre || '' } : null,
+        cliente_id: x.cliente_id ? { _id: x.cliente_id, nombre: x.cliente_nombre || '' } : null,
         destinatario: x.destinatario,
         direccion: x.direccion,
         codigo_postal: x.codigo_postal,
@@ -280,7 +261,6 @@ if (allowExternal) {
     return res.status(500).json({ error: 'No se pudo crear la asignación', detail: err.message });
   }
 };
-
 
 // POST /api/asignaciones/mapa  (stub: mismo flujo pero recibe envio_ids)
 exports.asignarViaMapa = async (req, res) => {
