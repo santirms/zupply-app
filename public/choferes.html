@@ -441,6 +441,45 @@
   }
 }
 
+    async function cargarRemitos() {
+  const p = new URLSearchParams();
+  const d = $('#fDesde')?.value; const h = $('#fHasta')?.value; const c = $('#fChofer')?.value;
+  if (d) p.set('desde', d);
+  if (h) p.set('hasta', h);
+  if (c) p.set('chofer_id', c);
+
+  const r = await fetch('/api/asignaciones?' + p.toString(), { credentials:'include' });
+  const rows = await r.json().catch(()=>[]);
+  const tbody = $('#tblRemitos');
+  tbody.innerHTML = rows.map(x => `
+    <tr class="border-b border-black/10 dark:border-white/10">
+      <td class="p-1">${new Date(x.fecha).toLocaleString()}</td>
+      <td class="p-1">${x.chofer?.nombre || '-'}</td>
+      <td class="p-1">${x.lista_nombre || x.zona || '-'}</td>
+      <td class="p-1">${x.total_paquetes ?? x.total ?? (x.envios?.length || 0)}</td>
+      <td class="p-1">${x.remito_url ? `<a class="text-blue-600 underline" href="${x.remito_url}" target="_blank" rel="noopener">Ver</a>` : '-'}</td>
+    </tr>
+  `).join('');
+}
+
+async function abrirHistorial() {
+  // choferes para el filtro
+  try {
+    const res = await fetch('/api/choferes', { credentials:'include' });
+    const arr = await res.json().catch(()=>[]);
+    const sel = $('#fChofer');
+    sel.innerHTML = `<option value="">(todos)</option>` + arr.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
+  } catch {}
+  await cargarRemitos();
+  $('#modalRemitos').classList.remove('hidden');
+}
+
+// eventos
+document.addEventListener('DOMContentLoaded', () => {
+  $('#btnOpenHist')?.addEventListener('click', abrirHistorial);
+  $('#btnFiltrarRemitos')?.addEventListener('click', cargarRemitos);
+});
+
 
     // ===== Init
     document.addEventListener('DOMContentLoaded', () => {
