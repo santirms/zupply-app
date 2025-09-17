@@ -118,42 +118,45 @@ exports.asignarViaQR = async (req, res) => {
 
     if (allowExternal) {
       for (const t of notFound) {
-        // prioridad: sender específico del ítem → pista global → pista cliente_id
-        const sid = senderByTrack.get(String(t)) || sender_id_hint || cliente_id || null;
-        const cli = sid ? await resolveCliente(sid) : null;
+       const sidRaw    = senderByTrack.get(String(t)) || sender_id_hint || cliente_id || null;
+       const senderStr = sidRaw ? String(sidRaw) : 'externo';   // ← siempre string no vacío
+       const cli       = sidRaw ? await resolveClienteByAny(senderStr) : null;
 
         // Creamos un Envío "stub" para cumplir required:true en asignacion.envios[].envio
-        const stub = await Envio.create({
-          id_venta: String(t),
-          meli_id: null,
-          estado: 'asignado',           // ya queda asignado al chofer
-          source: 'externo',
-          cliente_id: cli?._id || null, // SOLO si resolvimos Cliente real
-          destinatario: cli?.nombre || '',
-          direccion: '',
-          codigo_postal: '',
-          partido: '',
-          precio: 0,
-          chofer: chDoc._id,
-          chofer_nombre: chDoc.nombre
-        });
+const stub = await Envio.create({
+  id_venta: String(t),
+  meli_id: null,
+  estado: 'asignado',
+  source: 'externo',
 
-        subdocsExternos.push({
-          envio: stub._id,                // ✅ cumple el required del schema
-          id_venta: stub.id_venta,        // se imprime como “tracking” en el remito
-          meli_id: null,
-          cliente_id: stub.cliente_id || null,
-          cliente_nombre: cli?.nombre || '',
-          destinatario: cli?.nombre || '',
-          direccion: '',
-          codigo_postal: '',
-          partido: '',
-          precio: 0,
-          externo: true
-        });
-      }
-    }
+  // ✅ requeridos por tu schema:
+  sender_id: senderStr,
+  direccion: '-',          // cualquier string no vacío
+  codigo_postal: '0000',   // idem (ajustá si querés un default más real)
 
+  // opcionales / visibles:
+  cliente_id:   cli?._id || null,
+  destinatario: cli?.nombre || '—',
+  partido: '',
+  precio: 0,
+
+  // para relacionarlo con el chofer:
+  chofer: chDoc._id,
+  chofer_nombre: chDoc.nombre
+});
+
+subdocsExternos.push({
+  envio: stub._id,
+  id_venta: stub.id_venta,
+  meli_id: null,
+  cliente_id: stub.cliente_id || null,
+  destinatario: stub.destinatario,
+  direccion: stub.direccion,
+  codigo_postal: stub.codigo_postal,
+  partido: stub.partido,
+  precio: stub.precio,
+  externo: true
+});
     const total = subdocsInternos.length + subdocsExternos.length;
     if (total === 0) {
       return res.status(400).json({ error: 'Nada para asignar (todos ya asignados y sin externos)' });
