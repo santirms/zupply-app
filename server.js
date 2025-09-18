@@ -136,7 +136,7 @@ app.get('/index', (req, res) => {
 app.get('/', (req, res) => {
   const u = req.session?.user;
   if (!u?.authenticated) return res.redirect('/auth/login');
-  const map = { chofer: '/mis-envios.html', coordinador: '/choferes.html', admin: '/index.html' };
+  const map = { chofer: '/mis-envios.html', coordinador: '/index.html', admin: '/index.html' };
   return res.redirect(map[u.role] || '/index.html');
 });
 
