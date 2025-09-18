@@ -306,7 +306,7 @@ console.error('Error al cargar resumen diario:', e);
 }
 
 function uiStatus(envio) {
-  // helpers visuales (igual que antes)
+  // badge principal
   window.estadoBadge = function estadoBadge(key, label) {
     const css = {
       entregado: 'bg-green-100 text-green-700 border-green-200',
@@ -321,15 +321,16 @@ function uiStatus(envio) {
     }[key] || 'bg-gray-100 text-gray-700 border-gray-200';
     return `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${css}">${label}</span>`;
   };
+  // chip (siempre que haya substatus)
   window.substatusChip = function substatusChip(sub) {
     if (!sub) return '';
     return `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${sub}</span>`;
   };
 
   const raw    = (envio.estado || envio.status || envio.estado_meli?.status || '').toLowerCase();
-  const subRaw = (envio.estado_meli?.substatus || '').toLowerCase();
+  const subRaw = (envio.estado_meli?.substatus || '').toLowerCase().trim();
 
-  // bucket/base
+  // bucket/base por status
   let norm = ({
     pending: 'pendiente',
     handling: 'pendiente',
@@ -340,7 +341,23 @@ function uiStatus(envio) {
     cancelled: 'cancelado',
   })[raw] || raw || 'pendiente';
 
-  // label base por bucket
+  // --- substatus conocidos (toman prioridad) ---
+  const isAbsent   = /(receiver|buyer|recipient|client)[_\s-]?(absent|not[_\s-]?at[_\s-]?home)/.test(subRaw);
+  const isResched  = /resched/.test(subRaw);                // buyer_rescheduled / rescheduled
+  const isSoon     = /(soon[_\s-]?deliver|arriving[_\s-]?soon)/.test(subRaw);
+  const isDelay    = /(with_)?delay(ed)?/.test(subRaw);
+
+  if (isAbsent) {
+    norm = 'comprador_ausente';
+  } else if (isResched) {
+    norm = 'reprogramado';
+  } else if (isDelay) {
+    norm = 'demorado';
+  } else if (isSoon) {
+    norm = 'en_camino';
+  }
+
+  // label de la “pill” principal
   let cardLabel = ({
     pendiente: 'Pendiente',
     asignado: 'Asignado',
@@ -353,28 +370,17 @@ function uiStatus(envio) {
     comprador_ausente: 'Comprador ausente',
   })[norm] || 'Pendiente';
 
-  // subchip: por defecto oculto; solo lo mostramos si el substatus es "desconocido"
-  let chip = '';
-
-  // ==== substatus conocidos (NO muestran chip) ====
-  if (/receiver[_\s-]?absent/.test(subRaw)) {
-    norm = 'comprador_ausente';
-    // chip = '' (oculto)
-  } else if (/resched/.test(subRaw)) {
-    norm = 'reprogramado';
-    if (/buyer/.test(subRaw)) cardLabel = 'Reprogramado por comprador'; // más preciso
-    // chip = '' (oculto)
-  } else if (/(with_)?delay/.test(subRaw)) {
-    norm = 'demorado';
-    // chip = '' (oculto)
-  } else if (/soon\s*deliver/.test(subRaw)) {
-    // cae en "en_camino", sin chip
-    norm = 'en_camino';
-    // chip = '' (oculto)
-  } else if (subRaw) {
-    // ==== substatus desconocido → mostramos chip legible ====
-    chip = subRaw.replace(/_/g, ' ').trim();
+  // ajuste de copy más preciso en resched
+  if (norm === 'reprogramado' && /buyer/.test(subRaw)) {
+    cardLabel = 'Reprogramado por comprador';
   }
+  // ajuste de copy para soon deliver (solo UI)
+  if (isSoon) {
+    cardLabel = 'Llega pronto';
+  }
+
+  // mostramos SIEMPRE el substatus como chip si viene
+  const chip = subRaw ? subRaw.replace(/_/g, ' ') : '';
 
   return { key: norm, label: cardLabel, substatus: chip };
 }
