@@ -81,12 +81,7 @@ async function asignarViaQR(req, res) {
     }
     if (!chDoc) return res.status(400).json({ error: 'Chofer inválido (id o nombre)' });
 
-  const envios = await Envio.find({
-    // justo después del find
-console.log('[asignarViaQR] tracks:', tracksNorm, 'num:', tracksNum);
-console.log('[asignarViaQR] encontrados:',
-  envios.map(e => ({ id_venta: e.id_venta, t: typeof e.id_venta, meli_id: e.meli_id, tm: typeof e.meli_id }))
-);
+ const envios = await Envio.find({
   $or: [
     // id_venta puede estar almacenado como String o Number
     { id_venta: { $in: tracksNorm } },
@@ -97,7 +92,6 @@ console.log('[asignarViaQR] encontrados:',
     { meli_id:  { $in: tracksNum } },
   ]
 }).populate('cliente_id').lean();
-   
 
 // indexar encontrados por “cualquiera de sus llaves”
 const foundByKey = new Map();
