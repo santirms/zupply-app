@@ -360,10 +360,9 @@
         if (r.ok) interno = await r.json();
       } catch {}
 
-      if (interno) {
-        const isTerminal = s => ['entregado','cancelado'].includes(String(s||'').toLowerCase());
-        const internosElegibles = envios.filter(e => !e.chofer && !isTerminal(e.estado));
-        
+    if (interno.chofer || interno.chofer_id) {
+    return alert(`Ya asignado a ${interno.chofer?.nombre || 'otro chofer'}: ${trk}`);
+    }
         stateQR.seen.add(trk);
         stateQR.items.push({
           _id: interno._id,
