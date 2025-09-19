@@ -34,7 +34,7 @@ async function resolveClienteByAny(hint) {
   try { return await Cliente.findOne(q).select('nombre').lean(); } catch { return null; }
 }
 
-exports.asignarViaQR = async (req, res) => {
+async function asignarViaQR = async (req, res) => {
   try {
     // -------- entrada --------
     const {
