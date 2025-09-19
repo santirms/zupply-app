@@ -360,9 +360,10 @@
         if (r.ok) interno = await r.json();
       } catch {}
 
+    
     if (interno.chofer || interno.chofer_id) {
     return alert(`Ya asignado a ${interno.chofer?.nombre || 'otro chofer'}: ${trk}`);
-    }
+    
         stateQR.seen.add(trk);
         stateQR.items.push({
           _id: interno._id,
