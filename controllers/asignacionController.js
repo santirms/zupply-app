@@ -87,12 +87,12 @@ exports.asignarViaQR = async (req, res) => {
       $or: [{ id_venta: { $in: tracks } }, { meli_id: { $in: tracks } }]
     }).populate('cliente_id').lean();
 
-    const internosPend = envios.filter(e => (e.estado || 'pendiente') === 'pendiente');
+    const internosElegibles = envios.filter(e => (e.estado || 'pendiente') === 'pendiente');
     const encontrados  = new Set(envios.map(e => String(e.id_venta || e.meli_id)));
     const notFound     = tracks.filter(t => !encontrados.has(String(t)));
 
     // 4) Subdocs internos
-    const subdocsInternos = internosPend.map(e => ({
+    const subdocsInternos = internosElegibles.map(e => ({
       envio: e._id,
       id_venta: e.id_venta,
       meli_id: e.meli_id,
@@ -208,7 +208,7 @@ exports.asignarViaQR = async (req, res) => {
 
     // 9) PDF: combinar internos + externos
     const enviosPDF = [
-      ...internosPend, // docs reales
+      ...internosElegibles, // docs reales
       ...subdocsExternos.map(x => ({
         _id: x.envio,
         id_venta: x.id_venta,
