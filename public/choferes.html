@@ -361,10 +361,9 @@
       } catch {}
 
       if (interno) {
-        if ((interno.estado || 'pendiente') !== 'pendiente') {
-          alert(`Ya asignado: ${trk}`);
-          return;
-        }
+        const isTerminal = s => ['entregado','cancelado'].includes(String(s||'').toLowerCase());
+        const internosElegibles = envios.filter(e => !e.chofer && !isTerminal(e.estado));
+        
         stateQR.seen.add(trk);
         stateQR.items.push({
           _id: interno._id,
