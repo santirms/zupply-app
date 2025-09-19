@@ -253,5 +253,12 @@ async function asignarViaQR(req, res) {
 
 module.exports = {
   asignarViaQR,
-  };
-
+  asignarViaMapa,
+  listarAsignaciones,
+  detalleAsignacion,
+  quitarEnvios,
+  moverEnvios,
+  agregarEnvios,
+  whatsappLink,
+  eliminarAsignacion,
+};
