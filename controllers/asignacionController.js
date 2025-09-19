@@ -49,6 +49,9 @@ exports.asignarViaQR = async (req, res) => {
       items = []                      // [{ tracking, sender_id }]
     } = req.body || {};
 
+    const exported = require('../controllers/asignacionController');
+    console.log('[asignacionController exports]', Object.keys(exported));
+    
     // -------- normalizar trackings + sender por tracking --------
     const tracks = (Array.isArray(tracking_ids) && tracking_ids.length)
       ? tracking_ids.map(String)
