@@ -48,10 +48,7 @@ exports.asignarViaQR = async (req, res) => {
       sender_id_hint = null,          // pista global opcional
       items = []                      // [{ tracking, sender_id }]
     } = req.body || {};
-
-    const exported = require('../controllers/asignacionController');
-    console.log('[asignacionController exports]', Object.keys(exported));
-    
+       
     // -------- normalizar trackings + sender por tracking --------
     const tracks = (Array.isArray(tracking_ids) && tracking_ids.length)
       ? tracking_ids.map(String)
@@ -256,13 +253,5 @@ exports.asignarViaQR = async (req, res) => {
 
 module.exports = {
   asignarViaQR,
-  asignarViaMapa,
-  listarAsignaciones,
-  detalleAsignacion,
-  quitarEnvios,
-  moverEnvios,
-  agregarEnvios,
-  whatsappLink,
-  eliminarAsignacion,
-};
+  };
 
