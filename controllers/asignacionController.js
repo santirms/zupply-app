@@ -253,15 +253,3 @@ exports.asignarViaQR = async (req, res) => {
     return res.status(500).json({ error: 'No se pudo crear la asignación', detail: err.message });
   }
 };
-
-module.exports = {
-  asignarViaQR,
-  asignarViaMapa,
-  listarAsignaciones,
-  detalleAsignacion,
-  quitarEnvios,
-  moverEnvios,
-  agregarEnvios,
-  whatsappLink,
-  eliminarAsignacion,
-};
