@@ -54,24 +54,31 @@ async function asignarViaQR(req, res) {
     } = req.body || {};
 
     // -------- normalizar trackings + sender por tracking --------
-    const tracksNorm = [...new Set(tracks.map(t => String(t).trim()))];
-    const tracksNum  = tracksNorm
-    .filter(s => /^\d+$/.test(s))                 // sólo dígitos
-    .map(s => Number(s))
-    .filter(n => Number.isSafeInteger(n));        // evita overflow
-    
-    const senderByTrack = new Map();
-    for (const it of Array.isArray(items) ? items : []) {
-      const t = String(it?.tracking || '').trim();
-      if (!t) continue;
-      if (!tracks.includes(t)) tracks.push(t);
-      const sid = String(it?.sender_id || '').trim();
-      if (sid) senderByTrack.set(t, sid);
-    }
+  // -------- normalizar trackings + sender por tracking --------
+const tracks = Array.isArray(tracking_ids) ? tracking_ids.slice() : [];
+if (tracking)  tracks.push(String(tracking));
+if (id_venta)  tracks.push(String(id_venta));
+if (meli_id)   tracks.push(String(meli_id));
 
-    if ((!chofer_id && !chofer_nombre) || !tracks.length) {
-      return res.status(400).json({ error: 'Faltan datos' });
-    }
+const tracksNorm = [...new Set(
+  tracks.map(t => String(t).trim()).filter(Boolean)
+)];
+const tracksNum  = tracksNorm
+  .filter(s => /^\d+$/.test(s))
+  .map(s => Number(s))
+  .filter(n => Number.isSafeInteger(n));
+
+const senderByTrack = new Map();
+for (const it of Array.isArray(items) ? items : []) {
+  const t = String(it?.tracking || '').trim();
+  if (!t) continue;
+  const sid = String(it?.sender_id || '').trim();
+  if (sid) senderByTrack.set(t, sid);
+}
+
+if ((!chofer_id && !chofer_nombre) || !tracksNorm.length) {
+  return res.status(400).json({ error: 'Faltan datos' });
+}
 
     // -------- chofer --------
     let chDoc = null;
@@ -121,53 +128,30 @@ for (const t of tracksNorm) {
       precio: e.precio ?? 0
     }));
 
-    // -------- externos: crear stubs cumpliendo schema --------
-    const allowExternal = String(process.env.ALLOW_EXTERNAL_TRACKINGS ?? 'true').toLowerCase() === 'true';
-    const subdocsExternos = [];
+ // -------- externos: crear como subdocs, sin crear Envio si no hay cliente --------
+const allowExternal = String(process.env.ALLOW_EXTERNAL_TRACKINGS ?? 'true').toLowerCase() === 'true';
+const subdocsExternos = [];
 
-    if (allowExternal) {
-      for (const t of externosKeys) {
-        const sidRaw = senderByTrack.get(t) || sender_id_hint || null;     // (2) cliente por sender si existe
-        const sidStr = sidRaw ? String(sidRaw) : 'externo';                 // (3) sino, sentinel “externo”
-        const cli    = sidRaw ? await resolveClienteByAny(sidStr) : null;
+if (allowExternal) {
+  for (const t of externosKeys) {
+    const sidRaw = senderByTrack.get(t) || sender_id_hint || null;
+    const sidStr = sidRaw ? String(sidRaw).trim() : null;
+    const cli    = sidStr ? await resolveClienteByAny(sidStr) : null;
 
-        // Stub Envio — cumple los “required” de tu schema
-        const stub = await Envio.create({
-          id_venta: String(t),
-          meli_id: null,
-          estado: 'asignado',
-          source: 'externo',
+    subdocsExternos.push({
+      externo: true,
+      tracking: String(t),
+      id_venta: String(t),
+      cliente_id: cli?._id || undefined,
+      destinatario: cli?.nombre || '',
+      direccion: '',
+      codigo_postal: '',
+      partido: '',
+      precio: 0
+    });
+  }
+}
 
-          // requeridos
-          sender_id: sidStr,
-          direccion: '-',          // string no vacío
-          codigo_postal: '0000',   // string no vacío
-
-          // opcionales / visibles
-          cliente_id:   cli?._id || null,   // si encontramos Cliente por sender
-          destinatario: cli?.nombre || '',  // nombre si existe
-          partido: '',
-          precio: 0,
-
-          // relación con chofer
-          chofer: chDoc._id,
-          chofer_nombre: chDoc.nombre
-        });
-
-        subdocsExternos.push({
-          envio: stub._id,
-          id_venta: stub.id_venta,
-          meli_id:  null,
-          cliente_id: stub.cliente_id || null,
-          destinatario: stub.destinatario,
-          direccion: stub.direccion,
-          codigo_postal: stub.codigo_postal,
-          partido: stub.partido,
-          precio: stub.precio,
-          externo: true
-        });
-      }
-    }
 
     const total = subdocsInternos.length + subdocsExternos.length;
     if (!total) return res.status(400).json({ error: 'Nada para asignar' });
@@ -217,22 +201,22 @@ for (const t of tracksNorm) {
       } catch {}
     }
 
-    // -------- PDF (internos reales + externos stub) --------
-    const enviosPDF = [
-      ...internos,
-      ...subdocsExternos.map(x => ({
-        _id: x.envio,
-        id_venta: x.id_venta,
-        meli_id: null,
-        cliente_id: x.cliente_id ? { _id: x.cliente_id } : null,
-        destinatario: x.destinatario,
-        direccion: x.direccion,
-        codigo_postal: x.codigo_postal,
-        partido: x.partido,
-        precio: x.precio,
-        sender_id: (senderByTrack.get(x.id_venta) || sender_id_hint || 'externo')
-      }))
-    ];
+// -------- PDF (internos reales + externos como objetos mínimos) --------
+const enviosPDF = [
+  ...internos,
+  ...subdocsExternos.map(x => ({
+    _id: null,
+    id_venta: x.id_venta,
+    meli_id:  null,
+    cliente_id: x.cliente_id ? { _id: x.cliente_id } : null,
+    destinatario: x.destinatario,
+    direccion: x.direccion,
+    codigo_postal: x.codigo_postal,
+    partido: x.partido,
+    precio: x.precio,
+    sender_id: (senderByTrack.get(x.id_venta) || sender_id_hint || 'externo')
+  }))
+];
 
     let remito_url = null;
     try {
@@ -419,7 +403,7 @@ async function quitarEnvios(req, res) {
   asg.total_paquetes = keep.length;
   await asg.save();
 
-  const ids = removed.map(x => x.envio);
+  const ids = removed.map(x => x.envio).filter(Boolean);
   await Envio.updateMany({ _id: { $in: ids } }, { $set: { estado: 'pendiente', chofer: null }, $currentDate: { updatedAt: true } });
 
   const chofer = await Chofer.findById(asg.chofer).lean();
@@ -457,7 +441,7 @@ async function moverEnvios(req, res) {
     fecha: new Date()
   });
 
-  await Envio.updateMany({ _id: { $in: mov.map(x => x.envio) } }, { $set: { estado: 'asignado', chofer: chofer_destino }, $currentDate: { updatedAt: true } });
+  await Envio.updateMany({ _id: { $in: mov.map(x => x.envio).filter(Boolean) } }, { $set: { estado: 'asignado', chofer: chofer_destino }, $currentDate: { updatedAt: true } });
 
   const choferO = await Chofer.findById(origen.chofer).lean();
   const choferD = await Chofer.findById(chofer_destino).lean();
