@@ -54,10 +54,12 @@ async function asignarViaQR(req, res) {
     } = req.body || {};
 
     // -------- normalizar trackings + sender por tracking --------
-    const tracks = (Array.isArray(tracking_ids) && tracking_ids.length)
-      ? tracking_ids.map(String)
-      : [tracking, id_venta, meli_id].filter(Boolean).map(String);
-
+    const tracksNorm = [...new Set(tracks.map(t => String(t).trim()))];
+    const tracksNum  = tracksNorm
+    .filter(s => /^\d+$/.test(s))                 // sólo dígitos
+    .map(s => Number(s))
+    .filter(n => Number.isSafeInteger(n));        // evita overflow
+    
     const senderByTrack = new Map();
     for (const it of Array.isArray(items) ? items : []) {
       const t = String(it?.tracking || '').trim();
@@ -79,25 +81,38 @@ async function asignarViaQR(req, res) {
     }
     if (!chDoc) return res.status(400).json({ error: 'Chofer inválido (id o nombre)' });
 
-    // -------- buscar envíos existentes por cualquiera de las dos llaves --------
-    const envios = await Envio.find({
-      $or: [{ id_venta: { $in: tracks } }, { meli_id: { $in: tracks } }]
-    }).populate('cliente_id').lean();
+  const envios = await Envio.find({
+  $or: [
+    // id_venta puede estar almacenado como String o Number
+    { id_venta: { $in: tracksNorm } },
+    { id_venta: { $in: tracksNum } },
 
-    // index por id_venta/meli_id → doc
-    const foundByKey = new Map();
-    for (const e of envios) {
-      if (e.id_venta) foundByKey.set(String(e.id_venta), e);
-      if (e.meli_id)  foundByKey.set(String(e.meli_id),  e);
-    }
+    // meli_id puede estar almacenado como String o Number (por las dudas)
+    { meli_id:  { $in: tracksNorm } },
+    { meli_id:  { $in: tracksNum } },
+  ]
+}).populate('cliente_id').lean();
+    
+// justo después del find
+console.log('[asignarViaQR] tracks:', tracksNorm, 'num:', tracksNum);
+console.log('[asignarViaQR] encontrados:',
+  envios.map(e => ({ id_venta: e.id_venta, t: typeof e.id_venta, meli_id: e.meli_id, tm: typeof e.meli_id }))
+);
 
-    // separar internos/externos (independiente del estado MeLi)
-    const internos = [];
-    const externosKeys = [];
-    for (const t of tracks) {
-      const doc = foundByKey.get(String(t));
-      if (doc) internos.push(doc); else externosKeys.push(String(t));
-    }
+// indexar encontrados por “cualquiera de sus llaves”
+const foundByKey = new Map();
+for (const e of envios) {
+  if (e.id_venta != null) foundByKey.set(String(e.id_venta), e);
+  if (e.meli_id  != null) foundByKey.set(String(e.meli_id),  e);
+}
+
+// separar internos/externos
+const internos = [];
+const externosKeys = [];
+for (const t of tracksNorm) {
+  const doc = foundByKey.get(String(t));
+  if (doc) internos.push(doc); else externosKeys.push(String(t));
+}
 
     // -------- internos: SIEMPRE incluir --------
     const subdocsInternos = internos.map(e => ({
