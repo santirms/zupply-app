@@ -284,47 +284,50 @@
     }
 
     // ===== Parse de payload
-    function extractPayload(raw) {
-      const out = { tracking: '', sender_id: null };
-      if (!raw) return out;
-      const s = String(raw).trim();
+  function extractPayload(raw) {
+  const out = { tracking: '', sender_id: null };
+  if (!raw) return out;
+  const s = String(raw).trim();
 
-      // JSON
-      if (s.startsWith('{') && s.endsWith('}')) {
-        try {
-          const o = JSON.parse(s);
-          out.tracking = String(
-            o.tracking_id || o.tracking || o.id || o.id_venta || o.meli_id || o.code || o.shipment_id || ''
-          ).trim();
-          out.sender_id = String(o.sender_id || o.cliente_id || o.sender || '').trim() || null;
-          return out;
-        } catch {}
-      }
-
-      // URL con params
-      if (/^https?:\/\//i.test(s)) {
-        try {
-          const u = new URL(s);
-          out.tracking = String(
-            u.searchParams.get('tracking_id') || u.searchParams.get('tracking') || u.searchParams.get('id') ||
-            u.searchParams.get('id_venta') || u.searchParams.get('meli_id') || u.searchParams.get('shipment_id') || ''
-          ).trim();
-          out.sender_id = String(
-            u.searchParams.get('sender_id') || u.searchParams.get('cliente_id') || u.searchParams.get('sender') || ''
-          ).trim() || null;
-          if (!out.tracking) {
-            const seg = u.pathname.split('/').filter(Boolean).reverse().find(x => /^\w{5,}$/.test(x));
-            if (seg) out.tracking = seg;
-          }
-          return out;
-        } catch {}
-      }
-
-      // Plano: primer token con 5+ chars
-      const m = s.match(/[\w-]{5,}/);
-      out.tracking = m ? m[0] : s;
+  // JSON
+  if (s.startsWith('{') && s.endsWith('}')) {
+    try {
+      const o = JSON.parse(s);
+      out.tracking = String(
+        o.tracking_id || o.tracking || o.id || o.id_venta || o.meli_id || o.code || o.shipment_id || ''
+      ).trim();
+      out.sender_id = String(o.sender_id || o.cliente_id || o.sender || '').trim() || null;
       return out;
-    }
+    } catch {}
+  }
+
+  // URL con params (solo por comodidad; seguimos buscando en TU base)
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s);
+      out.tracking = String(
+        u.searchParams.get('tracking_id') || u.searchParams.get('tracking') || u.searchParams.get('id') ||
+        u.searchParams.get('id_venta') || u.searchParams.get('meli_id') || u.searchParams.get('shipment_id') || ''
+      ).trim();
+      out.sender_id = String(
+        u.searchParams.get('sender_id') || u.searchParams.get('cliente_id') || u.searchParams.get('sender') || ''
+      ).trim() || null;
+
+      if (!out.tracking) {
+        const seg = u.pathname.split('/').filter(Boolean).reverse().find(x => /^\w{5,}$/.test(x));
+        if (seg) out.tracking = seg;
+      }
+      return out;
+    } catch {}
+  }
+
+  // Plano: primer token con 5+ chars
+  const m = s.match(/[\w-]{5,}/);
+  out.tracking = m ? m[0] : s;
+  return out;
+}
+
+    
 
     // ===== Lista QR
     function renderListQR() {
@@ -349,48 +352,52 @@
       });
     }
 
-    async function addTrackingQR(payload) {
-      const trk = String(payload?.tracking || '').trim();
-      const sender_id = payload?.sender_id ? String(payload.sender_id) : null;
-      if (!trk || stateQR.seen.has(trk)) return;
+async function addTrackingQR(payload) {
+  const trk = String(payload?.tracking || '').trim();
+  const sender_id = payload?.sender_id ? String(payload.sender_id) : null;
+  if (!trk || stateQR.seen.has(trk)) return;
 
-      let interno = null;
-      try {
-        const r = await fetch(`/api/envios/tracking/${encodeURIComponent(trk)}`, { credentials: 'same-origin' });
-        if (r.ok) interno = await r.json();
-      } catch {}
+  let interno = null;
+  try {
+    const r = await fetch(`/api/envios/tracking/${encodeURIComponent(trk)}`, { credentials: 'same-origin' });
+    if (r.ok) interno = await r.json();
+  } catch {}
 
-    
-    if (interno.chofer || interno.chofer_id) {
-    return alert(`Ya asignado a ${interno.chofer?.nombre || 'otro chofer'}: ${trk}`);
-    
-        stateQR.seen.add(trk);
-        stateQR.items.push({
-          _id: interno._id,
-          tracking: interno.id_venta || interno.meli_id || trk,
-          cliente: interno.cliente_id?.nombre || '',
-          direccion: interno.direccion || '',
-          codigo_postal: interno.codigo_postal || '',
-          partido: interno.partido || '',
-          sender_id: interno.cliente_id?._id || sender_id || null,
-          externo: false
-        });
-      } else {
-        const nombreCli = sender_id ? (CLIENTES_MAP.get(sender_id) || `Cliente ${sender_id.slice(-4)}`) : '(externo)';
-        stateQR.seen.add(trk);
-        stateQR.items.push({
-          _id: null,
-          tracking: trk,
-          cliente: nombreCli,
-          direccion: '',
-          codigo_postal: '',
-          partido: '',
-          sender_id,
-          externo: true
-        });
-      }
-      renderListQR();
-    }
+  if (interno && (interno.chofer || interno.chofer_id)) {
+    alert(`Ya asignado a ${interno.chofer?.nombre || 'otro chofer'}: ${trk}`);
+    return;
+  }
+
+  stateQR.seen.add(trk);
+
+  if (interno) {
+    stateQR.items.push({
+      _id: interno._id,
+      tracking: interno.id_venta || interno.meli_id || trk,
+      cliente: interno.cliente_id?.nombre || '',
+      direccion: interno.direccion || '',
+      codigo_postal: interno.codigo_postal || '',
+      partido: interno.partido || '',
+      sender_id: interno.cliente_id?._id || sender_id || null,
+      externo: false
+    });
+  } else {
+    const nombreCli = sender_id ? (CLIENTES_MAP.get(sender_id) || `Cliente ${sender_id.slice(-4)}`) : '(externo)';
+    stateQR.items.push({
+      _id: null,
+      tracking: trk,
+      cliente: nombreCli,
+      direccion: '',
+      codigo_postal: '',
+      partido: '',
+      sender_id,
+      externo: true
+    });
+  }
+
+  renderListQR();
+}
+
 
   async function asignarQR() {
   const chofer_id       = $('#choferSel')?.value || '';
