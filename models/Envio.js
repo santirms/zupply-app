@@ -16,7 +16,10 @@ const HistItemSchema = new mongoose.Schema({
 
 const envioSchema = new Schema({
   sender_id:      { type: String, required: true },
-  cliente_id:     { type: Schema.Types.ObjectId, ref: 'Cliente', required: true },
+  cliente_id:     {  type: mongoose.Schema.Types.ObjectId,  ref: 'Cliente',  required: function () {    // solo exigimos cliente_id si el envío NO es externo
+    return (this.source || '') !== 'externo';
+  }
+},
   id_venta:       { type: String, required: true },
 
   // Sólo para envíos MeLi; no guardes "" ni null
