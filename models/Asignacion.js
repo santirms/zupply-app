@@ -10,7 +10,7 @@ const asignacionEnvioSchema = new Schema({
   externo:       { type: Boolean, default: false }, // marcamos placeholder
   id_venta:      { type: String },
   meli_id:       { type: String },
-  cliente_id:    { type: Schema.Types.ObjectId, ref: 'Cliente', required: true },
+  cliente_id:    { type: Schema.Types.ObjectId, ref: 'Cliente', required: false },
   destinatario:  { type: String },
   direccion:     { type: String },
   codigo_postal: { type: String },
