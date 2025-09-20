@@ -35,13 +35,13 @@ function getFlag(name, defVal = undefined) {
 
   const since = new Date(Date.now() - HOURS * 60 * 60 * 1000);
 
-  if (!process.env.MONGODB_URI) {
-    console.error('[hydrate-history] ERROR: faltante MONGODB_URI en .env');
+  if (!process.env.MONGO_URI) {
+    console.error('[hydrate-history] ERROR: faltante MONGO_URI en .env');
     process.exit(1);
   }
 
   try {
-    await mongoose.connect(process.env.MONGODB_URI, {
+    await mongoose.connect(process.env.MONGO_URI, {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 15000
     });
