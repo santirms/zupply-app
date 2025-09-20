@@ -512,7 +512,6 @@ router.get('/mis', requireAuth, requireRole('chofer'), async (req, res, next) =>
   } catch (e) { next(e); }
 });
 
-
 // GET /envios/:id
 router.get('/:id', async (req, res) => {
   try {
@@ -521,16 +520,34 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    let envio = await Envio.findById(id).populate('cliente_id'); // doc vivo (sin lean)
+    // 1) leemos lean para poder clonar/spread
+    let envio = await Envio.findById(id).populate('cliente_id').lean();
+    if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
 
+    // 2) coords si faltan (y re-leer)
+    if (!Number.isFinite(envio.latitud) || !Number.isFinite(envio.longitud)) {
+      try {
+        await ensureCoords(envio); // ya actualiza en DB
+        envio = await Envio.findById(id).populate('cliente_id').lean();
+      } catch {}
+    }
 
-    envio = await ensureCoords(envio);   // ⬅️ usá el retorno
-    // ⬇️ hidratar historial desde MeLi con HORA REAL (history.date)
-    try { await ensureMeliHistory(envio); } catch (e) { console.warn('meli-history skip:', e.message); }
+    // 3) hidratar historial si está viejo/pobre (usa el servicio compartido)
+    try { await ensureMeliHistorySrv(id, { force: false }); } catch (e) {
+      console.warn('ensureMeliHistorySrv:', e.message);
+    }
 
-    const plain = envio.toObject();         // ahora sí lean
-    plain.timeline = buildTimeline(plain);  // usa historial ya hidratado
-    res.json(plain);
+    // 4) re-leer para traer historial actualizado
+    envio = await Envio.findById(id).populate('cliente_id').lean();
+
+    // 5) timeline consistente para el front
+    const timeline = buildTimeline(envio); // tu función ya definida en este archivo
+    return res.json({
+      ...envio,
+      timeline,
+      historial: envio.historial || [],
+      eventos:   envio.eventos   || []
+    });
   } catch (err) {
     console.error('Error al obtener envío:', err);
     res.status(500).json({ error: 'Error al obtener envío' });
