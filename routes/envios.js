@@ -520,34 +520,21 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    // 1) leemos lean para poder clonar/spread
-    let envio = await Envio.findById(id).populate('cliente_id').lean();
-    if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
+    let envioDoc = await Envio.findById(id).populate('cliente_id');
+    if (!envioDoc) return res.status(404).json({ error: 'Envío no encontrado' });
 
-    // 2) coords si faltan (y re-leer)
-    if (!Number.isFinite(envio.latitud) || !Number.isFinite(envio.longitud)) {
-      try {
-        await ensureCoords(envio); // ya actualiza en DB
-        envio = await Envio.findById(id).populate('cliente_id').lean();
-      } catch {}
-    }
+    // coords (puede devolver otra instancia, pero no importa)
+    envioDoc = await ensureCoords(envioDoc);
 
-    // 3) hidratar historial si está viejo/pobre (usa el servicio compartido)
-    try { await ensureMeliHistorySrv(id, { force: false }); } catch (e) {
-      console.warn('ensureMeliHistorySrv:', e.message);
-    }
+    // 🔁 hidratá historial desde MeLi (usa el servicio que escribe directo en DB)
+    try { await ensureMeliHistory(id, { force: true }); } catch (e) { console.warn('meli-history skip:', e.message); }
 
-    // 4) re-leer para traer historial actualizado
-    envio = await Envio.findById(id).populate('cliente_id').lean();
+    // ⬅️ RE-LEER fresco desde DB (ya con historial guardado por el servicio)
+    const plain = await Envio.findById(id).populate('cliente_id').lean();
 
-    // 5) timeline consistente para el front
-    const timeline = buildTimeline(envio); // tu función ya definida en este archivo
-    return res.json({
-      ...envio,
-      timeline,
-      historial: envio.historial || [],
-      eventos:   envio.eventos   || []
-    });
+    // timeline para el front (mergea historial+eventos)
+    plain.timeline = buildTimeline(plain);
+    return res.json(plain);
   } catch (err) {
     console.error('Error al obtener envío:', err);
     res.status(500).json({ error: 'Error al obtener envío' });
