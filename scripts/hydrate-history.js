@@ -1,17 +1,21 @@
-// scripts/hydrate-history.js
-// Uso:
-//   node scripts/hydrate-history.js --hours=24 --limit=500 --force
-//   MELI_HISTORY_DEBUG=1 node scripts/hydrate-history.js --hours=12 --delivered
+// scripts/hydrate-history.js (versión diagnóstica)
+// Uso ejemplos:
+//   node scripts/hydrate-history.js --all --limit=500 --force
+//   node scripts/hydrate-history.js --hours=48 --poor --limit=300
+//   node scripts/hydrate-history.js --since=2025-09-01 --delivered --needsync=6 --force
+//   MELI_HISTORY_DEBUG=1 node scripts/hydrate-history.js --all --limit=100 --force
 //
 // Flags:
-//   --hours      Ventana de tiempo hacia atrás (default 24)
-//   --limit      Máximo de candidatos a procesar (default 1000)
-//   --force      Ignora el TTL interno del servicio y fuerza la hidratación
-//   --delivered  Filtra envíos con estado interno 'entregado' dentro de la ventana
+//   --all           Ignora ventana de tiempo (trae por condiciones no temporales)
+//   --hours=N       Ventana hacia atrás en horas (default 24)
+//   --since=YYYY-MM-DD   Fecha desde (UTC) alternativa a --hours
+//   --limit=N       Máximo candidatos (default 1000)
+//   --force         Ignora TTL interno del servicio
+//   --delivered     Solo envíos con estado interno 'entregado'
+//   --poor          Solo envíos con historial pobre (no array o length < 2)
+//   --needsync=H    Solo envíos con meli_history_last_sync ausente o más viejo que H horas
 //
-// Requisitos:
-//   - process.env.MONGODB_URI debe estar configurado
-//   - services/meliHistory.ensureMeliHistory disponible
+// Requisitos: .env con MONGODB_URI
 
 require('dotenv').config();
 const mongoose = require('mongoose');
@@ -22,18 +26,40 @@ function getFlag(name, defVal = undefined) {
   const arg = process.argv.find(a => a.startsWith(`--${name}`));
   if (!arg) return defVal;
   const [, val] = arg.split('=');
-  if (val === undefined) return true; // flag sin valor => booleano
+  if (val === undefined) return true;
   const num = Number(val);
   return Number.isNaN(num) ? val : num;
 }
 
-(async function main() {
-  const HOURS     = getFlag('hours', 24);
-  const LIMIT     = getFlag('limit', 1000);
-  const FORCE     = !!getFlag('force', false);
-  const DELIVERED = !!getFlag('delivered', false);
+function isoOrNull(s) {
+  if (!s) return null;
+  const d = new Date(s);
+  return Number.isNaN(+d) ? null : d;
+}
 
-  const since = new Date(Date.now() - HOURS * 60 * 60 * 1000);
+(async function main() {
+  const ALL        = !!getFlag('all', false);
+  const HOURS      = getFlag('hours', 24);
+  const SINCE_RAW  = getFlag('since', null);
+  const LIMIT      = getFlag('limit', 1000);
+  const FORCE      = !!getFlag('force', false);
+  const DELIVERED  = !!getFlag('delivered', false);
+  const POOR       = !!getFlag('poor', false);
+  const NEEDSYNC_H = getFlag('needsync', null); // horas
+
+  // Calcular "since"
+  let since = null;
+  if (!ALL) {
+    if (SINCE_RAW) {
+      since = isoOrNull(SINCE_RAW);
+      if (!since) {
+        console.error('[hydrate-history] ERROR: --since inválido. Use YYYY-MM-DD');
+        process.exit(1);
+      }
+    } else {
+      since = new Date(Date.now() - HOURS * 60 * 60 * 1000);
+    }
+  }
 
   if (!process.env.MONGO_URI) {
     console.error('[hydrate-history] ERROR: faltante MONGO_URI en .env');
@@ -51,51 +77,107 @@ function getFlag(name, defVal = undefined) {
     process.exit(1);
   }
 
-  // Query base: envíos con meli_id y actividad reciente (createdAt o updatedAt)
-  const baseQuery = {
-    meli_id: { $exists: true, $ne: null },
+  // -----------------------------------------------
+  // Construcción del query base (diagnóstico amigable)
+  // -----------------------------------------------
+  const mustHave = { meli_id: { $exists: true, $ne: null, $ne: '' } };
+
+  // Condiciones OR por tiempo (si NO --all)
+  const timeOr = [];
+  if (!ALL && since) {
+    timeOr.push({ updatedAt: { $gte: since } }, { createdAt: { $gte: since } });
+  }
+
+  // Condición "poor" (historial pobre)
+  const poorCond = {
     $or: [
-      { updatedAt: { $gte: since } },
-      { createdAt: { $gte: since } }
+      { historial: { $exists: false } },
+      { historial: { $type: 'array', $size: 0 } },
+      { historial: { $exists: true }, $where: 'Array.isArray(this.historial) && this.historial.length < 2' }
     ]
   };
 
-  // Si piden sólo entregados en la ventana
-  if (DELIVERED) {
-    baseQuery.estado = 'entregado';
+  // Condición "needsync"
+  let needSyncCond = null;
+  if (NEEDSYNC_H != null) {
+    const cutoff = new Date(Date.now() - Number(NEEDSYNC_H) * 60 * 60 * 1000);
+    needSyncCond = {
+      $or: [
+        { meli_history_last_sync: { $exists: false } },
+        { meli_history_last_sync: { $lt: cutoff } }
+      ]
+    };
   }
 
+  // Armar $and final
+  const andParts = [mustHave];
+  if (!ALL && timeOr.length) andParts.push({ $or: timeOr });
+  if (DELIVERED) andParts.push({ estado: 'entregado' });
+  if (POOR) andParts.push(poorCond);
+  if (needSyncCond) andParts.push(needSyncCond);
+
+  const query = andParts.length > 1 ? { $and: andParts } : mustHave;
+
+  // -----------------------------------------------
+  // Diagnóstico rápido de conteos
+  // -----------------------------------------------
+  try {
+    const countAllWithId = await Envio.countDocuments(mustHave);
+    const countTime = !ALL && timeOr.length ? await Envio.countDocuments({ $and: [mustHave, { $or: timeOr }] }) : null;
+    const countDelivered = DELIVERED ? await Envio.countDocuments({ $and: [mustHave, { estado: 'entregado' }] }) : null;
+    const countPoor = POOR ? await Envio.countDocuments({ $and: [mustHave, poorCond] }) : null;
+    const countNeedSync = needSyncCond ? await Envio.countDocuments({ $and: [mustHave, needSyncCond] }) : null;
+
+    console.log('[hydrate-history] diagnóstico:');
+    console.log(`  con meli_id: ${countAllWithId}`);
+    if (countTime !== null)      console.log(`  dentro de ventana tiempo: ${countTime} (desde=${since?.toISOString?.() || 'n/a'})`);
+    if (countDelivered !== null) console.log(`  estado=entregado: ${countDelivered}`);
+    if (countPoor !== null)      console.log(`  historial pobre: ${countPoor}`);
+    if (countNeedSync !== null)  console.log(`  necesita sync (>${NEEDSYNC_H}h): ${countNeedSync}`);
+  } catch (err) {
+    console.warn('[hydrate-history] aviso: no se pudieron calcular todos los conteos:', err?.message);
+  }
+
+  // -----------------------------------------------
+  // Buscar candidatos
+  // -----------------------------------------------
   let candidatos = [];
   try {
     candidatos = await Envio
-      .find(baseQuery)
-      .select('_id meli_id cliente_id historial estado updatedAt createdAt')
+      .find(query)
+      .select('_id meli_id cliente_id historial estado updatedAt createdAt meli_history_last_sync')
       .sort({ updatedAt: -1 })
       .limit(LIMIT)
       .lean();
 
-    console.log(`[hydrate-history] candidatos: ${candidatos.length} (hours=${HOURS}, delivered=${DELIVERED})`);
+    console.log(`[hydrate-history] candidatos: ${candidatos.length} (all=${ALL}, hours=${HOURS}, since=${since ? since.toISOString() : 'n/a'}, delivered=${DELIVERED}, poor=${POOR}, needsync=${NEEDSYNC_H ?? 'n/a'})`);
   } catch (err) {
     console.error('[hydrate-history] ERROR buscando candidatos:', err?.message);
     process.exit(1);
   }
 
+  // Si no hay candidatos, sugerir banderas útiles
+  if (!candidatos.length) {
+    console.log('[hydrate-history] SUGERENCIA: probá alguna de estas variantes:');
+    console.log('  - node scripts/hydrate-history.js --all --limit=200 --force');
+    console.log('  - node scripts/hydrate-history.js --poor --hours=240 --limit=200 --force');
+    console.log('  - node scripts/hydrate-history.js --delivered --hours=72 --needsync=6 --force');
+  }
+
   let ok = 0, fail = 0;
 
-  // Procesar secuencial para no pegarle muy fuerte a la API
+  // Procesar secuencialmente
   for (const envio of candidatos) {
     try {
       await ensureMeliHistory(envio._id, { force: FORCE });
 
-      // Volver a leer historial para informar cantidad real tras hidratar
       const refreshed = await Envio.findById(envio._id).select('historial estado estado_meli').lean();
       const hist = Array.isArray(refreshed?.historial) ? refreshed.historial : [];
       const len = hist.length;
 
-      // Compute último evento (si hay)
       let lastStr = 'null @ null';
       if (len > 0) {
-        const lastEvt = hist.slice().sort((a, b) => new Date(b.at || b.updatedAt || 0) - new Date(a.at || a.updatedAt || 0))[0];
+        const lastEvt = hist.slice().sort((a,b) => new Date(b.at || b.updatedAt || 0) - new Date(a.at || a.updatedAt || 0))[0];
         const s  = lastEvt?.estado_meli?.status || lastEvt?.estado || '';
         const ss = lastEvt?.estado_meli?.substatus || '';
         const at = lastEvt?.at || lastEvt?.updatedAt || null;
@@ -112,9 +194,7 @@ function getFlag(name, defVal = undefined) {
 
   console.log(`[hydrate-history] listo. ok=${ok} fail=${fail}`);
 
-  try {
-    await mongoose.disconnect();
-  } catch (_) {}
+  try { await mongoose.disconnect(); } catch (_) {}
   process.exit(0);
 })().catch(e => {
   console.error('[hydrate-history] FATAL:', e);
