@@ -46,14 +46,25 @@ function shouldHydrate(envio) {
 }
 
 function mapMeliHistory(items = []) {
-  return items.map(e => ({
-    at: new Date(e.date),                                     // ← HORA REAL
-    estado: e.status,
-    estado_meli: { status: e.status, substatus: e.substatus || '' },
-    actor_name: 'MeLi',
-    source: 'meli-history'
-  }));
+  return items.map(e => {
+    const st  = (e.status || '').toLowerCase();
+    let sub   = (e.substatus || '').toLowerCase();
+
+    // Si ML trae estos como STATUS, copialos al substatus para que el front los muestre
+    if (!sub && ['ready_to_print','printed','out_for_delivery','not_visited'].includes(st)) {
+      sub = st;
+    }
+
+    return {
+      at: new Date(e.date),      // hora real
+      estado: e.status,
+      estado_meli: { status: e.status, substatus: sub },
+      actor_name: 'MeLi',
+      source: 'meli-history'
+    };
+  });
 }
+
 
 function mergeHistorial(existing = [], incoming = []) {
   const key = h =>
@@ -431,6 +442,7 @@ function buildTimeline(envio) {
       t.push({
         at: h.at || h.fecha || envio.fecha,
         estado: h.estado || h.status || '',
+        estado_meli: h.estado_meli || null,         // 👈 PRESERVAR
         descripcion: h.descripcion || h.desc || '',
         source: h.source || 'sistema',
         actor_name: h.actor_name || ''
@@ -442,6 +454,10 @@ function buildTimeline(envio) {
       t.push({
         at: h.at || h.date || h.fecha || envio.fecha,
         estado: h.estado || h.status || h.title || '',
+        estado_meli: h.estado_meli ||                // 👈 si viene armado
+                     ((h.status || h.substatus)      //    o lo armamos liviano
+                       ? { status: h.status || null, substatus: h.substatus || '' }
+                       : null),
         descripcion: h.descripcion || h.message || '',
         source: h.source || 'meli',
         actor_name: h.actor_name || ''
