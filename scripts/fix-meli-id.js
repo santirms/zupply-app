@@ -10,22 +10,35 @@ const { getValidToken } = require('../utils/meliUtils');
 const LIMIT = Number(process.argv[2] || 500);
 
 (async function main(){
-  if (!process.env.MONGO_URI) {
-    console.error('Falta MONGO_URI'); process.exit(1);
+  if (!process.env.MONGODB_URI) {
+    console.error('Falta MONGODB_URI'); process.exit(1);
   }
-  await mongoose.connect(process.env.MONGO_URI, { maxPoolSize: 10 });
+  await mongoose.connect(process.env.MONGODB_URI, { maxPoolSize: 10 });
 
-  // candidatos: con meli_id y poco historial (o vacío) para priorizar
-  const q = {
-    meli_id: { $exists: true, $ne: null, $ne: '' },
-    $or: [
-      { historial: { $exists: false } },
-      { historial: { $type: 'array', $size: 0 } },
-      { $where: 'Array.isArray(this.historial) && this.historial.length < 2' }
-    ]
+  // historial "pobre": length < 2 (incluye inexistente/no array)
+  const poorExpr = {
+    $expr: {
+      $lt: [
+        { $cond: [
+          { $isArray: "$historial" },
+          { $size: "$historial" },
+          0
+        ]},
+        2
+      ]
+    }
   };
 
-  const envios = await Envio.find(q).select('_id meli_id cliente_id').limit(LIMIT).lean();
+  const q = {
+    meli_id: { $exists: true, $ne: null, $ne: '' },
+    ...poorExpr
+  };
+
+  const envios = await Envio.find(q)
+    .select('_id meli_id cliente_id')
+    .limit(LIMIT)
+    .lean();
+
   console.log(`[fix-meli-id] candidatos=${envios.length}`);
 
   let ok=0, same=0, skip=0, fail=0;
