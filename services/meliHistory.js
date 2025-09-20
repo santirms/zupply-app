@@ -14,14 +14,22 @@ function keyOf(h) {
 }
 
 function mapHistory(items = []) {
-  return items.map(e => ({
-    at: new Date(e.date),
-    estado: e.status,
-    estado_meli: { status: e.status, substatus: e.substatus || '' },
-    actor_name: 'MeLi',
-    source: 'meli-history',
-  }));
+  return items.map(e => {
+    const st  = (e.status || '').toLowerCase();
+    let sub   = (e.substatus || '').toLowerCase();
+    if (!sub && ['ready_to_print','printed','out_for_delivery','not_visited'].includes(st)) {
+      sub = st;
+    }
+    return {
+      at: new Date(e.date),
+      estado: e.status,
+      estado_meli: { status: e.status, substatus: sub },
+      actor_name: 'MeLi',
+      source: 'meli-history',
+    };
+  });
 }
+
 
 function mapToInterno(status, substatus) {
   const s = (status || '').toLowerCase();
