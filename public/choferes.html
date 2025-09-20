@@ -480,12 +480,291 @@ async function abrirHistorial() {
   $('#modalRemitos').classList.remove('hidden');
 }
 
+// ===== Editor Remito =====
+const editorState = { asgId:null, rows:[], selected:new Set(), choferes:[] };
+
+async function abrirEditorRemito(asgId) {
+  editorState.asgId = asgId;
+  // cargar choferes (si no los tenemos aún)
+  if (!editorState.choferes.length) {
+    try {
+      const r = await fetch('/api/choferes', { credentials:'include' });
+      editorState.choferes = r.ok ? (await r.json()) : [];
+    } catch {}
+  }
+  await recargarEditor();
+  // scrollear hasta el editor
+  document.getElementById('editorRemito').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+async function recargarEditor() {
+  const wrap = document.getElementById('editorRemito');
+  wrap.classList.remove('hidden');
+  wrap.innerHTML = `<div class="p-3 rounded border bg-white dark:bg-white/5">Cargando...</div>`;
+
+  let det = null;
+  try {
+    const r = await fetch(`/api/asignaciones/${editorState.asgId}`, { credentials:'include' });
+    det = r.ok ? (await r.json()) : null;
+  } catch {}
+  if (!det) {
+    wrap.innerHTML = `<div class="p-3 rounded border bg-red-50 dark:bg-red-900/20">No se pudo cargar el remito.</div>`;
+    return;
+  }
+
+  // Construyo un mapa por tracking desde envios_raw (siempre presente desde el patch)
+  const byTrk = new Map();
+  (det.envios_raw || []).forEach(x => {
+    if (!x || !x.tracking) return;
+    byTrk.set(x.tracking, {
+      tracking: x.tracking,
+      externo: !!x.externo,
+      cliente: '',
+      direccion: x.direccion || '',
+      cp: x.codigo_postal || '',
+      partido: x.partido || ''
+    });
+  });
+
+  // Enriquezco con envios_resueltos (si existen)
+  (det.envios_resueltos || det.envios || []).forEach(e => {
+    const t = String(e.id_venta || e.meli_id || '').trim();
+    if (!t) return;
+    const row = byTrk.get(t) || { tracking:t, externo:false };
+    row.cliente   = e.cliente_id?.nombre || row.cliente || '';
+    row.direccion = e.direccion || row.direccion || '';
+    row.cp        = e.codigo_postal || row.cp || '';
+    row.partido   = e.partido || row.partido || '';
+    row.externo   = !!row.externo; // preferir flag de raw
+    byTrk.set(t, row);
+  });
+
+  editorState.rows = Array.from(byTrk.values());
+  editorState.selected.clear();
+
+  const selChoferOptions = editorState.choferes.map(c => `<option value="${c._id}">${c.nombre || '(sin nombre)'}</option>`).join('');
+
+  wrap.innerHTML = `
+    <div class="p-3 rounded border bg-white dark:bg-white/5">
+      <div class="flex items-start gap-3 flex-wrap">
+        <div class="flex-1 min-w-[280px]">
+          <h3 class="text-lg font-bold mb-1">Editar remito</h3>
+          <div class="text-sm opacity-70">ID: ${det._id} — ${new Date(det.fecha).toLocaleString()}</div>
+          <div class="text-sm opacity-70 mb-2">Chofer: ${det.chofer?.nombre || '-'}</div>
+          <div class="flex items-center gap-2 mb-3">
+            ${det.remito_url ? `<a class="px-3 py-1.5 rounded bg-slate-700 text-white" href="${det.remito_url}" target="_blank" rel="noopener">Ver PDF</a>` : ''}
+            <button id="btnRefrescarEditor" class="px-3 py-1.5 rounded border">Refrescar</button>
+            <div class="flex items-center gap-3 mt-2">
+           <label class="inline-flex items-center gap-2 text-sm">
+           <input type="checkbox" id="chkForceDelete" checked>
+           Revertir envíos a "pendiente"
+           </label>
+           <button id="btnEliminarRemito" class="px-3 py-1.5 rounded bg-red-700 text-white">
+           Eliminar remito
+         </button>
+         </div>
+          </div>
+        </div>
+        <div class="flex-1 min-w-[280px]">
+          <label class="text-sm block mb-1">Mover seleccionados a:</label>
+          <div class="flex gap-2">
+            <select id="selChoferDestino" class="border rounded px-2 py-2 flex-1">${selChoferOptions}</select>
+            <button id="btnMover" class="px-3 py-2 rounded bg-amber-500 text-white">Mover</button>
+          </div>
+        </div>
+        <div class="flex-1 min-w-[280px]">
+          <label class="text-sm block mb-1">Quitar seleccionados</label>
+          <button id="btnQuitar" class="px-3 py-2 rounded bg-red-600 text-white">Quitar</button>
+        </div>
+      </div>
+
+      <div class="mt-3">
+        <label class="text-sm block mb-1">Agregar trackings (separá por coma, espacio o nueva línea)</label>
+        <div class="flex gap-2">
+          <textarea id="txtAgregar" class="border rounded px-2 py-2 flex-1" rows="2" placeholder="4548..., 12345..."></textarea>
+          <button id="btnAgregar" class="px-3 py-2 rounded bg-green-600 text-white">Agregar</button>
+        </div>
+      </div>
+
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-black/10 dark:border-white/10">
+              <th class="p-1"><input type="checkbox" id="chkAll"></th>
+              <th class="text-left p-1">Tracking</th>
+              <th class="text-left p-1">Cliente</th>
+              <th class="text-left p-1">Dirección</th>
+              <th class="text-left p-1">CP/Partido</th>
+              <th class="text-left p-1">Tipo</th>
+            </tr>
+          </thead>
+          <tbody id="tbEditor"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  renderTablaEditor();
+
+  // Eventos
+  document.getElementById('btnRefrescarEditor').onclick = recargarEditor;
+  document.getElementById('btnMover').onclick = moverSeleccionados;
+  document.getElementById('btnQuitar').onclick = quitarSeleccionados;
+  document.getElementById('btnAgregar').onclick = agregarTrackingsEditor;
+  document.getElementById('btnEliminarRemito').onclick = eliminarRemito;
+  document.getElementById('chkAll').onchange = (e) => {
+    if (e.target.checked) {
+      editorState.rows.forEach(r => editorState.selected.add(r.tracking));
+    } else {
+      editorState.selected.clear();
+    }
+    renderTablaEditor();
+  };
+}
+
+function renderTablaEditor() {
+  const tb = document.getElementById('tbEditor');
+  tb.innerHTML = editorState.rows.map(r => `
+    <tr class="border-b border-black/10 dark:border-white/10">
+      <td class="p-1">
+        <input type="checkbox" data-trk="${r.tracking}" ${editorState.selected.has(r.tracking)?'checked':''}>
+      </td>
+      <td class="p-1 font-mono">${r.tracking}</td>
+      <td class="p-1">${r.cliente || ''}</td>
+      <td class="p-1">${r.direccion || ''}</td>
+      <td class="p-1">${[r.cp||'', r.partido||''].filter(Boolean).join(' ')}</td>
+      <td class="p-1">${r.externo ? '<span class="text-amber-600">externo</span>' : 'interno'}</td>
+    </tr>
+  `).join('');
+
+  tb.querySelectorAll('input[type="checkbox"][data-trk]').forEach(chk => {
+    chk.onchange = () => {
+      const t = chk.getAttribute('data-trk');
+      if (chk.checked) editorState.selected.add(t);
+      else editorState.selected.delete(t);
+    };
+  });
+}
+
+function getSelectedTrackings() {
+  return Array.from(editorState.selected.values()).filter(Boolean);
+}
+
+async function moverSeleccionados() {
+  const tracking_ids = getSelectedTrackings();
+  const chofer_destino = document.getElementById('selChoferDestino')?.value || '';
+  if (!tracking_ids.length) return alert('Seleccioná al menos un paquete.');
+  if (!chofer_destino) return alert('Elegí chofer destino.');
+  if (!confirm(`Mover ${tracking_ids.length} paquete(s)?`)) return;
+
+  try {
+    const r = await fetch(`/api/asignaciones/${editorState.asgId}/move`, {
+      method:'PATCH',
+      headers:{ 'Content-Type':'application/json' },
+      credentials:'include',
+      body: JSON.stringify({ tracking_ids, chofer_destino })
+    });
+    const data = await r.json();
+    if (!r.ok || !data || data.ok !== true) {
+      throw new Error((data && (data.error || data.detail)) || `HTTP ${r.status}`);
+    }
+    alert('Movido con éxito.');
+    await recargarEditor();
+    await cargarRemitos(); // refresca la grilla superior
+  } catch (e) {
+    console.error('moverSeleccionados', e);
+    alert('No se pudo mover: ' + e.message);
+  }
+}
+
+async function quitarSeleccionados() {
+  const tracking_ids = getSelectedTrackings();
+  if (!tracking_ids.length) return alert('Seleccioná al menos un paquete.');
+  if (!confirm(`Quitar ${tracking_ids.length} paquete(s) del remito?`)) return;
+
+  try {
+    const r = await fetch(`/api/asignaciones/${editorState.asgId}/remove`, {
+      method:'PATCH',
+      headers:{ 'Content-Type':'application/json' },
+      credentials:'include',
+      body: JSON.stringify({ tracking_ids })
+    });
+    const data = await r.json();
+    if (!r.ok || !data || data.ok !== true) {
+      throw new Error((data && (data.error || data.detail)) || `HTTP ${r.status}`);
+    }
+    alert('Quitado con éxito.');
+    await recargarEditor();
+    await cargarRemitos();
+  } catch (e) {
+    console.error('quitarSeleccionados', e);
+    alert('No se pudo quitar: ' + e.message);
+  }
+}
+
+function parseTrackingsInput(s) {
+  return (s || '')
+    .split(/[\s,;]+/)
+    .map(x => x.trim())
+    .filter(Boolean);
+}
+
+async function agregarTrackingsEditor() {
+  const raw = document.getElementById('txtAgregar')?.value || '';
+  const tracking_ids = parseTrackingsInput(raw);
+  if (!tracking_ids.length) return alert('Ingresá al menos un tracking.');
+  // Opcional: podrías permitir elegir un cliente_id aquí si querés que los externos queden con cliente preseleccionado
+  try {
+    const r = await fetch(`/api/asignaciones/${editorState.asgId}/add`, {
+      method:'PATCH',
+      headers:{ 'Content-Type':'application/json' },
+      credentials:'include',
+      body: JSON.stringify({ tracking_ids, force_move: true })
+    });
+    const data = await r.json();
+    if (!r.ok || !data || data.ok !== true) {
+      throw new Error((data && (data.error || data.detail)) || `HTTP ${r.status}`);
+    }
+    document.getElementById('txtAgregar').value = '';
+    alert(`Agregados: ${data.agregados} (externos: ${data.externos})`);
+    await recargarEditor();
+    await cargarRemitos();
+  } catch (e) {
+    console.error('agregarTrackingsEditor', e);
+    alert('No se pudo agregar: ' + e.message);
+  }
+}
+
+async function eliminarRemito() {
+  const force = document.getElementById('chkForceDelete')?.checked;
+  const msg = `¿Eliminar este remito${force ? ' y revertir los envíos a "pendiente"' : ''}?`;
+  if (!confirm(msg)) return;
+
+  try {
+    const r = await fetch(`/api/asignaciones/${editorState.asgId}?force=${force ? 'true' : 'false'}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    const data = await r.json().catch(()=>null);
+    if (!r.ok || !data || data.ok !== true) {
+      throw new Error((data && (data.error || data.detail)) || `HTTP ${r.status}`);
+    }
+    alert('Remito eliminado.');
+    // limpiar editor y refrescar listado del modal
+    document.getElementById('editorRemito').classList.add('hidden');
+    editorState.asgId = null;
+    await cargarRemitos();
+  } catch (e) {
+    console.error('eliminarRemito', e);
+    alert('No se pudo eliminar: ' + e.message);
+  }
+}
+    
 // eventos
 document.addEventListener('DOMContentLoaded', () => {
   $('#btnOpenHist')?.addEventListener('click', abrirHistorial);
   $('#btnFiltrarRemitos')?.addEventListener('click', cargarRemitos);
 });
-
 
     // ===== Init
     document.addEventListener('DOMContentLoaded', () => {
