@@ -9,6 +9,7 @@ const { geocodeDireccion } = require('../utils/geocode');
 const axios   = require('axios'); 
 const QRCode  = require('qrcode');
 const { buildLabelPDF } = require('../utils/labelService');
+const { ensureMeliHistory: ensureMeliHistorySrv } = require('../services/meliHistory');
 
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
 const { getEnvioByTracking, labelByTracking } = require('../controllers/envioController');
