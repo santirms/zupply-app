@@ -10,10 +10,10 @@ const { getValidToken } = require('../utils/meliUtils');
 const LIMIT = Number(process.argv[2] || 500);
 
 (async function main(){
-  if (!process.env.MONGODB_URI) {
-    console.error('Falta MONGODB_URI'); process.exit(1);
+  if (!process.env.MONGO_URI) {
+    console.error('Falta MONGO_URI'); process.exit(1);
   }
-  await mongoose.connect(process.env.MONGODB_URI, { maxPoolSize: 10 });
+  await mongoose.connect(process.env.MONGO_URI, { maxPoolSize: 10 });
 
   // historial "pobre": length < 2 (incluye inexistente/no array)
   const poorExpr = {
