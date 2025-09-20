@@ -83,10 +83,10 @@ function isoOrNull(s) {
   const mustHave = { meli_id: { $exists: true, $ne: null, $ne: '' } };
 
   // Condiciones OR por tiempo (si NO --all)
-  const timeOr = [];
-  if (!ALL && since) {
-    timeOr.push({ updatedAt: { $gte: since } }, { createdAt: { $gte: since } });
-  }
+ const timeOr = [];
+if (!ALL && since) {
+  timeOr.push({ updatedAt: { $gte: since } }, { createdAt: { $gte: since } });
+}
 
   // Condición "poor" (historial pobre)
   const poorCond = {
@@ -97,6 +97,9 @@ function isoOrNull(s) {
     ]
   };
 
+  // --- decidir si aplicar la compuerta temporal ---
+const HAS_STRONG_FILTER = DELIVERED || POOR || (NEEDSYNC_H != null);
+  
   // Condición "needsync"
   let needSyncCond = null;
   if (NEEDSYNC_H != null) {
@@ -109,14 +112,19 @@ function isoOrNull(s) {
     };
   }
 
-  // Armar $and final
-  const andParts = [mustHave];
-  if (!ALL && timeOr.length) andParts.push({ $or: timeOr });
-  if (DELIVERED) andParts.push({ estado: 'entregado' });
-  if (POOR) andParts.push(poorCond);
-  if (needSyncCond) andParts.push(needSyncCond);
+ // Armar $and final
+const andParts = [mustHave];
 
-  const query = andParts.length > 1 ? { $and: andParts } : mustHave;
+// SOLO aplicamos la compuerta temporal si NO hay filtros fuertes
+if (!ALL && timeOr.length && !HAS_STRONG_FILTER) {
+  andParts.push({ $or: timeOr });
+}
+
+if (DELIVERED) andParts.push({ estado: 'entregado' });
+if (POOR) andParts.push(poorCond);
+if (needSyncCond) andParts.push(needSyncCond);
+
+const query = andParts.length > 1 ? { $and: andParts } : mustHave;
 
   // -----------------------------------------------
   // Diagnóstico rápido de conteos
