@@ -1,77 +1,122 @@
-// scripts/hydrate-delivered-today.js
+// scripts/hydrate-history.js
+// Uso:
+//   node scripts/hydrate-history.js --hours=24 --limit=500 --force
+//   MELI_HISTORY_DEBUG=1 node scripts/hydrate-history.js --hours=12 --delivered
+//
+// Flags:
+//   --hours      Ventana de tiempo hacia atrás (default 24)
+//   --limit      Máximo de candidatos a procesar (default 1000)
+//   --force      Ignora el TTL interno del servicio y fuerza la hidratación
+//   --delivered  Filtra envíos con estado interno 'entregado' dentro de la ventana
+//
+// Requisitos:
+//   - process.env.MONGODB_URI debe estar configurado
+//   - services/meliHistory.ensureMeliHistory disponible
+
 require('dotenv').config();
 const mongoose = require('mongoose');
-const axios    = require('axios');
-const Envio    = require('../models/Envio');
-const Cliente  = require('../models/Cliente');
-const { getValidToken } = require('../utils/meliUtils');
+const Envio = require('../models/Envio');
+const { ensureMeliHistory } = require('../services/meliHistory');
 
-function mapToInterno(status, sub) {
-  const s = (status||'').toLowerCase(), u = (sub||'').toLowerCase();
-  if (s==='delivered') return 'entregado';
-  if (s==='cancelled') return 'cancelado';
-  if (s==='not_delivered') return /receiver[_\s-]?absent/.test(u) ? 'comprador_ausente' : 'no_entregado';
-  if (s==='shipped') return 'en_camino';
-  if (s==='ready_to_ship' || s==='handling') return 'pendiente';
-  if (/resched/.test(u)) return 'reprogramado';
-  if (/delay/.test(u))   return 'demorado';
-  return 'pendiente';
+function getFlag(name, defVal = undefined) {
+  const arg = process.argv.find(a => a.startsWith(`--${name}`));
+  if (!arg) return defVal;
+  const [, val] = arg.split('=');
+  if (val === undefined) return true; // flag sin valor => booleano
+  const num = Number(val);
+  return Number.isNaN(num) ? val : num;
 }
-const mapMeliHistory = (items=[]) => items.map(e => ({
-  at:new Date(e.date), estado:e.status,
-  estado_meli:{status:e.status, substatus:e.substatus||''},
-  actor_name:'MeLi', source:'meli-history'
-}));
-function mergeHistorial(existing=[], incoming=[]) {
-  const key = h => `${+new Date(h.at||h.updatedAt||0)}|${(h.estado||'').toLowerCase()}|${(h.estado_meli?.substatus||'').toLowerCase()}`;
-  const seen = new Set(existing.map(key));
-  const out = existing.slice();
-  for (const h of incoming) if (!seen.has(key(h))) { out.push(h); seen.add(key(h)); }
-  out.sort((a,b)=>new Date(a.at)-new Date(b.at));
-  return out;
-}
-async function fetchHistory(meli_id, token) {
-  const { data } = await axios.get(`https://api.mercadolibre.com/shipments/${meli_id}/history`,
-    { headers:{Authorization:`Bearer ${token}`} });
-  return Array.isArray(data) ? data : (data.results||[]);
-}
-async function hydrateOne(e) {
-  const cliente = await Cliente.findById(e.cliente_id).lean();
-  if (!cliente?.user_id) return { skipped:true, reason:'no_user_id' };
-  const token = await getValidToken(cliente.user_id);
-  const mapped = mapMeliHistory(await fetchHistory(e.meli_id, token));
-  const merged = mergeHistorial(e.historial||[], mapped);
-  const last   = mapped.reduce((a,b)=> new Date(a.at)>new Date(b.at)?a:b, mapped[0]);
-  const setBlock = { historial: merged, meli_history_last_sync:new Date() };
-  if (last) {
-    setBlock.estado = mapToInterno(last.estado_meli?.status||last.estado, last.estado_meli?.substatus);
-    setBlock.estado_meli = { status:last.estado_meli?.status||last.estado, substatus:last.estado_meli?.substatus||null, updatedAt:last.at };
+
+(async function main() {
+  const HOURS     = getFlag('hours', 24);
+  const LIMIT     = getFlag('limit', 1000);
+  const FORCE     = !!getFlag('force', false);
+  const DELIVERED = !!getFlag('delivered', false);
+
+  const since = new Date(Date.now() - HOURS * 60 * 60 * 1000);
+
+  if (!process.env.MONGODB_URI) {
+    console.error('[hydrate-history] ERROR: faltante MONGODB_URI en .env');
+    process.exit(1);
   }
-  await Envio.updateOne({ _id:e._id }, { $set:setBlock });
-  return { ok:true, lastAt:last?.at||null, lastStatus:last?.estado_meli?.status||last?.estado||null };
-}
 
-(async () => {
-  const uri = process.env.MONGO_URI || process.env.MONGO_URL || process.env.DATABASE_URL;
-  if (!uri) throw new Error('Falta MONGO_URI');
-  await mongoose.connect(uri);
-
-  const start = new Date(); start.setHours(0,0,0,0);
-  const end   = new Date(); end.setHours(23,59,59,999);
-
-  const envios = await Envio.find({
-    meli_id: { $ne: null },
-    fecha:   { $gte: start, $lte: end },
-    $or: [ { estado: 'entregado' }, { 'estado_meli.status': 'delivered' } ]
-  }).select('_id meli_id cliente_id historial').lean();
-
-  console.log('[hydrate-delivered-today] candidatos:', envios.length);
-  let ok=0, fail=0;
-  for (const e of envios) {
-    try { const r = await hydrateOne(e); if (r.ok) { ok++; console.log(' ✓', e.meli_id, r.lastStatus, '@', r.lastAt); } }
-    catch (err) { fail++; console.warn(' ✗', e.meli_id, err.message); }
-    await new Promise(r=>setTimeout(r,130));
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 15000
+    });
+    console.log('[hydrate-history] conectado a Mongo');
+  } catch (err) {
+    console.error('[hydrate-history] ERROR conectando a Mongo:', err?.message);
+    process.exit(1);
   }
-  console.log('[hydrate-delivered-today] listo. ok=%d fail=%d', ok, fail);
-  await mongoose.disconnect();
-})().catch(e => { console.error('fatal', e); process.exit(1); });
+
+  // Query base: envíos con meli_id y actividad reciente (createdAt o updatedAt)
+  const baseQuery = {
+    meli_id: { $exists: true, $ne: null },
+    $or: [
+      { updatedAt: { $gte: since } },
+      { createdAt: { $gte: since } }
+    ]
+  };
+
+  // Si piden sólo entregados en la ventana
+  if (DELIVERED) {
+    baseQuery.estado = 'entregado';
+  }
+
+  let candidatos = [];
+  try {
+    candidatos = await Envio
+      .find(baseQuery)
+      .select('_id meli_id cliente_id historial estado updatedAt createdAt')
+      .sort({ updatedAt: -1 })
+      .limit(LIMIT)
+      .lean();
+
+    console.log(`[hydrate-history] candidatos: ${candidatos.length} (hours=${HOURS}, delivered=${DELIVERED})`);
+  } catch (err) {
+    console.error('[hydrate-history] ERROR buscando candidatos:', err?.message);
+    process.exit(1);
+  }
+
+  let ok = 0, fail = 0;
+
+  // Procesar secuencial para no pegarle muy fuerte a la API
+  for (const envio of candidatos) {
+    try {
+      await ensureMeliHistory(envio._id, { force: FORCE });
+
+      // Volver a leer historial para informar cantidad real tras hidratar
+      const refreshed = await Envio.findById(envio._id).select('historial estado estado_meli').lean();
+      const hist = Array.isArray(refreshed?.historial) ? refreshed.historial : [];
+      const len = hist.length;
+
+      // Compute último evento (si hay)
+      let lastStr = 'null @ null';
+      if (len > 0) {
+        const lastEvt = hist.slice().sort((a, b) => new Date(b.at || b.updatedAt || 0) - new Date(a.at || a.updatedAt || 0))[0];
+        const s  = lastEvt?.estado_meli?.status || lastEvt?.estado || '';
+        const ss = lastEvt?.estado_meli?.substatus || '';
+        const at = lastEvt?.at || lastEvt?.updatedAt || null;
+        lastStr = `${s}${ss ? '/' + ss : ''} @ ${at ? new Date(at).toISOString() : 'null'}`;
+      }
+
+      console.log(` ✓ ${envio.meli_id} eventos=${len}  ${lastStr}`);
+      ok++;
+    } catch (err) {
+      console.log(` ✗ ${envio.meli_id} error=${err?.message || err}`);
+      fail++;
+    }
+  }
+
+  console.log(`[hydrate-history] listo. ok=${ok} fail=${fail}`);
+
+  try {
+    await mongoose.disconnect();
+  } catch (_) {}
+  process.exit(0);
+})().catch(e => {
+  console.error('[hydrate-history] FATAL:', e);
+  process.exit(1);
+});
