@@ -473,9 +473,12 @@ async function cargarRemitos() {
   const rows = await r.json().catch(()=>[]);
   const tbody = $('#tblRemitos');
 
+  const tz  = 'America/Argentina/Buenos_Aires';
+  const fmt = iso => new Date(iso).toLocaleString('es-AR', { timeZone: tz });
+
   tbody.innerHTML = rows.map(x => `
     <tr class="border-b border-black/10 dark:border-white/10">
-      <td class="p-1">${new Date(x.fecha).toLocaleString()}</td>
+      <td class="p-1">${fmt(x.fecha)}</td>
       <td class="p-1">${x.chofer?.nombre || '-'}</td>
       <td class="p-1">${x.lista_nombre || x.zona || '-'}</td>
       <td class="p-1">${x.total_paquetes ?? x.total ?? (x.envios?.length || 0)}</td>
@@ -496,7 +499,7 @@ async function cargarRemitos() {
     b.onclick = () => abrirEditorRemito(b.getAttribute('data-edit'));
   });
 
-  // bind Eliminar rápido (con revertir = true)
+  // bind Eliminar (revertir = true)
   tbody.querySelectorAll('button[data-del]').forEach(b=>{
     b.onclick = async () => {
       const id = b.getAttribute('data-del');
@@ -505,7 +508,6 @@ async function cargarRemitos() {
         const r = await fetch(`/api/asignaciones/${id}?force=true`, { method:'DELETE', credentials:'include' });
         const data = await r.json().catch(()=>null);
         if (!r.ok || !data || data.ok !== true) throw new Error((data && (data.error || data.detail)) || `HTTP ${r.status}`);
-        // si estabas editándolo, escondé el editor
         if (editorState.asgId === id) {
           editorState.asgId = null;
           $('#editorRemito')?.classList.add('hidden');
@@ -518,6 +520,7 @@ async function cargarRemitos() {
     };
   });
 }
+
 
 async function abrirHistorial() {
   // choferes para el filtro
