@@ -281,12 +281,37 @@ async function asignarViaMapa(req, res) {
 async function listarAsignaciones(req, res) {
   try {
     const { desde, hasta, chofer_id } = req.query;
+    const TZ = process.env.TZ || 'America/Argentina/Buenos_Aires';
+
+    // Acepta: "hoy", "ayer", "DD/MM/YYYY" o "YYYY-MM-DD"
+    const parseDateStart = (s) => {
+      if (!s) return null;
+      const t = String(s).trim().toLowerCase();
+      if (t === 'hoy' || t === 'today')      return dayjs.tz(TZ).startOf('day');
+      if (t === 'ayer' || t === 'yesterday') return dayjs.tz(TZ).subtract(1, 'day').startOf('day');
+      // dd/mm/aaaa
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(t)) {
+        return dayjs.tz(t, 'DD/MM/YYYY', TZ).startOf('day');
+      }
+      // yyyy-mm-dd (valor estándar del input date)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(t)) {
+        return dayjs.tz(t, 'YYYY-MM-DD', TZ).startOf('day');
+      }
+      const d = dayjs.tz(s, TZ);
+      return d.isValid() ? d.startOf('day') : null;
+    };
+
+    const from = parseDateStart(desde);
+    const to   = parseDateStart(hasta); // inicio del día "hasta"
+
     const q = {};
-    if (desde || hasta) {
+    if (from || to) {
       q.fecha = {};
-      if (desde) q.fecha.$gte = new Date(desde);
-      if (hasta) q.fecha.$lte = new Date(hasta);
+      if (from) q.fecha.$gte = from.toDate();
+      // hacemos "hasta" inclusivo: < (inicio del día siguiente)
+      if (to)   q.fecha.$lt  = to.add(1, 'day').startOf('day').toDate();
     }
+
     if (chofer_id) q.chofer = chofer_id;
 
     const rows = await Asignacion.find(q)
@@ -301,6 +326,7 @@ async function listarAsignaciones(req, res) {
       lista_nombre: r.lista_nombre || '',
       remito_url: r.remito_url || '',
       total_paquetes: Array.isArray(r.envios) ? r.envios.length : (r.total_paquetes || 0),
+      zona: r.zona || ''
     }));
 
     res.json(out);
