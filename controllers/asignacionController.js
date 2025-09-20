@@ -327,17 +327,38 @@ async function detalleAsignacion(req, res) {
     if (!asg) return res.status(404).json({ error: 'Asignación no encontrada' });
 
     const raw = Array.isArray(asg.envios) ? asg.envios : [];
+
+    // Normalizo "raw" a una lista uniforme para UI/operaciones
+    const normalizeRaw = (v) => {
+      const obj = (v && typeof v === 'object') ? v : {};
+      const tracking =
+        (obj.id_venta && String(obj.id_venta)) ||
+        (obj.meli_id  && String(obj.meli_id))  ||
+        (obj.tracking && String(obj.tracking)) || '';
+
+      return {
+        tracking,
+        id_venta: obj.id_venta ? String(obj.id_venta) : (tracking || null),
+        meli_id:  obj.meli_id  ? String(obj.meli_id)  : null,
+        externo:  !!obj.externo,
+        cliente_id: obj.cliente_id || null,
+        destinatario: obj.destinatario || '',
+        direccion: obj.direccion || '',
+        codigo_postal: obj.codigo_postal || '',
+        partido: obj.partido || '',
+        precio: obj.precio ?? 0
+      };
+    };
+
+    const rawList = raw.map(normalizeRaw);
+
+    // Resuelvo en DB lo que tenga Envio
     const ids = [];
     const trackings = [];
-
     for (const v of raw) {
       if (!v) continue;
       const maybeId = (v && v._id) ? v._id : v;
-
-      if (mongoose.isValidObjectId(maybeId)) {
-        ids.push(maybeId);
-        continue;
-      }
+      if (mongoose.isValidObjectId(maybeId)) { ids.push(maybeId); continue; }
 
       if (typeof v === 'object') {
         if (v.id_venta) trackings.push(String(v.id_venta).trim());
@@ -349,23 +370,16 @@ async function detalleAsignacion(req, res) {
     }
 
     const found = [];
-
     if (ids.length) {
       const byIds = await Envio.find({ _id: { $in: ids } })
         .populate({ path: 'cliente_id', select: 'nombre' })
         .lean();
       found.push(...byIds);
     }
-
     if (trackings.length) {
       const byTrk = await Envio.find({
-        $or: [
-          { id_venta: { $in: trackings } },
-          { meli_id:  { $in: trackings } }
-        ]
-      })
-        .populate({ path: 'cliente_id', select: 'nombre' })
-        .lean();
+        $or: [{ id_venta: { $in: trackings } }, { meli_id: { $in: trackings } }]
+      }).populate({ path: 'cliente_id', select: 'nombre' }).lean();
 
       const seen = new Set(found.map(x => String(x._id)));
       for (const r of byTrk) {
@@ -374,15 +388,38 @@ async function detalleAsignacion(req, res) {
       }
     }
 
-    asg.envios = found;
-    asg.total_paquetes = found.length;
+    // Trackings resueltos (para saber cuáles quedaron “externos”)
+    const resolvedTrk = new Set(
+      found.map(e => String(e.id_venta || e.meli_id || ''))
+          .filter(Boolean)
+    );
+    const externos_raw = rawList.filter(x => x.tracking && !resolvedTrk.has(x.tracking));
 
-    return res.json(asg);
+    // Respuesta "extendida" para el editor
+    const out = {
+      _id: asg._id,
+      fecha: asg.fecha,
+      chofer: asg.chofer || null,
+      lista_nombre: asg.lista_nombre || '',
+      remito_url: asg.remito_url || '',
+      zona: asg.zona || '',
+      // compat:
+      envios: found,
+      total_paquetes: rawList.length,
+
+      // nuevo para editor:
+      envios_resueltos: found,
+      envios_raw: rawList,
+      externos_raw
+    };
+
+    return res.json(out);
   } catch (e) {
     console.error('detalleAsignacion error:', e);
     res.status(500).json({ error: e.message || 'Error al obtener detalle' });
   }
 }
+
 
 /* ========================================================================== */
 /* 5) QUITAR ENVIOS                                                           */
@@ -616,7 +653,7 @@ async function eliminarAsignacion(req, res) {
 
     const raw = Array.isArray(asg.envios) ? asg.envios : [];
     const ids = raw
-      .map(v => (v && v._id) ? v._id : v)
+       .map(v => v && v.envio)
       .filter(x => mongoose.isValidObjectId(x));
 
     const countExist = ids.length
