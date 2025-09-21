@@ -86,7 +86,7 @@ async function getHistory(access, shipmentId) {
 /**
  * Hidrata historial y AUTOCORRIGE meli_id si estaba guardado el "tracking".
  */
-async function ensureMeliHistory(envioOrId, { token, force = false } = {}) {
+async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = false } = {}) {
   const envio = typeof envioOrId === 'string'
     ? await Envio.findById(envioOrId).lean()
     : (envioOrId?.toObject ? envioOrId.toObject() : envioOrId);
@@ -137,14 +137,40 @@ async function ensureMeliHistory(envioOrId, { token, force = false } = {}) {
   // Mezcla con historial actual y dedupe
   const current = (await Envio.findById(envio._id).select('historial').lean())?.historial || [];
   const currentArr = Array.isArray(current) ? current : [];
-  const seen = new Set(currentArr.map(keyOf));
-  const toAdd = mapped.filter(h => !seen.has(keyOf(h)));
+ 
+  let update = { $set: { meli_history_last_sync: new Date() } };
+  
+if (rebuild) {
+    // 1) conservar NO-MeLi (panel, scan, asignaciones, etc.)
+    const nonMeli = currentArr.filter(h => h?.actor_name !== 'MeLi' && h?.source !== 'meli-history');
+
+    // 2) unir con lo nuevo de MeLi
+    const merged = [...nonMeli, ...mapped];
+
+    // 3) dedupe estable por fecha+status+sub+source
+    const seen = new Set();
+    const deduped = [];
+    merged
+      .slice()
+      .sort((a,b) => new Date(a.at || a.updatedAt || 0) - new Date(b.at || b.updatedAt || 0))
+      .forEach(h => {
+        const k = `${+new Date(h.at || h.updatedAt || 0)}|${(h?.estado_meli?.status||'').toLowerCase()}|${(h?.estado_meli?.substatus||'').toLowerCase()}|${h?.source||''}`;
+        if (!seen.has(k)) { seen.add(k); deduped.push(h); }
+      });
+
+    update.$set.historial = deduped;
+  } else {
+    // camino actual (incremental)
+    const seen = new Set(currentArr.map(keyOf));
+    const toAdd = (Array.isArray(mapped) ? mapped : []).filter(h => !seen.has(keyOf(h)));
+    if (toAdd.length) update.$push = { historial: { $each: toAdd } };
+  }
 
   // Último evento (si hay)
-  const lastEvt = mapped.slice().sort((a,b) => new Date(b.at) - new Date(a.at))[0];
-
-  const update = { $set: { meli_history_last_sync: new Date() } };
-  if (toAdd.length) update.$push = { historial: { $each: toAdd } };
+    // Último evento (si hay) o, en su defecto, status del shipment
+  const lastEvt = (Array.isArray(mapped) ? mapped : [])
+    .slice()
+    .sort((a,b) => new Date(b.at) - new Date(a.at))[0];
 
   // Si hubo eventos usamos el último; si no, pero el shipment trae status, usamos eso
   if (lastEvt || sh?.status) {
