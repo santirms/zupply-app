@@ -80,15 +80,20 @@ async function main() {
   // query base
   const q = { meli_id: { $exists: true, $ne: null } };
 
-  // OR de fechas
-  const timeOr = []; // <<< declarar ANTES de usar
-  if (fromDate || toDate) {
-    const range = {};
-    if (fromDate) range.$gte = fromDate;
-    if (toDate)   range.$lte = toDate;
-    timeOr.push({ updatedAt: range }, { createdAt: range });
-  }
-  if (timeOr.length) q.$or = timeOr;
+// ---- OR de fechas: incluir también estado_meli.updatedAt ----
+const timeOr = [];
+if (fromDate || toDate) {
+  const range = {};
+  if (fromDate) range.$gte = fromDate;
+  if (toDate)   range.$lte = toDate;
+  // considerar timestamps del doc y el del último estado MeLi
+  timeOr.push(
+    { updatedAt: range },
+    { createdAt: range },
+    { 'estado_meli.updatedAt': range }   // 👈 clave para tu caso
+  );
+}
+if (timeOr.length) q.$or = timeOr;
 
   if (!ALL) {
     // delivered filter
@@ -132,12 +137,21 @@ async function main() {
 
   console.log('[hydrate-history] diagnóstico:');
   console.log('  con meli_id:', countWithMeliId);
-  if (fromDate || toDate) {
-    console.log('  dentro de ventana tiempo:',
-      await Envio.countDocuments({ meli_id: { $exists: true, $ne: null }, ...(timeOr.length ? { $or: timeOr } : {}) }),
-      `(desde=${fromDate ? fromDate.toISOString() : 'n/a'} hasta=${toDate ? toDate.toISOString() : 'n/a'})`
-    );
+if (fromDate || toDate) {
+  const base = { meli_id: { $exists: true, $ne: null } };
+  if (AUTOINGESTA) {
+    const cs = await Cliente.find({ auto_ingesta: true }).select('_id').lean();
+    const ids = cs.map(c => c._id);
+    base.cliente_id = ids.length ? { $in: ids } : { $in: [] };
   }
+  const countInWindow = await Envio.countDocuments({
+    ...base,
+    ...(timeOr.length ? { $or: timeOr } : {})
+  });
+  console.log('  dentro de ventana tiempo:', countInWindow,
+    `(desde=${fromDate ? fromDate.toISOString() : 'n/a'} hasta=${toDate ? toDate.toISOString() : 'n/a'})`
+  );
+}
   console.log('  estado=entregado:', countDelivered);
   if (NEEDSYNC_H !== null) console.log(`  necesita sync (>${NEEDSYNC_H}h):`, countNeedSync);
 
