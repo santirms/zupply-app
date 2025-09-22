@@ -72,17 +72,19 @@ let fromDate = isoOrNull(FROM_RAW);
 let toDate   = isoOrNull(TO_RAW);
 let since    = null;
 
-if (!ALL && !fromDate && !toDate) {
-  if (SINCE_RAW) {
-    since = isoOrNull(SINCE_RAW);
-    if (!since) {
-      console.error('[hydrate-history] ERROR: --since inválido (use YYYY-MM-DD)'); process.exit(1);
-    }
-  } else {
-    since = new Date(Date.now() - HOURS * 60 * 60 * 1000);
-  }
+if (toDate) {
+  toDate = new Date(toDate.getTime() + (24*60*60*1000 - 1)); // 23:59:59.999
+}
+  
+if (fromDate || toDate) {
+  const range = {};
+  if (fromDate) range.$gte = fromDate;
+  if (toDate)   range.$lte = toDate; // ya es fin de día
+  timeOr.push({ updatedAt: range }, { createdAt: range });
 }
 
+// y en el log de diagnóstico usá 'toDate' ya extendido:
+console.log(`[hydrate-history] candidatos: ${candidatos.length} (sort=${SORT}, from=${fromDate?.toISOString?.()||'n/a'}, to=${toDate?.toISOString?.()||'n/a'}, delivered=${DELIVERED}, poor=${POOR}, needsync=${NEEDSYNC_H ?? 'n/a'}, autoingesta=${AUTOINGESTA})`);
 
   try {
     await mongoose.connect(process.env.MONGO_URI, {
