@@ -52,6 +52,7 @@ const POOR       = !!getFlag('poor', false);
 const NEEDSYNC_H = getFlag('needsync', null);
 const AUTOINGESTA= !!getFlag('autoingesta', false);
 const SKIP       = Number(getFlag('skip', 0) || 0);
+const REBUILD    = !!getFlag('rebuild', false);
 
 const SORT = (getFlag('sort', 'updated_desc') || '').toLowerCase();
 function sortSpec(key) {
