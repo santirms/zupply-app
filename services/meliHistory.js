@@ -8,6 +8,7 @@ const HYDRATE_TTL_MIN = 15;
 const DEBUG = process.env.MELI_HISTORY_DEBUG === '1';
 function dlog(...a){ if (DEBUG) console.log('[meli-history]', ...a); }
 
+// ---------------- utils de clave/fecha ----------------
 function keyOf(h) {
   const ts  = +new Date(h?.at || h?.updatedAt || 0);
   const mst = (h?.estado_meli?.status || '').toLowerCase();
@@ -15,6 +16,54 @@ function keyOf(h) {
   return `${ts}|${mst}|${mss}`;
 }
 
+function toDateOrNull(v) {
+  if (!v) return null;
+  try {
+    if (v instanceof Date) return v;
+    if (typeof v === 'number') return new Date(v);
+    if (typeof v === 'string') return new Date(v);
+    if (typeof v === 'object' && v.date) return new Date(v.date);
+  } catch {}
+  return null;
+}
+
+// Extrae la mejor fecha posible de muchas variantes
+function bestDate(obj = {}) {
+  const tryList = [
+    obj.date,
+    obj.date_history,
+    obj.last_updated,
+    obj.updated,
+    obj.modification_date,
+    obj.status_date,
+    obj.statusDate,
+    obj.shipping_date,
+    obj.created_at,
+    obj.creation_date,
+    obj.date_created
+  ];
+
+  // si date_history es objeto con {date: ...}
+  if (!tryList[0] && obj?.date_history && typeof obj.date_history === 'object') {
+    const dh = obj.date_history;
+    // puede ser {date: "..."} o array [{date, status}...]
+    if (Array.isArray(dh) && dh.length) {
+      // elegimos la última que tenga date
+      const last = [...dh].reverse().find(x => x?.date);
+      if (last?.date) tryList.unshift(last.date);
+    } else if (dh.date) {
+      tryList.unshift(dh.date);
+    }
+  }
+
+  for (const cand of tryList) {
+    const dt = toDateOrNull(cand);
+    if (dt && !isNaN(+dt)) return dt;
+  }
+  return null;
+}
+
+// ---------------- mapeos ----------------
 function mapHistory(items = []) {
   return (Array.isArray(items) ? items : []).map(e => {
     const st  = (e?.status || '').toLowerCase();
@@ -24,18 +73,7 @@ function mapHistory(items = []) {
       'ready_to_ship','handling','shipped'
     ].includes(st)) sub = st;
 
-    // elegir la mejor fecha disponible
-    const dateRaw =
-      e?.date ||
-      e?.date_history ||
-      e?.last_updated ||
-      e?.updated ||
-      e?.modification_date ||
-      e?.status_date ||
-      null;
-
-    const at = dateRaw ? new Date(dateRaw) : new Date();
-
+    const at = bestDate(e) || new Date();
     return {
       at,
       estado: e?.status || '',
@@ -59,6 +97,7 @@ function mapToInterno(status, substatus) {
   return 'pendiente';
 }
 
+// ---------------- clientes MeLi ----------------
 async function getShipment(access, idOrTracking) {
   try {
     const r = await axios.get(
@@ -91,6 +130,55 @@ async function getShipmentFromOrder(access, orderId) {
   } catch { return null; }
 }
 
+// Convierte la respuesta de /history en array de eventos
+function coerceHistoryArray(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+
+  // campos tipo array conocidos
+  const arrays = ['results','history','entries','events'];
+  for (const k of arrays) {
+    if (Array.isArray(data[k])) return data[k];
+  }
+
+  // Si viene objeto con status/substatus/fecha → 1 evento
+  if (data.status || data.substatus || data.date || data.date_history || data.status_date || data.last_updated) {
+    const out = [];
+
+    // A veces date_history es array de {status, substatus, date}
+    if (Array.isArray(data.date_history) && data.date_history.length) {
+      for (const h of data.date_history) {
+        if (h?.status || h?.substatus || h?.date) {
+          out.push({
+            status: h.status || data.status || '',
+            substatus: h.substatus || data.substatus || '',
+            date: h.date || data.date || data.status_date || data.last_updated
+          });
+        }
+      }
+      if (out.length) return out;
+    }
+
+    // o date_history es objeto {date: ...}
+    let date =
+      data.date ||
+      (data.date_history && (data.date_history.date || data.date_history)) ||
+      data.status_date ||
+      data.last_updated ||
+      data.updated ||
+      data.modification_date;
+
+    out.push({
+      status: data.status || '',
+      substatus: data.substatus || '',
+      date
+    });
+    return out;
+  }
+
+  return [];
+}
+
 async function getHistory(access, shipmentId) {
   try {
     const r = await axios.get(
@@ -102,29 +190,12 @@ async function getHistory(access, shipmentId) {
       }
     );
     if (r.status >= 400) return [];
-
     const data = r.data ?? null;
-
-    // 1) intentar arrays conocidos
-    let raw = null;
-    if (Array.isArray(data)) raw = data;
-    else if (Array.isArray(data?.results)) raw = data.results;
-    else if (Array.isArray(data?.history)) raw = data.history;
-    else if (Array.isArray(data?.entries)) raw = data.entries;
-    else if (Array.isArray(data?.events))  raw = data.events;
-
-    // 2) si no hay arrays pero viene objeto con status/substatus/fecha, lo tratamos como 1 evento
-    if (!raw) {
-      if (data && (data.status || data.substatus || data.date_history || data.date || data.status_date || data.last_updated)) {
-        raw = [data];
-      } else {
-        raw = [];
-      }
-    }
-    return raw;
+    return coerceHistoryArray(data);
   } catch { return []; }
 }
 
+// ---------------- main ----------------
 /**
  * Hidrata historial y AUTOCORRIGE meli_id si estaba guardado el "tracking".
  */
@@ -160,7 +231,7 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
       await Envio.updateOne({ _id: envio._id }, { $set: { meli_id: shipmentId } });
     }
   } else {
-    // 2) Segundo intento: si tenemos order_id (venta_id_meli), resolver shipment desde la orden
+    // 2) Resolver desde order si existe
     const orderId = envio.venta_id_meli || envio.order_id_meli || envio.order_id;
     if (orderId) {
       const resolved = await getShipmentFromOrder(access, orderId);
@@ -177,25 +248,17 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     }
   }
 
-  // 3) Historial con shipmentId corregido
+  // 3) Historial (array) con shipmentId corregido
   let raw = await getHistory(access, shipmentId);
 
   // 3.bis) Si sigue vacío pero el shipment trae status, sintetizamos 1 evento
   if ((!raw || raw.length === 0) && sh?.status) {
-    const when =
-      sh?.date_history ||
-      sh?.last_updated ||
-      sh?.status_date ||
-      sh?.date ||
-      sh?.updated ||
-      new Date().toISOString();
-
+    const when = bestDate(sh) || new Date();
     raw = [{
       status: sh.status,
       substatus: sh.substatus || '',
       date: when
     }];
-
     dlog('history vacío: sintetizo 1 evento desde shipment.status', { shipmentId, status: sh.status, substatus: sh.substatus, when });
   }
 
@@ -208,13 +271,11 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
   const update = { $set: { meli_history_last_sync: new Date() } };
 
   if (rebuild) {
-    // 1) conservar NO-MeLi (panel, scan, asignaciones, etc.)
+    // conservar NO-MeLi (panel, scan, asignaciones, etc.)
     const nonMeli = currentArr.filter(h => h?.actor_name !== 'MeLi' && h?.source !== 'meli-history');
-
-    // 2) unir con lo nuevo de MeLi
     const merged = [...nonMeli, ...mapped];
 
-    // 3) dedupe estable por fecha+status+sub+source
+    // dedupe estable por fecha+status+sub+source
     const seen = new Set();
     const deduped = [];
     merged
@@ -224,16 +285,15 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
         const k = `${+new Date(h.at || h.updatedAt || 0)}|${(h?.estado_meli?.status||'').toLowerCase()}|${(h?.estado_meli?.substatus||'').toLowerCase()}|${h?.source||''}`;
         if (!seen.has(k)) { seen.add(k); deduped.push(h); }
       });
-
     update.$set.historial = deduped;
   } else {
-    // camino incremental
+    // incremental
     const seen = new Set(currentArr.map(keyOf));
     const toAdd = (Array.isArray(mapped) ? mapped : []).filter(h => !seen.has(keyOf(h)));
     if (toAdd.length) update.$push = { historial: { $each: toAdd } };
   }
 
-  // Último evento (si hay) o, en su defecto, status del shipment
+  // Último evento (o estado del shipment)
   const lastEvt = (Array.isArray(mapped) ? mapped : [])
     .slice()
     .sort((a,b) => new Date(b.at) - new Date(a.at))[0];
@@ -242,7 +302,7 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     const st  = (lastEvt?.estado_meli?.status || lastEvt?.estado || sh?.status || '').toString();
     const sub = (lastEvt?.estado_meli?.substatus || sh?.substatus || '').toString();
     update.$set.estado = mapToInterno(st, sub);
-    update.$set.estado_meli = { status: st, substatus: sub, updatedAt: lastEvt?.at || new Date() };
+    update.$set.estado_meli = { status: st, substatus: sub, updatedAt: lastEvt?.at || bestDate(sh) || new Date() };
   }
 
   await Envio.updateOne({ _id: envio._id }, update);
