@@ -1,191 +1,227 @@
-// scripts/hydrate-history.js
-/* eslint-disable no-console */
+#!/usr/bin/env node
+/**
+ * Hydrate MeLi history for candidate shipments.
+ *
+ * Uso ejemplo:
+ *   MELI_HISTORY_DEBUG=0 node scripts/hydrate-history.js \
+ *     --from=2025-09-09 --to=2025-09-20 \
+ *     --autoingesta --needsync=0 \
+ *     --sort=updated_desc --limit=800 --skip=0 \
+ *     --force --rebuild --timefield=estado
+ */
+
 const mongoose = require('mongoose');
 const path = require('path');
 
-// Models & services
-const Envio = require('../models/Envio');
-const meliHistory = require('../services/meliHistory');
+const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI;
+if (!MONGO_URI) {
+  console.error('[hydrate-history] FATAL: faltó MONGO_URI en variables de entorno');
+  process.exit(1);
+}
 
-// ===== Util =====
-function parseArgs(argv = process.argv.slice(2)) {
+// Models & service
+const Envio = require('../models/Envio');
+const { ensureMeliHistory } = require('../services/meliHistory');
+
+// ---------- utils básicos ----------
+function argBool(v, def = false) {
+  if (v === undefined || v === null) return !!def;
+  const s = String(v).trim().toLowerCase();
+  if (['1','true','yes','y','on'].includes(s)) return true;
+  if (['0','false','no','n','off'].includes(s)) return false;
+  return !!def;
+}
+function parseArgs(argv) {
   const args = {};
-  for (const a of argv) {
-    if (a.startsWith('--')) {
-      const [k, vRaw] = a.replace(/^--/, '').split('=');
-      const v = (vRaw === undefined) ? true : vRaw;
+  for (let i = 2; i < argv.length; i++) {
+    const a = argv[i];
+    if (!a.startsWith('--')) continue;
+    const eq = a.indexOf('=');
+    if (eq > -1) {
+      const k = a.slice(2, eq);
+      const v = a.slice(eq + 1);
       args[k] = v;
+    } else {
+      const k = a.slice(2);
+      // flags booleanas estilo --force
+      args[k] = true;
     }
   }
   return args;
 }
-
-function endOfDay(d) {
-  const x = new Date(d);
-  x.setHours(23, 59, 59, 999);
-  return x;
+function toIsoDayStart(d) {
+  return new Date(`${d}T00:00:00.000Z`);
 }
-function startOfDay(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-function asDateOrNull(s, end = false) {
-  if (!s) return null;
-  const d = new Date(s);
-  if (Number.isNaN(+d)) return null;
-  return end ? endOfDay(d) : startOfDay(d);
+function toIsoDayEnd(d) {
+  return new Date(`${d}T23:59:59.999Z`);
 }
 
-function toInt(v, def) {
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) ? n : def;
-}
+// ---------- main ----------
+async function main() {
+  const args = parseArgs(process.argv);
 
-function timeFieldPath(which) {
-  // --timefield=estado → usa estado_meli.updatedAt
-  // default → updatedAt (document-level)
-  if (`${which}`.toLowerCase() === 'estado') return 'estado_meli.updatedAt';
-  return 'updatedAt';
-}
+  const timeFieldArg = (args.timefield || '').toString().trim().toLowerCase();
+  const timeField =
+    timeFieldArg === 'estado'  ? 'estado_meli.updatedAt' :
+    timeFieldArg === 'updated' ? 'updatedAt' :
+    timeFieldArg === 'created' ? 'createdAt' :
+    'estado_meli.updatedAt';
 
-function sortSpec(sortArg, tfPath) {
-  // ejemplos: updated_desc, updated_asc, estado_desc, estado_asc
-  const s = (sortArg || '').toLowerCase();
-  if (s.endsWith('_asc'))  return { [tfPath]: 1 };
-  if (s.endsWith('_desc')) return { [tfPath]: -1 };
-  // default
-  return { [tfPath]: -1 };
-}
+  const now = Date.now();
+  const from = args.from ? toIsoDayStart(args.from) : new Date(0);
+  const to   = args.to   ? toIsoDayEnd(args.to)     : new Date(now);
 
-// ===== Main =====
-(async function main() {
-  const args = parseArgs();
+  // Por defecto INCLUYE entregados. Si --delivered=false => los excluye
+  const deliveredFlag = argBool(args.delivered, true);
 
-  const FROM = asDateOrNull(args.from);
-  const TO   = asDateOrNull(args.to, true);
+  // needsync: horas (si se omite => no filtra)
+  const needSyncHours = (args.needsync !== undefined && args.needsync !== null && args.needsync !== '')
+    ? Number(args.needsync)
+    : null;
+  const needSyncCutoff = needSyncHours != null
+    ? new Date(now - needSyncHours * 60 * 60 * 1000)
+    : null;
 
-  const TIMEFIELD = timeFieldPath(args.timefield); // 'estado' o 'updated'
-  const NEEDSYNC_HOURS = toInt(args.needsync, 0);
-  const LIMIT = toInt(args.limit, 300);
-  const SKIP  = toInt(args.skip, 0);
-  const FORCE = !!args.force;
-  const REBUILD = !!args.rebuild;
+  const autoIng = argBool(args.autoingesta, false) || argBool(args['auto_ingesta'], false);
+  const poorFlag = argBool(args.poor, false);
+  const force = argBool(args.force, false);
+  const rebuild = argBool(args.rebuild, false);
 
-  const AUTOINGESTA = !!args.autoingesta;
-  const DELIVERED_FLAG = (args.delivered ?? 'false'); // solo para imprimir
+  // Orden
+  const sortArg = (args.sort || '').toString().trim().toLowerCase();
+  let sort = {};
+  if (sortArg === 'updated_desc') sort = { [timeField]: -1 };
+  else if (sortArg === 'updated_asc') sort = { [timeField]: 1 };
+  else sort = { [timeField]: -1 }; // default
 
-  const mongoUri = process.env.MONGO_URI;
-  if (!mongoUri) {
-    console.error('[hydrate-history] FATAL: faltó MONGO_URI en el entorno');
-    process.exit(1);
-  }
+  const limit = Math.max(0, parseInt(args.limit || '300', 10));
+  const skip  = Math.max(0, parseInt(args.skip  || '0', 10));
 
-  await mongoose.connect(mongoUri, {
-    maxPoolSize: 5,
+  // Conexión
+  await mongoose.connect(MONGO_URI, {
+    serverSelectionTimeoutMS: 20000,
+    maxPoolSize: 10,
   });
-
   console.log('[hydrate-history] conectado a Mongo');
-  console.log('[hydrate-history] usando meliHistory:', require.resolve('../services/meliHistory'), meliHistory.VERSION || 'sin VERSION');
 
-  // ---- métricas de diagnóstico ----
-  const withMeliIdCount = await Envio.countDocuments({ meli_id: { $exists: true, $ne: null } });
-
-  const timeWindowFilter = {};
-  if (FROM) timeWindowFilter[TIMEFIELD] = { ...(timeWindowFilter[TIMEFIELD] || {}), $gte: FROM };
-  if (TO)   timeWindowFilter[TIMEFIELD] = { ...(timeWindowFilter[TIMEFIELD] || {}), $lte: TO };
-
-  const inWindowCount = Object.keys(timeWindowFilter).length
-    ? await Envio.countDocuments({ meli_id: { $exists: true, $ne: null }, ...timeWindowFilter })
-    : 0;
-
+  // --- Diagnóstico rápido base ---
+  const withMeliId = await Envio.countDocuments({ meli_id: { $exists: true, $ne: null } });
   const deliveredCount = await Envio.countDocuments({ estado: 'entregado' });
 
-  let needSyncCount = 0;
-  if (NEEDSYNC_HOURS > 0) {
-    const cutoff = new Date(Date.now() - NEEDSYNC_HOURS * 3600 * 1000);
-    needSyncCount = await Envio.countDocuments({
-      meli_id: { $exists: true, $ne: null },
+  // === Build base filter ===
+  const baseTime = { [timeField]: { $gte: from, $lte: to } };
+
+  const diagCounts = {};
+  diagCounts.total = await Envio.countDocuments({});
+  diagCounts.inWindow = await Envio.countDocuments(baseTime);
+
+  let filter = { ...baseTime };
+
+  // autoingesta (si se pidió)
+  if (autoIng) {
+    filter = {
+      $and: [
+        filter,
+        { $or: [{ autoingesta: true }, { auto_ingesta: true }] }
+      ]
+    };
+  }
+  diagCounts.afterAuto = await Envio.countDocuments(filter);
+
+  // delivered (si se pidió excluir)
+  if (!deliveredFlag) {
+    filter = { $and: [ filter, { estado: { $ne: 'entregado' } } ] };
+  }
+  diagCounts.afterDelivered = await Envio.countDocuments(filter);
+
+  // needsync (si se especificó)
+  if (needSyncHours != null) {
+    const needSyncFilter = {
       $or: [
         { meli_history_last_sync: { $exists: false } },
-        { meli_history_last_sync: { $lt: cutoff } },
-      ],
-    });
-  } else {
-    // si needsync=0, mostramos cuántos tienen algún last_sync (o no) solo a modo informativo
-    needSyncCount = await Envio.countDocuments({ meli_id: { $exists: true, $ne: null } });
+        { meli_history_last_sync: { $lte: needSyncCutoff } }
+      ]
+    };
+    filter = { $and: [ filter, needSyncFilter ] };
   }
+  diagCounts.afterNeedSync = await Envio.countDocuments(filter);
 
+  // poor (opcional, default false)
+  if (poorFlag) {
+    filter = {
+      $and: [
+        filter,
+        { $or: [
+          { historial: { $exists: false } },
+          { $expr: { $lt: [ { $size: { $ifNull: [ "$historial", [] ] } }, 2 ] } }
+        ] }
+      ]
+    };
+  }
+  diagCounts.afterPoor = await Envio.countDocuments(filter);
+
+  // Candidatos
+  const candidatos = await Envio
+    .find(filter, { historial: 0 }) // no traemos historial aquí para ahorrar red
+    .sort(sort)
+    .skip(skip)
+    .limit(limit)
+    .lean();
+
+  // Print diagnóstico
+  console.log('[hydrate-history] usando meliHistory:', require.resolve('../services/meliHistory'), 'meliHistory.v3-sintetiza-desde-shipment');
   console.log('[hydrate-history] diagnóstico:');
-  console.log('  con meli_id:', withMeliIdCount);
-  if (FROM || TO) {
-    console.log('  dentro de ventana tiempo:', inWindowCount, `(desde=${FROM ? FROM.toISOString() : '-'} hasta=${TO ? TO.toISOString() : '-'})`);
+  console.log(`  con meli_id: ${withMeliId}`);
+  console.log(`  dentro de ventana tiempo: ${diagCounts.inWindow} (desde=${from.toISOString()} hasta=${to.toISOString()})`);
+  console.log(`  estado=entregado: ${deliveredCount}`);
+  console.log(`  after autoingesta: ${diagCounts.afterAuto}`);
+  console.log(`  after delivered(${deliveredFlag ? 'incluye' : 'excluye'}): ${diagCounts.afterDelivered}`);
+  if (needSyncHours != null) {
+    console.log(`  after needsync(>${needSyncHours}h): ${diagCounts.afterNeedSync}`);
+  } else {
+    console.log('  needsync: (sin filtro)');
+    console.log(`  after needsync: ${diagCounts.afterNeedSync}`);
   }
-  console.log('  estado=entregado:', deliveredCount);
-  console.log('  necesita sync (>0h):', needSyncCount);
+  console.log(`  after poor(${poorFlag}): ${diagCounts.afterPoor}`);
 
-  // ---- query base de candidatos ----
-  const base = { meli_id: { $exists: true, $ne: null } };
-
-  if (AUTOINGESTA) base.autoingesta = true;
-
-  // Si el caller quiere excluir entregados (como en tus ejecuciones previas), no incluyas 'entregado'
-  if (`${DELIVERED_FLAG}` === 'false') {
-    base.estado = { $ne: 'entregado' };
-  }
-
-  // window por timefield (updatedAt o estado_meli.updatedAt)
-  Object.assign(base, timeWindowFilter);
-
-  // needsync (si >0): refrescar los que tengan sync viejo
-  if (NEEDSYNC_HOURS > 0) {
-    const cutoff = new Date(Date.now() - NEEDSYNC_HOURS * 3600 * 1000);
-    base.$or = [
-      { meli_history_last_sync: { $exists: false } },
-      { meli_history_last_sync: { $lt: cutoff } },
-    ];
-  }
-
-  const sSpec = sortSpec(args.sort, TIMEFIELD);
-
-  const candidatosCount = await Envio.countDocuments(base);
   console.log(
-    `[hydrate-history] candidatos: ${candidatosCount} (sort=${Object.keys(sSpec)[0]} ${sSpec[Object.keys(sSpec)[0]] > 0 ? 'asc' : 'desc'}, from=${FROM ? FROM.toISOString() : '-'}, to=${TO ? TO.toISOString() : '-'}, delivered=${DELIVERED_FLAG}, poor=false, needsync=${NEEDSYNC_HOURS}, autoingesta=${AUTOINGESTA})`
+    `[hydrate-history] candidatos: ${candidatos.length} ` +
+    `(sort=${Object.keys(sort)[0]} ${Object.values(sort)[0] > 0 ? 'asc' : 'desc'}, ` +
+    `from=${from.toISOString()}, to=${to.toISOString()}, ` +
+    `delivered=${deliveredFlag}, poor=${poorFlag}, ` +
+    `needsync=${needSyncHours != null ? needSyncHours : '(none)'}, autoingesta=${autoIng})`
   );
 
-  const cursor = Envio.find(base).sort(sSpec).skip(SKIP).limit(LIMIT).cursor();
-
   let ok = 0, fail = 0;
-  for await (const envio of cursor) {
+
+  for (const e of candidatos) {
     try {
-      // hidrata
-      await meliHistory.ensureMeliHistory(envio, { force: FORCE, rebuild: REBUILD });
+      // hidratamos
+      await ensureMeliHistory(e, { force, rebuild });
 
-      // lee lo recién guardado para log honesto
-      const fresh = await Envio.findById(envio._id).select('historial estado estado_meli meli_id').lean();
+      // volvemos a leer solo para poder reportar
+      const refreshed = await Envio.findById(e._id, { historial: 1, estado_meli: 1 }).lean();
+      const hist = Array.isArray(refreshed?.historial) ? refreshed.historial : [];
+      const meliEvts = hist.filter(h => (h?.source === 'meli-history') || (h?.actor_name === 'MeLi'));
+      const lastTs = refreshed?.estado_meli?.updatedAt || meliEvts.slice().sort((a,b)=>new Date(b.at)-new Date(a.at))[0]?.at || null;
 
-      const eventosMeli = (fresh?.historial || []).filter((h) => h?.source === 'meli-history').length;
-      const lastEvt = (fresh?.historial || [])
-        .filter((h) => h?.source === 'meli-history')
-        .sort((a, b) => new Date(b.at) - new Date(a.at))[0];
-
-      const lastAt = lastEvt?.at || fresh?.estado_meli?.updatedAt || null;
-      const lastSt = fresh?.estado_meli?.status || fresh?.estado || null;
-
-      console.log(
-        ` ✓ ${fresh?.meli_id || envio.meli_id} eventos=${eventosMeli} ${lastSt || 'null'} @ ${lastAt ? new Date(lastAt).toISOString() : 'null'}`
-      );
+      const when = lastTs ? new Date(lastTs).toISOString() : 'null';
+      const lastStatus = refreshed?.estado_meli?.status || (meliEvts.slice().sort((a,b)=>new Date(b.at)-new Date(a.at))[0]?.estado_meli?.status) || null;
+      console.log(` ✓ ${e.meli_id || e._id} eventos=${meliEvts.length} ${lastStatus || 'null'} @ ${when}`);
       ok++;
-    } catch (e) {
-      console.log(` ✗ ${envio?.meli_id || envio?._id} error=${e?.message || e}`);
+    } catch (err) {
+      console.log(` ✗ ${e.meli_id || e._id} error=${err?.message || err}`);
       fail++;
     }
   }
 
   console.log(`[hydrate-history] listo. ok=${ok} fail=${fail}`);
   await mongoose.disconnect();
-})().catch(async (err) => {
-  console.error('[hydrate-history] FATAL:', err);
+  process.exit(0);
+}
+
+main().catch(async (err) => {
+  console.error('[hydrate-history] FATAL:', err?.stack || err);
   try { await mongoose.disconnect(); } catch {}
   process.exit(1);
 });
