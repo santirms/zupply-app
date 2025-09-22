@@ -6,7 +6,6 @@ const { getValidToken } = require('../utils/meliUtils');
 
 const HYDRATE_TTL_MIN = 15;
 const DEBUG = process.env.MELI_HISTORY_DEBUG === '1';
-
 function dlog(...a){ if (DEBUG) console.log('[meli-history]', ...a); }
 
 function keyOf(h) {
@@ -20,9 +19,10 @@ function mapHistory(items = []) {
   return (Array.isArray(items) ? items : []).map(e => {
     const st  = (e?.status || '').toLowerCase();
     let sub   = (e?.substatus || '').toLowerCase();
-    if (!sub && ['ready_to_print','printed','out_for_delivery','not_visited','ready_to_ship','handling','shipped'].includes(st)) {
-      sub = st;
-    }
+    if (!sub && [
+      'ready_to_print','printed','out_for_delivery','not_visited',
+      'ready_to_ship','handling','shipped'
+    ].includes(st)) sub = st;
 
     // elegir la mejor fecha disponible
     const dateRaw =
@@ -46,7 +46,6 @@ function mapHistory(items = []) {
   });
 }
 
-
 function mapToInterno(status, substatus) {
   const s = (status || '').toLowerCase();
   const sub = (substatus || '').toLowerCase();
@@ -62,56 +61,69 @@ function mapToInterno(status, substatus) {
 
 async function getShipment(access, idOrTracking) {
   try {
-    const url = `https://api.mercadolibre.com/shipments/${idOrTracking}`;
-    const r = await axios.get(url, {
-      headers: { Authorization: `Bearer ${access}` },
-      timeout: 10000,
-      validateStatus: s => s >= 200 && s < 500,
-    });
-    if (r.status >= 400) { dlog('getShipment http', r.status, idOrTracking); return null; }
-    const sh = r.data || null;
-    if (sh) dlog('shipment', { id: sh.id, status: sh.status, substatus: sh.substatus, logistic_type: sh.logistic_type });
-    return sh;
-  } catch (e) { dlog('getShipment err', e?.message); return null; }
+    const r = await axios.get(
+      `https://api.mercadolibre.com/shipments/${idOrTracking}`,
+      {
+        headers: { Authorization: `Bearer ${access}` },
+        timeout: 10000,
+        validateStatus: s => s >= 200 && s < 500,
+      }
+    );
+    if (r.status >= 400) return null;
+    return r.data || null;
+  } catch { return null; }
+}
+
+async function getShipmentFromOrder(access, orderId) {
+  try {
+    const r = await axios.get(
+      `https://api.mercadolibre.com/orders/${orderId}/shipments`,
+      {
+        headers: { Authorization: `Bearer ${access}` },
+        timeout: 10000,
+        validateStatus: s => s >= 200 && s < 500,
+      }
+    );
+    if (r.status >= 400) return null;
+    const data = r.data || {};
+    const arr = Array.isArray(data) ? data : (data.results || []);
+    return Array.isArray(arr) && arr[0]?.id ? arr[0].id : null;
+  } catch { return null; }
 }
 
 async function getHistory(access, shipmentId) {
   try {
-    const url = `https://api.mercadolibre.com/shipments/${shipmentId}/history`;
-    const r = await axios.get(url, {
-      headers: { Authorization: `Bearer ${access}` },
-      timeout: 10000,
-      validateStatus: s => s >= 200 && s < 500,
-    });
-    if (r.status >= 400) { dlog('getHistory http', r.status, shipmentId); return []; }
+    const r = await axios.get(
+      `https://api.mercadolibre.com/shipments/${shipmentId}/history`,
+      {
+        headers: { Authorization: `Bearer ${access}` },
+        timeout: 10000,
+        validateStatus: s => s >= 200 && s < 500,
+      }
+    );
+    if (r.status >= 400) return [];
 
-const data = r.data ?? null;
+    const data = r.data ?? null;
 
-// 1) intentar arrays conocidos
-let raw = null;
-if (Array.isArray(data)) raw = data;
-else if (Array.isArray(data?.results)) raw = data.results;
-else if (Array.isArray(data?.history)) raw = data.history;
-else if (Array.isArray(data?.entries)) raw = data.entries;
-else if (Array.isArray(data?.events))  raw = data.events;
+    // 1) intentar arrays conocidos
+    let raw = null;
+    if (Array.isArray(data)) raw = data;
+    else if (Array.isArray(data?.results)) raw = data.results;
+    else if (Array.isArray(data?.history)) raw = data.history;
+    else if (Array.isArray(data?.entries)) raw = data.entries;
+    else if (Array.isArray(data?.events))  raw = data.events;
 
-// 2) si no hay arrays pero viene objeto con status/substatus, lo tratamos como 1 solo evento
-if (!raw) {
-  if (data && (data.status || data.substatus || data.date_history || data.date)) {
-    raw = [data];
-  } else {
-    raw = [];
-  }
+    // 2) si no hay arrays pero viene objeto con status/substatus/fecha, lo tratamos como 1 evento
+    if (!raw) {
+      if (data && (data.status || data.substatus || data.date_history || data.date || data.status_date || data.last_updated)) {
+        raw = [data];
+      } else {
+        raw = [];
+      }
+    }
+    return raw;
+  } catch { return []; }
 }
-
-return raw;
-
-  } catch (e) {
-    dlog('getHistory err', e?.message);
-    return [];
-  }
-}
-
 
 /**
  * Hidrata historial y AUTOCORRIGE meli_id si estaba guardado el "tracking".
@@ -122,10 +134,6 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     : (envioOrId?.toObject ? envioOrId.toObject() : envioOrId);
 
   if (!envio?.meli_id) { dlog('skip sin meli_id', envio?._id?.toString?.()); return; }
-
-    if (!raw.length) {
-  dlog('no-history', { envio: envio._id?.toString?.(), shipmentId, meli_id: envio.meli_id, order: envio.venta_id_meli || envio.order_id_meli || envio.order_id || null });
- }
 
   const last  = envio.meli_history_last_sync ? +new Date(envio.meli_history_last_sync) : 0;
   const fresh = Date.now() - last < HYDRATE_TTL_MIN * 60 * 1000;
@@ -141,59 +149,54 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     if (!access) { dlog('skip sin access'); return; }
   }
 
-async function getShipmentFromOrder(access, orderId) {
-  try {
-    const r = await axios.get(
-      `https://api.mercadolibre.com/orders/${orderId}/shipments`,
-      {
-        headers: { Authorization: `Bearer ${access}` },
-        timeout: 10000,
-        validateStatus: s => s >= 200 && s < 500,
-      }
-    );
-    if (r.status >= 400) return null;
-    // Respuesta típica: { results: [{ id: <shipmentId>, ... }, ...] } o array
-    const data = r.data || {};
-    const arr = Array.isArray(data) ? data : (data.results || []);
-    return Array.isArray(arr) && arr[0]?.id ? arr[0].id : null;
-  } catch { return null; }
-}
+  // 1) Intento directo con lo que hay en meli_id
+  let sh = await getShipment(access, envio.meli_id);
+  let shipmentId = envio.meli_id;
 
-// 1) Intento directo con lo que hay en meli_id
-let sh = await getShipment(access, envio.meli_id);
-let shipmentId = envio.meli_id;
-
-if (sh?.id) {
-  if (`${sh.id}` !== `${envio.meli_id}`) {
-    dlog('autocorrect meli_id', { before: envio.meli_id, after: sh.id });
-    shipmentId = `${sh.id}`;
-    await Envio.updateOne({ _id: envio._id }, { $set: { meli_id: shipmentId } });
-  }
-} else {
-  // 2) Segundo intento: si tenemos order_id (venta_id_meli), resolver shipment desde la orden
-  const orderId = envio.venta_id_meli || envio.order_id_meli || envio.order_id; // ajustá al nombre real del campo
-  if (orderId) {
-    const resolved = await getShipmentFromOrder(access, orderId);
-    if (resolved) {
-      dlog('autocorrect meli_id via order', { orderId, shipmentId: resolved });
-      shipmentId = `${resolved}`;
+  if (sh?.id) {
+    if (`${sh.id}` !== `${envio.meli_id}`) {
+      dlog('autocorrect meli_id', { before: envio.meli_id, after: sh.id });
+      shipmentId = `${sh.id}`;
       await Envio.updateOne({ _id: envio._id }, { $set: { meli_id: shipmentId } });
-      // y ahora sí, traemos el shipment real
-      sh = await getShipment(access, shipmentId);
-    } else {
-      dlog('order→shipment no resolvió', { orderId });
     }
   } else {
-    dlog('no orderId para resolver shipment');
+    // 2) Segundo intento: si tenemos order_id (venta_id_meli), resolver shipment desde la orden
+    const orderId = envio.venta_id_meli || envio.order_id_meli || envio.order_id;
+    if (orderId) {
+      const resolved = await getShipmentFromOrder(access, orderId);
+      if (resolved) {
+        dlog('autocorrect meli_id via order', { orderId, shipmentId: resolved });
+        shipmentId = `${resolved}`;
+        await Envio.updateOne({ _id: envio._id }, { $set: { meli_id: shipmentId } });
+        sh = await getShipment(access, shipmentId);
+      } else {
+        dlog('order→shipment no resolvió', { orderId });
+      }
+    } else {
+      dlog('no orderId para resolver shipment');
+    }
   }
-}
 
-  // 2) Historial con shipmentId corregido
+  // 3) Historial con shipmentId corregido
   let raw = await getHistory(access, shipmentId);
 
-  // 2.bis) Retry: si sigue vacío y getShipment trajo status/substatus, al menos actualizamos estado actual
-  if (!raw.length && sh?.status) {
-    dlog('history vacío, actualizo estado con shipment.status como mínimo');
+  // 3.bis) Si sigue vacío pero el shipment trae status, sintetizamos 1 evento
+  if ((!raw || raw.length === 0) && sh?.status) {
+    const when =
+      sh?.date_history ||
+      sh?.last_updated ||
+      sh?.status_date ||
+      sh?.date ||
+      sh?.updated ||
+      new Date().toISOString();
+
+    raw = [{
+      status: sh.status,
+      substatus: sh.substatus || '',
+      date: when
+    }];
+
+    dlog('history vacío: sintetizo 1 evento desde shipment.status', { shipmentId, status: sh.status, substatus: sh.substatus, when });
   }
 
   const mapped = mapHistory(raw);
@@ -201,10 +204,10 @@ if (sh?.id) {
   // Mezcla con historial actual y dedupe
   const current = (await Envio.findById(envio._id).select('historial').lean())?.historial || [];
   const currentArr = Array.isArray(current) ? current : [];
- 
-  let update = { $set: { meli_history_last_sync: new Date() } };
-  
-if (rebuild) {
+
+  const update = { $set: { meli_history_last_sync: new Date() } };
+
+  if (rebuild) {
     // 1) conservar NO-MeLi (panel, scan, asignaciones, etc.)
     const nonMeli = currentArr.filter(h => h?.actor_name !== 'MeLi' && h?.source !== 'meli-history');
 
@@ -224,19 +227,17 @@ if (rebuild) {
 
     update.$set.historial = deduped;
   } else {
-    // camino actual (incremental)
+    // camino incremental
     const seen = new Set(currentArr.map(keyOf));
     const toAdd = (Array.isArray(mapped) ? mapped : []).filter(h => !seen.has(keyOf(h)));
     if (toAdd.length) update.$push = { historial: { $each: toAdd } };
   }
 
-  // Último evento (si hay)
-    // Último evento (si hay) o, en su defecto, status del shipment
+  // Último evento (si hay) o, en su defecto, status del shipment
   const lastEvt = (Array.isArray(mapped) ? mapped : [])
     .slice()
     .sort((a,b) => new Date(b.at) - new Date(a.at))[0];
 
-  // Si hubo eventos usamos el último; si no, pero el shipment trae status, usamos eso
   if (lastEvt || sh?.status) {
     const st  = (lastEvt?.estado_meli?.status || lastEvt?.estado || sh?.status || '').toString();
     const sub = (lastEvt?.estado_meli?.substatus || sh?.substatus || '').toString();
