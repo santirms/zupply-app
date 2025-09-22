@@ -51,6 +51,7 @@ const DELIVERED  = !!getFlag('delivered', false);
 const POOR       = !!getFlag('poor', false);
 const NEEDSYNC_H = getFlag('needsync', null);
 const AUTOINGESTA= !!getFlag('autoingesta', false);
+const SKIP       = Number(getFlag('skip', 0) || 0);
 
 const SORT = (getFlag('sort', 'updated_desc') || '').toLowerCase();
 function sortSpec(key) {
@@ -167,12 +168,14 @@ const query = andParts.length > 1 ? { $and: andParts } : mustHave;
   // -----------------------------------------------
  let candidatos = [];
 try {
-  candidatos = await Envio
-    .find(query)
-    .select('_id meli_id cliente_id historial estado updatedAt createdAt meli_history_last_sync')
-    .sort(sortSpec(SORT))        // <<— updated_desc por defecto
-    .limit(LIMIT)
-    .lean();
+ candidatos = await Envio
+  .find(query)
+  .select('_id meli_id cliente_id historial estado updatedAt createdAt meli_history_last_sync')
+  .sort(sortSpec(SORT))     // updated_desc = recientes primero
+  .skip(SKIP)               // <<— paginación
+  .limit(LIMIT)
+  .lean();
+
 
   console.log(`[hydrate-history] candidatos: ${candidatos.length} (sort=${SORT}, from=${fromDate?.toISOString?.()||'n/a'}, to=${toDate?.toISOString?.()||'n/a'}, delivered=${DELIVERED}, poor=${POOR}, needsync=${NEEDSYNC_H ?? 'n/a'}, autoingesta=${AUTOINGESTA})`);
 } catch (err) {
@@ -193,7 +196,7 @@ try {
   // Procesar secuencialmente
   for (const envio of candidatos) {
     try {
-      await ensureMeliHistory(envio._id, { force: FORCE });
+      await ensureMeliHistory(envio._id, { force: FORCE, rebuild: REBUILD });
 
       const refreshed = await Envio.findById(envio._id).select('historial estado estado_meli').lean();
       const hist = Array.isArray(refreshed?.historial) ? refreshed.historial : [];
