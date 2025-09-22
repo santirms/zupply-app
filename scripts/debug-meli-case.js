@@ -19,7 +19,7 @@ async function get(access, url) {
   const arg = process.argv[2];
   if (!arg) { console.error('Uso: node scripts/debug-meli-case.js <envioId|meli_id>'); process.exit(1); }
 
-  await mongoose.connect(process.env.MONGODB_URI);
+  await mongoose.connect(process.env.MONGO_URI);
 
   let envio = await Envio.findOne({ _id: arg }).lean();
   if (!envio) envio = await Envio.findOne({ meli_id: arg }).lean();
