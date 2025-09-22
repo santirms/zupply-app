@@ -7,6 +7,8 @@ const minimist = require('minimist');
 const Envio = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const { ensureMeliHistory } = require('../services/meliHistory');
+const meliHistory = require('../services/meliHistory');
+console.log('[hydrate-history] usando meliHistory:', require.resolve('../services/meliHistory'), meliHistory.VERSION||'sin VERSION');
 
 // --------- helpers flags ----------
 const argv = minimist(process.argv.slice(2));
