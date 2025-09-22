@@ -20,15 +20,22 @@ function mapHistory(items = []) {
   return (Array.isArray(items) ? items : []).map(e => {
     const st  = (e?.status || '').toLowerCase();
     let sub   = (e?.substatus || '').toLowerCase();
-    if (!sub && [
-      'ready_to_print','printed','out_for_delivery','not_visited',
-      'ready_to_ship','handling','shipped'
-    ].includes(st)) sub = st;
+    if (!sub && ['ready_to_print','printed','out_for_delivery','not_visited','ready_to_ship','handling','shipped'].includes(st)) {
+      sub = st;
+    }
 
-    // algunos payloads usan 'date' y otros 'date_time' o 'event_date'
-    const when = e?.date || e?.date_time || e?.event_date || e?.created_at;
+    // elegir la mejor fecha disponible
+    const dateRaw =
+      e?.date ||
+      e?.date_history ||
+      e?.last_updated ||
+      e?.updated ||
+      e?.modification_date ||
+      e?.status_date ||
+      null;
 
-    const at = when ? new Date(when) : new Date();
+    const at = dateRaw ? new Date(dateRaw) : new Date();
+
     return {
       at,
       estado: e?.status || '',
@@ -38,6 +45,7 @@ function mapHistory(items = []) {
     };
   });
 }
+
 
 function mapToInterno(status, substatus) {
   const s = (status || '').toLowerCase();
@@ -77,27 +85,27 @@ async function getHistory(access, shipmentId) {
     });
     if (r.status >= 400) { dlog('getHistory http', r.status, shipmentId); return []; }
 
-    const data = r.data ?? {};
+const data = r.data ?? null;
 
-    // Aceptamos TODOS los formatos conocidos de la API
-    let raw = Array.isArray(data)
-      ? data
-      : (
-          data.results ??
-          data.history ??
-          data.entries ??
-          data.events ??
-          data.timeline ??
-          data.date_history ??   // 👈 FALTABA ESTE (self_service)
-          []
-        );
+// 1) intentar arrays conocidos
+let raw = null;
+if (Array.isArray(data)) raw = data;
+else if (Array.isArray(data?.results)) raw = data.results;
+else if (Array.isArray(data?.history)) raw = data.history;
+else if (Array.isArray(data?.entries)) raw = data.entries;
+else if (Array.isArray(data?.events))  raw = data.events;
 
-    if (!Array.isArray(raw)) raw = [];
+// 2) si no hay arrays pero viene objeto con status/substatus, lo tratamos como 1 solo evento
+if (!raw) {
+  if (data && (data.status || data.substatus || data.date_history || data.date)) {
+    raw = [data];
+  } else {
+    raw = [];
+  }
+}
 
-    dlog('history.len', shipmentId, raw.length);
-    if (DEBUG && !raw.length) dlog('history.body.keys', Object.keys(data));
+return raw;
 
-    return raw;
   } catch (e) {
     dlog('getHistory err', e?.message);
     return [];
