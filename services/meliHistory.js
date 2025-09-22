@@ -25,7 +25,10 @@ function mapHistory(items = []) {
       'ready_to_ship','handling','shipped'
     ].includes(st)) sub = st;
 
-    const at = e?.date ? new Date(e.date) : new Date();
+    // algunos payloads usan 'date' y otros 'date_time' o 'event_date'
+    const when = e?.date || e?.date_time || e?.event_date || e?.created_at;
+
+    const at = when ? new Date(when) : new Date();
     return {
       at,
       estado: e?.status || '',
@@ -73,19 +76,34 @@ async function getHistory(access, shipmentId) {
       validateStatus: s => s >= 200 && s < 500,
     });
     if (r.status >= 400) { dlog('getHistory http', r.status, shipmentId); return []; }
-    const data = r.data ?? [];
 
-    // 👇 acepta varias formas conocidas
+    const data = r.data ?? {};
+
+    // Aceptamos TODOS los formatos conocidos de la API
     let raw = Array.isArray(data)
       ? data
-      : (data.results ?? data.history ?? data.entries ?? data.events ?? data.timeline ?? []);
+      : (
+          data.results ??
+          data.history ??
+          data.entries ??
+          data.events ??
+          data.timeline ??
+          data.date_history ??   // 👈 FALTABA ESTE (self_service)
+          []
+        );
 
     if (!Array.isArray(raw)) raw = [];
+
     dlog('history.len', shipmentId, raw.length);
-    if (DEBUG && !raw.length) dlog('history.body', JSON.stringify(data).slice(0, 500)); // 1er tramo p/inspección
+    if (DEBUG && !raw.length) dlog('history.body.keys', Object.keys(data));
+
     return raw;
-  } catch (e) { dlog('getHistory err', e?.message); return []; }
+  } catch (e) {
+    dlog('getHistory err', e?.message);
+    return [];
+  }
 }
+
 
 /**
  * Hidrata historial y AUTOCORRIGE meli_id si estaba guardado el "tracking".
