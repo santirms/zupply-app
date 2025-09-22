@@ -66,7 +66,7 @@ function sortSpec(key) {
     default:             return { updatedAt: -1 };
   }
 }
-
+const timeOr = [];
 // Rango temporal explícito
 let fromDate = isoOrNull(FROM_RAW);
 let toDate   = isoOrNull(TO_RAW);
@@ -103,7 +103,7 @@ console.log(`[hydrate-history] candidatos: ${candidatos.length} (sort=${SORT}, f
   const mustHave = { meli_id: { $exists: true, $ne: null, $ne: '' } };
 
   // Condiciones OR por tiempo (si NO --all)
- const timeOr = [];
+ 
 if (!ALL && since) {
   timeOr.push({ updatedAt: { $gte: since } }, { createdAt: { $gte: since } });
 }
