@@ -97,8 +97,7 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
 
   if (!envio?.meli_id) { dlog('skip sin meli_id', envio?._id?.toString?.()); return; }
 
-  let raw = await getHistory(access, shipmentId);
-  if (!raw.length) {
+    if (!raw.length) {
   dlog('no-history', { envio: envio._id?.toString?.(), shipmentId, meli_id: envio.meli_id, order: envio.venta_id_meli || envio.order_id_meli || envio.order_id || null });
  }
 
