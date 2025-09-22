@@ -51,36 +51,40 @@ function mapToInterno(status, substatus) {
 
 async function getShipment(access, idOrTracking) {
   try {
-    const r = await axios.get(
-      `https://api.mercadolibre.com/shipments/${idOrTracking}`,
-      {
-        headers: { Authorization: `Bearer ${access}` },
-        timeout: 10000,
-        validateStatus: s => s >= 200 && s < 500,
-      }
-    );
-    if (r.status >= 400) return null;
-    return r.data || null;
-  } catch { return null; }
+    const url = `https://api.mercadolibre.com/shipments/${idOrTracking}`;
+    const r = await axios.get(url, {
+      headers: { Authorization: `Bearer ${access}` },
+      timeout: 10000,
+      validateStatus: s => s >= 200 && s < 500,
+    });
+    if (r.status >= 400) { dlog('getShipment http', r.status, idOrTracking); return null; }
+    const sh = r.data || null;
+    if (sh) dlog('shipment', { id: sh.id, status: sh.status, substatus: sh.substatus, logistic_type: sh.logistic_type });
+    return sh;
+  } catch (e) { dlog('getShipment err', e?.message); return null; }
 }
 
 async function getHistory(access, shipmentId) {
   try {
-    const r = await axios.get(
-      `https://api.mercadolibre.com/shipments/${shipmentId}/history`,
-      {
-        headers: { Authorization: `Bearer ${access}` },
-        timeout: 10000,
-        validateStatus: s => s >= 200 && s < 500,
-      }
-    );
-    if (r.status >= 400) return [];
+    const url = `https://api.mercadolibre.com/shipments/${shipmentId}/history`;
+    const r = await axios.get(url, {
+      headers: { Authorization: `Bearer ${access}` },
+      timeout: 10000,
+      validateStatus: s => s >= 200 && s < 500,
+    });
+    if (r.status >= 400) { dlog('getHistory http', r.status, shipmentId); return []; }
     const data = r.data ?? [];
-    const raw = Array.isArray(data)
+
+    // 👇 acepta varias formas conocidas
+    let raw = Array.isArray(data)
       ? data
-      : (data.results ?? data.history ?? data.entries ?? data.events ?? []);
-    return Array.isArray(raw) ? raw : [];
-  } catch { return []; }
+      : (data.results ?? data.history ?? data.entries ?? data.events ?? data.timeline ?? []);
+
+    if (!Array.isArray(raw)) raw = [];
+    dlog('history.len', shipmentId, raw.length);
+    if (DEBUG && !raw.length) dlog('history.body', JSON.stringify(data).slice(0, 500)); // 1er tramo p/inspección
+    return raw;
+  } catch (e) { dlog('getHistory err', e?.message); return []; }
 }
 
 /**
@@ -92,6 +96,11 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     : (envioOrId?.toObject ? envioOrId.toObject() : envioOrId);
 
   if (!envio?.meli_id) { dlog('skip sin meli_id', envio?._id?.toString?.()); return; }
+
+  let raw = await getHistory(access, shipmentId);
+  if (!raw.length) {
+  dlog('no-history', { envio: envio._id?.toString?.(), shipmentId, meli_id: envio.meli_id, order: envio.venta_id_meli || envio.order_id_meli || envio.order_id || null });
+ }
 
   const last  = envio.meli_history_last_sync ? +new Date(envio.meli_history_last_sync) : 0;
   const fresh = Date.now() - last < HYDRATE_TTL_MIN * 60 * 1000;
