@@ -107,22 +107,52 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     if (!access) { dlog('skip sin access'); return; }
   }
 
-  // 1) Intento de obtener shipment con lo que hay en meli_id (puede ser tracking o shipment)
-  const sh = await getShipment(access, envio.meli_id);
-  let shipmentId = envio.meli_id;
+async function getShipmentFromOrder(access, orderId) {
+  try {
+    const r = await axios.get(
+      `https://api.mercadolibre.com/orders/${orderId}/shipments`,
+      {
+        headers: { Authorization: `Bearer ${access}` },
+        timeout: 10000,
+        validateStatus: s => s >= 200 && s < 500,
+      }
+    );
+    if (r.status >= 400) return null;
+    // Respuesta típica: { results: [{ id: <shipmentId>, ... }, ...] } o array
+    const data = r.data || {};
+    const arr = Array.isArray(data) ? data : (data.results || []);
+    return Array.isArray(arr) && arr[0]?.id ? arr[0].id : null;
+  } catch { return null; }
+}
 
-  if (sh?.id) {
-    // Si la API devuelve un objeto con id, ese es el shipment real.
-    if (`${sh.id}` !== `${envio.meli_id}`) {
-      dlog('autocorrect meli_id', { before: envio.meli_id, after: sh.id });
-      shipmentId = `${sh.id}`;
-      // Persistimos la corrección (de tracking → shipment.id)
+// 1) Intento directo con lo que hay en meli_id
+let sh = await getShipment(access, envio.meli_id);
+let shipmentId = envio.meli_id;
+
+if (sh?.id) {
+  if (`${sh.id}` !== `${envio.meli_id}`) {
+    dlog('autocorrect meli_id', { before: envio.meli_id, after: sh.id });
+    shipmentId = `${sh.id}`;
+    await Envio.updateOne({ _id: envio._id }, { $set: { meli_id: shipmentId } });
+  }
+} else {
+  // 2) Segundo intento: si tenemos order_id (venta_id_meli), resolver shipment desde la orden
+  const orderId = envio.venta_id_meli || envio.order_id_meli || envio.order_id; // ajustá al nombre real del campo
+  if (orderId) {
+    const resolved = await getShipmentFromOrder(access, orderId);
+    if (resolved) {
+      dlog('autocorrect meli_id via order', { orderId, shipmentId: resolved });
+      shipmentId = `${resolved}`;
       await Envio.updateOne({ _id: envio._id }, { $set: { meli_id: shipmentId } });
+      // y ahora sí, traemos el shipment real
+      sh = await getShipment(access, shipmentId);
+    } else {
+      dlog('order→shipment no resolvió', { orderId });
     }
   } else {
-    // No pudimos resolver shipment; seguimos con lo que hay (igual /history intentará).
-    dlog('warn: getShipment no devolvió id; continuo con meli_id tal cual');
+    dlog('no orderId para resolver shipment');
   }
+}
 
   // 2) Historial con shipmentId corregido
   let raw = await getHistory(access, shipmentId);
