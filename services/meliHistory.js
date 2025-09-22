@@ -7,7 +7,7 @@ const { getValidToken } = require('../utils/meliUtils');
 const HYDRATE_TTL_MIN = 15;
 const DEBUG = process.env.MELI_HISTORY_DEBUG === '1';
 function dlog(...a){ if (DEBUG) console.log('[meli-history]', ...a); }
-module.exports.VERSION = 'meliHistory.v3-sintetiza-desde-shipment';
+
 
 // ---------------- utils de clave/fecha ----------------
 function keyOf(h) {
@@ -310,3 +310,4 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
 }
 
 module.exports = { ensureMeliHistory };
+module.exports.VERSION = 'meliHistory.v3-sintetiza-desde-shipment';
