@@ -21,7 +21,7 @@ async function get(access, url) {
   const arg = process.argv[2];
   if (!arg) { console.error('Uso: node scripts/debug-meli-case.js <envioId|meli_id|tracking|orderId>'); process.exit(1); }
 
-  await mongoose.connect(process.env.MONGODB_URI);
+  await mongoose.connect(process.env.MONGO_URI);
 
   // 1) Buscar sin forzar cast a ObjectId
   let envio = null;
