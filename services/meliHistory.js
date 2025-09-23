@@ -179,12 +179,15 @@ async function getShipmentFromOrder(access, orderId) {
 }
 
 // Fallback extra: escanear shipment por campos/fechas conocidas
+// ---- síntesis cuando /history viene vacío (usa fechas REALES y todos los intermedios) ----
 function buildHistoryFromShipment(sh) {
   if (!sh || typeof sh !== 'object') return [];
 
   const out = [];
+  const dh = sh.date_history && typeof sh.date_history === 'object' ? sh.date_history : {};
 
-  const pushEvent = (dateVal, status, substatus, sourceKey) => {
+  // helper
+  const push = (dateVal, status, substatus, sourceKey) => {
     if (!dateVal) return;
     const dt = new Date(dateVal);
     if (isNaN(+dt)) return;
@@ -193,104 +196,74 @@ function buildHistoryFromShipment(sh) {
       estado: status,
       estado_meli: { status, substatus: substatus || '' },
       actor_name: 'MeLi',
-      source: `meli-history:shipment:${sourceKey || 'date'}`
+      source: `meli-history:shipment:${sourceKey}`
     });
   };
-
-  // helper para leer la primera key existente entre varias rutas
-  const pick = (...paths) => {
-    for (const p of paths) {
-      const segs = String(p).split('.');
-      let cur = sh;
-      for (const s of segs) cur = (cur || {})[s];
-      if (cur) return cur;
+  const pick = (...vals) => {
+    for (const v of vals) {
+      const d = v && (v.date || v); // a veces viene { date: "..." }
+      if (!d) continue;
+      const dt = new Date(d);
+      if (!isNaN(+dt)) return d;
     }
     return null;
   };
 
-  // ---- PENDIENTE / printed (venta -> preparado) ----
-  const pendingAt = pick(
-    'status_history.date_created',
-    'date_created',
-    'status_history.date_ready_to_print',
-    'date_ready_to_print',
-    'status_history.date_printed',
-    'date_printed',
-    'status_history.date_handling',
-    'date_handling'
-  );
-  if (pendingAt) pushEvent(pendingAt, 'ready_to_ship', 'printed', 'pending');
-
-  // ---- EN CAMINO (shipped / in_transit / out_for_delivery) ----
-  const shippedAt = pick(
-    'status_history.date_out_for_delivery',
-    'date_out_for_delivery',
-    'status_history.date_in_transit',
-    'date_in_transit',
-    'status_history.date_shipped',
-    'date_shipped',
-    'status_history.date_ready_for_delivery',
-    'date_ready_for_delivery',
-    'status_history.date_in_hub',
-    'date_in_hub',
-    'status_history.date_first_mile',
-    'date_first_mile'
-  );
-  if (shippedAt) pushEvent(shippedAt, 'shipped', 'out_for_delivery', 'in_transit');
-
-  // ---- ENTREGADO ----
-  const deliveredAt = pick(
-    'status_history.date_delivered',
-    'date_delivered',
-    'date_first_delivered',
-    'delivered_date'
-  );
-  if (deliveredAt) pushEvent(deliveredAt, 'delivered', '', 'delivered');
-
-  // ---- NO ENTREGADO (ausente) ----
-  const notDeliveredAt = pick(
-    'status_history.date_not_delivered',
-    'date_not_delivered',
-    'first_not_delivered',
-    'status_history.date_receiver_absent',
-    'date_receiver_absent'
-  );
-  if (notDeliveredAt) pushEvent(notDeliveredAt, 'not_delivered', 'receiver_absent', 'not_delivered');
-
-  // ---- SCAN GENÉRICO (por si algún proveedor cambia los nombres) ----
-  const scanKeys = [
-    { re: /out[_-]?for[_-]?delivery|last[_-]?mile/i, st: 'shipped', sub: 'out_for_delivery' },
-    { re: /in[_-]?transit|shipped/i, st: 'shipped', sub: '' },
-    { re: /delivered/i, st: 'delivered', sub: '' },
-    { re: /not[_-]?delivered|receiver[_-]?absent/i, st: 'not_delivered', sub: 'receiver_absent' },
-    { re: /ready[_-]?to[_-]?print|printed|handling/i, st: 'ready_to_ship', sub: 'printed' }
-  ];
-  for (const [k, v] of Object.entries(sh)) {
-    if (!v || typeof v !== 'string') continue;
-    if (!/\d{4}-\d{2}-\d{2}/.test(v)) continue; // parece una fecha
-    for (const m of scanKeys) {
-      if (m.re.test(k)) { pushEvent(v, m.st, m.sub, `scan:${k}`); break; }
-    }
-  }
-  // también escaneamos status_history si es objeto con strings
-  if (sh.status_history && typeof sh.status_history === 'object') {
-    for (const [k, v] of Object.entries(sh.status_history)) {
-      const val = v && typeof v === 'object' && v.date ? v.date : v;
-      if (!val || typeof val !== 'string') continue;
-      if (!/\d{4}-\d{2}-\d{2}/.test(val)) continue;
-      for (const m of scanKeys) {
-        if (m.re.test(k)) { pushEvent(val, m.st, m.sub, `scan:status_history.${k}`); break; }
-      }
-    }
+  // 1) Estados iniciales (pendiente/listo para envío)
+  //    Guardamos printed/ready_to_print como "ready_to_ship" con substatus correspondiente
+  const dtReadyToPrint = pick(dh.ready_to_print, dh.printed, sh.date_ready_to_print, sh.date_printed);
+  if (dtReadyToPrint) {
+    // substatus: kept (printed si corresponde)
+    const sub = dh.printed ? 'printed' : 'ready_to_print';
+    push(dtReadyToPrint, 'ready_to_ship', sub, 'ready_to_print|printed');
   }
 
-  // ---- orden + dedupe (fecha+status+sub) ----
-  out.sort((a, b) => +new Date(a.at) - +new Date(b.at));
+  // 2) Preparación / handling
+  const dtHandling = pick(dh.handling, sh.date_handling);
+  if (dtHandling) push(dtHandling, 'ready_to_ship', 'handling', 'handling');
+
+  // 3) Despachado / en tránsito
+  const dtShipped     = pick(dh.shipped, sh.date_shipped);
+  const dtInTransit  = pick(dh.in_transit, sh.date_in_transit);
+  if (dtShipped)    push(dtShipped,   'shipped', '', 'shipped');
+  if (dtInTransit)  push(dtInTransit, 'shipped', '', 'in_transit');
+
+  // 4) Salió a reparto
+  const dtOFD = pick(dh.out_for_delivery, sh.date_out_for_delivery);
+  if (dtOFD) push(dtOFD, 'shipped', 'out_for_delivery', 'out_for_delivery');
+
+  // 5) Intento fallido / ausente
+  const dtAbsent = pick(dh.receiver_absent, dh.not_delivered, sh.date_not_delivered, sh.date_receiver_absent);
+  if (dtAbsent) push(dtAbsent, 'not_delivered', 'receiver_absent', 'not_delivered|receiver_absent');
+
+  // 6) Entregado
+  const dtDelivered = pick(dh.delivered, sh.date_delivered, sh.delivered_date, sh.date_first_delivered);
+  if (dtDelivered) push(dtDelivered, 'delivered', '', 'delivered');
+
+  // 7) Cancelado
+  const dtCancelled = pick(dh.cancelled, sh.date_cancelled, sh.date_canceled);
+  if (dtCancelled) push(dtCancelled, 'cancelled', '', 'cancelled');
+
+  // 8) Fallback único si igual no encontramos nada útil
+  if (!out.length && sh.status) {
+    const updated =
+      sh.status_history?.date_updated ||
+      sh.last_updated || sh.date_last_updated || sh.date_updated ||
+      sh.date_delivered || sh.delivered_date ||
+      sh.date_shipped || sh.date_created || new Date();
+    const st  = String(sh.status).toLowerCase();
+    const sub = String(sh.substatus || '').toLowerCase();
+    push(updated, st, sub, 'status_fallback');
+  }
+
+  // Orden + dedupe estable (por fecha + status + substatus + source)
+  out.sort((a,b) => +new Date(a.at) - +new Date(b.at));
   const seen = new Set();
   const res = [];
+  const keyOf = (h) => `${+new Date(h.at)}|${(h.estado||'').toLowerCase()}|${(h.estado_meli?.substatus||'').toLowerCase()}|${(h.source||'').toLowerCase()}`;
   for (const h of out) {
-    const key = `${+new Date(h.at)}|${(h.estado_meli.status||'').toLowerCase()}|${(h.estado_meli.substatus||'').toLowerCase()}`;
-    if (!seen.has(key)) { seen.add(key); res.push(h); }
+    const k = keyOf(h);
+    if (!seen.has(k)) { seen.add(k); res.push(h); }
   }
   return res;
 }
