@@ -181,19 +181,10 @@ async function getShipmentFromOrder(access, orderId) {
 // Fallback extra: escanear shipment por campos/fechas conocidas
 function buildHistoryFromShipment(sh) {
   if (!sh || typeof sh !== 'object') return [];
+
   const out = [];
 
-  const dh = sh.date_history && typeof sh.date_history === 'object' ? sh.date_history : null;
-  const KNOWN = [
-    [/delivered/, 'delivered', ''],
-    [/not[_-]?delivered|receiver[_-]?absent|address[_-]?mismatch/, 'not_delivered', 'receiver_absent'],
-    [/out[_-]?for[_-]?delivery/, 'shipped', 'out_for_delivery'],
-    [/in[_-]?transit/, 'shipped', ''],
-    [/shipped?/, 'shipped', ''],
-    [/ready[_-]?to[_-]?print|printed/, 'ready_to_ship', 'printed'],
-    [/handling|ready[_-]?to[_-]?ship/, 'ready_to_ship', 'handling'],
-    [/cancel(l)?ed?/, 'cancelled', '']
-  ];
+  // helper para pushear un evento validando fecha
   const pushEvent = (dateVal, status, substatus, sourceKey) => {
     if (!dateVal) return;
     const dt = new Date(dateVal);
@@ -203,54 +194,57 @@ function buildHistoryFromShipment(sh) {
       estado: status,
       estado_meli: { status, substatus: substatus || '' },
       actor_name: 'MeLi',
-      source: `meli-history:shipment:${sourceKey || 'date_history'}`
+      source: `meli-history:shipment:${sourceKey || 'date'}`
     });
   };
 
-  if (dh) {
-    for (const [k, v] of Object.entries(dh)) {
-      if (!v) continue;
-      const key = String(k).toLowerCase();
-      const val = v && typeof v === 'object' && v.date ? v.date : v;
-      for (const [re, st, sub] of KNOWN) {
-        if (re.test(key)) { pushEvent(val, st, sub, key); break; }
-      }
-    }
+  // 1) PENDIENTE / printed: fecha de creación
+  // (tu UI lo mapea a "Pendiente / printed")
+  pushEvent(
+    sh.date_created || sh.status_history?.date_created,
+    'ready_to_ship',
+    'printed',
+    'date_created'
+  );
+
+  // 2) EN CAMINO: usar la mejor fecha de “shipped/in_transit/out_for_delivery”
+  const shippedAt =
+      sh.status_history?.date_shipped ||
+      sh.date_shipped ||
+      sh.status_history?.date_in_transit ||
+      sh.date_in_transit ||
+      sh.status_history?.date_handling ||
+      sh.date_handling;
+  if (shippedAt) {
+    // substatus “out_for_delivery” para que aparezca el chip
+    pushEvent(shippedAt, 'shipped', 'out_for_delivery', 'date_shipped');
   }
 
-  if (!out.length) {
-    for (const [k, v] of Object.entries(sh)) {
-      if (!v) continue;
-      const key = String(k).toLowerCase();
-      const looksLikeDate = (x) => typeof x === 'string' && /\d{4}-\d{2}-\d{2}/.test(x);
-      if (looksLikeDate(v)) {
-        for (const [re, st, sub] of KNOWN) {
-          if (re.test(key)) { pushEvent(v, st, sub, key); break; }
-        }
-      }
-    }
-  }
-
-  if (!out.length && sh.status) {
-    const updated =
-      sh.status_history?.date_updated ||
-      sh.last_updated ||
-      sh.date_last_updated ||
-      sh.date_updated ||
+  // 3) ENTREGADO (sin substatus)
+  const deliveredAt =
+      sh.status_history?.date_delivered ||
       sh.date_delivered ||
-      sh.delivered_date ||
-      sh.date_created ||
-      new Date();
-    const st = String(sh.status).toLowerCase();
-    const sub = String(sh.substatus || '').toLowerCase();
-    pushEvent(updated, st, sub, 'status_fallback');
+      sh.date_first_delivered ||
+      sh.delivered_date;
+  if (deliveredAt) {
+    pushEvent(deliveredAt, 'delivered', '', 'date_delivered');
   }
 
-  out.sort((a,b) => +new Date(a.at) - +new Date(b.at));
+  // 4) NO ENTREGADO / AUSENTE (si existiera)
+  const notDeliveredAt =
+      sh.status_history?.date_not_delivered ||
+      sh.date_not_delivered ||
+      sh.first_not_delivered;
+  if (notDeliveredAt) {
+    pushEvent(notDeliveredAt, 'not_delivered', 'receiver_absent', 'date_not_delivered');
+  }
+
+  // orden cronológico + dedupe estable
+  out.sort((a, b) => +new Date(a.at) - +new Date(b.at));
   const seen = new Set();
   const res = [];
   for (const h of out) {
-    const k = keyOf(h);
+    const k = `${+new Date(h.at)}|${(h.estado_meli.status||'').toLowerCase()}|${(h.estado_meli.substatus||'').toLowerCase()}`;
     if (!seen.has(k)) { seen.add(k); res.push(h); }
   }
   return res;
@@ -377,8 +371,8 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     : [...currentArr, ...((update.$push?.historial?.$each) || [])]
   );
 
-  // delivered más reciente (fecha real)
-  const deliveredEvt = all
+ // ¿Hay delivered en la línea de tiempo? (con su fecha real)
+  const deliveredEvt = (Array.isArray(all) ? all : [])
     .filter(h => (h?.estado_meli?.status || h?.estado || '').toString().toLowerCase() === 'delivered')
     .sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0))[0];
 
@@ -387,18 +381,22 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     .slice()
     .sort((a, b) => new Date(b.at || b.updatedAt || 0) - new Date(a.at || a.updatedAt || 0))[0];
 
-  const fallbackDate =
-    (sh && (sh.date_delivered || sh.delivered_date)) ? new Date(sh.date_delivered || sh.delivered_date)
-    : (sh && (sh.date_last_updated || sh.last_updated || sh.date_updated)) ? new Date(sh.date_last_updated || sh.last_updated || sh.date_updated)
+    const fallbackDate =
+      (sh && (sh.date_delivered || sh.date_first_delivered)) ? new Date(sh.date_delivered || sh.date_first_delivered)
+    : (sh && (sh.status_history?.date_shipped || sh.date_shipped)) ? new Date(sh.status_history?.date_shipped || sh.date_shipped)
     : (sh && sh.date_created) ? new Date(sh.date_created)
     : new Date();
 
-  const stBase  = (lastEvt?.estado_meli?.status || lastEvt?.estado || sh?.status || current?.estado_meli?.status || '').toString();
-  const subBase = (lastEvt?.estado_meli?.substatus || sh?.substatus || current?.estado_meli?.substatus || '').toString();
+   const stBase  = (lastEvt?.estado_meli?.status || lastEvt?.estado || sh?.status || envio?.estado_meli?.status || '').toString();
+   const subBase = (lastEvt?.estado_meli?.substatus || sh?.substatus || envio?.estado_meli?.substatus || '').toString();
 
-  const stFinal   = deliveredEvt ? 'delivered' : stBase;
-  const subFinal  = deliveredEvt ? (deliveredEvt?.estado_meli?.substatus || '') : subBase;
+  // Si hay delivered real, priorizamos ese estado/fecha
+  let stFinal   = deliveredEvt ? 'delivered' : stBase;
+  let subFinal  = deliveredEvt ? (deliveredEvt?.estado_meli?.substatus || '') : subBase;
   const dateFinal = deliveredEvt ? (deliveredEvt.at || fallbackDate) : (lastEvt?.at || fallbackDate);
+
+  // **Nunca** dejar substatus en delivered
+  if (String(stFinal).toLowerCase() === 'delivered') subFinal = '';
 
   const RANK = {
     pendiente: 0,
@@ -422,8 +420,8 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
 
   update.$set.estado = internoFuerte;
   update.$set.estado_meli = {
-    status: stFinal || current?.estado_meli?.status || null,
-    substatus: subFinal || current?.estado_meli?.substatus || null,
+    status: stFinal,
+    substatus: subFinal,
     updatedAt: dateFinal,
   };
 
