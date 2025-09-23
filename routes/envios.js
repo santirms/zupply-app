@@ -14,6 +14,7 @@ const { ensureMeliHistory: ensureMeliHistorySrv } = require('../services/meliHis
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
 const { getEnvioByTracking, labelByTracking } = require('../controllers/envioController');
 const ctrl   = require('../controllers/envioController');
+const WINDOW36H_MS = 36 * 60 * 60 * 1000;
 
 // ⬇️ NUEVO: middlewares
  const {
@@ -33,6 +34,37 @@ router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE'
 // ——— Meli history on-demand con hora real ———
 const HYDRATE_TTL_MIN = 15;  // re-hidratar si pasaron >15'
 
+function buildFiltroList(req) {
+  const f = {};
+  const { sender_id, estado, partido, tracking, id_venta, desde, hasta } = req.query;
+
+  if (sender_id) f.sender_id   = sender_id;
+  if (estado)     f.estado      = estado;
+  if (partido)    f.partido     = partido;
+  if (id_venta)   f.id_venta    = id_venta;
+
+  // Si buscan por tracking, NO limite de fecha (devuelve puntuales)
+  if (tracking) {
+    f.$or = [
+      { tracking: tracking },
+      { id_venta: tracking },     // por compatibilidad
+      { meli_id: tracking }
+    ];
+    return f;
+  }
+
+  // Sin rango explícito ⇒ ventana 36h (día actual + mitad del anterior)
+  if (!desde && !hasta) {
+    f.updatedAt = { $gte: new Date(Date.now() - WINDOW36H_MS) };
+  } else {
+    const r = {};
+    if (desde) r.$gte = new Date(desde);
+    if (hasta) r.$lte = new Date(hasta);
+    if (Object.keys(r).length) f.updatedAt = r;
+  }
+
+  return f;
+}
 async function getMeliAccessTokenForEnvio(envio) {
   // TODO: reemplazar por tu forma real de obtener token por cliente
   return process.env.MELI_ACCESS_TOKEN; // placeholder para probar
@@ -94,75 +126,42 @@ async function ensureMeliHistory(envioDoc) {
   await envioDoc.save();
 }
 
-// GET /envios
+// GET /envios  (LISTADO LIVIANO + 36h por defecto)
 router.get('/', async (req, res) => {
   try {
-    const { sender_id, desde, hasta } = req.query;
+    const limit = Math.min(parseInt(req.query.limit || '100', 10), 200);
+    const filtro = buildFiltroList(req);
 
-    // 1) Filtro base
-    const filtro = {};
-    if (sender_id) filtro.sender_id = sender_id;
-    if (desde || hasta) {
-      filtro.fecha = {};
-      if (desde) filtro.fecha.$gte = new Date(desde);
-      if (hasta) filtro.fecha.$lte = new Date(hasta);
+    // Paginación por cursor (updatedAt|_id) sólo cuando NO hay tracking
+    const cursor = req.query.cursor;
+    const sort = { updatedAt: -1, _id: -1 };
+    if (cursor && !req.query.tracking) {
+      const [ts, id] = cursor.split('|');
+      filtro.$or = [
+        { updatedAt: { $lt: new Date(ts) } },
+        { updatedAt: new Date(ts), _id: { $lt: id } }
+      ];
     }
 
-    // 2) Traer envíos de DB (con cliente + lista de precios)
-    const enviosDocs = await Envio.find(filtro)
-      .populate({ path: 'cliente_id', populate: { path: 'lista_precios' } });
+    const rows = await Envio.find(
+      filtro,
+      // PROYECCIÓN: sólo lo que necesita la tabla (liviano)
+      'id_venta tracking meli_id estado zona partido destinatario direccion codigo_postal updatedAt createdAt'
+    )
+    .sort(sort)
+    .limit(limit)
+    .lean();
 
-    // 3) Procesar cada envío (calcular zona de facturación, precio si falta, etc.)
-    const zonaCache = new Map(); // cache partido -> nombreZona
+    const nextCursor = (!req.query.tracking && rows.length)
+      ? `${rows[rows.length - 1].updatedAt.toISOString()}|${rows[rows.length - 1]._id}`
+      : null;
 
-    const envios = await Promise.all(enviosDocs.map(async (envioDoc) => {
-      const e = envioDoc.toObject();
-
-      // mantener partido tal cual
-      const partidoName = e.partido || '';
-
-      // zona de facturación: usar e.zona si viene; si no, derivar por partido
-      let zonaFact = e.zona || '';
-      if (!zonaFact && partidoName) {
-        if (zonaCache.has(partidoName)) {
-          zonaFact = zonaCache.get(partidoName);
-        } else {
-          const zDocByPartido = await Zona.findOne({ partidos: partidoName }, { nombre: 1 });
-          zonaFact = zDocByPartido?.nombre || '';
-          zonaCache.set(partidoName, zonaFact);
-        }
-      }
-
-      // precio si no hay / <= 0 usando lista de precios del cliente
-      if (typeof e.precio !== 'number' || e.precio <= 0) {
-        let costo = 0;
-        const cl = e.cliente_id;
-        if (cl?.lista_precios && zonaFact) {
-          const zDocByNombre = await Zona.findOne({ nombre: zonaFact }, { _id: 1 });
-          if (zDocByNombre) {
-            const zp = cl.lista_precios.zonas?.find(
-              z => String(z.zona) === String(zDocByNombre._id)
-            );
-            costo = zp?.precio ?? 0;
-          }
-        }
-        e.precio = costo;
-      }
-
-      // exponer zona (para tooltip/columna), NO tocar e.partido
-      e.zona = zonaFact;
-
-      return e;
-    }));
-
-    // 4) Responder array
-    return res.json(envios);
+    res.json({ rows, nextCursor });
   } catch (err) {
-    console.error('Error GET /envios:', err);
-    return res.status(500).json({ error: 'Error al obtener envíos' });
+    console.error('Error GET /envios (list):', err);
+    res.status(500).json({ error: 'Error al obtener envíos' });
   }
 });
-
 
 // POST /guardar-masivo
 router.post('/guardar-masivo', async (req, res) => {
@@ -527,7 +526,7 @@ router.get('/:id', async (req, res) => {
     envioDoc = await ensureCoords(envioDoc);
 
     // 🔁 hidratá historial desde MeLi (usa el servicio que escribe directo en DB)
-    try { await ensureMeliHistory(id, { force: true }); } catch (e) { console.warn('meli-history skip:', e.message); }
+    try { await ensureMeliHistory(envioDoc); } catch (e) { console.warn('meli-history skip:', e.message); }
 
     // ⬅️ RE-LEER fresco desde DB (ya con historial guardado por el servicio)
     const plain = await Envio.findById(id).populate('cliente_id').lean();
