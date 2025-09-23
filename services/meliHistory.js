@@ -15,7 +15,73 @@ function sortByAt(arr) {
     .filter(e => e && e.at)
     .sort((a, b) => new Date(a.at) - new Date(b.at));
 }
+// === Helpers de fallback ===
+function pickDate(...cands) {
+  for (const v of cands) {
+    if (!v) continue;
+    const d = new Date(v);
+    if (!isNaN(d)) return d.toISOString();
+  }
+  return null;
+}
 
+function normalizeEvt(tipo, at, extra = {}) {
+  if (!at) return null;
+  return {
+    source: 'meli-history',
+    actor_name: 'MeLi',
+    tipo,           // 'pendiente', 'listo_para_envio', 'en_camino', 'entregado', etc.
+    at,
+    ...extra,
+  };
+}
+
+// Mapea status/substatus de MeLi a tipos internos básicos
+function mapMeliStatus(status, substatus) {
+  const s = String(status || '').toLowerCase();
+  const sub = String(substatus || '').toLowerCase();
+  if (s === 'delivered') return 'entregado';
+  if (s === 'ready_to_ship') {
+    if (sub === 'ready_to_print' || sub === 'printed') return 'listo_para_envio';
+    return 'listo_para_envio';
+  }
+  if (s === 'shipped' || s === 'in_transit' || s === 'handling') return 'en_camino';
+  if (s === 'not_delivered' && sub === 'receiver_absent') return 'ausente';
+  if (s === 'cancelled') return 'cancelado';
+  if (s === 'to_be_agreed') return 'pendiente';
+  return 'pendiente';
+}
+
+// Sintetiza eventos a partir del shipment cuando el endpoint /history trae 0
+function synthesizeFromShipment(shipment, ventaDateIso /* string o null */) {
+  const evts = [];
+
+  // 1) PENDIENTE en fecha de venta si la tenemos (no duplica si ya existe afuera)
+  const ventaAt = pickDate(ventaDateIso, shipment?.date_created);
+  if (ventaAt) {
+    const e = normalizeEvt('pendiente', ventaAt);
+    if (e) evts.push(e);
+  }
+
+  // 2) Estado actual del shipment
+  const tipo = mapMeliStatus(shipment?.status, shipment?.substatus);
+
+  // Elegimos la mejor fecha disponible para el estado actual:
+  // algunas guías traen: status_history.date, last_updated, delivered_date, etc.
+  const statusAt = pickDate(
+    shipment?.status_history?.date, // si existiera
+    shipment?.delivered_date,
+    shipment?.last_updated,
+    shipment?.date_last_updated
+  );
+
+  const e2 = normalizeEvt(tipo, statusAt);
+  if (e2) evts.push(e2);
+
+  // Si quedó 'pendiente' y es el mismo instante que la venta, no agregamos dos iguales
+  // (queda a cargo del merge externo por clave tipo+at)
+  return evts.filter(Boolean);
+}
 function keyOf(h) {
   const ts  = +new Date(h?.at || h?.updatedAt || 0);
   const mst = (h?.estado_meli?.status || '').toLowerCase();
@@ -327,6 +393,15 @@ eventos = deduped;
     const add  = (update.$push?.historial?.$each) || [];
     all = [...curr, ...add];
   }
+// historyEvents: lo que trajo /shipments/{id}/history (array)
+let eventos = Array.isArray(historyEvents) ? historyEvents : [];
+
+// Si vino vacío, sintetizamos con el SHIPMENT (sin pisar lo que ya hubiera)
+if (eventos.length === 0) {
+  const ventaIso = envio?.fecha ? new Date(envio.fecha).toISOString() : null; // ajustá si tu campo de venta es otro
+  const sint = synthesizeFromShipment(shipment, ventaIso);
+  eventos = sint;
+}
 
   // Helper de fuerza de estado (no retroceder)
   const RANK = {
