@@ -817,7 +817,6 @@ try {
 const res = await fetch(`/api/envios/${envioAEliminar}`, { method: 'DELETE', cache: 'no-store' });
 if (!res.ok) throw new Error(`HTTP ${res.status}`);
 enviosCargados = enviosCargados.filter(e => e._id !== envioAEliminar);
-enviosFiltrados = enviosFiltrados.filter(e => e._id !== envioAEliminar);
 cerrarModalEliminar();
 renderTabla();
 renderPaginacion();
