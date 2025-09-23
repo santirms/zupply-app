@@ -60,113 +60,92 @@ function toIsoDayEnd(d) {
 async function main() {
   const args = parseArgs(process.argv);
 
-  const timeFieldArg = (args.timefield || '').toString().trim().toLowerCase();
-  const timeField =
+  // Campo para ventana temporal
+  const VENTA_FIELD = 'fecha'; // <-- cambialo si tu campo de venta tiene otro nombre
+  const timeFieldArg = String(args.timefield || '').trim().toLowerCase();
+  const WINDOW_FIELD =
+    timeFieldArg === 'venta'   ? VENTA_FIELD :
     timeFieldArg === 'estado'  ? 'estado_meli.updatedAt' :
     timeFieldArg === 'updated' ? 'updatedAt' :
     timeFieldArg === 'created' ? 'createdAt' :
     'estado_meli.updatedAt';
 
-  const now = Date.now();
-  const from = args.from ? toIsoDayStart(args.from) : new Date(0);
-  const to   = args.to   ? toIsoDayEnd(args.to)     : new Date(now);
+  // Ventana de fechas
+  if (!args.from || !args.to) {
+    console.error('[hydrate-history] ERROR: faltan --from y/o --to (YYYY-MM-DD)');
+    process.exit(1);
+  }
+  const from = toIsoDayStart(args.from);
+  const to   = toIsoDayEnd(args.to);
 
-  // Por defecto INCLUYE entregados. Si --delivered=false => los excluye
-  const deliveredFlag = argBool(args.delivered, true);
+  // delivered: por defecto INCLUYE entregados; si pasás --delivered=false los excluye
+  const deliveredFlag = (args.delivered === undefined)
+    ? undefined
+    : argBool(args.delivered);
 
-  // needsync: horas (si se omite => no filtra)
-  const needSyncHours = (args.needsync !== undefined && args.needsync !== null && args.needsync !== '')
-    ? Number(args.needsync)
+  // needsync: horas; si no viene, no filtra
+  const needSyncHours  = (args.needsync === undefined ? null : Number(args.needsync));
+  const needSyncCutoff = (needSyncHours && !Number.isNaN(needSyncHours) && needSyncHours > 0)
+    ? new Date(Date.now() - needSyncHours * 3600 * 1000)
     : null;
-  const needSyncCutoff = needSyncHours != null
-    ? new Date(now - needSyncHours * 60 * 60 * 1000)
-    : null;
 
-  const autoIng = argBool(args.autoingesta, false) || argBool(args['auto_ingesta'], false);
-  const poorFlag = argBool(args.poor, false);
-  const force = argBool(args.force, false);
-  const rebuild = argBool(args.rebuild, false);
+  // otros flags
+  const autoIng  = argBool(args.autoingesta, false) || argBool(args['auto_ingesta'], false);
+  const poorFlag = (args.poor === undefined ? undefined : argBool(args.poor));
+  const force    = argBool(args.force, false);
+  const rebuild  = argBool(args.rebuild, false);
 
   // Orden
-  const sortArg = (args.sort || '').toString().trim().toLowerCase();
-  let sort = {};
-  if (sortArg === 'updated_desc') sort = { [timeField]: -1 };
-  else if (sortArg === 'updated_asc') sort = { [timeField]: 1 };
-  else sort = { [timeField]: -1 }; // default
+  const sortArg = String(args.sort || '').trim().toLowerCase();
+  const sort =
+    sortArg === 'venta_asc'    ? { [VENTA_FIELD]: 1 }  :
+    sortArg === 'venta_desc'   ? { [VENTA_FIELD]: -1 } :
+    sortArg === 'updated_asc'  ? { [WINDOW_FIELD]: 1 } :
+    sortArg === 'updated_desc' ? { [WINDOW_FIELD]: -1 } :
+                                 { [WINDOW_FIELD]: -1 }; // default
 
   const limit = Math.max(0, parseInt(args.limit || '300', 10));
-  const skip  = Math.max(0, parseInt(args.skip  || '0', 10));
+  const skip  = Math.max(0, parseInt(args.skip  || '0',   10));
 
-  // Conexión
-  await mongoose.connect(MONGO_URI, {
-    serverSelectionTimeoutMS: 20000,
-    maxPoolSize: 10,
-  });
-  console.log('[hydrate-history] conectado a Mongo');
+  // Filtro base
+  const filter = {
+    meli_id: { $exists: true, $ne: null },
+    [WINDOW_FIELD]: { $gte: from, $lte: to },
+  };
 
-  // --- Diagnóstico rápido base ---
-  const withMeliId = await Envio.countDocuments({ meli_id: { $exists: true, $ne: null } });
-  const deliveredCount = await Envio.countDocuments({ estado: 'entregado' });
-
-  // === Build base filter ===
-  const baseTime = { [timeField]: { $gte: from, $lte: to } };
-
-  const diagCounts = {};
-  diagCounts.total = await Envio.countDocuments({});
-  diagCounts.inWindow = await Envio.countDocuments(baseTime);
-
-  let filter = { ...baseTime };
-
-  // autoingesta (si se pidió)
-  if (autoIng) {
-    filter = {
-      $and: [
-        filter,
-        { $or: [{ autoingesta: true }, { auto_ingesta: true }] }
-      ]
-    };
+  if (deliveredFlag === true) {
+    filter['estado_meli.status'] = 'delivered';
+  } else if (deliveredFlag === false) {
+    filter['estado_meli.status'] = { $ne: 'delivered' };
   }
-  diagCounts.afterAuto = await Envio.countDocuments(filter);
 
-  // delivered (si se pidió excluir)
-  if (!deliveredFlag) {
-    filter = { $and: [ filter, { estado: { $ne: 'entregado' } } ] };
-  }
-  diagCounts.afterDelivered = await Envio.countDocuments(filter);
+  if (autoIng) filter.autoIngesta = true;
+  if (poorFlag === true)  filter['history.poor'] = true;
+  if (poorFlag === false) filter['history.poor'] = { $ne: true };
+  if (needSyncCutoff) filter.updatedAt = { $lt: needSyncCutoff };
 
-  // needsync (si se especificó)
-  if (needSyncHours != null) {
-    const needSyncFilter = {
-      $or: [
-        { meli_history_last_sync: { $exists: false } },
-        { meli_history_last_sync: { $lte: needSyncCutoff } }
-      ]
-    };
-    filter = { $and: [ filter, needSyncFilter ] };
-  }
-  diagCounts.afterNeedSync = await Envio.countDocuments(filter);
+  // Diagnóstico
+  console.log('[hydrate-history] usando meliHistory:', require.resolve('../services/meliHistory.js'), 'meliHistory.v3-sintetiza-desde-shipment');
+  console.log('[hydrate-history] diagnóstico:');
+  console.log('  timefield       =', timeFieldArg || '(default: estado)');
+  console.log('  WINDOW_FIELD    =', WINDOW_FIELD);
+  console.log('  ventana         =', from.toISOString(), '->', to.toISOString());
+  console.log('  sort            =', JSON.stringify(sort));
+  console.log('  delivered       =', deliveredFlag);
+  console.log('  autoingesta     =', autoIng);
+  console.log('  poor            =', poorFlag);
+  console.log('  needsync(horas) =', needSyncHours);
+  console.log('  limit/skip      =', limit, '/', skip);
+  console.log('  filtro          =', JSON.stringify(filter));
 
-  // poor (opcional, default false)
-  if (poorFlag) {
-    filter = {
-      $and: [
-        filter,
-        { $or: [
-          { historial: { $exists: false } },
-          { $expr: { $lt: [ { $size: { $ifNull: [ "$historial", [] ] } }, 2 ] } }
-        ] }
-      ]
-    };
-  }
-  diagCounts.afterPoor = await Envio.countDocuments(filter);
-
+  // ===== Usá estos valores en tu query =====
+  const candidatos = await Envio.find(filter).sort(sort).skip(skip).limit(limit);
   // Candidatos
-  const candidatos = await Envio
-    .find(filter, { historial: 0 }) // no traemos historial aquí para ahorrar red
-    .sort(sort)
-    .skip(skip)
-    .limit(limit)
-    .lean();
+ const { sortField, sortDir, LIMIT, SKIP, filter } = global.__HYDRATE_ARGS__;
+const candidatos = await Envio.find(filter)
+  .sort({ [sortField]: sortDir })
+  .skip(SKIP)
+  .limit(LIMIT);
 
   // Print diagnóstico
   console.log('[hydrate-history] usando meliHistory:', require.resolve('../services/meliHistory'), 'meliHistory.v3-sintetiza-desde-shipment');
