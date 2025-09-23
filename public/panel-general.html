@@ -105,11 +105,9 @@ Limpiar
 </div>
 
 <div class="mt-4 flex justify-between items-center">
-<button id="prevBtn" onclick="cambiarPagina(-1)"
-class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Anterior</button>
-<span class="text-sm" id="infoPagina">Página 1 de 1</span>
-<button id="nextBtn" onclick="cambiarPagina(1)"
-class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Siguiente</button>
+  <span class="text-sm" id="infoPagina"></span>
+  <button id="btnMas" onclick="cargarMas()"
+    class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cargar más</button>
 </div>
 </div>
 
@@ -205,10 +203,9 @@ Guardar nota
 <script>
 window.USER_ROLE = window.USER_ROLE || 'admin';
 // =================== Estado ===================
-let enviosCargados = [];
-let enviosFiltrados = [];
-let currentPage = 1;
-const pageSize = 20;
+let enviosCargados = [];     // lista que muestra la tabla
+let nextCursor = null;       // cursor de backend para “cargar más”
+let filtrosActivos = {};     // recordamos últimos filtros enviados al server
 let mapaInstancia = null;
 
 // =================== Utils ===================
@@ -224,6 +221,75 @@ const normalize = s =>
 const cleanZona = z =>
 (z || '').replace(/\s+(N|S|E|O|NE|NO|SE|SO)$/i, '').trim();
 
+function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, partidos, cursor, limit=100 }) {
+  const p = new URLSearchParams();
+
+  // Buscar por tracking: MANDAR SOLO tracking (el backend ignora fechas y cursor)
+  if (tracking) p.set('tracking', tracking);
+
+  // Si querés filtrar por id_venta directamente (tu backend ya lo soporta)
+  if (id_venta) p.set('id_venta', id_venta);
+
+  // Rango explícito (si NO hay tracking)
+  if (!tracking) {
+    if (desde) p.set('desde', desde);
+    if (hasta) p.set('hasta', hasta);
+  }
+
+  // Estado (tu backend lo entiende si lo pasás)
+  if (estado) p.set('estado', estado);
+
+  // Partidos múltiples (si tenés endpoint que lo soporte puedes enviar múltiples)
+  if (Array.isArray(partidos) && partidos.length) {
+    // Opciones: enviar repetido ?partido=A&partido=B o como string “A,B”
+    // Voy con repetido (mejor en Express: [].concat(req.query.partido))
+    partidos.forEach(n => p.append('partido', n));
+  }
+
+  // Paginación por cursor
+  if (cursor && !tracking) p.set('cursor', cursor);
+
+  // Límite
+  p.set('limit', String(limit));
+
+  // Cache bust
+  p.set('ts', String(Date.now()));
+
+  return p;
+}
+  
+async function cargarPrimerPagina() {
+  try {
+    // sin fechas → backend aplica 36h por defecto
+    filtrosActivos = { limit: 100 }; // guardamos estado
+    const q = buildQueryParams(filtrosActivos);
+    const res = await fetch(`/api/envios?${q.toString()}`, { cache: 'no-store' });
+    const data = await res.json();
+    enviosCargados = data.rows || data || []; // compat con tu respuesta antigua
+    nextCursor = data.nextCursor || null;
+    renderTabla();
+    renderPaginacionLikeCursor();
+  } catch (e) {
+    console.error('cargarPrimerPagina error', e);
+  }
+}
+
+async function cargarMas() {
+  try {
+    if (!nextCursor) return;
+    const q = buildQueryParams({ ...filtrosActivos, cursor: nextCursor });
+    const res = await fetch(`/api/envios?${q.toString()}`, { cache: 'no-store' });
+    const data = await res.json();
+    const nuevos = data.rows || data || [];
+    enviosCargados = enviosCargados.concat(nuevos);
+    nextCursor = data.nextCursor || null;
+    renderTabla();               // re-render con lista extendida
+    renderPaginacionLikeCursor();
+  } catch (e) {
+    console.error('cargarMas error', e);
+  }
+}
+  
 // Filtro multi-partidos (Set vacío = TODOS)
 const seleccionPartidos = new Set();
 function updateCountPartidos() {
@@ -293,7 +359,7 @@ attribution: '&copy; OpenStreetMap contributors'
 L.marker([lat, lng]).addTo(mapaInstancia);
 setTimeout(() => mapaInstancia.invalidateSize(), 0);
 }
-
+  
 // =================== Resumen ===================
 async function cargarResumenDiario() {
 try {
@@ -464,87 +530,77 @@ console.error('No se pudo cargar partidos:', e);
 
 // =================== Filtros ===================
 async function aplicarFiltro() {
-const cliRaw       = (document.getElementById('filtroCliente')?.value || '');
-const trackingRaw  = (document.getElementById('filtroTracking')?.value || '');
-const idVentaRaw  = document.getElementById('filtroIdVenta')?.value  || '';
-const desde        = (document.getElementById('filtroDesde')?.value || '');
-const hasta        = (document.getElementById('filtroHasta')?.value || '');
-const estadoSel    = (document.getElementById('filtroEstado')?.value || '').toLowerCase();
+  const cliRaw       = (document.getElementById('filtroCliente')?.value || '');
+  const trackingRaw  = (document.getElementById('filtroTracking')?.value || '');
+  const idVentaRaw   = (document.getElementById('filtroIdVenta')?.value  || '');
+  const desde        = (document.getElementById('filtroDesde')?.value || '');
+  const hasta        = (document.getElementById('filtroHasta')?.value || '');
+  const estadoSel    = (document.getElementById('filtroEstado')?.value || '').toLowerCase();
 
-const cliSearch    = cliRaw.trim().toLowerCase();
-const trackingTxt  = trackingRaw.trim().toLowerCase().replace(/\s+/g,'');
-const idVentaTxt = idVentaRaw.trim().toLowerCase().replace(/\s+/g, '');
+  // Normalizaciones
+  const tracking = trackingRaw.trim();
+  const id_venta = idVentaRaw.trim();
+  const estado   = estadoSel || '';
 
-try {  
-const res = await fetch(`/api/envios?ts=${Date.now()}`, { cache: 'no-store' });
-enviosCargados = await res.json();
+  // Partidos seleccionados (por nombre “normalizado” → quiero enviar el texto original que mostró el panel)
+  const partidos = [];
+  document.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]:checked')
+    .forEach(cb => partidos.push(cb.getAttribute('data-nombre')));
 
-  
-enviosFiltrados = enviosCargados.filter(e => {
-// Cliente / sender
-const nom    = e.cliente_id?.nombre?.toLowerCase() || '';
-const sender = (e.sender_id || '').toLowerCase();
-const matchCli = !cliSearch || nom.includes(cliSearch) || sender.includes(cliSearch);
+  // Si está “Todos” marcado, ignoro lista (server = todos)
+  const all = document.getElementById('chk_all_partidos');
+  if (all && all.checked) partidos.length = 0;
 
-// Tracking (meli_id o id_venta)
-const meliStr  = (e.meli_id   ?? '').toString().toLowerCase();
-const ventaStr  = (e.id_venta ?? '').toString().toLowerCase();
-const matchTracking = !trackingTxt || meliStr.includes(trackingTxt) || ventaStr.includes(trackingTxt);
-const matchIdVenta  = !idVentaTxt || ventaStr.includes(idVentaTxt);
+  try {
+    // Guardamos filtros “activos” (para usar en cargarMas)
+    filtrosActivos = {
+      tracking: tracking || undefined,
+      id_venta: id_venta || undefined,
+      // cliente: cliRaw  (por ahora no lo mandamos: tu backend actual no filtra por nombre de cliente)
+      desde: desde || undefined,
+      hasta: hasta || undefined,
+      estado: estado || undefined,
+      partidos: partidos,
+      limit: 100
+    };
 
+    // ⚠️ IMPORTANTE:
+    // - Si hay tracking → el backend IGNORA fechas/cursor y devuelve coincidencias puntuales.
+    // - Si NO hay tracking y NO hay fechas → backend aplica 36h por defecto.
 
-// Fechas
-const fechaISO = e.fecha ? new Date(e.fecha).toISOString().split('T')[0] : '';
-const afterDesde  = !desde || fechaISO >= desde;
-const beforeHasta = !hasta || fechaISO <= hasta;
+    const q = buildQueryParams(filtrosActivos);
+    const res = await fetch(`/api/envios?${q.toString()}`, { cache: 'no-store' });
+    const data = await res.json();
 
-// Partidos (multi)
-const zonaNameNorm = normalize(e.partido || e.zona || '');
-const matchPartido = !seleccionPartidos.size || seleccionPartidos.has(zonaNameNorm);
+    enviosCargados = data.rows || data || [];
+    nextCursor = data.nextCursor || null;
 
-// Estado (unificado)
-const { key: estadoUnificado } = uiStatus(e);
-const matchEstado = !estadoSel || estadoUnificado === estadoSel;
-
-return matchCli && matchTracking && matchIdVenta && afterDesde && beforeHasta && matchPartido && matchEstado;
-
-});
-
-// Orden: nuevos primero
-enviosFiltrados.sort((a, b) => {
-const fa = a.fecha ? new Date(a.fecha).getTime() : 0;
-const fb = b.fecha ? new Date(b.fecha).getTime() : 0;
-return fb - fa;
-});
-
-currentPage = 1;
-renderTabla();
-renderPaginacion();
-} catch (err) {
-console.error('Error aplicando filtro:', err);
-}
+    renderTabla();
+    renderPaginacionLikeCursor();
+  } catch (err) {
+    console.error('Error aplicando filtro:', err);
+  }
 }
 
-function limpiarFiltros() {
-document.getElementById('filtroCliente').value = '';
-document.getElementById('filtroTracking').value = '';
-document.getElementById('filtroDesde').value = '';
-document.getElementById('filtroHasta').value = '';
-document.getElementById('filtroEstado').value = '';
+async function limpiarFiltros() {
+  document.getElementById('filtroCliente').value = '';
+  document.getElementById('filtroTracking').value = '';
+  document.getElementById('filtroIdVenta').value = '';
+  document.getElementById('filtroDesde').value = '';
+  document.getElementById('filtroHasta').value = '';
+  document.getElementById('filtroEstado').value = '';
 
-// Restaurar "Todos" en partidos
-seleccionPartidos.clear();
-const all = document.getElementById('chk_all_partidos');
-if (all) all.checked = true;
-document
-.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]')
-.forEach(cb => (cb.checked = false));
-updateCountPartidos();
+  // Restaurar “Todos” en partidos
+  seleccionPartidos.clear();
+  const all = document.getElementById('chk_all_partidos');
+  if (all) all.checked = true;
+  document
+    .querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]')
+    .forEach(cb => (cb.checked = false));
+  updateCountPartidos();
 
-enviosFiltrados = enviosCargados.slice().sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-currentPage = 1;
-renderTabla();
-renderPaginacion();
+  // Volver a la ventana por defecto (36h)
+  await cargarPrimerPagina();
 }
 
 // =================== Tabla / Paginación ===================
@@ -565,7 +621,7 @@ function renderTabla() {
   const page = enviosFiltrados.slice(start, start + pageSize);
 
   page.forEach(e => {
-    const fecha = e.fecha ? new Date(e.fecha).toLocaleString() : '-';
+    const fecha = new Date(e.updatedAt || e.fecha || e.createdAt || Date.now()).toLocaleString();
 
     // Estado (badge + substatus)
     const { key: eKey, label: eLabel, substatus } = uiStatus(e);
@@ -1049,7 +1105,7 @@ if (e.key === 'Escape') { cerrarModalDetalle(); cerrarModalEliminar(); }
 });
 
 cargarResumenDiario();
-cargarPartidos().then(() => aplicarFiltro());
+cargarPartidos().then(() => cargarPrimerPagina()); // 36h por defecto
 });
 
 async function forceSyncMeli(meli_id) {
