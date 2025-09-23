@@ -9,6 +9,63 @@ const DEBUG = process.env.MELI_HISTORY_DEBUG === '1';
 function dlog(...a){ if (DEBUG) console.log('[meli-history]', ...a); }
 
 // ---------------------------- helpers ----------------------------
+// --- Tracking: mapea checkpoints a nuestro esquema ---
+function mapFromTracking(tk) {
+  const out = [];
+  if (!tk) return out;
+
+  // distintas variantes que devuelve MeLi
+  const items = Array.isArray(tk.history) ? tk.history
+              : Array.isArray(tk.events) ? tk.events
+              : Array.isArray(tk.checkpoints) ? tk.checkpoints
+              : [];
+
+  const push = (dateVal, status, substatus, sourceKey) => {
+    if (!dateVal) return;
+    const dt = new Date(dateVal);
+    if (isNaN(+dt)) return;
+    out.push({
+      at: dt,
+      estado: status,
+      estado_meli: { status, substatus: substatus || '' },
+      actor_name: 'MeLi',
+      source: `meli-history:tracking:${sourceKey}`
+    });
+  };
+
+  for (const it of items) {
+    const when = it.date || it.status_date || it.updated_at || it.created_at;
+    const raw  = String(it.status || it.description || it.detail || '').toLowerCase();
+
+    let status = null, sub = '';
+    if (/out[_\s-]?for[_\s-]?delivery|reparto/.test(raw)) {
+      status = 'shipped'; sub = 'out_for_delivery';
+    } else if (/in[_\s-]?transit|transit|camino/.test(raw)) {
+      status = 'shipped'; sub = '';
+    } else if (/delivered|entregado/.test(raw)) {
+      status = 'delivered'; sub = '';
+    } else if (/not[_\s-]?delivered|receiver[_\s-]?absent|ausente/.test(raw)) {
+      status = 'not_delivered'; sub = 'receiver_absent';
+    } else if (/cancel/.test(raw)) {
+      status = 'cancelled'; sub = '';
+    }
+
+    if (status) push(when, status, sub, raw || 'checkpoint');
+  }
+
+  // orden + dedupe
+  out.sort((a,b) => +new Date(a.at) - +new Date(b.at));
+  const seen = new Set();
+  const res = [];
+  const key = h => `${+new Date(h.at)}|${(h.estado||'').toLowerCase()}|${(h.estado_meli?.substatus||'').toLowerCase()}|${(h.source||'').toLowerCase()}`;
+  for (const h of out) {
+    const k = key(h);
+    if (!seen.has(k)) { seen.add(k); res.push(h); }
+  }
+  return res;
+}
+
+
 function sortByAt(arr) {
   return (Array.isArray(arr) ? arr : [])
     .filter(e => e && e.at)
@@ -159,6 +216,23 @@ async function getHistory(access, shipmentId) {
       : (data.results ?? data.history ?? data.entries ?? data.events ?? []);
     return Array.isArray(raw) ? raw : [];
   } catch { return []; }
+}
+
+async function getTracking(access, shipmentId) {
+  try {
+    const r = await axios.get(
+      `https://api.mercadolibre.com/shipments/${shipmentId}/tracking`,
+      {
+        headers: { Authorization: `Bearer ${access}` },
+        timeout: 10000,
+        validateStatus: s => s >= 200 && s < 500,
+      }
+    );
+    if (r.status >= 400) return null;
+    return r.data || null;
+  } catch {
+    return null;
+  }
 }
 
 async function getShipmentFromOrder(access, orderId) {
@@ -349,6 +423,30 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     }
   }
 
+  // Intento extra: TRACKING para completar intermedios
+try {
+  const needOFD = !mapped.some(h => (h.estado_meli?.status === 'shipped' && h.estado_meli?.substatus === 'out_for_delivery'));
+  const needShip = !mapped.some(h => h.estado_meli?.status === 'shipped');
+  if (needOFD || needShip) {
+    const tk = await getTracking(access, shipmentId);
+    const tkMapped = mapFromTracking(tk);
+    if (tkMapped.length) {
+      dlog('completo con tracking', tkMapped.length);
+      // merge + dedupe por fecha/status/sub/source
+      const all = [...mapped, ...tkMapped].sort((a,b) => +new Date(a.at) - +new Date(b.at));
+      const seen = new Set();
+      const res = [];
+      const key = h => `${+new Date(h.at)}|${(h.estado||'').toLowerCase()}|${(h.estado_meli?.substatus||'').toLowerCase()}|${(h.source||'').toLowerCase()}`;
+      for (const h of all) {
+        const k = key(h);
+        if (!seen.has(k)) { seen.add(k); res.push(h); }
+      }
+      mapped = res;
+    }
+  }
+} catch (e) {
+  dlog('tracking merge error', e?.message || e);
+}
   // Mezcla con historial actual y dedupe
   const current = (await Envio.findById(envio._id).select('historial estado estado_meli').lean()) || {};
   const currentArr = Array.isArray(current.historial) ? current.historial : [];
