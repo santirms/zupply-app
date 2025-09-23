@@ -14,7 +14,7 @@ const { ensureMeliHistory: ensureMeliHistorySrv } = require('../services/meliHis
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
 const { getEnvioByTracking, labelByTracking } = require('../controllers/envioController');
 const ctrl   = require('../controllers/envioController');
-const WINDOW36H_MS = 36 * 60 * 60 * 1000;
+
 
 // ⬇️ NUEVO: middlewares
  const {
@@ -33,6 +33,9 @@ router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE'
 
 // ——— Meli history on-demand con hora real ———
 const HYDRATE_TTL_MIN = 15;  // re-hidratar si pasaron >15'
+
+const WINDOW36H_MS = 36 * 60 * 60 * 1000;
+const TIME_FIELD = 'fecha'; // <— usar "fecha" si no tenés timestamps
 
 function buildFiltroList(req) {
   const f = {};
@@ -55,12 +58,12 @@ function buildFiltroList(req) {
 
   // Sin rango explícito ⇒ ventana 36h (día actual + mitad del anterior)
   if (!desde && !hasta) {
-    f.updatedAt = { $gte: new Date(Date.now() - WINDOW36H_MS) };
+    if (!desde && !hasta) f[TIME_FIELD] = { $gte: new Date(Date.now() - WINDOW36H_MS) };
   } else {
     const r = {};
-    if (desde) r.$gte = new Date(desde);
-    if (hasta) r.$lte = new Date(hasta);
-    if (Object.keys(r).length) f.updatedAt = r;
+    if (desde) r.$gte = new Date(`${desde}T00:00:00-03:00`); // AR opcional
+    if (hasta) r.$lte = new Date(`${hasta}T23:59:59.999-03:00`);
+    if (Object.keys(r).length) f[TIME_FIELD] = r;
   }
 
   return f;
@@ -134,24 +137,27 @@ router.get('/', async (req, res) => {
 
     // Paginación por cursor (updatedAt|_id) sólo cuando NO hay tracking
     const cursor = req.query.cursor;
-    const sort = { updatedAt: -1, _id: -1 };
+    const sort = { [TIME_FIELD]: -1, _id: -1 };
     if (cursor && !req.query.tracking) {
       const [ts, id] = cursor.split('|');
-      filtro.$or = [
-        { updatedAt: { $lt: new Date(ts) } },
-        { updatedAt: new Date(ts), _id: { $lt: id } }
+      filtro.$or = [{ [TIME_FIELD]: { $lt: new Date(ts) } }, { [TIME_FIELD]: new Date(ts), _id: { $lt: id } }];
       ];
     }
 
     const rows = await Envio.find(
       filtro,
       // PROYECCIÓN: sólo lo que necesita la tabla (liviano)
-      'id_venta tracking meli_id estado zona partido destinatario direccion codigo_postal updatedAt createdAt'
+     'id_venta tracking meli_id estado zona partido destinatario direccion codigo_postal fecha createdAt'
     )
     .sort(sort)
     .limit(limit)
     .lean();
-
+   
+    const last = rows[rows.length - 1];
+    const nextCursor = (!req.query.tracking && last)
+     ? `${(last.fecha || last.createdAt).toISOString()}|${last._id}`
+      : null;
+   
     const nextCursor = (!req.query.tracking && rows.length)
       ? `${rows[rows.length - 1].updatedAt.toISOString()}|${rows[rows.length - 1]._id}`
       : null;
