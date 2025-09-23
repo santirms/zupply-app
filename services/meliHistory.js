@@ -289,16 +289,19 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
 
     // 3) dedupe estable por fecha+status+sub+source
     const seen = new Set();
-    const deduped = [];
-    merged
-      .slice()
-      .sort((a,b) => new Date(a.at || a.updatedAt || 0) - new Date(b.at || b.updatedAt || 0))
-      .forEach(h => {
-        const k = keyOf(h);
-        if (!seen.has(k)) { seen.add(k); deduped.push(h); }
-      });
-
-    update.$set.historial = deduped;
+ const deduped = [];
+for (const ev of eventosOrdenadosPorFecha) {
+  const prev = deduped[deduped.length - 1];
+  if (!prev || prev.status !== ev.status || prev.substatus !== ev.substatus) {
+    deduped.push(ev);
+  } else {
+    // Si son iguales y el nuevo trae fecha más precisa, conservá el más "fino"
+    if (ev.date && prev.date && ev.date !== prev.date) {
+      deduped[deduped.length - 1] = ev;
+    }
+  }
+}
+eventos = deduped;
   } else {
     // incremental
     const seen = new Set(currentArr.map(keyOf));
