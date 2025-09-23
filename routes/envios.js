@@ -141,8 +141,7 @@ router.get('/', async (req, res) => {
     if (cursor && !req.query.tracking) {
       const [ts, id] = cursor.split('|');
       filtro.$or = [{ [TIME_FIELD]: { $lt: new Date(ts) } }, { [TIME_FIELD]: new Date(ts), _id: { $lt: id } }];
-      ];
-    }
+      }
 
     const rows = await Envio.find(
       filtro,
