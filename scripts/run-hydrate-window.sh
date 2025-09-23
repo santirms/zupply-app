@@ -34,6 +34,7 @@ MELI_HISTORY_DEBUG=0 node scripts/hydrate-history.js \
   --from=$(date -u -d '7 days ago' +%F) \
   --to=$(date -u +%F) \
   --delivered=false \
-  --needsync=1 \
   --sort=updated_desc --limit=1200 --skip=0 \
   --timefield=estado
+
+  
