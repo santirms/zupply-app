@@ -9,6 +9,13 @@ const DEBUG = process.env.MELI_HISTORY_DEBUG === '1';
 function dlog(...a){ if (DEBUG) console.log('[meli-history]', ...a); }
 
 // ---------------------------- helpers ----------------------------
+// --- helper consistente para ordenar eventos por fecha ---
+function sortByAt(arr) {
+  return (Array.isArray(arr) ? arr : [])
+    .filter(e => e && e.at)
+    .sort((a, b) => new Date(a.at) - new Date(b.at));
+}
+
 function keyOf(h) {
   const ts  = +new Date(h?.at || h?.updatedAt || 0);
   const mst = (h?.estado_meli?.status || '').toLowerCase();
@@ -362,7 +369,8 @@ eventos = deduped;
   const stFinal  = deliveredEvt ? 'delivered' : stBase;
   const subFinal = deliveredEvt ? (deliveredEvt?.estado_meli?.substatus || '') : subBase;
   const dateFinal = deliveredEvt ? (deliveredEvt.at || fallbackDate) : (lastEvt?.at || fallbackDate);
-
+  const eventosOrdenadosPorFecha = sortByAt(eventos);
+  
   // Mapear a interno y NO retroceder
   const internoNuevo = mapToInterno(stFinal, subFinal);
   const internoPrev  = envio?.estado || 'pendiente';
