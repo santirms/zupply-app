@@ -184,7 +184,6 @@ function buildHistoryFromShipment(sh) {
 
   const out = [];
 
-  // helper para pushear un evento validando fecha
   const pushEvent = (dateVal, status, substatus, sourceKey) => {
     if (!dateVal) return;
     const dt = new Date(dateVal);
@@ -198,57 +197,104 @@ function buildHistoryFromShipment(sh) {
     });
   };
 
-  // 1) PENDIENTE / printed: fecha de creación
-  // (tu UI lo mapea a "Pendiente / printed")
-  pushEvent(
-    sh.date_created || sh.status_history?.date_created,
-    'ready_to_ship',
-    'printed',
-    'date_created'
+  // helper para leer la primera key existente entre varias rutas
+  const pick = (...paths) => {
+    for (const p of paths) {
+      const segs = String(p).split('.');
+      let cur = sh;
+      for (const s of segs) cur = (cur || {})[s];
+      if (cur) return cur;
+    }
+    return null;
+  };
+
+  // ---- PENDIENTE / printed (venta -> preparado) ----
+  const pendingAt = pick(
+    'status_history.date_created',
+    'date_created',
+    'status_history.date_ready_to_print',
+    'date_ready_to_print',
+    'status_history.date_printed',
+    'date_printed',
+    'status_history.date_handling',
+    'date_handling'
   );
+  if (pendingAt) pushEvent(pendingAt, 'ready_to_ship', 'printed', 'pending');
 
-  // 2) EN CAMINO: usar la mejor fecha de “shipped/in_transit/out_for_delivery”
-  const shippedAt =
-      sh.status_history?.date_shipped ||
-      sh.date_shipped ||
-      sh.status_history?.date_in_transit ||
-      sh.date_in_transit ||
-      sh.status_history?.date_handling ||
-      sh.date_handling;
-  if (shippedAt) {
-    // substatus “out_for_delivery” para que aparezca el chip
-    pushEvent(shippedAt, 'shipped', 'out_for_delivery', 'date_shipped');
+  // ---- EN CAMINO (shipped / in_transit / out_for_delivery) ----
+  const shippedAt = pick(
+    'status_history.date_out_for_delivery',
+    'date_out_for_delivery',
+    'status_history.date_in_transit',
+    'date_in_transit',
+    'status_history.date_shipped',
+    'date_shipped',
+    'status_history.date_ready_for_delivery',
+    'date_ready_for_delivery',
+    'status_history.date_in_hub',
+    'date_in_hub',
+    'status_history.date_first_mile',
+    'date_first_mile'
+  );
+  if (shippedAt) pushEvent(shippedAt, 'shipped', 'out_for_delivery', 'in_transit');
+
+  // ---- ENTREGADO ----
+  const deliveredAt = pick(
+    'status_history.date_delivered',
+    'date_delivered',
+    'date_first_delivered',
+    'delivered_date'
+  );
+  if (deliveredAt) pushEvent(deliveredAt, 'delivered', '', 'delivered');
+
+  // ---- NO ENTREGADO (ausente) ----
+  const notDeliveredAt = pick(
+    'status_history.date_not_delivered',
+    'date_not_delivered',
+    'first_not_delivered',
+    'status_history.date_receiver_absent',
+    'date_receiver_absent'
+  );
+  if (notDeliveredAt) pushEvent(notDeliveredAt, 'not_delivered', 'receiver_absent', 'not_delivered');
+
+  // ---- SCAN GENÉRICO (por si algún proveedor cambia los nombres) ----
+  const scanKeys = [
+    { re: /out[_-]?for[_-]?delivery|last[_-]?mile/i, st: 'shipped', sub: 'out_for_delivery' },
+    { re: /in[_-]?transit|shipped/i, st: 'shipped', sub: '' },
+    { re: /delivered/i, st: 'delivered', sub: '' },
+    { re: /not[_-]?delivered|receiver[_-]?absent/i, st: 'not_delivered', sub: 'receiver_absent' },
+    { re: /ready[_-]?to[_-]?print|printed|handling/i, st: 'ready_to_ship', sub: 'printed' }
+  ];
+  for (const [k, v] of Object.entries(sh)) {
+    if (!v || typeof v !== 'string') continue;
+    if (!/\d{4}-\d{2}-\d{2}/.test(v)) continue; // parece una fecha
+    for (const m of scanKeys) {
+      if (m.re.test(k)) { pushEvent(v, m.st, m.sub, `scan:${k}`); break; }
+    }
+  }
+  // también escaneamos status_history si es objeto con strings
+  if (sh.status_history && typeof sh.status_history === 'object') {
+    for (const [k, v] of Object.entries(sh.status_history)) {
+      const val = v && typeof v === 'object' && v.date ? v.date : v;
+      if (!val || typeof val !== 'string') continue;
+      if (!/\d{4}-\d{2}-\d{2}/.test(val)) continue;
+      for (const m of scanKeys) {
+        if (m.re.test(k)) { pushEvent(val, m.st, m.sub, `scan:status_history.${k}`); break; }
+      }
+    }
   }
 
-  // 3) ENTREGADO (sin substatus)
-  const deliveredAt =
-      sh.status_history?.date_delivered ||
-      sh.date_delivered ||
-      sh.date_first_delivered ||
-      sh.delivered_date;
-  if (deliveredAt) {
-    pushEvent(deliveredAt, 'delivered', '', 'date_delivered');
-  }
-
-  // 4) NO ENTREGADO / AUSENTE (si existiera)
-  const notDeliveredAt =
-      sh.status_history?.date_not_delivered ||
-      sh.date_not_delivered ||
-      sh.first_not_delivered;
-  if (notDeliveredAt) {
-    pushEvent(notDeliveredAt, 'not_delivered', 'receiver_absent', 'date_not_delivered');
-  }
-
-  // orden cronológico + dedupe estable
+  // ---- orden + dedupe (fecha+status+sub) ----
   out.sort((a, b) => +new Date(a.at) - +new Date(b.at));
   const seen = new Set();
   const res = [];
   for (const h of out) {
-    const k = `${+new Date(h.at)}|${(h.estado_meli.status||'').toLowerCase()}|${(h.estado_meli.substatus||'').toLowerCase()}`;
-    if (!seen.has(k)) { seen.add(k); res.push(h); }
+    const key = `${+new Date(h.at)}|${(h.estado_meli.status||'').toLowerCase()}|${(h.estado_meli.substatus||'').toLowerCase()}`;
+    if (!seen.has(key)) { seen.add(key); res.push(h); }
   }
   return res;
 }
+
 
 // ---------------------------- main ----------------------------
 async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = false } = {}) {
