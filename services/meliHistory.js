@@ -307,34 +307,71 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
   }
 
   // Último evento (si hay) o, en su defecto, status del shipment
-  let lastEvt = (Array.isArray(mapped) ? mapped : [])
+   // ---------- reemplazar desde acá (final de ensureMeliHistory) ----------
+  // Armamos el array "all" con el historial resultante post-merge
+  let all;
+  if (rebuild) {
+    all = update.$set.historial || [];
+  } else {
+    const curr = Array.isArray(currentArr) ? currentArr : [];
+    const add  = (update.$push?.historial?.$each) || [];
+    all = [...curr, ...add];
+  }
+
+  // Helper de fuerza de estado (no retroceder)
+  const RANK = {
+    pendiente: 0,
+    en_camino: 1,
+    no_entregado: 1,
+    comprador_ausente: 1,
+    reprogramado: 1,
+    demorado: 1,
+    cancelado: 2,
+    entregado: 3,
+  };
+  function stronger(a, b) {
+    const ra = RANK[a] ?? -1;
+    const rb = RANK[b] ?? -1;
+    return ra >= rb ? a : b;
+  }
+
+  // Último evento por fecha
+  const lastEvt = (Array.isArray(all) ? all : [])
     .slice()
-    .sort((a,b) => new Date(b.at) - new Date(a.at))[0];
+    .sort((a, b) => new Date(b.at || b.updatedAt || 0) - new Date(a.at || a.updatedAt || 0))[0];
 
-  if (!lastEvt && sh?.status) {
-    // usamos fecha de delivered/updated si existe
-    const fallbackDate =
-      sh.date_history?.delivered?.date ||
-      sh.date_delivered ||
-      sh.status_history?.date_updated ||
-      sh.last_updated ||
-      sh.date_last_updated ||
-      sh.date_updated ||
-      new Date();
-    lastEvt = {
-      at: new Date(fallbackDate),
-      estado: sh.status,
-      estado_meli: { status: sh.status, substatus: sh.substatus || '' }
-    };
-  }
+  // ¿Hay delivered en la línea de tiempo? (con su fecha real)
+  const deliveredEvt = (Array.isArray(all) ? all : [])
+    .filter(h => (h?.estado_meli?.status || h?.estado || '').toString().toLowerCase() === 'delivered')
+    .sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0))[0];
 
-  if (lastEvt || sh?.status) {
-    const st  = (lastEvt?.estado_meli?.status || lastEvt?.estado || sh?.status || '').toString();
-    const sub = (lastEvt?.estado_meli?.substatus || sh?.substatus || '').toString();
-    update.$set.estado = mapToInterno(st, sub);
-    update.$set.estado_meli = { status: st, substatus: sub, updatedAt: lastEvt?.at || new Date() };
-  }
+  // Fallback a shipment si no hay eventos
+  const fallbackDate =
+    (sh && (sh.date_delivered || sh.date_first_delivered)) ? new Date(sh.date_delivered || sh.date_first_delivered)
+    : (sh && sh.date_shipped) ? new Date(sh.date_shipped)
+    : (sh && sh.date_created) ? new Date(sh.date_created)
+    : new Date();
 
+  const stBase  = (lastEvt?.estado_meli?.status || lastEvt?.estado || sh?.status || envio?.estado_meli?.status || '').toString();
+  const subBase = (lastEvt?.estado_meli?.substatus || sh?.substatus || envio?.estado_meli?.substatus || '').toString();
+
+  // Si hay delivered real, preferimos ese estado y esa fecha
+  const stFinal  = deliveredEvt ? 'delivered' : stBase;
+  const subFinal = deliveredEvt ? (deliveredEvt?.estado_meli?.substatus || '') : subBase;
+  const dateFinal = deliveredEvt ? (deliveredEvt.at || fallbackDate) : (lastEvt?.at || fallbackDate);
+
+  // Mapear a interno y NO retroceder
+  const internoNuevo = mapToInterno(stFinal, subFinal);
+  const internoPrev  = envio?.estado || 'pendiente';
+  const internoFuerte = stronger(internoNuevo, internoPrev);
+
+  update.$set.estado = internoFuerte;
+  update.$set.estado_meli = {
+    status: stFinal,
+    substatus: subFinal,
+    updatedAt: dateFinal,
+  };
+  // ---------- reemplazar hasta acá ----------
   await Envio.updateOne({ _id: envio._id }, update);
 }
 
