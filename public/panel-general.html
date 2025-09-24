@@ -229,6 +229,7 @@ function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, p
 
   // Si querés filtrar por id_venta directamente (tu backend ya lo soporta)
   if (id_venta) p.set('id_venta', id_venta);
+  if (cliente)  p.set('cliente', cliente);
 
   // Rango explícito (si NO hay tracking)
   if (!tracking) {
@@ -556,6 +557,7 @@ async function aplicarFiltro() {
   try {
     // Guardamos filtros “activos” (para usar en cargarMas)
     filtrosActivos = {
+      cliente: cliRaw.trim() || undefined,
       tracking: tracking || undefined,
       id_venta: id_venta || undefined,
       // cliente: cliRaw  (por ahora no lo mandamos: tu backend actual no filtra por nombre de cliente)
