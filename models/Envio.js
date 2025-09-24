@@ -29,7 +29,12 @@ const envioSchema = new Schema({
    * Partido / Localidad detectado desde el CP (p.ej. "Alte. Brown", "CABA", "Lomas de Zamora")
    */
   partido:        { type: String },
-
+  
+  qr_meta: {
+  last_scan_at: { type: Date, default: null },
+  valid_until:  { type: Date, default: null },
+  last_hash:    { type: String, default: null }
+  },
   /**
    * 💰 Usar en Facturación:
    * Nombre de la zona de la lista de precios (p.ej. "Zona 1", "CABA", "Interior")
