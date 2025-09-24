@@ -86,7 +86,14 @@ function mapMeliHistory(items = []) {
     if (!sub && ['ready_to_print','printed','out_for_delivery','not_visited'].includes(st)) {
       sub = st;
     }
-
+   // Si es "not_delivered" y no hay sub, intentá inferir por mensaje (cuando viene en texto)
+   if (st === 'not_delivered' && !sub) {
+     const msg = `${e.description || e.message || ''}`.toLowerCase();
+     if (/absent|not at home|not_available|no disponible|ausente/.test(msg)) {
+       sub = 'recipient_absent';
+     }
+   }
+   
     return {
       at: new Date(e.date),      // hora real
       estado: e.status,
@@ -150,6 +157,7 @@ router.get('/', async (req, res) => {
     .sort(sort)
     .limit(limit)
     .lean();
+   .populate({ path: 'cliente_id', select: 'nombre' });
 
     const last = rows[rows.length - 1];
     const nextCursor = (!req.query.tracking && last)
