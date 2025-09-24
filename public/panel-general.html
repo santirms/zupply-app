@@ -408,7 +408,9 @@ function uiStatus(envio) {
   })[raw] || raw || 'pendiente';
 
   // --- substatus conocidos (toman prioridad) ---
-  const isAbsent   = /(receiver|buyer|recipient|client)[_\s-]?(absent|not[_\s-]?at[_\s-]?home)/.test(subRaw);
+  const isAbsent   = 
+  /(recipient|receiver|buyer|client|addressee|destinatario)[_\s-]?(absent|not[_\s-]?at[_\s-]?home|not[_\s-]?available|no[_\s-]?disponible|no[_\s-]?estaba|ausente)/.test(subRaw)
+  || subRaw === 'comprador_ausente';
   const isResched  = /resched/.test(subRaw);                // buyer_rescheduled / rescheduled
   const isSoon     = /(soon[_\s-]?deliver|arriving[_\s-]?soon)/.test(subRaw);
   const isDelay    = /(with_)?delay(ed)?/.test(subRaw);
