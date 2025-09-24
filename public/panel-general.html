@@ -636,6 +636,12 @@ function renderTabla() {
     const partidoUI = (e.partido && e.partido.trim()) ? e.partido : '-';
     const zonaFact  = (e.zona && e.zona.trim()) ? cleanZona(e.zona) : '';
 
+    function hasNotesFlag(e) {
+  // preferimos contador; si no, cae a arrays o boolean
+  return (e.notas_count > 0) ||
+         (Array.isArray(e.notas) && e.notas.length > 0) ||
+         !!e.has_notes;
+}
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="px-4 py-2">
@@ -664,6 +670,7 @@ function renderTabla() {
       <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
       <td class="px-4 py-2">${estadoHTML}</td>
       <td class="px-4 py-2">
+      ${ hasNotesFlag(e) ? `<span title="Tiene notas" class="mr-1">🚩</span>` : '' }
         <button class="text-red-600 hover:text-red-700" title="Eliminar"
                 onclick="abrirModalEliminar('${e._id}')">🗑</button>
         <button class="text-gray-600 hover:text-gray-800 mr-2" title="Notas"
