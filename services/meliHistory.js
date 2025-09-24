@@ -396,6 +396,39 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
   let raw = await getHistory(access, shipmentId);
   let mapped = mapHistory(raw);
 
+  // --- si el shipment está en un estado terminal y el history no lo trae,
+//     agregamos un evento sintético con la fecha real del shipment ---
+if (sh && sh.status) {
+  const term = new Set(['delivered', 'cancelled', 'not_delivered']);
+  const shStatus = String(sh.status).toLowerCase();
+  if (term.has(shStatus)) {
+    const lastMappedStatus = (mapped[mapped.length - 1]?.estado_meli?.status || '')
+      .toString()
+      .toLowerCase();
+
+    if (lastMappedStatus !== shStatus) {
+      // elegimos la mejor fecha disponible para ese estado final
+      const when = pickDate(
+        sh.date_delivered,
+        sh.status_history?.date_updated,
+        sh.last_updated,
+        sh.date_last_updated,
+        sh.date_updated,
+        sh.date_created
+      );
+
+      // armamos el evento en el mismo formato que mapHistory()
+      mapped.push({
+        at: new Date(when || Date.now()),
+        estado: sh.status, // dejamos el status ML crudo para consistencia con mapHistory
+        estado_meli: { status: sh.status, substatus: sh.substatus || '' },
+        actor_name: 'MeLi',
+        source: 'meli-history:shipment:terminal'
+      });
+    }
+  }
+}
+
   // Fallback si está vacío
   if (!mapped.length && sh) {
     const ventaIso = envio?.fecha ? new Date(envio.fecha).toISOString() : null; // ajustá si tu campo difiere
