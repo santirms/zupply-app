@@ -831,7 +831,7 @@ if (!res.ok) throw new Error(`HTTP ${res.status}`);
 enviosCargados = enviosCargados.filter(e => e._id !== envioAEliminar);
 cerrarModalEliminar();
 renderTabla();
-renderPaginacion();
+renderPaginacionLikeCursor();
 } catch (e) {
 console.error('Error eliminando envío:', e);
 alert('No se pudo eliminar el envío.');
