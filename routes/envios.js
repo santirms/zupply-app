@@ -200,6 +200,7 @@ router.get('/', async (req, res) => {
     .sort(sort)
     .limit(limit)
     .populate({ path: 'cliente_id', select: 'nombre' })
+    .populate({ path: 'chofer', select: 'nombre' })
     .lean();
     
     const last = rows[rows.length - 1];
