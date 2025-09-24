@@ -298,6 +298,12 @@ const el = document.getElementById('countPartidos');
 if (el) el.textContent = !seleccionPartidos.size ? '(Todos)' : `(${seleccionPartidos.size})`;
 }
 
+function hasNotesFlag(e) {
+  // preferimos contador; si no, cae a arrays o boolean
+  return (e.notas_count > 0) ||
+         (Array.isArray(e.notas) && e.notas.length > 0) ||
+         !!e.has_notes;
+  
 function hasQr(envio) {
   // preferimos valid_until; si no viene, usamos last_hash/has_qr como fallback
   const vu = envio?.qr_meta?.valid_until || envio?.qr_valid_until || envio?.qrValidUntil;
@@ -635,12 +641,7 @@ function renderTabla() {
 
     const partidoUI = (e.partido && e.partido.trim()) ? e.partido : '-';
     const zonaFact  = (e.zona && e.zona.trim()) ? cleanZona(e.zona) : '';
-
-    function hasNotesFlag(e) {
-  // preferimos contador; si no, cae a arrays o boolean
-  return (e.notas_count > 0) ||
-         (Array.isArray(e.notas) && e.notas.length > 0) ||
-         !!e.has_notes;
+ 
 }
     const tr = document.createElement('tr');
     tr.innerHTML = `
