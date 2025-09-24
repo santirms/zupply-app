@@ -35,39 +35,35 @@ router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE'
 const HYDRATE_TTL_MIN = 15;  // re-hidratar si pasaron >15'
 
 const WINDOW36H_MS = 36 * 60 * 60 * 1000;
-const TIME_FIELD = 'fecha'; // <— usar "fecha" si no tenés timestamps
+const TIME_FIELD = 'fecha'; // usamos "fecha" para ventana/sort/cursor
 
 function buildFiltroList(req) {
   const f = {};
   const { sender_id, estado, partido, tracking, id_venta, desde, hasta } = req.query;
 
-  if (sender_id) f.sender_id   = sender_id;
-  if (estado)     f.estado      = estado;
-  if (partido)    f.partido     = partido;
-  if (id_venta)   f.id_venta    = id_venta;
+  if (sender_id) f.sender_id = sender_id;
+  if (estado)     f.estado    = estado;
+  if (partido)    f.partido   = partido;
+  if (id_venta)   f.id_venta  = id_venta;
 
-  // Si buscan por tracking, NO limite de fecha (devuelve puntuales)
+  // Si buscan por tracking, NO limite de fecha
   if (tracking) {
-    f.$or = [
-      { tracking: tracking },
-      { id_venta: tracking },     // por compatibilidad
-      { meli_id: tracking }
-    ];
+    f.$or = [{ tracking }, { id_venta: tracking }, { meli_id: tracking }];
     return f;
   }
 
-  // Sin rango explícito ⇒ ventana 36h (día actual + mitad del anterior)
+  // Ventana por defecto: 36h
   if (!desde && !hasta) {
-    if (!desde && !hasta) f[TIME_FIELD] = { $gte: new Date(Date.now() - WINDOW36H_MS) };
+    f[TIME_FIELD] = { $gte: new Date(Date.now() - WINDOW36H_MS) };
   } else {
     const r = {};
-    if (desde) r.$gte = new Date(`${desde}T00:00:00-03:00`); // AR opcional
+    if (desde) r.$gte = new Date(`${desde}T00:00:00-03:00`);          // horario AR
     if (hasta) r.$lte = new Date(`${hasta}T23:59:59.999-03:00`);
     if (Object.keys(r).length) f[TIME_FIELD] = r;
   }
-
   return f;
 }
+
 async function getMeliAccessTokenForEnvio(envio) {
   // TODO: reemplazar por tu forma real de obtener token por cliente
   return process.env.MELI_ACCESS_TOKEN; // placeholder para probar
@@ -132,33 +128,32 @@ async function ensureMeliHistory(envioDoc) {
 // GET /envios  (LISTADO LIVIANO + 36h por defecto)
 router.get('/', async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit || '100', 10), 200);
+    const limit  = Math.min(parseInt(req.query.limit || '100', 10), 200);
     const filtro = buildFiltroList(req);
 
-    // Paginación por cursor (updatedAt|_id) sólo cuando NO hay tracking
+    // Paginación por cursor (fecha|_id) sólo cuando NO hay tracking
     const cursor = req.query.cursor;
-    const sort = { [TIME_FIELD]: -1, _id: -1 };
+    const sort   = { [TIME_FIELD]: -1, _id: -1 };
     if (cursor && !req.query.tracking) {
       const [ts, id] = cursor.split('|');
-      filtro.$or = [{ [TIME_FIELD]: { $lt: new Date(ts) } }, { [TIME_FIELD]: new Date(ts), _id: { $lt: id } }];
-      }
+      filtro.$or = [
+        { [TIME_FIELD]: { $lt: new Date(ts) } },
+        { [TIME_FIELD]: new Date(ts), _id: { $lt: id } }
+      ];
+    }
 
     const rows = await Envio.find(
       filtro,
-      // PROYECCIÓN: sólo lo que necesita la tabla (liviano)
-     'id_venta tracking meli_id estado zona partido destinatario direccion codigo_postal fecha createdAt'
+      // Proyección liviana para la tabla
+      'id_venta tracking meli_id estado zona partido destinatario direccion codigo_postal fecha createdAt'
     )
     .sort(sort)
     .limit(limit)
     .lean();
-   
+
     const last = rows[rows.length - 1];
     const nextCursor = (!req.query.tracking && last)
-     ? `${(last.fecha || last.createdAt).toISOString()}|${last._id}`
-      : null;
-   
-    const nextCursor = (!req.query.tracking && rows.length)
-      ? `${rows[rows.length - 1].updatedAt.toISOString()}|${rows[rows.length - 1]._id}`
+      ? `${(last.fecha || last.createdAt).toISOString()}|${last._id}`
       : null;
 
     res.json({ rows, nextCursor });
