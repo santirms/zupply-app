@@ -303,7 +303,7 @@ function hasNotesFlag(e) {
   return (e.notas_count > 0) ||
          (Array.isArray(e.notas) && e.notas.length > 0) ||
          !!e.has_notes;
-  
+ } 
 function hasQr(envio) {
   // preferimos valid_until; si no viene, usamos last_hash/has_qr como fallback
   const vu = envio?.qr_meta?.valid_until || envio?.qr_valid_until || envio?.qrValidUntil;
