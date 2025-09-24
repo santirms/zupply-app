@@ -156,53 +156,39 @@ async function ensureMeliHistory(envioDoc) {
 }
 
 // GET /envios  (LISTADO LIVIANO + 36h por defecto)
+// GET /envios (list)
 router.get('/', async (req, res) => {
   try {
     const limit  = Math.min(parseInt(req.query.limit || '100', 10), 200);
     const filtro = buildFiltroList(req);
-
-  if (req.query.cliente) {
-  const needle = String(req.query.cliente).trim();
-  if (needle) {
-    const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const rx  = new RegExp(esc, 'i');
-
-    const matches = await Cliente.find({ nombre: rx }).select('_id codigo_cliente codigo').lean();
-    const ids = matches.map(c => c._id);
-
-    const extraOr = [];
-    if (ids.length) extraOr.push({ cliente_id: { $in: ids } });
-    extraOr.push({ sender_id: rx });
-
-    // combinamos con lo que ya hubiera en el filtro
-    if (extraOr.length) {
-      if (filtro.$and) filtro.$and.push({ $or: extraOr });
-      else filtro.$and = [{ $or: extraOr }];
-    }
-  }
-}
-    // Paginación por cursor (fecha|_id) sólo cuando NO hay tracking
-    const cursor = req.query.cursor;
     const sort   = { [TIME_FIELD]: -1, _id: -1 };
-    if (cursor && !req.query.tracking) {
-      const [ts, id] = cursor.split('|');
-      filtro.$or = [
-        { [TIME_FIELD]: { $lt: new Date(ts) } },
-        { [TIME_FIELD]: new Date(ts), _id: { $lt: id } }
-      ];
-    }
 
-    const rows = await Envio.find(
-      filtro,
-      // Proyección liviana para la tabla
-      'id_venta tracking meli_id estado zona partido destinatario direccion codigo_postal fecha createdAt cliente_id'
-    )
-    .sort(sort)
-    .limit(limit)
-    .populate({ path: 'cliente_id', select: 'nombre' })
-    .populate({ path: 'chofer', select: 'nombre' })
-    .lean();
-    
+    const pipeline = [
+      { $match: filtro },
+      { $sort: sort },
+      { $limit: limit },
+      {
+        $project: {
+          id_venta: 1, tracking: 1, meli_id: 1,
+          estado: 1, zona: 1, partido: 1,
+          destinatario: 1, direccion: 1, codigo_postal: 1,
+          fecha: 1, createdAt: 1, cliente_id: 1, chofer: 1,
+          // 👇 solo un flag liviano para la 🚩
+          has_notes: { $gt: [ { $size: { $ifNull: ['$notas', []] } }, 0 ] }
+        }
+      }
+    ];
+
+    let rows = await Envio.aggregate(pipeline);
+
+    // completar nombre del cliente (y chofer si querés)
+    rows = await Cliente.populate(rows, { path: 'cliente_id', select: 'nombre' });
+    // si querés nombre de chofer y tenés el model:
+    try {
+      const Chofer = require('../models/Chofer');
+      rows = await Chofer.populate(rows, { path: 'chofer', select: 'nombre' });
+    } catch(_) {}
+
     const last = rows[rows.length - 1];
     const nextCursor = (!req.query.tracking && last)
       ? `${(last.fecha || last.createdAt).toISOString()}|${last._id}`
@@ -214,6 +200,7 @@ router.get('/', async (req, res) => {
     res.status(500).json({ error: 'Error al obtener envíos' });
   }
 });
+
 
 // POST /guardar-masivo
 router.post('/guardar-masivo', async (req, res) => {
@@ -513,6 +500,18 @@ function buildTimeline(envio) {
         descripcion: h.descripcion || h.message || '',
         source: h.source || 'meli',
         actor_name: h.actor_name || ''
+      });
+    }
+  }
+ if (Array.isArray(envio.notas)) {
+    for (const n of envio.notas) {
+      t.push({
+        at: n.at || envio.fecha,
+        estado: 'nota',
+        estado_meli: null,
+        note: n.texto || '',
+        source: 'nota',
+        actor_name: n.actor_name || ''   // 👈 esto alimenta la columna “Usuario”
       });
     }
   }
