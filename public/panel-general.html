@@ -303,7 +303,8 @@ function hasNotesFlag(e) {
   return (e.notas_count > 0) ||
          (Array.isArray(e.notas) && e.notas.length > 0) ||
          !!e.has_notes;
- } 
+}
+
 function hasQr(envio) {
   // preferimos valid_until; si no viene, usamos last_hash/has_qr como fallback
   const vu = envio?.qr_meta?.valid_until || envio?.qr_valid_until || envio?.qrValidUntil;
@@ -311,7 +312,7 @@ function hasQr(envio) {
   return !!(envio?.qr_meta?.last_hash || envio?.qr_last_hash || envio?.has_qr);
 }
 
-  function qrIconButtonHtml(envioId) {
+function qrIconButtonHtml(envioId) {
   return `
     <button
       class="ml-2 inline-flex items-center gap-1 text-emerald-700 bg-emerald-100 border border-emerald-200 rounded px-1.5 py-0.5 text-[11px]"
@@ -324,9 +325,10 @@ function hasQr(envio) {
         <rect x="3" y="14" width="7" height="7" rx="1"></rect>
         <path d="M14 14h3v3h-3zM18 14h3v3h-3zM18 18h3v3h-3zM14 18h3v3h-3z"></path>
       </svg>
-      </button>`;
+    </button>`;
 }
- async function probeQrButtons() {
+
+async function probeQrButtons() {
   const slots = Array.from(document.querySelectorAll('[data-qr-probe]'));
   await Promise.all(slots.map(async slot => {
     const id = slot.getAttribute('data-qr-probe');
