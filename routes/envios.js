@@ -152,13 +152,13 @@ router.get('/', async (req, res) => {
     const rows = await Envio.find(
       filtro,
       // Proyección liviana para la tabla
-      'id_venta tracking meli_id estado zona partido destinatario direccion codigo_postal fecha createdAt'
+      'id_venta tracking meli_id estado zona partido destinatario direccion codigo_postal fecha createdAt cliente_id'
     )
     .sort(sort)
     .limit(limit)
+    .populate({ path: 'cliente_id', select: 'nombre' })
     .lean();
-   .populate({ path: 'cliente_id', select: 'nombre' });
-
+    
     const last = rows[rows.length - 1];
     const nextCursor = (!req.query.tracking && last)
       ? `${(last.fecha || last.createdAt).toISOString()}|${last._id}`
