@@ -161,6 +161,26 @@ router.get('/', async (req, res) => {
     const limit  = Math.min(parseInt(req.query.limit || '100', 10), 200);
     const filtro = buildFiltroList(req);
 
+  if (req.query.cliente) {
+  const needle = String(req.query.cliente).trim();
+  if (needle) {
+    const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rx  = new RegExp(esc, 'i');
+
+    const matches = await Cliente.find({ nombre: rx }).select('_id codigo_cliente codigo').lean();
+    const ids = matches.map(c => c._id);
+
+    const extraOr = [];
+    if (ids.length) extraOr.push({ cliente_id: { $in: ids } });
+    extraOr.push({ sender_id: rx });
+
+    // combinamos con lo que ya hubiera en el filtro
+    if (extraOr.length) {
+      if (filtro.$and) filtro.$and.push({ $or: extraOr });
+      else filtro.$and = [{ $or: extraOr }];
+    }
+  }
+}
     // Paginación por cursor (fecha|_id) sólo cuando NO hay tracking
     const cursor = req.query.cursor;
     const sort   = { [TIME_FIELD]: -1, _id: -1 };
