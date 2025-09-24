@@ -77,33 +77,56 @@ function shouldHydrate(envio) {
   return !fresh || pobre;
 }
 
+function normStr(x) { return (x || '').toString().trim().toLowerCase(); }
+
+function deriveSub(status, sub, desc) {
+  const st  = normStr(status);
+  let   sb  = normStr(sub);
+  const msg = normStr(desc);
+
+  // 1) si status ya es uno de los que el front quiere como "substatus", copialo
+  const statusActsLikeSub = new Set([
+    'ready_to_print','printed','out_for_delivery','not_visited',
+    'receiver_absent','recipient_absent','buyer_absent','buyer_not_at_home',
+    'addressee_not_available','client_not_at_home','recipient_not_at_home'
+  ]);
+  if (!sb && statusActsLikeSub.has(st)) sb = st;
+
+  // 2) si es "not_delivered" sin sub, inferí por mensaje
+  if (st === 'not_delivered' && !sb) {
+    if (/absent|not\s*at\s*home|not_available|no\s*disponible|ausente|no\s*estaba/.test(msg)) {
+      sb = 'recipient_absent';
+    }
+  }
+
+  // 3) aliases/conversiones
+  const aliases = {
+    'buyer_not_at_home': 'recipient_absent',
+    'receiver_absent': 'recipient_absent',
+    'addressee_not_available': 'recipient_absent',
+    'client_not_at_home': 'recipient_absent',
+    'recipient_not_at_home': 'recipient_absent',
+    'comprador_ausente': 'recipient_absent'
+  };
+  sb = aliases[sb] || sb;
+
+  return sb; // '' si no hay nada concluyente
+}
+
 function mapMeliHistory(items = []) {
   return items.map(e => {
-    const st  = (e.status || '').toLowerCase();
-    let sub   = (e.substatus || '').toLowerCase();
+    const status = e.status || '';
+    const sub    = deriveSub(e.status, e.substatus, e.description || e.message);
 
-    // Si ML trae estos como STATUS, copialos al substatus para que el front los muestre
-    if (!sub && ['ready_to_print','printed','out_for_delivery','not_visited'].includes(st)) {
-      sub = st;
-    }
-   // Si es "not_delivered" y no hay sub, intentá inferir por mensaje (cuando viene en texto)
-   if (st === 'not_delivered' && !sub) {
-     const msg = `${e.description || e.message || ''}`.toLowerCase();
-     if (/absent|not at home|not_available|no disponible|ausente/.test(msg)) {
-       sub = 'recipient_absent';
-     }
-   }
-   
     return {
-      at: new Date(e.date),      // hora real
-      estado: e.status,
-      estado_meli: { status: e.status, substatus: sub },
+      at: new Date(e.date),
+      estado: status,
+      estado_meli: { status, substatus: sub }, // sub ya normalizado
       actor_name: 'MeLi',
       source: 'meli-history'
     };
   });
 }
-
 
 function mergeHistorial(existing = [], incoming = []) {
   const key = h =>
