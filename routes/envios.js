@@ -163,6 +163,26 @@ router.get('/', async (req, res) => {
     const filtro = buildFiltroList(req);
     const sort   = { [TIME_FIELD]: -1, _id: -1 };
 
+   if (req.query.cliente) {
+   const needle = String(req.query.cliente).trim();
+   if (needle) {
+    // Escapamos regex para evitar chars especiales
+    const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rx  = new RegExp(esc, 'i');
+
+    // Buscamos ids de clientes por nombre
+    const clientes = await Cliente.find({ nombre: rx }).select('_id codigo_cliente sender_id').lean();
+    const ids = clientes.map(c => c._id);
+
+    // Armamos un OR que matchee cliente_id o sender_id
+    const or = [{ sender_id: rx }];
+    if (ids.length) or.push({ cliente_id: { $in: ids } });
+
+    // Combinamos sin pisar otros filtros (cursor, fechas, etc.)
+    if (filtro.$and) filtro.$and.push({ $or: or });
+    else filtro.$and = [{ $or: or }];
+  }
+}
     const pipeline = [
       { $match: filtro },
       { $sort: sort },
