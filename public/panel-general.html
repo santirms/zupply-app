@@ -282,15 +282,21 @@ async function cargarMas() {
     const res = await fetch(`/api/envios?${q.toString()}`, { cache: 'no-store' });
     const data = await res.json();
     const nuevos = data.rows || data || [];
-    enviosCargados = enviosCargados.concat(nuevos);
+
+    // 🔒 Dedupe por _id para evitar repetidos si el backend no avanzó bien el cursor
+    const seen = new Set(enviosCargados.map(e => e._id));
+    const unique = nuevos.filter(e => !seen.has(e._id));
+
+    enviosCargados = enviosCargados.concat(unique);
     nextCursor = data.nextCursor || null;
-    renderTabla();               // re-render con lista extendida
+
+    renderTabla();
     renderPaginacionLikeCursor();
   } catch (e) {
     console.error('cargarMas error', e);
   }
 }
-  
+
 // Filtro multi-partidos (Set vacío = TODOS)
 const seleccionPartidos = new Set();
 function updateCountPartidos() {
