@@ -86,18 +86,22 @@
       <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
           <div class="text-xs opacity-70">Pendientes</div>
+          <div id="kpi-pend">—</div>
           <div class="text-3xl font-semibold mt-1 tracking-tight text-amber-600">—</div>
         </div>
         <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
           <div class="text-xs opacity-70">En ruta</div>
+          <div id="kpi-ruta">—</div>
           <div class="text-3xl font-semibold mt-1 tracking-tight text-sky-600 dark:text-sky-300">—</div>
         </div>
         <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
           <div class="text-xs opacity-70">Entregados</div>
+          <div id="kpi-ent">—</div>
           <div class="text-3xl font-semibold mt-1 tracking-tight text-emerald-600 dark:text-emerald-300">—</div>
         </div>
         <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
           <div class="text-xs opacity-70">Incidencias</div>
+          <div id="kpi-inc">—</div>
           <div class="text-3xl font-semibold mt-1 tracking-tight text-rose-600 dark:text-rose-300">—</div>
         </div>
       </section>
@@ -220,6 +224,19 @@
       } catch {}
       setTimeout(tick, 1000);
     })();
+
+    (async function loadKPIs(){
+  try {
+    const r = await fetch('/api/kpis/home', { cache:'no-store' });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error('kpis_fail');
+    const set = (id, val)=>{ const el=document.getElementById(id); if(el) el.textContent=(+val||0).toLocaleString('es-AR'); };
+    set('kpi-pend', j.pendientes);
+    set('kpi-ruta', j.en_ruta);
+    set('kpi-ent',  j.entregados);
+    set('kpi-inc',  j.incidencias);
+  } catch(e){ console.warn('No se pudieron cargar los KPIs', e); }
+})();
 
     // ====== Menú usuario ======
     (function userMenu(){
