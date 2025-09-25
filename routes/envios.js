@@ -156,44 +156,67 @@ async function ensureMeliHistory(envioDoc) {
 }
 
 // GET /envios  (LISTADO LIVIANO + 36h por defecto)
-// GET /envios (list)
 router.get('/', async (req, res) => {
   try {
     const limit  = Math.min(parseInt(req.query.limit || '100', 10), 200);
-    const filtro = buildFiltroList(req);
-    const sort   = { [TIME_FIELD]: -1, _id: -1 };
+    const filtro = buildFiltroList(req); // sigue armando condiciones por 'fecha', sender_id, estado, etc.
 
-   if (req.query.cliente) {
-   const needle = String(req.query.cliente).trim();
-   if (needle) {
-    // Escapamos regex para evitar chars especiales
-    const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const rx  = new RegExp(esc, 'i');
+    // ---- Filtro por NOMBRE de cliente (y sender_id textual) ----
+    if (req.query.cliente) {
+      const needle = String(req.query.cliente).trim();
+      if (needle) {
+        const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const rx  = new RegExp(esc, 'i');
 
-    // Buscamos ids de clientes por nombre
-    const clientes = await Cliente.find({ nombre: rx }).select('_id codigo_cliente sender_id').lean();
-    const ids = clientes.map(c => c._id);
+        const clientes = await Cliente.find({ nombre: rx }).select('_id codigo_cliente sender_id').lean();
+        const ids = clientes.map(c => c._id);
 
-    // Armamos un OR que matchee cliente_id o sender_id
-    const or = [{ sender_id: rx }];
-    if (ids.length) or.push({ cliente_id: { $in: ids } });
+        const or = [{ sender_id: rx }];
+        if (ids.length) or.push({ cliente_id: { $in: ids } });
 
-    // Combinamos sin pisar otros filtros (cursor, fechas, etc.)
-    if (filtro.$and) filtro.$and.push({ $or: or });
-    else filtro.$and = [{ $or: or }];
-  }
-}
+        if (filtro.$and) filtro.$and.push({ $or: or });
+        else filtro.$and = [{ $or: or }];
+      }
+    }
+
+    // --- Cursor consistente basado en 'ts' (fecha || createdAt) ---
+    // Usamos 'ts' dentro del pipeline, así soporta docs viejos que no tengan 'fecha'
+    const sort = { ts: -1, _id: -1 };
+    const matchFilter = { ...filtro };
+
+    if (req.query.cursor && !req.query.tracking) {
+      const [tsIso, idStr] = String(req.query.cursor).split('|');
+      const ts  = new Date(tsIso);
+      const oid = new mongoose.Types.ObjectId(idStr);
+
+      const cursorCond = {
+        $or: [
+          { ts: { $lt: ts } },                  // estricto menor por timestamp
+          { ts: ts, _id: { $lt: oid } }         // desempate por _id
+        ]
+      };
+      if (matchFilter.$and) matchFilter.$and.push(cursorCond);
+      else matchFilter.$and = [cursorCond];
+    }
+
+    // --- Pipeline ---
     const pipeline = [
-      { $match: filtro },
+      // 'ts' unifica 'fecha' y 'createdAt'
+      { $addFields: { ts: { $ifNull: ['$fecha', '$createdAt'] } } },
+
+      // Si alguno no tiene 'ts', lo excluimos para que el cursor sea estable
+      { $match: { ...matchFilter, ts: { $ne: null } } },
+
       { $sort: sort },
       { $limit: limit },
       {
         $project: {
           id_venta: 1, tracking: 1, meli_id: 1,
-          estado: 1, zona: 1, partido: 1,
+          estado: 1, estado_meli: 1,
+          zona: 1, partido: 1,
           destinatario: 1, direccion: 1, codigo_postal: 1,
-          fecha: 1, createdAt: 1, cliente_id: 1, chofer: 1,
-          // 👇 solo un flag liviano para la 🚩
+          fecha: 1, createdAt: 1, ts: 1,
+          cliente_id: 1, chofer: 1,
           has_notes: { $gt: [ { $size: { $ifNull: ['$notas', []] } }, 0 ] }
         }
       }
@@ -201,18 +224,19 @@ router.get('/', async (req, res) => {
 
     let rows = await Envio.aggregate(pipeline);
 
-    // completar nombre del cliente (y chofer si querés)
+    // populate liviano
     rows = await Cliente.populate(rows, { path: 'cliente_id', select: 'nombre' });
-    // si querés nombre de chofer y tenés el model:
     try {
       const Chofer = require('../models/Chofer');
       rows = await Chofer.populate(rows, { path: 'chofer', select: 'nombre' });
-    } catch(_) {}
+    } catch (_) {}
 
-    const last = rows[rows.length - 1];
-    const nextCursor = (!req.query.tracking && last)
-      ? `${(last.fecha || last.createdAt).toISOString()}|${last._id}`
-      : null;
+    // nextCursor basado en LA MISMA clave 'ts'
+    let nextCursor = null;
+    if (!req.query.tracking && rows.length) {
+      const last = rows[rows.length - 1];
+      if (last.ts) nextCursor = `${new Date(last.ts).toISOString()}|${last._id}`;
+    }
 
     res.json({ rows, nextCursor });
   } catch (err) {
