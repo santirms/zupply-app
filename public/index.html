@@ -226,6 +226,11 @@
       setTimeout(tick, 1000);
     })();
 
+      document.addEventListener('DOMContentLoaded', () => {
+    loadKPIs();
+    setInterval(loadKPIs, 60_000);
+  });
+    
 async function loadKPIs() {
   const el = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
 
