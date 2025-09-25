@@ -6,6 +6,7 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');   // ← importa el store
 const cors = require('cors');
 const mongoose = require('mongoose');
+const kpisRouter = require('./routes/kpis');
 
 const app = express();
 
