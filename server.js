@@ -164,6 +164,7 @@ app.use('/api/listas-de-precios',require('./routes/listasDePrecios'));
 app.use('/api/partidos',         require('./routes/partidos'));
 app.use('/api/clientes',         require('./routes/clientes'));
 app.use('/users',                require('./routes/users')); // detrás del guardia global
+app.use('/api/kpis',             require('./routes/kpis'));
 
 // PANEL GENERAL DE ENVÍOS (coordinador solo lectura; ver routes/envios.js)
 app.use('/api/envios',           require('./routes/envios'));
