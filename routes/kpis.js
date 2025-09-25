@@ -115,6 +115,17 @@ router.get('/dia', async (req, res) => {
   }
 });
 
+// Exportá las funciones si las tenés definidas aparte:
+async function kpisDiaHandler(req, res) { /* …calcular y enviar {pendientes, en_ruta, entregados, incidencias}… */ }
+async function kpisDiaDebug(req, res)   { /* … */ }
+
+router.get('/home', kpisDiaHandler);
+router.get('/home/debug', kpisDiaDebug);
+
+// Rutas “originales” también disponibles:
+router.get('/dia', kpisDiaHandler);
+router.get('/dia/debug', kpisDiaDebug);
+
 /**
  * Endpoint de debug para ver qué está contando
  *  - Devuelve totales por estado dentro de “hoy” (con cortes)
