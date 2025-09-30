@@ -194,6 +194,8 @@ app.use('/partidos',             require('./routes/partidos'));
 app.use('/escanear',             require('./routes/escanear'));
 app.use('/envios',               require('./routes/envios'));
 app.use('/leer-etiquetas',       require('./routes/leerEtiquetas'));
+app.use('/facturacion',          require('./routes/facturacion'));
+
 
 /* -------------------- Estáticos privados (tras login) -------------------- */
 // Tu build/SPA del panel (si lo usás)
