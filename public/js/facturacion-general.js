@@ -81,22 +81,29 @@ async function filtrar() {
   const hasta = qs('#hasta').value;
   const clienteId = qs('#filtroCliente').value;
 
+  if (!clienteId) {
+    alert('Seleccioná un cliente para generar el preview.');
+    return;
+  }
+
   try {
-    const res = await fetch(`/envios?desde=${encodeURIComponent(desde||'')}&hasta=${encodeURIComponent(hasta||'')}`, { cache:'no-store' });
-    if (!res.ok) throw new Error('Error cargando envíos');
-    const data = await res.json();
+    const url = `/facturacion/preview?clienteId=${encodeURIComponent(clienteId)}&desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Error generando preview');
+    const { items, total } = await res.json();
 
-    envios = clienteId
-      ? data.filter(e => e.cliente_id?._id === clienteId)
-      : data;
-
+    envios = items; // ahora `envios` ya trae precio calculado, zona y partido
     pintarTabla();
+    const info = qs('#total-info');
+    const nf = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    info.textContent = `Registros: ${envios.length} · Total facturado: $ ${nf.format(total)}`;
   } catch (err) {
     console.error(err);
-    alert('No se pudieron cargar los envíos.');
+    alert('No se pudo generar el preview de facturación.');
   }
 }
 window.filtrar = filtrar;
+
 
 // ====== Render tabla + totales ======
 function pintarTabla() {
