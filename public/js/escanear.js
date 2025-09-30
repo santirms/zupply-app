@@ -1,63 +1,39 @@
-// public/js/escanear.js  (tu versión + overlay / beep / pulse / tips / fixes Android)
+// Zupply • Escáner (UI y lógica)
+// - Overlay con retícula, línea y pulso
+// - Beep + vibración
+// - Soporta cámara o lector/teclado
+// - Envia el QR crudo a /api/scan-meli (igual que antes)
+
 const qs  = s => document.querySelector(s);
 const qsa = s => Array.from(document.querySelectorAll(s));
 const DEBUG = new URLSearchParams(location.search).has('debug');
 
-let html5QrCode, scanning = false;
+let html5QrCode = null;
+let scanning = false;
 const seen = new Set();
 let failCount = 0;
 
 function dlog(...a){ if (DEBUG) console.log(...a); }
 
-// ---------- Overlay (mira + línea + pulso) ----------
-function ensureOverlayStyles() {
-  if (document.getElementById('scan-overlay-styles')) return;
-  const css = `
-  #reader { position: relative; }
-  /* forzar stacking por encima del <video> en Android */
-  .scan-overlay { --qrbox-size: 320px; position:absolute; inset:0; pointer-events:none; display:grid; place-items:center; z-index: 50; }
-  .reticle { width:var(--qrbox-size); height:var(--qrbox-size); border:2px solid rgba(255,255,255,.7); border-radius:16px; box-shadow:0 0 0 100vmax rgba(0,0,0,.35); position:relative; overflow:hidden; }
-  .reticle:before,.reticle:after{content:"";position:absolute;inset:0;border-radius:16px;border:2px solid rgba(0,255,128,.25);
-    clip-path: polygon(0 0, 14% 0, 14% 2px, 2px 2px, 2px 14%, 0 14%, 0 0,
-                       86% 0, 100% 0, 100% 14%, 98% 14%, 98% 2px, 86% 2px, 86% 0,
-                       100% 86%, 100% 100%, 86% 100%, 86% 98%, 98% 98%, 98% 86%, 100% 86%,
-                       0 86%, 0 100%, 14% 100%, 14% 98%, 2px 98%, 2px 86%, 0 86%); }
-  .scanline{position:absolute;left:0;right:0;height:2px;top:0;background:linear-gradient(to right,transparent,rgba(0,255,128,.9),transparent);animation:scan 2.4s linear infinite;}
-  @keyframes scan{0%{transform:translateY(8px);opacity:.9;}50%{transform:translateY(calc(var(--qrbox-size) - 10px));opacity:.6;}100%{transform:translateY(8px);opacity:.9;}}
-  .hit-pulse{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:60;}
-  .hit-pulse .ring{width:32px;height:32px;border:3px solid #22c55e;border-radius:999px;opacity:0;transform:scale(.2);animation:pulse .6s ease-out forwards;box-shadow:0 0 16px rgba(34,197,94,.6);}
-  @keyframes pulse{to{opacity:0;transform:scale(8);}}
-  `;
-  const style = document.createElement('style');
-  style.id = 'scan-overlay-styles';
-  style.textContent = css;
-  document.head.appendChild(style);
-}
-
-function ensureOverlay(readerEl, moveToTop = false) {
+// ---------- Overlay ----------
+function ensureOverlay(readerEl){
   if (!readerEl) return;
-  let overlay = readerEl.querySelector('.scan-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.className = 'scan-overlay';
-    overlay.innerHTML = `
+  if (!readerEl.querySelector('.scan-overlay')) {
+    const el = document.createElement('div');
+    el.className = 'scan-overlay';
+    el.innerHTML = `
       <div class="reticle"><div class="scanline"></div></div>
       <div class="hit-pulse" style="display:none"><div class="ring"></div></div>
     `;
-    readerEl.appendChild(overlay);
+    readerEl.appendChild(el);
   }
-  // Ajustar tamaño según ancho disponible
-  function updateQrboxSize(){
+  const update = ()=>{
     const max = Math.min(readerEl.clientWidth || 320, 520);
     const size = Math.round(Math.min(Math.max(max * 0.7, 240), 420));
     readerEl.style.setProperty('--qrbox-size', `${size}px`);
-  }
-  updateQrboxSize();
-  window.addEventListener('resize', updateQrboxSize);
-
-  // En Android algunos navegadores dibujan el video al tope del stacking;
-  // re-apendemos para garantizar que el overlay quede último.
-  if (moveToTop) readerEl.appendChild(overlay);
+  };
+  update();
+  window.addEventListener('resize', update);
 }
 
 function showHitPulse(readerEl){
@@ -65,68 +41,60 @@ function showHitPulse(readerEl){
   if (!pulse) return;
   pulse.style.display = 'grid';
   const ring = pulse.querySelector('.ring');
-  ring.style.animation = 'none'; void ring.offsetWidth; ring.style.animation = ''; // restart
-  setTimeout(() => (pulse.style.display = 'none'), 600);
+  ring.style.animation = 'none'; void ring.offsetWidth; ring.style.animation = '';
+  setTimeout(()=> pulse.style.display='none', 600);
 }
 
-function beep(freq = 920, ms = 120) {
+function beep(freq=920, ms=120){
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine'; osc.frequency.value = freq;
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start();
-    gain.gain.setValueAtTime(0.001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + ms/1000);
-    osc.stop(ctx.currentTime + ms/1000 + 0.02);
-    setTimeout(() => ctx.close(), ms + 100);
+  const ctx = new (window.AudioContext||window.webkitAudioContext)();
+  const osc = ctx.createOscillator(); const g = ctx.createGain();
+  osc.type='sine'; osc.frequency.value=freq; osc.connect(g); g.connect(ctx.destination);
+  osc.start(); g.gain.setValueAtTime(0.001, ctx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime+0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+ms/1000);
+  osc.stop(ctx.currentTime+ms/1000+0.02);
+  setTimeout(()=>ctx.close(), ms+120);
   } catch {}
 }
+function haptic(){ try{ if(navigator.vibrate) navigator.vibrate([60]); }catch{} }
 
-function haptic() {
-  try { if (navigator.vibrate) navigator.vibrate([60]); } catch {}
-}
-
-// ---------- Tu parsing/render original ----------
-function parseQrPayload(text) {
-  let raw;
-  try { raw = JSON.parse(text); } catch { return null; }
-
+// ---------- Parser ----------
+function parseQrPayload(text){
+  let raw; try { raw = JSON.parse(text); } catch { return null; }
   const meli_id   = raw.tracking_id || raw.id || raw.meli_id || null;
   const sender_id = (raw.sender_id ?? raw.senderId ?? '').toString() || null;
   const hash_code = raw.hash_code || raw.hashnumber || raw.hashNumber || raw.hash || null;
   const security_digit = raw.security_digit || raw.sec || null;
-
   const destinatario = raw.destinatario || raw.receiver || raw.receiver_name || null;
-  const direccion = raw.direccion
-    || [raw.street_name, raw.street_number].filter(Boolean).join(' ')
-    || raw.address
-    || null;
+  const direccion = raw.direccion || [raw.street_name, raw.street_number].filter(Boolean).join(' ')
+                  || raw.address || null;
   const codigo_postal = raw.codigo_postal || raw.zip_code || raw.zip || null;
-
   return { raw, meli_id, sender_id, hash_code, security_digit, destinatario, direccion, codigo_postal };
 }
 
-// NUEVA versión
-function renderScanCard(payload, rawStr) {
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+}
+
+// ---------- Render tarjeta ----------
+function renderScanCard(payload, rawStr){
   const list = qs('#scanList');
   const card = document.createElement('div');
-  card.className = 'bg-white p-4 rounded-lg shadow flex flex-col gap-2';
-
-  // guardamos el QR crudo para el POST
+  card.className = 'rounded-2xl border border-white/10 bg-white/[0.02] p-4';
   card.dataset.rawText = rawStr || JSON.stringify(payload.raw);
 
   card.innerHTML = `
-    <p><strong>Sender ID:</strong> ${payload.sender_id ?? '(?)'}</p>
-    <p><strong>Tracking ID:</strong> ${payload.meli_id ?? '(?)'}</p>
-    <p><strong>Hash:</strong> ${payload.hash_code ?? '(?)'}</p>
-    <p class="text-xs text-gray-500 break-all">RAW: ${escapeHtml(JSON.stringify(payload.raw))}</p>
-    <div class="mt-2 flex gap-2 items-center">
-      <button class="btn-save px-3 py-1 bg-blue-600 text-white rounded">Guardar</button>
-      <button class="btn-view-qr px-3 py-1 border rounded" disabled>Ver QR</button>
-      <span class="text-sm text-gray-500 save-status"></span>
+    <div class="text-sm grid md:grid-cols-2 gap-1">
+      <div><span class="opacity-70">Sender ID:</span> ${payload.sender_id ?? '(?)'}</div>
+      <div><span class="opacity-70">Tracking:</span> ${payload.meli_id ?? '(?)'}</div>
+      <div><span class="opacity-70">Hash:</span> ${payload.hash_code ?? '(?)'}</div>
+      <div class="opacity-60 text-xs md:col-span-2 break-all">RAW: ${escapeHtml(JSON.stringify(payload.raw))}</div>
+    </div>
+    <div class="mt-3 flex items-center gap-2">
+      <button class="btn-save bg-[#FF9800] hover:bg-[#F57C00] text-white px-4 py-2 rounded-2xl">Guardar</button>
+      <button class="btn-view-qr px-4 py-2 rounded-2xl border border-white/10 hover:bg-white/[0.06]" disabled>Ver QR</button>
+      <span class="save-status text-sm opacity-80"></span>
     </div>
   `;
   list.prepend(card);
@@ -135,49 +103,29 @@ function renderScanCard(payload, rawStr) {
   const btnView = card.querySelector('.btn-view-qr');
   const txt     = card.querySelector('.save-status');
 
-  btnSave.addEventListener('click', async () => {
-    btnSave.disabled = true;
-    txt.textContent  = 'Guardando…';
-
+  btnSave.addEventListener('click', async ()=>{
+    btnSave.disabled = true; txt.textContent = 'Guardando…';
     try {
-      // Endpoint unificado: crea/actualiza envío + adjunta PNG del QR (TTL 7d)
-      const res  = await fetch('/api/scan-meli', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch('/api/scan-meli', {
+        method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ raw_text: card.dataset.rawText })
       });
-      const data = await res.json();
+      const data = await res.json().catch(()=>null);
+      if(!res.ok || !data?.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
-      if (!res.ok || !data.ok) {
-        const msg = data?.error || `HTTP ${res.status}`;
-        throw new Error(msg);
-      }
-
-      txt.textContent = data.created
-        ? '✅ Envío creado + QR adjuntado'
-        : '✅ QR adjuntado';
-
+      txt.textContent = data.created ? '✅ Envío creado + QR adjuntado' : '✅ QR adjuntado';
       if (data.qr_url) {
         btnView.disabled = false;
-        btnView.onclick = () => window.open(data.qr_url, '_blank'); // o tu modal propio
+        btnView.onclick = ()=> window.open(data.qr_url, '_blank');
       }
-    } catch (err) {
-      console.error('Error guardando envío:', err);
-      txt.textContent = '❌ Error guardando';
-      btnSave.disabled = false;
+    } catch(e){
+      console.error(e); txt.textContent = '❌ Error guardando'; btnSave.disabled = false;
     }
   });
 }
 
-
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, (m) =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])
-  );
-}
-
 // ---------- Arranque ----------
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', async ()=>{
   const camaraContainer  = qs('#camaraContainer');
   const tecladoContainer = qs('#tecladoContainer');
   const modoRadios       = qsa('input[name="modoScan"]');
@@ -187,20 +135,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const statusText       = qs('#status');
   const inputTeclado     = qs('#scannerInput');
 
-  ensureOverlayStyles();
   ensureOverlay(reader);
 
   if (window.Html5Qrcode) {
     html5QrCode = new Html5Qrcode(reader.id);
-    dlog('html5-qrcode OK');
-  } else {
-    dlog('html5-qrcode no disponible (modo teclado/copia)');
+    dlog('html5-qrcode listo');
   }
 
-  // Cambio de modo
-  modoRadios.forEach(radio => {
-    radio.addEventListener('change', () => {
-      const cam = radio.value === 'camara' && radio.checked;
+  // Modo
+  modoRadios.forEach(r=>{
+    r.addEventListener('change', ()=>{
+      const cam = r.value==='camara' && r.checked;
       camaraContainer.classList.toggle('hidden', !cam);
       tecladoContainer.classList.toggle('hidden', cam);
       if (!cam) inputTeclado?.focus();
@@ -209,124 +154,104 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Controles cámara
+  // Cámara
   startBtn?.addEventListener('click', startScanner);
   stopBtn?.addEventListener('click', stopScanner);
 
-  // Modo lector/pegar texto
-  inputTeclado?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      const code = inputTeclado.value.trim();
-      inputTeclado.value = '';
+  // Teclado
+  inputTeclado?.addEventListener('keydown', e=>{
+    if (e.key==='Enter') {
+      const code = inputTeclado.value.trim(); inputTeclado.value='';
       if (code) onScanSuccess(code, reader, statusText);
     }
   });
 
-  // -------- Helper: elegir cámara trasera sin selector --------
-  async function pickBackCameraId() {
-    try {
+  // Helpers
+  async function pickBackCameraId(){
+    try{
       const cams = await Html5Qrcode.getCameras();
-      const back = cams.find(d => /back|environment|rear|trasera/i.test(d.label));
+      const back = cams.find(d=>/back|environment|rear|trasera/i.test(d.label));
       return (back || cams[0])?.id || null;
-    } catch { return null; }
+    }catch{ return null; }
+  }
+  function computeQrbox(w,h){
+    const max = Math.min(w, 520);
+    const size = Math.round(Math.min(Math.max(max*0.7, 240), 420));
+    return { width:size, height:size };
   }
 
-  // compute qrbox en sync con overlay
-  function computeQrbox(viewW, viewH) {
-    const max = Math.min(viewW, 520);
-    const size = Math.round(Math.min(Math.max(max * 0.7, 240), 420));
-    return { width: size, height: size };
-  }
-
-  async function startScanner() {
-    if (!html5QrCode) {
-      alert('La cámara no está disponible. Usá el modo lector.');
-      return;
-    }
+  async function startScanner(){
+    if (!html5QrCode){ alert('La cámara no está disponible. Usá el modo lector.'); return; }
     statusText.textContent = 'Iniciando cámara…';
 
-    // 1) Intentar por deviceId (trasera), 2) fallback a facingMode:environment
-    let started = false;
-    try {
+    let started=false;
+    try{
       const backId = await pickBackCameraId();
-      if (backId) {
+      if (backId){
         await html5QrCode.start(
-          { deviceId: { exact: backId } },
-          { fps: 12, qrbox: computeQrbox, aspectRatio: 1.777, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
-          (t)=>onScanSuccess(t, reader, statusText),
+          { deviceId:{ exact: backId } },
+          { fps:12, qrbox:computeQrbox, aspectRatio:1.777, experimentalFeatures:{ useBarCodeDetectorIfSupported:true } },
+          t=>onScanSuccess(t, reader, statusText),
           ()=>onScanFail(statusText)
         );
-        started = true;
+        started=true;
       }
-    } catch(e){ dlog('deviceId start fail:', e); }
+    }catch(e){ dlog('deviceId start fail', e); }
 
-    if (!started) {
-      try {
+    if (!started){
+      try{
         await html5QrCode.start(
-          { facingMode: 'environment' },
-          { fps: 12, qrbox: computeQrbox, aspectRatio: 1.777, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
-          (t)=>onScanSuccess(t, reader, statusText),
+          { facingMode:'environment' },
+          { fps:12, qrbox:computeQrbox, aspectRatio:1.777, experimentalFeatures:{ useBarCodeDetectorIfSupported:true } },
+          t=>onScanSuccess(t, reader, statusText),
           ()=>onScanFail(statusText)
         );
-        started = true;
-      } catch(e){
-        console.error('Error iniciando cámara:', e);
-        statusText.textContent = 'No se pudo iniciar la cámara. Revisá permisos del sitio.';
+        started=true;
+      }catch(e){
+        console.error('No se pudo iniciar la cámara:', e);
+        statusText.textContent = 'Revisá permisos del sitio para la cámara.';
         return;
       }
     }
 
-    scanning = true;
-    startBtn.disabled = true;
-    stopBtn.disabled  = false;
-    statusText.textContent = 'Escaneando… Tip: que el QR ocupe ~70% del recuadro.';
-    // mover overlay al tope por si el video queda encima
-    ensureOverlay(reader, true);
+    scanning=true; startBtn.disabled=true; stopBtn.disabled=false;
+    statusText.textContent='Escaneando… Tip: que el QR ocupe ~70% del recuadro.';
+    // Overlay por encima del video en algunos Android
+    ensureOverlay(reader);
   }
 
-  async function stopScanner() {
+  async function stopScanner(){
     if (!scanning || !html5QrCode) return;
-    statusText.textContent = 'Deteniendo…';
-    try { await html5QrCode.stop(); await html5QrCode.clear(); }
-    catch(e){ console.error(e); }
-    scanning = false;
-    startBtn.disabled = false;
-    stopBtn.disabled  = true;
-    statusText.textContent = 'Escáner detenido.';
+    statusText.textContent='Deteniendo…';
+    try{ await html5QrCode.stop(); await html5QrCode.clear(); }catch(e){ console.error(e); }
+    scanning=false; startBtn.disabled=false; stopBtn.disabled=true;
+    statusText.textContent='Escáner detenido.';
   }
 });
 
-// Procesamiento central + feedback visual/sonoro
-function onScanSuccess(decodedText, readerEl, statusEl) {
-  dlog('QR raw:', decodedText);
+// Procesamiento central
+function onScanSuccess(decodedText, readerEl, statusEl){
   if (seen.has(decodedText)) return;
   seen.add(decodedText);
 
-  showHitPulse(readerEl);
-  beep(940, 120);
-  haptic(); // vibración (si el dispositivo/permiso lo permite)
-  statusEl.textContent = '¡Código leído! Podés seguir escaneando.';
+  showHitPulse(readerEl); beep(940,120); haptic();
+  statusEl.textContent='¡Código leído! Podés seguir escaneando.';
 
   const payload = parseQrPayload(decodedText);
-  if (!payload) {
-    console.warn('QR no es JSON válido');
-    return;
-  }
+  if (!payload){ console.warn('QR no es JSON válido'); return; }
   renderScanCard(payload, decodedText);
 }
 
-// Tips rotativos (incluye “pliegues”/arrugas)
 const TIPS = [
   'acercá hasta que ocupe ~70% del recuadro',
   'alejalo 5–10 cm si se ve borroso',
   'incliná 10–15° para evitar reflejos',
-  'alisá la etiqueta: sin pliegues/arrugas ni cinta brillante'
+  'alisá la etiqueta: sin pliegues/arrugas ni cinta brillante',
 ];
-
-function onScanFail(statusEl) {
+function onScanFail(statusEl){
   failCount++;
   if (failCount % 60 === 0) {
-    const tip = TIPS[(failCount/60) % TIPS.length | 0];
+    const tip = TIPS[(failCount/60)%TIPS.length | 0];
     statusEl.textContent = 'Tip: ' + tip + '.';
   }
 }
