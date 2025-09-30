@@ -9,12 +9,12 @@
   <script>window.tailwind=window.tailwind||{};window.tailwind.config={darkMode:"class"};</script>
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Tema inicial: por defecto "system" -->
+  <!-- Tema inicial: system por defecto -->
   <script>
     (function(){
       try{
-        const saved=localStorage.getItem('zpl_theme'); // 'light'|'dark'|'system'
-        const prefersDark=window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const saved=localStorage.getItem('zpl_theme');
+        const prefersDark=matchMedia('(prefers-color-scheme: dark)').matches;
         const wantDark=(saved==='dark')||((!saved||saved==='system')&&prefersDark);
         document.documentElement.classList.toggle('dark',wantDark);
         if(!saved) localStorage.setItem('zpl_theme','system');
@@ -23,14 +23,9 @@
   </script>
 
   <style>
-    :root{
-      --z-primary:#F59E0B;       /* ámbar suave */
-      --z-primary-dark:#D97706;  /* hover */
-      --z-primary-fg:#111827;    /* texto sobre ámbar */
-    }
-
-    /* Overlay y animaciones del lector */
-    #reader{position:relative;}
+    :root{ --z-primary:#F59E0B; --z-primary-dark:#D97706; --z-primary-fg:#111827; }
+    /* Overlay + animaciones (mira y barrido) */
+    #reader{position:relative}
     .scan-overlay{--qrbox-size:320px;position:absolute;inset:0;pointer-events:none;display:grid;place-items:center;z-index:50}
     .reticle{width:var(--qrbox-size);height:var(--qrbox-size);border:2px solid rgba(255,255,255,.7);border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.35);position:relative;overflow:hidden}
     .reticle:before,.reticle:after{content:"";position:absolute;inset:0;border-radius:16px;border:2px solid rgba(0,255,128,.25);
@@ -42,16 +37,17 @@
     @keyframes pulse{to{opacity:0;transform:scale(8)}}
   </style>
 
-  <!-- html5-qrcode (multifuente con fallback) -->
+  <!-- html5-qrcode con fallback -->
   <script>
-    (function loadHtml5QR(){
-      const urls=['/libs/html5-qrcode.min.js','https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js','https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js'];
-      (function tryNext(i){
-        if(i>=urls.length) return console.warn('html5-qrcode NO disponible');
-        const s=document.createElement('script');
-        s.src=urls[i]; s.defer=true; s.crossOrigin='anonymous';
+    (function(){
+      const urls=['/libs/html5-qrcode.min.js',
+        'https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js',
+        'https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js'];
+      (function next(i){
+        if(i>=urls.length) return console.warn('html5-qrcode NO disp.');
+        const s=document.createElement('script'); s.src=urls[i]; s.defer=true; s.crossOrigin='anonymous';
         s.onload=()=>console.log('html5-qrcode OK ->',urls[i]);
-        s.onerror=()=>{console.warn('falló',urls[i]);tryNext(i+1);};
+        s.onerror=()=>{console.warn('falló',urls[i]);next(i+1);};
         document.head.appendChild(s);
       })(0);
     })();
@@ -61,23 +57,20 @@
 <body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
   <div class="max-w-7xl mx-auto p-4 md:p-6">
 
-    <!-- TOPBAR (sticky/translúcida) -->
+    <!-- TOPBAR -->
     <header class="sticky top-0 z-40 mb-4">
       <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
         <a href="/index.html" class="flex items-center gap-3" title="Inicio">
           <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)"><span class="text-white font-black">Z</span></div>
-          <img src="/assets/logo-zupply.svg" alt="Zupply" class="h-5 hidden sm:block" onerror="this.remove()">
           <span class="sm:hidden font-semibold tracking-wide text-amber-500">zupply</span>
+          <img src="/assets/logo-zupply.svg" class="h-5 hidden sm:block" onerror="this.remove()">
         </a>
-
         <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
         <span class="text-sm opacity-80">Escáner de paquetes</span>
 
         <div class="ml-auto flex items-center gap-2">
-          <!-- Usuario -->
           <div class="relative" id="userMenuWrap">
-            <button id="userBtn"
-              class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+            <button id="userBtn" class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
               <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
               <span id="username" class="max-w-[160px] truncate">Usuario</span>
               <span class="opacity-70">▾</span>
@@ -89,18 +82,14 @@
             </div>
           </div>
 
-          <!-- Tema -->
-          <button id="themeBtn"
-            class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 text-slate-700 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100">
-            Tema: auto
-          </button>
+          <button id="themeBtn" class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 text-slate-700 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100">Tema: auto</button>
         </div>
       </div>
     </header>
 
     <!-- CONTENIDO -->
     <main class="space-y-6">
-      <!-- Modo de entrada -->
+      <!-- Modo -->
       <section class="rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4">
         <div class="flex flex-wrap items-center gap-6">
           <label class="inline-flex items-center gap-2 text-sm">
@@ -114,11 +103,9 @@
         </div>
       </section>
 
-      <!-- Controles + Lector -->
+      <!-- Lector (sin selector/linterna) -->
       <section class="rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4">
-        <div class="flex flex-wrap items-center gap-2 mb-3">
-          <select id="selectCam" class="border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 rounded-xl px-3 py-2 min-w-[220px]"></select>
-          <button id="torchBtn" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10">Linterna</button>
+        <div class="flex items-center gap-2 mb-3">
           <div class="grow"></div>
           <button id="startBtn" class="px-4 py-2 rounded-xl font-medium shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">Iniciar cámara</button>
           <button id="stopBtn"  class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 dark:border-white/10 dark:text-slate-100 dark:bg-white/10 dark:hover:bg-white/15" disabled>Detener</button>
@@ -131,8 +118,7 @@
       <!-- Modo lector/teclado -->
       <section id="tecladoContainer" class="hidden rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4">
         <p class="text-sm opacity-80 mb-2">Enfocá el input, escaneá con tu lector (o pegá el texto del QR) y presioná Enter.</p>
-        <input id="scannerInput" class="w-full border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 rounded-xl px-3 py-2"
-          placeholder='{"tracking_id":"...","sender_id":"...","hash_code":"..."}' />
+        <input id="scannerInput" class="w-full border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 rounded-xl px-3 py-2" placeholder='{"tracking_id":"...","sender_id":"...","hash_code":"..."}' />
       </section>
 
       <!-- Resultados -->
@@ -145,54 +131,23 @@
     <footer class="py-6 text-center text-xs opacity-60">© <span id="anio"></span> Zupply</footer>
   </div>
 
-  <!-- Lógica -->
   <script src="/js/escanear.js" defer></script>
 
   <script>
-    // Año footer
-    document.getElementById('anio').textContent = new Date().getFullYear();
-
-    // User menu básico (igual que en otras pantallas)
-    (function userMenu(){
-      const btn=document.getElementById('userBtn');
-      const menu=document.getElementById('userMenu');
-      const wrap=document.getElementById('userMenuWrap');
+    // Año + user/tema (igual que el resto)
+    document.getElementById('anio').textContent=new Date().getFullYear();
+    (function(){
+      const btn=document.getElementById('userBtn'),menu=document.getElementById('userMenu'),wrap=document.getElementById('userMenuWrap');
       btn.addEventListener('click',()=>menu.classList.toggle('hidden'));
-      document.addEventListener('click',(e)=>{ if(!wrap.contains(e.target)) menu.classList.add('hidden'); });
-
-      document.getElementById('logoutBtn').addEventListener('click', async ()=>{
-        try{ await fetch('/auth/logout',{method:'POST'});}catch{}
-        try{ localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username'); }catch{}
-        location.href='/auth/login';
-      });
-
-      fetch('/me',{cache:'no-store'})
-        .then(r=>{ if(!r.ok) throw new Error('unauth'); return r.json(); })
-        .then(me=>{
-          const name=me.name||me.username||me.email||'Usuario';
-          document.getElementById('username').textContent=name;
-          try{ localStorage.setItem('zpl_username',name);}catch{}
-        })
-        .catch(()=> location.href='/auth/login');
+      document.addEventListener('click',(e)=>{if(!wrap.contains(e.target))menu.classList.add('hidden');});
+      document.getElementById('logoutBtn').addEventListener('click',async()=>{try{await fetch('/auth/logout',{method:'POST'})}catch{};localStorage.removeItem('zpl_auth');location.href='/auth/login'});
+      fetch('/me',{cache:'no-store'}).then(r=>{if(!r.ok)throw 0;return r.json()}).then(me=>{document.getElementById('username').textContent=(me.name||me.username||me.email||'Usuario')}).catch(()=>location.href='/auth/login');
     })();
-
-    // Tema: ciclo light/dark/system (default system)
-    (function themeToggle(){
-      const order=['light','dark','system'];
-      const btn=document.getElementById('themeBtn');
-      const apply=(mode)=>{
-        const prefersDark=window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const wantDark=(mode==='dark')||(mode==='system'&&prefersDark);
-        document.documentElement.classList.toggle('dark',wantDark);
-        localStorage.setItem('zpl_theme',mode);
-        btn.textContent='Tema: '+(mode==='system'?'auto':mode);
-      };
+    (function(){
+      const order=['light','dark','system']; const btn=document.getElementById('themeBtn');
+      const apply=m=>{const prefers=matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',m==='dark'||(m==='system'&&prefers));localStorage.setItem('zpl_theme',m);btn.textContent='Tema: '+(m==='system'?'auto':m);}
       apply(localStorage.getItem('zpl_theme')||'system');
-      btn.addEventListener('click',()=>{
-        const current=localStorage.getItem('zpl_theme')||'system';
-        const next=order[(order.indexOf(current)+1)%order.length];
-        apply(next);
-      });
+      btn.addEventListener('click',()=>{const c=localStorage.getItem('zpl_theme')||'system';apply(order[(order.indexOf(c)+1)%order.length]);});
     })();
   </script>
 </body>
