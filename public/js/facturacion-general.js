@@ -113,17 +113,15 @@ function pintarTabla() {
   let total = 0;
   envios.forEach(e => {
     const fecha = e.fecha ? new Date(e.fecha).toLocaleDateString('es-AR') : '-';
-    const cliente = e.cliente_id || {};
-    const codigoInt = cliente.codigo_cliente || '';
     const precioNum = typeof e.precio === 'number' ? e.precio : 0;
     total += precioNum;
 
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-slate-50 dark:hover:bg-white/10';
     tr.innerHTML = `
-      <td class="px-4 py-2">${e.id_venta || e.meli_id || ''}</td>
-      <td class="px-4 py-2">${cliente.nombre || ''}</td>
-      <td class="px-4 py-2">${codigoInt}</td>
+      <td class="px-4 py-2">${e.tracking || ''}</td>
+      <td class="px-4 py-2">${e.cliente || ''}</td>
+      <td class="px-4 py-2">${e.codigo_interno || ''}</td>
       <td class="px-4 py-2">${e.sender_id || ''}</td>
       <td class="px-4 py-2">${e.partido || ''}</td>
       <td class="px-4 py-2 text-right">$${precioNum.toFixed(2)}</td>
@@ -136,6 +134,7 @@ function pintarTabla() {
   const nf = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   info.textContent = `Registros: ${envios.length} · Total facturado: $ ${nf.format(total)}`;
 }
+
 
 // ====== Exportar a Excel (.xlsx) con autofiltros ======
 function exportarExcel() {
