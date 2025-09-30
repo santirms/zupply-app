@@ -1,178 +1,198 @@
 <!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Zupply • Escáner de Paquetes</title>
+  <title>Zupply | Escáner de Paquetes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Tailwind (dark por clase) -->
+  <script>window.tailwind=window.tailwind||{};window.tailwind.config={darkMode:"class"};</script>
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Carga html5-qrcode con fallback -->
+  <!-- Tema inicial: por defecto "system" -->
   <script>
-    (function loadHtml5QR() {
-      const urls = [
-        "/libs/html5-qrcode.min.js",
-        "https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js",
-        "https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js",
-      ];
-      (function tryNext(i){
-        if(i>=urls.length) return console.warn("html5-qrcode no disponible");
-        const s=document.createElement("script");
-        s.defer=true; s.crossOrigin="anonymous"; s.src=urls[i];
-        s.onload=()=>console.log("html5-qrcode OK", urls[i]);
-        s.onerror=()=>{ console.warn("falló", urls[i]); tryNext(i+1); };
-        document.head.appendChild(s);
-      })(0);
+    (function(){
+      try{
+        const saved=localStorage.getItem('zpl_theme'); // 'light'|'dark'|'system'
+        const prefersDark=window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark=(saved==='dark')||((!saved||saved==='system')&&prefersDark);
+        document.documentElement.classList.toggle('dark',wantDark);
+        if(!saved) localStorage.setItem('zpl_theme','system');
+      }catch{}
     })();
   </script>
 
   <style>
-    /* Overlay de ayuda */
-    #reader { position: relative; }
-    .scan-overlay{
-      --qrbox-size: 320px;
-      position:absolute; inset:0; pointer-events:none;
-      display:grid; place-items:center; z-index:50;
+    :root{
+      --z-primary:#F59E0B;       /* ámbar suave */
+      --z-primary-dark:#D97706;  /* hover */
+      --z-primary-fg:#111827;    /* texto sobre ámbar */
     }
-    .reticle{
-      width:var(--qrbox-size); height:var(--qrbox-size);
-      border:2px solid rgba(255,255,255,.7); border-radius:16px;
-      box-shadow:0 0 0 100vmax rgba(0,0,0,.35); position:relative; overflow:hidden;
-    }
-    .reticle:after{
-      content:""; position:absolute; inset:0; border-radius:16px; border:2px solid rgba(0,255,128,.25);
-      clip-path: polygon(0 0, 14% 0, 14% 2px, 2px 2px, 2px 14%, 0 14%, 0 0,
-                         86% 0, 100% 0, 100% 14%, 98% 14%, 98% 2px, 86% 2px, 86% 0,
-                         100% 86%, 100% 100%, 86% 100%, 86% 98%, 98% 98%, 98% 86%, 100% 86%,
-                         0 86%, 0 100%, 14% 100%, 14% 98%, 2px 98%, 2px 86%, 0 86%);
-    }
-    .scanline{position:absolute;left:0;right:0;height:2px;top:0;
-      background:linear-gradient(to right,transparent,rgba(0,255,128,.9),transparent);
-      animation:scan 2.4s linear infinite;}
-    @keyframes scan{0%{transform:translateY(8px)}50%{transform:translateY(calc(var(--qrbox-size) - 10px))}100%{transform:translateY(8px)}}
+
+    /* Overlay y animaciones del lector */
+    #reader{position:relative;}
+    .scan-overlay{--qrbox-size:320px;position:absolute;inset:0;pointer-events:none;display:grid;place-items:center;z-index:50}
+    .reticle{width:var(--qrbox-size);height:var(--qrbox-size);border:2px solid rgba(255,255,255,.7);border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.35);position:relative;overflow:hidden}
+    .reticle:before,.reticle:after{content:"";position:absolute;inset:0;border-radius:16px;border:2px solid rgba(0,255,128,.25);
+      clip-path:polygon(0 0,14% 0,14% 2px,2px 2px,2px 14%,0 14%,0 0,86% 0,100% 0,100% 14%,98% 14%,98% 2px,86% 2px,86% 0,100% 86%,100% 100%,86% 100%,86% 98%,98% 98%,98% 86%,100% 86%,0 86%,0 100%,14% 100%,14% 98%,2px 98%,2px 86%,0 86%)}
+    .scanline{position:absolute;left:0;right:0;height:2px;top:0;background:linear-gradient(to right,transparent,rgba(0,255,128,.9),transparent);animation:scan 2.4s linear infinite}
+    @keyframes scan{0%{transform:translateY(8px);opacity:.9}50%{transform:translateY(calc(var(--qrbox-size) - 10px));opacity:.6}100%{transform:translateY(8px);opacity:.9}}
     .hit-pulse{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:60}
-    .hit-pulse .ring{width:32px;height:32px;border:3px solid #22c55e;border-radius:999px;opacity:0;transform:scale(.2);
-      animation:pulse .6s ease-out forwards; box-shadow:0 0 16px rgba(34,197,94,.6)}
+    .hit-pulse .ring{width:32px;height:32px;border:3px solid #22c55e;border-radius:999px;opacity:0;transform:scale(.2);animation:pulse .6s ease-out forwards;box-shadow:0 0 16px rgba(34,197,94,.6)}
     @keyframes pulse{to{opacity:0;transform:scale(8)}}
   </style>
+
+  <!-- html5-qrcode (multifuente con fallback) -->
+  <script>
+    (function loadHtml5QR(){
+      const urls=['/libs/html5-qrcode.min.js','https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js','https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js'];
+      (function tryNext(i){
+        if(i>=urls.length) return console.warn('html5-qrcode NO disponible');
+        const s=document.createElement('script');
+        s.src=urls[i]; s.defer=true; s.crossOrigin='anonymous';
+        s.onload=()=>console.log('html5-qrcode OK ->',urls[i]);
+        s.onerror=()=>{console.warn('falló',urls[i]);tryNext(i+1);};
+        document.head.appendChild(s);
+      })(0);
+    })();
+  </script>
 </head>
-<body class="bg-[#0A0D16] text-gray-100">
 
-  <!-- Topbar -->
-  <header class="sticky top-0 z-40 border-b border-white/10 bg-[#0B1020]/80 backdrop-blur">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-      <a href="/index.html" class="flex items-center gap-3 group">
-        <div class="h-8 w-8 grid place-items-center rounded"
-             style="background:linear-gradient(135deg,#FFB74D,#FF9800,#F57C00)">
-          <span class="text-white font-black">Z</span>
-        </div>
-        <div class="font-semibold tracking-wide text-[#FF9800]">zupply</div>
-      </a>
-      <a href="/index.html"
-         class="px-3 py-1.5 rounded-xl text-sm border border-white/10 hover:bg-white/[0.06]">🏠 Home</a>
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+  <div class="max-w-7xl mx-auto p-4 md:p-6">
 
-      <div class="ml-auto flex items-center gap-2">
-        <button id="themeBtn"
-          class="px-3 py-1.5 rounded-xl text-sm border border-white/10 hover:bg-white/[0.06]">
-          Tema: auto
-        </button>
+    <!-- TOPBAR (sticky/translúcida) -->
+    <header class="sticky top-0 z-40 mb-4">
+      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
+        <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+          <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)"><span class="text-white font-black">Z</span></div>
+          <img src="/assets/logo-zupply.svg" alt="Zupply" class="h-5 hidden sm:block" onerror="this.remove()">
+          <span class="sm:hidden font-semibold tracking-wide text-amber-500">zupply</span>
+        </a>
 
-        <!-- Menú usuario -->
-        <div class="relative">
-          <button id="userBtn"
-                  class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-white/10 hover:bg-white/[0.06]">
-            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10">👤</span>
-            <span id="uName" class="max-w-[140px] truncate">Usuario</span>
-            <span class="opacity-70">▾</span>
-          </button>
-          <div id="userMenu"
-               class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-white/10 bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
-            <a href="/index.html" class="block px-3 py-2 rounded-xl hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
-            <div class="my-1 h-px bg-white/10"></div>
-            <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
+        <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
+        <span class="text-sm opacity-80">Escáner de paquetes</span>
+
+        <div class="ml-auto flex items-center gap-2">
+          <!-- Usuario -->
+          <div class="relative" id="userMenuWrap">
+            <button id="userBtn"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
+              <span id="username" class="max-w-[160px] truncate">Usuario</span>
+              <span class="opacity-70">▾</span>
+            </button>
+            <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
+              <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
+              <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
+            </div>
           </div>
+
+          <!-- Tema -->
+          <button id="themeBtn"
+            class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 text-slate-700 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100">
+            Tema: auto
+          </button>
         </div>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <!-- Body -->
-  <main class="max-w-3xl mx-auto px-4 py-6">
-    <h1 class="text-2xl font-bold">📦 Escáner de Paquetes</h1>
+    <!-- CONTENIDO -->
+    <main class="space-y-6">
+      <!-- Modo de entrada -->
+      <section class="rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4">
+        <div class="flex flex-wrap items-center gap-6">
+          <label class="inline-flex items-center gap-2 text-sm">
+            <input type="radio" name="modoScan" value="camara" checked />
+            <span>Usar cámara</span>
+          </label>
+          <label class="inline-flex items-center gap-2 text-sm">
+            <input type="radio" name="modoScan" value="teclado" />
+            <span>Usar lector USB / teclado</span>
+          </label>
+        </div>
+      </section>
 
-    <!-- Modo -->
-    <div class="mt-4 flex flex-wrap items-center gap-6 text-sm">
-      <label class="inline-flex items-center gap-2">
-        <input type="radio" name="modoScan" value="camara" checked />
-        <span>Usar cámara</span>
-      </label>
-      <label class="inline-flex items-center gap-2">
-        <input type="radio" name="modoScan" value="teclado" />
-        <span>Usar lector USB / teclado</span>
-      </label>
-    </div>
-
-    <!-- Cámara -->
-    <section id="camaraContainer" class="mt-4">
-      <div class="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+      <!-- Controles + Lector -->
+      <section class="rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4">
         <div class="flex flex-wrap items-center gap-2 mb-3">
-          <button id="startBtn" class="bg-[#FF9800] text-white px-4 py-2 rounded-2xl hover:bg-[#F57C00]">Iniciar cámara</button>
-          <button id="stopBtn"  class="px-4 py-2 rounded-2xl border border-white/10 hover:bg-white/[0.06]" disabled>Detener</button>
+          <select id="selectCam" class="border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 rounded-xl px-3 py-2 min-w-[220px]"></select>
+          <button id="torchBtn" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10">Linterna</button>
+          <div class="grow"></div>
+          <button id="startBtn" class="px-4 py-2 rounded-xl font-medium shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">Iniciar cámara</button>
+          <button id="stopBtn"  class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 dark:border-white/10 dark:text-slate-100 dark:bg-white/10 dark:hover:bg-white/15" disabled>Detener</button>
         </div>
 
-        <div id="reader" class="rounded-xl overflow-hidden border border-white/10 relative"></div>
-        <p id="status" class="text-center text-sm text-gray-300 mt-2">
-          Listo. Alineá el código en el recuadro y mantené 15–25 cm.
-        </p>
-      </div>
-    </section>
+        <div id="reader" class="rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 relative"></div>
+        <p id="status" class="text-center text-sm opacity-80 mt-2">Listo. Alineá el código dentro del recuadro y mantené 15–25 cm.</p>
+      </section>
 
-    <!-- Lector / teclado -->
-    <section id="tecladoContainer" class="mt-4 hidden">
-      <div class="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-        <p class="text-sm text-gray-300 mb-2">
-          Pegá el contenido del QR y presioná Enter.
-        </p>
-        <input id="scannerInput"
-               class="w-full bg-transparent border border-white/10 rounded-xl px-3 py-2"
-               placeholder='{"id":"...","sender_id":123,"hash_code":"..."}' />
-      </div>
-    </section>
+      <!-- Modo lector/teclado -->
+      <section id="tecladoContainer" class="hidden rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4">
+        <p class="text-sm opacity-80 mb-2">Enfocá el input, escaneá con tu lector (o pegá el texto del QR) y presioná Enter.</p>
+        <input id="scannerInput" class="w-full border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 rounded-xl px-3 py-2"
+          placeholder='{"tracking_id":"...","sender_id":"...","hash_code":"..."}' />
+      </section>
 
-    <!-- Resultados -->
-    <h2 class="text-xl font-semibold mt-8 mb-3 text-center">Paquetes escaneados</h2>
-    <div id="scanList" class="grid gap-3"></div>
-  </main>
+      <!-- Resultados -->
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Paquetes escaneados</h2>
+        <div id="scanList" class="grid gap-3"></div>
+      </section>
+    </main>
 
+    <footer class="py-6 text-center text-xs opacity-60">© <span id="anio"></span> Zupply</footer>
+  </div>
+
+  <!-- Lógica -->
   <script src="/js/escanear.js" defer></script>
 
-  <!-- Tema + usuario (mismo comportamiento que el resto) -->
   <script>
-    (function themeInit(){
-      function applyTheme(mode){
-        const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
-        const wantDark = mode==='dark' || (mode==='system' && prefersDark);
-        document.documentElement.classList.toggle('dark', wantDark);
-        localStorage.setItem('zpl_theme', mode);
-        document.getElementById('themeBtn').textContent = 'Tema: ' + (mode==='system'?'auto':mode);
-      }
-      const saved = localStorage.getItem('zpl_theme') || 'system';
-      applyTheme(saved);
-      document.getElementById('themeBtn').onclick = () => {
-        const order = ['light','dark','system'];
-        const cur = localStorage.getItem('zpl_theme') || 'system';
-        const next = order[(order.indexOf(cur)+1)%order.length];
-        applyTheme(next);
-      };
+    // Año footer
+    document.getElementById('anio').textContent = new Date().getFullYear();
+
+    // User menu básico (igual que en otras pantallas)
+    (function userMenu(){
+      const btn=document.getElementById('userBtn');
+      const menu=document.getElementById('userMenu');
+      const wrap=document.getElementById('userMenuWrap');
+      btn.addEventListener('click',()=>menu.classList.toggle('hidden'));
+      document.addEventListener('click',(e)=>{ if(!wrap.contains(e.target)) menu.classList.add('hidden'); });
+
+      document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+        try{ await fetch('/auth/logout',{method:'POST'});}catch{}
+        try{ localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username'); }catch{}
+        location.href='/auth/login';
+      });
+
+      fetch('/me',{cache:'no-store'})
+        .then(r=>{ if(!r.ok) throw new Error('unauth'); return r.json(); })
+        .then(me=>{
+          const name=me.name||me.username||me.email||'Usuario';
+          document.getElementById('username').textContent=name;
+          try{ localStorage.setItem('zpl_username',name);}catch{}
+        })
+        .catch(()=> location.href='/auth/login');
     })();
 
-    (function userMenu(){
-      const btn = document.getElementById('userBtn');
-      const menu = document.getElementById('userMenu');
-      btn.addEventListener('click', ()=> menu.classList.toggle('hidden'));
-      document.getElementById('logoutBtn').onclick = ()=>{ try{ localStorage.removeItem('zpl_auth'); }catch{} location.href='/auth/login'; };
-      // intenta mostrar email si /me existe
-      fetch('/me').then(r=>r.ok?r.json():null).then(m=>{ if(m?.email) document.getElementById('uName').textContent = m.email; }).catch(()=>{});
-      document.addEventListener('click', (e)=>{ if(!btn.contains(e.target) && !menu.contains(e.target)) menu.classList.add('hidden'); });
+    // Tema: ciclo light/dark/system (default system)
+    (function themeToggle(){
+      const order=['light','dark','system'];
+      const btn=document.getElementById('themeBtn');
+      const apply=(mode)=>{
+        const prefersDark=window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark=(mode==='dark')||(mode==='system'&&prefersDark);
+        document.documentElement.classList.toggle('dark',wantDark);
+        localStorage.setItem('zpl_theme',mode);
+        btn.textContent='Tema: '+(mode==='system'?'auto':mode);
+      };
+      apply(localStorage.getItem('zpl_theme')||'system');
+      btn.addEventListener('click',()=>{
+        const current=localStorage.getItem('zpl_theme')||'system';
+        const next=order[(order.indexOf(current)+1)%order.length];
+        apply(next);
+      });
     })();
   </script>
 </body>
