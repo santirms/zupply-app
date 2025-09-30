@@ -4,120 +4,94 @@ const router  = express.Router();
 const Envio   = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 
-// helpers de tiempo (AR -03:00)
-function dateFromPartsLocal(dayISO, hm = '13:00') {
-  const [H='13', m='00'] = String(hm).split(':');
+function dateFromPartsLocal(dayISO, hhmm = '13:00'){
+  const [H='13', m='00'] = String(hhmm).split(':');
   return new Date(`${dayISO}T${H.padStart(2,'0')}:${m.padStart(2,'0')}:00-03:00`);
 }
-function buildCutWindowForToday(hora_corte_str) {
-  const now = new Date();
-  const hoyISO  = now.toISOString().slice(0,10);
-  const ayerISO = new Date(now.getTime() - 24*60*60*1000).toISOString().slice(0,10);
+function buildCutWindowForToday(hora_corte_str){
+  const hoyISO = new Date().toISOString().slice(0,10);
+  const ayerISO = new Date(Date.now()-24*60*60*1000).toISOString().slice(0,10);
   return {
-    start: dateFromPartsLocal(ayerISO, hora_corte_str || '13:00'),
-    end:   dateFromPartsLocal(hoyISO,  hora_corte_str || '13:00'),
+    start: dateFromPartsLocal(ayerISO, hora_corte_str||'13:00'),
+    end:   dateFromPartsLocal(hoyISO,  hora_corte_str||'13:00'),
   };
 }
+const isEnRuta     = (e) => ['asignado','en_camino'].includes((e.estado||'').toLowerCase());
+const isEntregado  = (e) => (e.estado||'').toLowerCase()==='entregado' || (e.estado_meli?.status||'').toLowerCase()==='delivered';
+const isCancelado  = (e) => (e.estado||'').toLowerCase()==='cancelado';
 
-// normalizaciones
-const st = s => (s || '').toString().toLowerCase();
-const isEnRuta     = e => ['asignado','en_camino'].includes(st(e.estado));
-const isEntregado  = e => st(e.estado) === 'entregado';
-const isCancelado  = e => st(e.estado) === 'cancelado';
-const isIncidenciaEstado = e =>
-  ['reprogramado','demorado','no_entregado','comprador_ausente'].includes(st(e.estado));
-
-// --- KPI principal ---
-router.get('/home', async (req, res) => {
-  try {
-    // 1) clientes y ventanas por hora de corte
+async function kpisDiaHandler(req,res){
+  try{
+    // --- Ventanas por cliente (para PENDIENTES) ---
     const clientes = await Cliente.find({}, 'auto_ingesta hora_corte').lean();
-    const autoIds = [], manualIds = [], ventanas = new Map();
-    for (const c of clientes) {
+    const autoIds=[], manualIds=[], ventanas=new Map();
+    for(const c of clientes){
       const id = String(c._id);
-      if (c.auto_ingesta) {
-        autoIds.push(id);
-        ventanas.set(id, buildCutWindowForToday(c.hora_corte || '13:00'));
-      } else {
-        manualIds.push(id);
-      }
+      if (c.auto_ingesta){ autoIds.push(id); ventanas.set(id, buildCutWindowForToday(c.hora_corte||'13:00')); }
+      else manualIds.push(id);
     }
 
-    // inicio/fin de HOY (para manuales)
+    // Manuales: hoy calendario
     const hoyISO = new Date().toISOString().slice(0,10);
-    const manualStart = dateFromPartsLocal(hoyISO, '00:00');
-    const manualEnd   = dateFromPartsLocal(hoyISO, '23:59');
+    const hoyStart = dateFromPartsLocal(hoyISO, '00:00');
+    const hoyEnd   = dateFromPartsLocal(hoyISO, '23:59');
 
-    // 2) candidatos de hoy
     const [candAuto, candManual] = await Promise.all([
-      autoIds.length
-        ? Envio.find({ cliente_id: { $in: autoIds } }).lean()
-        : [],
-      manualIds.length
-        ? Envio.find({
-            cliente_id: { $in: manualIds },
-            fecha: { $gte: manualStart, $lte: manualEnd }
-          }).lean()
-        : [],
+      autoIds.length   ? Envio.find({ cliente_id: { $in: autoIds } }).lean() : [],
+      manualIds.length ? Envio.find({ cliente_id: { $in: manualIds }, fecha: { $gte: hoyStart, $lte: hoyEnd } }).lean() : []
     ]);
 
-    // filtrar autos por su ventana (ayer 13:00 → hoy 12:59)
-    const enHoyAuto = candAuto.filter(e => {
-      const v = ventanas.get(String(e.cliente_id));
-      if (!v) return false;
-      const f = new Date(e.fecha);
-      return f >= v.start && f < v.end;
-    });
+    // aplicar ventana por CORTE a los auto_ingesta
+    const enHoyPorCorte = candAuto.filter(e=>{
+      const v = ventanas.get(String(e.cliente_id)); if(!v) return false;
+      const f = new Date(e.fecha); return f>=v.start && f<v.end;
+    }).concat(candManual);
 
-    const enHoy = enHoyAuto.concat(candManual);
+    // === KPIs ===
+    // Pendientes (definición por corte)
+    const pendientes = enHoyPorCorte.filter(e => !isEntregado(e) && !isCancelado(e)).length;
 
-    // 3) carryover (incidencias activas previas a HOY)
-    // tomo el inicio mínimo de todas las ventanas para cortar “hoy”
-    const minStartHoy = [...ventanas.values()].reduce(
-      (acc, v) => (!acc || v.start < acc ? v.start : acc),
-      manualStart
-    );
+    // En ruta (si lo querés por corte)
+    const en_ruta = enHoyPorCorte.filter(isEnRuta).length;
 
-    const win36Start = new Date(minStartHoy.getTime() - 36*60*60*1000);
-    // candidatos últimos 36h hasta el inicio de hoy
-    const candCarry = await Envio.find(
-      { fecha: { $gte: win36Start, $lt: minStartHoy } },
-      'estado historial notas chofer fecha'
+    // Entregados **HOY calendario (resetea 00:00)**
+    const entregadosHoyDocs = await Envio.find(
+      { fecha: { $gte: hoyStart, $lte: hoyEnd } },
+      'estado estado_meli'
+    ).lean();
+    const entregados = entregadosHoyDocs.filter(isEntregado).length;
+
+    // Incidencias (36h) incluyendo substatus de MeLi (resched/delay) y sin chofer
+    const win36Start = new Date(Date.now() - 36*60*60*1000);
+    const ult36h = await Envio.find(
+      { fecha: { $gte: win36Start } },
+      'estado estado_meli historial notas chofer'
     ).lean();
 
-    // incidencias activas: con nota o estado de incidencia, y no entregadas/canceladas
-    const carryActive = candCarry.filter(e => {
-      const hasNote = Array.isArray(e.notas) && e.notas.length > 0;
-      const byState = isIncidenciaEstado(e);
-      // patrón en_camino -> reprogramado -> en_camino
+    const incidencias = ult36h.filter(e=>{
+      const st  = (e.estado||'').toLowerCase();
+      const sub = (e.estado_meli?.substatus||'').toLowerCase();
+      const hasNotes  = Array.isArray(e.notas) && e.notas.length>0;
+      const reprogram = st==='reprogramado' || /resched/.test(sub);
+      const cancel    = st==='cancelado';
+      const delay     = /delay/.test(sub);
+      const sinChofer = !e.chofer;
+
       let patron = false;
-      if (Array.isArray(e.historial) && e.historial.length >= 3) {
-        const joined = e.historial.map(h => st(h.estado)).join('|');
+      if (Array.isArray(e.historial) && e.historial.length>=3){
+        const joined = e.historial.map(h => (h.estado||'').toLowerCase()).join('|');
         patron = /en_camino\|reprogramado\|en_camino/.test(joined);
       }
-      return (hasNote || byState || patron) && !isEntregado(e) && !isCancelado(e);
-    });
-
-    // 4) set base para en_ruta / entregados / pendientes
-    const base = enHoy.concat(carryActive);
-
-    const pendientes = base.filter(e => !isEntregado(e) && !isCancelado(e)).length;
-    const en_ruta    = base.filter(isEnRuta).length;
-    const entregados = base.filter(isEntregado).length;
-    const incidencias = carryActive.length;  // solo las activas arrastradas
+      return hasNotes || reprogram || cancel || delay || sinChofer || patron;
+    }).length;
 
     res.json({ pendientes, en_ruta, entregados, incidencias });
-  } catch (e) {
+  } catch(e){
     console.error('KPIs /home error', e);
-    res.status(500).json({ error: 'server_error' });
+    res.status(500).json({ error:'server_error' });
   }
-});
+}
 
-// debug opcional
-router.get('/home/debug', async (req,res)=>{
-  try {
-    res.json({ ok:true, hint:'Cuenta sobre (pendientes de hoy + incidencias activas previas 36h). Incidencias = solo carryActive.' });
-  } catch(e){ res.status(500).json({error:'server_error'}); }
-});
-
+router.get('/home', kpisDiaHandler);
+router.get('/dia',  kpisDiaHandler);
 module.exports = router;
