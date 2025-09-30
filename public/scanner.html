@@ -1,92 +1,106 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>📦 Escáner de Paquetes</title>
+  <title>Zupply • Escáner de Paquetes</title>
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Carga html5-qrcode (local -> CDN fallback) -->
+  <!-- Carga html5-qrcode con fallback -->
   <script>
     (function loadHtml5QR() {
       const urls = [
-        '/libs/html5-qrcode.min.js',
-        'https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js',
-        'https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js'
+        "/libs/html5-qrcode.min.js",
+        "https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js",
+        "https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js",
       ];
-      function tryNext(i){
-        if (i >= urls.length) { console.warn('html5-qrcode NO disponible'); return; }
-        const s = document.createElement('script');
-        s.src = urls[i];
-        s.defer = true;
-        s.crossOrigin = 'anonymous';
-        s.onload = () => console.log('html5-qrcode OK ->', urls[i]);
-        s.onerror = () => { console.warn('falló', urls[i]); tryNext(i+1); };
+      (function tryNext(i){
+        if(i>=urls.length) return console.warn("html5-qrcode no disponible");
+        const s=document.createElement("script");
+        s.defer=true; s.crossOrigin="anonymous"; s.src=urls[i];
+        s.onload=()=>console.log("html5-qrcode OK", urls[i]);
+        s.onerror=()=>{ console.warn("falló", urls[i]); tryNext(i+1); };
         document.head.appendChild(s);
-      }
-      tryNext(0);
+      })(0);
     })();
   </script>
 
   <style>
-    /* Lienzo del lector */
-    #reader { width: 100%; max-width: 520px; margin: 0 auto; position: relative; }
-
-    /* Overlay guía */
-    .scan-overlay {
-      --qrbox-size: 320px; /* se ajusta por JS en runtime */
-      position: absolute; inset: 0; pointer-events: none;
-      display: grid; place-items: center;
+    /* Overlay de ayuda */
+    #reader { position: relative; }
+    .scan-overlay{
+      --qrbox-size: 320px;
+      position:absolute; inset:0; pointer-events:none;
+      display:grid; place-items:center; z-index:50;
     }
-    .reticle {
-      width: var(--qrbox-size); height: var(--qrbox-size);
-      border: 2px solid rgba(255,255,255,.7);
-      border-radius: 16px;
-      box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); /* oscurece el resto */
-      position: relative; overflow: hidden;
+    .reticle{
+      width:var(--qrbox-size); height:var(--qrbox-size);
+      border:2px solid rgba(255,255,255,.7); border-radius:16px;
+      box-shadow:0 0 0 100vmax rgba(0,0,0,.35); position:relative; overflow:hidden;
     }
-    /* esquinas “gamer” */
-    .reticle:before, .reticle:after {
-      content:""; position:absolute; inset:0; border-radius:16px;
-      border: 2px solid rgba(0,255,128,.25);
+    .reticle:after{
+      content:""; position:absolute; inset:0; border-radius:16px; border:2px solid rgba(0,255,128,.25);
       clip-path: polygon(0 0, 14% 0, 14% 2px, 2px 2px, 2px 14%, 0 14%, 0 0,
                          86% 0, 100% 0, 100% 14%, 98% 14%, 98% 2px, 86% 2px, 86% 0,
                          100% 86%, 100% 100%, 86% 100%, 86% 98%, 98% 98%, 98% 86%, 100% 86%,
                          0 86%, 0 100%, 14% 100%, 14% 98%, 2px 98%, 2px 86%, 0 86%);
     }
-    /* línea de escaneo */
-    .scanline {
-      position:absolute; left:0; right:0; height:2px; top:0;
-      background: linear-gradient(to right, transparent, rgba(0,255,128,.9), transparent);
-      animation: scan 2.4s linear infinite;
-    }
-    @keyframes scan {
-      0% { transform: translateY(8px); opacity:.9; }
-      50% { transform: translateY(calc(var(--qrbox-size) - 10px)); opacity:.6; }
-      100% { transform: translateY(8px); opacity:.9; }
-    }
-
-    /* Pulso de éxito */
-    .hit-pulse {
-      position:absolute; inset:0; display:grid; place-items:center; pointer-events:none;
-    }
-    .hit-pulse .ring {
-      width: 32px; height: 32px; border: 3px solid #22c55e; border-radius: 999px;
-      opacity: 0; transform: scale(0.2);
-      animation: pulse .6s ease-out forwards;
-      box-shadow: 0 0 16px rgba(34,197,94,.6);
-    }
-    @keyframes pulse {
-      to { opacity: 0; transform: scale(8); }
-    }
+    .scanline{position:absolute;left:0;right:0;height:2px;top:0;
+      background:linear-gradient(to right,transparent,rgba(0,255,128,.9),transparent);
+      animation:scan 2.4s linear infinite;}
+    @keyframes scan{0%{transform:translateY(8px)}50%{transform:translateY(calc(var(--qrbox-size) - 10px))}100%{transform:translateY(8px)}}
+    .hit-pulse{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:60}
+    .hit-pulse .ring{width:32px;height:32px;border:3px solid #22c55e;border-radius:999px;opacity:0;transform:scale(.2);
+      animation:pulse .6s ease-out forwards; box-shadow:0 0 16px rgba(34,197,94,.6)}
+    @keyframes pulse{to{opacity:0;transform:scale(8)}}
   </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-  <div class="max-w-3xl mx-auto px-4 py-6">
-    <h1 class="text-2xl font-bold flex items-center gap-2">📦 Escáner de Paquetes</h1>
+<body class="bg-[#0A0D16] text-gray-100">
 
-    <!-- Modo de entrada -->
-    <div class="mt-4 flex flex-wrap items-center gap-6">
+  <!-- Topbar -->
+  <header class="sticky top-0 z-40 border-b border-white/10 bg-[#0B1020]/80 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+      <a href="/index.html" class="flex items-center gap-3 group">
+        <div class="h-8 w-8 grid place-items-center rounded"
+             style="background:linear-gradient(135deg,#FFB74D,#FF9800,#F57C00)">
+          <span class="text-white font-black">Z</span>
+        </div>
+        <div class="font-semibold tracking-wide text-[#FF9800]">zupply</div>
+      </a>
+      <a href="/index.html"
+         class="px-3 py-1.5 rounded-xl text-sm border border-white/10 hover:bg-white/[0.06]">🏠 Home</a>
+
+      <div class="ml-auto flex items-center gap-2">
+        <button id="themeBtn"
+          class="px-3 py-1.5 rounded-xl text-sm border border-white/10 hover:bg-white/[0.06]">
+          Tema: auto
+        </button>
+
+        <!-- Menú usuario -->
+        <div class="relative">
+          <button id="userBtn"
+                  class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-white/10 hover:bg-white/[0.06]">
+            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10">👤</span>
+            <span id="uName" class="max-w-[140px] truncate">Usuario</span>
+            <span class="opacity-70">▾</span>
+          </button>
+          <div id="userMenu"
+               class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-white/10 bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
+            <a href="/index.html" class="block px-3 py-2 rounded-xl hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
+            <div class="my-1 h-px bg-white/10"></div>
+            <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Body -->
+  <main class="max-w-3xl mx-auto px-4 py-6">
+    <h1 class="text-2xl font-bold">📦 Escáner de Paquetes</h1>
+
+    <!-- Modo -->
+    <div class="mt-4 flex flex-wrap items-center gap-6 text-sm">
       <label class="inline-flex items-center gap-2">
         <input type="radio" name="modoScan" value="camara" checked />
         <span>Usar cámara</span>
@@ -97,59 +111,69 @@
       </label>
     </div>
 
-    <!-- Controles de cámara -->
-    <div id="camaraContainer" class="mt-4">
-      <div class="bg-white rounded-lg shadow p-4">
+    <!-- Cámara -->
+    <section id="camaraContainer" class="mt-4">
+      <div class="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
         <div class="flex flex-wrap items-center gap-2 mb-3">
-          <select id="selectCam" class="border rounded px-3 py-2 min-w-[220px]"></select>
-          <button id="torchBtn" class="px-3 py-2 rounded border">Linterna</button>
-          <div class="grow"></div>
-          <button id="startBtn" class="bg-green-600 text-white px-4 py-2 rounded">Iniciar cámara</button>
-          <button id="stopBtn"  class="bg-red-600 text-white px-4 py-2 rounded" disabled>Detener</button>
+          <button id="startBtn" class="bg-[#FF9800] text-white px-4 py-2 rounded-2xl hover:bg-[#F57C00]">Iniciar cámara</button>
+          <button id="stopBtn"  class="px-4 py-2 rounded-2xl border border-white/10 hover:bg-white/[0.06]" disabled>Detener</button>
         </div>
 
-        <div id="reader" class="rounded overflow-hidden border relative"></div>
-        <p id="status" class="text-center text-sm text-gray-600 mt-2">Listo. Alineá el código dentro del recuadro y mantené 15–25 cm.</p>
-      </div>
-    </div>
-
-    <!-- Lector USB/teclado -->
-    <div id="tecladoContainer" class="mt-4 hidden">
-      <div class="bg-white rounded-lg shadow p-4">
-        <p class="text-sm text-gray-600 mb-2">
-          Enfocá el input y escaneá con tu lector (o pegá el texto del QR) y presioná Enter.
+        <div id="reader" class="rounded-xl overflow-hidden border border-white/10 relative"></div>
+        <p id="status" class="text-center text-sm text-gray-300 mt-2">
+          Listo. Alineá el código en el recuadro y mantené 15–25 cm.
         </p>
-        <input id="scannerInput" class="w-full border rounded px-3 py-2"
-          placeholder='{"id":"453...","sender_id":832118403,"hash_code":"..."}' />
       </div>
-    </div>
+    </section>
+
+    <!-- Lector / teclado -->
+    <section id="tecladoContainer" class="mt-4 hidden">
+      <div class="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+        <p class="text-sm text-gray-300 mb-2">
+          Pegá el contenido del QR y presioná Enter.
+        </p>
+        <input id="scannerInput"
+               class="w-full bg-transparent border border-white/10 rounded-xl px-3 py-2"
+               placeholder='{"id":"...","sender_id":123,"hash_code":"..."}' />
+      </div>
+    </section>
 
     <!-- Resultados -->
     <h2 class="text-xl font-semibold mt-8 mb-3 text-center">Paquetes escaneados</h2>
     <div id="scanList" class="grid gap-3"></div>
-  </div>
+  </main>
 
-  <!-- DEBUG en pantalla (?debug=1) -->
+  <script src="/js/escanear.js" defer></script>
+
+  <!-- Tema + usuario (mismo comportamiento que el resto) -->
   <script>
-    (function () {
-      try {
-        const params = new URLSearchParams(location.search);
-        if (params.get('debug') !== '1') return;
-        document.addEventListener('DOMContentLoaded', () => {
-          const dbg = document.createElement('div');
-          dbg.style.cssText = 'position:fixed;bottom:10px;left:10px;right:10px;max-height:40vh;overflow:auto;background:#111;color:#0f0;font:12px monospace;padding:8px;border-radius:8px;z-index:99999';
-          dbg.innerHTML = '<div style="color:#fff;margin-bottom:6px">DEBUG</div><div id="dbgLog"></div>';
-          document.body.appendChild(dbg);
-          const logEl = dbg.querySelector('#dbgLog');
-          const _log = console.log; console.log = (...a)=>{_log(...a); logEl.innerText += a.map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' ')+'\n';};
-          const _err = console.error; console.error = (...a)=>{_err(...a); logEl.innerText += '[ERR] '+a.map(x=>typeof x==='string'?x:JSON.stringify(x)).join(' ')+'\n';};
-          console.log('in-page debug ON');
-        });
-      } catch {}
+    (function themeInit(){
+      function applyTheme(mode){
+        const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark = mode==='dark' || (mode==='system' && prefersDark);
+        document.documentElement.classList.toggle('dark', wantDark);
+        localStorage.setItem('zpl_theme', mode);
+        document.getElementById('themeBtn').textContent = 'Tema: ' + (mode==='system'?'auto':mode);
+      }
+      const saved = localStorage.getItem('zpl_theme') || 'system';
+      applyTheme(saved);
+      document.getElementById('themeBtn').onclick = () => {
+        const order = ['light','dark','system'];
+        const cur = localStorage.getItem('zpl_theme') || 'system';
+        const next = order[(order.indexOf(cur)+1)%order.length];
+        applyTheme(next);
+      };
+    })();
+
+    (function userMenu(){
+      const btn = document.getElementById('userBtn');
+      const menu = document.getElementById('userMenu');
+      btn.addEventListener('click', ()=> menu.classList.toggle('hidden'));
+      document.getElementById('logoutBtn').onclick = ()=>{ try{ localStorage.removeItem('zpl_auth'); }catch{} location.href='/auth/login'; };
+      // intenta mostrar email si /me existe
+      fetch('/me').then(r=>r.ok?r.json():null).then(m=>{ if(m?.email) document.getElementById('uName').textContent = m.email; }).catch(()=>{});
+      document.addEventListener('click', (e)=>{ if(!btn.contains(e.target) && !menu.contains(e.target)) menu.classList.add('hidden'); });
     })();
   </script>
-
-  <!-- Tu lógica de escaneo -->
-  <script src="/js/escanear.js" defer></script>
 </body>
 </html>
