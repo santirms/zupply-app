@@ -1,59 +1,46 @@
-// Zupply – Escanear (estilo Opción C)
-// Cámara + modo teclado, overlay, beep/haptic, guardado en /api/scan-meli
+// Zupply – Escanear (simple): back camera por defecto, overlay fijo, sin selector/linterna
 
-const qs  = s => document.querySelector(s);
+const qs = s => document.querySelector(s);
 const qsa = s => Array.from(document.querySelectorAll(s));
-const DEBUG = new URLSearchParams(location.search).has('debug');
 
 let html5QrCode = null;
-let scanning    = false;
-let torchOn     = false;
-let currentStream = null;
+let scanning = false;
 const seen = new Set();
 let failCount = 0;
 
-function dlog(...a){ if (DEBUG) console.log(...a); }
-
-// ------- Overlay helpers -------
-function ensureOverlay(readerEl){
-  if (!readerEl) return;
-  let overlay = readerEl.querySelector('.scan-overlay');
-  if (!overlay){
-    overlay = document.createElement('div');
-    overlay.className = 'scan-overlay';
-    overlay.innerHTML = `
-      <div class="reticle"><div class="scanline"></div></div>
-      <div class="hit-pulse" style="display:none"><div class="ring"></div></div>`;
-    readerEl.appendChild(overlay);
+// ------- Overlay -------
+function ensureOverlay(readerEl, forceTop=false){
+  if(!readerEl) return;
+  let ov = readerEl.querySelector('.scan-overlay');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.className = 'scan-overlay';
+    ov.innerHTML = `<div class="reticle"><div class="scanline"></div></div>
+                    <div class="hit-pulse" style="display:none"><div class="ring"></div></div>`;
+    readerEl.appendChild(ov);
   }
-  function size(){
+  const resize=()=>{
     const max = Math.min(readerEl.clientWidth||320, 520);
     const sz  = Math.round(Math.min(Math.max(max*0.7,240),420));
     readerEl.style.setProperty('--qrbox-size', `${sz}px`);
-  }
-  size(); window.addEventListener('resize', size);
+  };
+  resize(); addEventListener('resize', resize);
+  if(forceTop) readerEl.appendChild(ov);
 }
-function showHitPulse(readerEl){
+function hit(readerEl){
   const p = readerEl.querySelector('.hit-pulse'); if(!p) return;
-  p.style.display='grid';
-  const r = p.querySelector('.ring');
-  r.style.animation='none'; void r.offsetWidth; r.style.animation='';
-  setTimeout(()=> p.style.display='none', 600);
+  p.style.display='grid'; const r=p.querySelector('.ring'); r.style.animation='none'; void r.offsetWidth; r.style.animation=''; setTimeout(()=>p.style.display='none', 600);
 }
-function beep(freq=920, ms=120){
-  try{
-    const ctx = new (window.AudioContext||window.webkitAudioContext)();
-    const osc = ctx.createOscillator(); const g = ctx.createGain();
-    osc.frequency.value=freq; osc.type='sine'; osc.connect(g); g.connect(ctx.destination);
-    osc.start(); g.gain.setValueAtTime(0.001,ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.25,ctx.currentTime+0.01);
-    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+ms/1000);
-    osc.stop(ctx.currentTime+ms/1000+0.02); setTimeout(()=>ctx.close(), ms+120);
-  }catch{}
+function beep(freq=940, ms=120){
+  try{const ctx=new (AudioContext||webkitAudioContext)(),o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine'; o.frequency.value=freq; o.connect(g); g.connect(ctx.destination); o.start();
+    g.gain.setValueAtTime(0.001,ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.25,ctx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+ms/1000); o.stop(ctx.currentTime+ms/1000+0.02);
+    setTimeout(()=>ctx.close(),ms+120);}catch{}
 }
-function haptic(){ try{ if(navigator.vibrate) navigator.vibrate([60]); }catch{} }
+function haptic(){ try{ if(navigator.vibrate) navigator.vibrate(50); }catch{} }
 
-// ------- Payload & UI -------
+// ------- Parse + UI -------
 function parseQrPayload(text){
   let raw; try{ raw=JSON.parse(text); }catch{ return null; }
   const meli_id   = raw.tracking_id || raw.id || raw.meli_id || null;
@@ -61,17 +48,15 @@ function parseQrPayload(text){
   const hash_code = raw.hash_code || raw.hashnumber || raw.hashNumber || raw.hash || null;
   const security_digit = raw.security_digit || raw.sec || null;
   const destinatario = raw.destinatario || raw.receiver || raw.receiver_name || null;
-  const direccion = raw.direccion || [raw.street_name,raw.street_number].filter(Boolean).join(' ') || raw.address || null;
+  const direccion = raw.direccion || [raw.street_name, raw.street_number].filter(Boolean).join(' ') || raw.address || null;
   const codigo_postal = raw.codigo_postal || raw.zip_code || raw.zip || null;
   return { raw, meli_id, sender_id, hash_code, security_digit, destinatario, direccion, codigo_postal };
 }
-
-function escapeHtml(s){ return s.replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
-
+function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function renderScanCard(payload, rawStr){
   const list = qs('#scanList');
   const card = document.createElement('div');
-  card.className = 'rounded-2xl p-4 border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5';
+  card.className='rounded-2xl p-4 border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5';
   card.dataset.rawText = rawStr || JSON.stringify(payload.raw);
   card.innerHTML = `
     <div class="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
@@ -79,7 +64,7 @@ function renderScanCard(payload, rawStr){
       <p><span class="opacity-60">Tracking ID:</span> <span class="font-medium">${payload.meli_id ?? '(?)'}</span></p>
       <p><span class="opacity-60">Hash:</span> ${payload.hash_code ?? '(?)'}</p>
       <p><span class="opacity-60">Seguridad:</span> ${payload.security_digit ?? '—'}</p>
-      <p class="sm:col-span-2"><span class="opacity-60">Dirección:</span> ${[payload.destinatario, payload.direccion].filter(Boolean).join(' · ') || '—'}</p>
+      <p class="sm:col-span-2"><span class="opacity-60">Dirección:</span> ${[payload.destinatario,payload.direccion].filter(Boolean).join(' · ')||'—'}</p>
       <p class="sm:col-span-2 text-xs opacity-70 break-all">RAW: ${escapeHtml(JSON.stringify(payload.raw))}</p>
     </div>
     <div class="mt-3 flex items-center gap-2">
@@ -89,172 +74,116 @@ function renderScanCard(payload, rawStr){
     </div>`;
   list.prepend(card);
 
-  const btnSave = card.querySelector('.btn-save');
-  const btnView = card.querySelector('.btn-view-qr');
-  const txt     = card.querySelector('.save-status');
-
+  const btnSave=card.querySelector('.btn-save'); const btnView=card.querySelector('.btn-view-qr'); const txt=card.querySelector('.save-status');
   btnSave.addEventListener('click', async ()=>{
-    btnSave.disabled = true; txt.textContent = 'Guardando…';
+    btnSave.disabled=true; txt.textContent='Guardando…';
     try{
-      const res = await fetch('/api/scan-meli', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ raw_text: card.dataset.rawText })
-      });
-      const data = await res.json();
-      if(!res.ok || !data.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-      txt.textContent = data.created ? '✅ Envío creado + QR adjuntado' : '✅ QR adjuntado';
-      if(data.qr_url){
-        btnView.disabled = false;
-        btnView.onclick = ()=> window.open(data.qr_url,'_blank');
-      }
-    }catch(e){
-      console.error(e);
-      txt.textContent = '❌ Error guardando';
-      btnSave.disabled = false;
-    }
+      const res=await fetch('/api/scan-meli',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw_text:card.dataset.rawText})});
+      const data=await res.json(); if(!res.ok||!data.ok) throw new Error(data?.error||`HTTP ${res.status}`);
+      txt.textContent=data.created?'✅ Envío creado + QR adjuntado':'✅ QR adjuntado';
+      if(data.qr_url){ btnView.disabled=false; btnView.onclick=()=>window.open(data.qr_url,'_blank'); }
+    }catch(e){ console.error(e); txt.textContent='❌ Error guardando'; btnSave.disabled=false; }
   });
 }
 
-// ------- Cámara / Teclado -------
-document.addEventListener('DOMContentLoaded', async ()=>{
-  const camaraContainer  = qs('section:nth-of-type(2)'); // bloque con reader
-  const tecladoContainer = qs('#tecladoContainer');
-  const modoRadios       = qsa('input[name="modoScan"]');
-  const startBtn         = qs('#startBtn');
-  const stopBtn          = qs('#stopBtn');
-  const selectCam        = qs('#selectCam');
-  const torchBtn         = qs('#torchBtn');
-  const reader           = qs('#reader');
-  const statusEl         = qs('#status');
-  const inputTeclado     = qs('#scannerInput');
+// ------- Cámara / teclado -------
+document.addEventListener('DOMContentLoaded', ()=>{
+  const modoRadios=qsa('input[name="modoScan"]');
+  const startBtn=qs('#startBtn'); const stopBtn=qs('#stopBtn');
+  const reader=qs('#reader'); const statusEl=qs('#status'); const input=qs('#scannerInput');
 
   ensureOverlay(reader);
 
   // Modo
-  modoRadios.forEach(r=>{
-    r.addEventListener('change',()=>{
-      const cam = r.value==='camara' && r.checked;
-      camaraContainer.classList.toggle('hidden',!cam);
-      tecladoContainer.classList.toggle('hidden',cam);
-      if(!cam) inputTeclado?.focus();
-      if(scanning) awaitStop();
-      if(cam) statusEl.textContent='Listo. Alineá el código y mantené 15–25 cm.';
-    });
-  });
+  modoRadios.forEach(r=>r.addEventListener('change',()=>{
+    const cam = r.value==='camara' && r.checked;
+    reader.closest('section').classList.toggle('hidden',!cam);
+    qs('#tecladoContainer').classList.toggle('hidden',cam);
+    if(!cam) input.focus();
+    if(scanning) stop();
+    if(cam) statusEl.textContent='Listo. Alineá el código y mantené 15–25 cm.';
+  }));
 
-  // Input teclado
-  inputTeclado?.addEventListener('keydown', e=>{
+  // Teclado
+  input.addEventListener('keydown',e=>{
     if(e.key!=='Enter') return;
-    const code = inputTeclado.value.trim(); inputTeclado.value='';
+    const code=input.value.trim(); input.value='';
     if(code) onScanSuccess(code, reader, statusEl);
   });
 
-  // Popular cámaras
-  await populateCameras();
+  startBtn.addEventListener('click', start);
+  stopBtn .addEventListener('click', stop);
 
-  // Botones
-  startBtn?.addEventListener('click', start);
-  stopBtn ?.addEventListener('click', awaitStop);
-  torchBtn?.addEventListener('click', toggleTorch);
-
-  async function populateCameras(){
-    selectCam.innerHTML = '';
+  async function pickBackId(){
     try{
-      if(!window.Html5Qrcode) return;
-      const cams = await Html5Qrcode.getCameras();
-      cams.forEach(d=>{
-        const opt = document.createElement('option');
-        opt.value = d.id; opt.textContent = d.label || d.id;
-        selectCam.appendChild(opt);
-      });
-      // Elegir trasera si existe
-      const back = cams.find(d=>/back|environment|rear|trasera/i.test(d.label));
-      if(back) selectCam.value = back.id;
-    }catch(err){ console.warn('No se pudieron listar cámaras', err); }
+      const list=await Html5Qrcode.getCameras();
+      const back=list.find(d=>/back|environment|rear|trasera/i.test(d.label));
+      return (back||list[0])?.id || null;
+    }catch{ return null; }
   }
 
-  function computeQrbox(viewW, viewH){
-    const max = Math.min(viewW, 520);
-    const sz  = Math.round(Math.min(Math.max(max*0.7,240),420));
-    return { width: sz, height: sz };
+  function computeQrbox(w,h){
+    const max=Math.min(w,520); const sz=Math.round(Math.min(Math.max(max*0.7,240),420));
+    return {width:sz,height:sz};
   }
 
   async function start(){
     if(!window.Html5Qrcode){ alert('La cámara no está disponible. Usá el modo lector.'); return; }
-    statusEl.textContent = 'Iniciando cámara…';
+    statusEl.textContent='Iniciando cámara…';
+    html5QrCode = new Html5Qrcode(reader.id);
+    let ok=false, err1=null;
+
+    // 1) intento por deviceId trasero
     try{
-      html5QrCode = new Html5Qrcode(reader.id);
-      const constraints = selectCam.value
-        ? { deviceId:{ exact: selectCam.value } }
-        : { facingMode: 'environment' };
+      const backId = await pickBackId();
+      if(backId){
+        await html5QrCode.start(
+          { deviceId:{ exact: backId } },
+          { fps:12, qrbox:computeQrbox, aspectRatio:1.777, experimentalFeatures:{ useBarCodeDetectorIfSupported:true } },
+          t=>onScanSuccess(t, reader, statusEl),
+          ()=>onScanFail(statusEl)
+        );
+        ok=true;
+      }
+    }catch(e){ err1=e; }
 
-      await html5QrCode.start(
-        constraints,
-        { fps: 12, qrbox: computeQrbox, aspectRatio: 1.777, experimentalFeatures:{ useBarCodeDetectorIfSupported: true } },
-        t => onScanSuccess(t, reader, statusEl),
-        () => onScanFail(statusEl)
-      );
-
-      // stream para torch
-      currentStream = html5QrCode.getState() ? html5QrCode._qrRegion?.videoElement?.srcObject || null : null;
-
-      scanning = true;
-      startBtn.disabled = true; stopBtn.disabled = false;
-      statusEl.textContent = 'Escaneando… Tip: que el QR ocupe ~70% del recuadro.';
-      ensureOverlay(reader); // por si el <video> pisa el overlay en Android
-    }catch(e){
-      console.error('Error iniciando cámara:', e);
-      statusEl.textContent = 'No se pudo iniciar la cámara. Revisá permisos del sitio.';
-    }
-  }
-
-  async function awaitStop(){
-    statusEl.textContent = 'Deteniendo…';
-    try{ if(html5QrCode){ await html5QrCode.stop(); await html5QrCode.clear(); } }catch(e){ console.error(e); }
-    scanning=false; startBtn.disabled=false; stopBtn.disabled=true;
-    torchOn=false; currentStream=null; statusEl.textContent='Escáner detenido.';
-  }
-
-  async function toggleTorch(){
-    if(!currentStream) return;
-    // Intentar vía track constraints
-    try{
-      const track = currentStream.getVideoTracks()[0];
-      const caps  = track.getCapabilities && track.getCapabilities();
-      if(caps && caps.torch){
-        torchOn = !torchOn;
-        await track.applyConstraints({ advanced:[{ torch: torchOn }] });
-        torchBtn.classList.toggle('bg-amber-500/20', torchOn);
+    // 2) fallback facingMode
+    if(!ok){
+      try{
+        await html5QrCode.start(
+          { facingMode:'environment' },
+          { fps:12, qrbox:computeQrbox, aspectRatio:1.777, experimentalFeatures:{ useBarCodeDetectorIfSupported:true } },
+          t=>onScanSuccess(t, reader, statusEl),
+          ()=>onScanFail(statusEl)
+        );
+        ok=true;
+      }catch(e2){
+        console.error('No se pudo iniciar cámara:', err1 || e2);
+        statusEl.textContent='No se pudo iniciar la cámara. Revisá permisos del sitio.';
         return;
       }
-    }catch(e){ /* fallback abajo */ }
+    }
 
-    alert('La linterna no es compatible en este dispositivo/navegador.');
+    scanning=true;
+    startBtn.disabled=true; stopBtn.disabled=false;
+    statusEl.textContent='Escaneando… Tip: que el QR ocupe ~70% del recuadro.';
+    ensureOverlay(reader,true); // forzar overlay arriba del <video>
+  }
+
+  async function stop(){
+    statusEl.textContent='Deteniendo…';
+    try{ if(html5QrCode){ await html5QrCode.stop(); await html5QrCode.clear(); } }catch(e){ console.error(e); }
+    scanning=false; startBtn.disabled=false; stopBtn.disabled=true; statusEl.textContent='Escáner detenido.';
   }
 });
 
-// ------- Callbacks de escaneo -------
+// ------- callbacks -------
 function onScanSuccess(decodedText, readerEl, statusEl){
-  if(seen.has(decodedText)) return;
-  seen.add(decodedText);
-  showHitPulse(readerEl); beep(940,120); haptic();
+  if(seen.has(decodedText)) return; seen.add(decodedText);
+  hit(readerEl); beep(); haptic();
   statusEl.textContent='¡Código leído! Podés seguir escaneando.';
-
-  const payload = parseQrPayload(decodedText);
-  if(!payload){ console.warn('QR no es JSON válido'); return; }
+  const payload=parseQrPayload(decodedText); if(!payload) return;
   renderScanCard(payload, decodedText);
 }
-
-const TIPS = [
-  'acercá hasta que ocupe ~70% del recuadro',
-  'alejalo 5–10 cm si se ve borroso',
-  'incliná 10–15° para evitar reflejos',
-  'alisá la etiqueta: sin pliegues ni cinta brillante'
-];
-function onScanFail(statusEl){
-  failCount++;
-  if(failCount % 60 === 0){
-    const tip = TIPS[(failCount/60) % TIPS.length | 0];
-    statusEl.textContent = 'Tip: ' + tip + '.';
-  }
-}
+const TIPS=['acercá hasta ~70%','alejalo 5–10 cm si borroso','incliná 10–15° para evitar reflejos','alisá la etiqueta (sin pliegues)'];
+function onScanFail(statusEl){ if(++failCount%60===0){ statusEl.textContent='Tip: '+TIPS[(failCount/60)%TIPS.length|0]+'.'; } }
