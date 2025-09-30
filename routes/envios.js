@@ -51,7 +51,29 @@ function buildFiltroList(req) {
     f.$or = [{ tracking }, { id_venta: tracking }, { meli_id: tracking }];
     return f;
   }
-
+  // 👇 Estado: mapear "reprogramado", "demorado", "comprador_ausente" a substatus MeLi
+  if (estado) {
+    const e = String(estado).toLowerCase();
+    if (e === 'reprogramado') {
+      f.$or = [
+        { estado: 'reprogramado' },
+        { 'estado_meli.substatus': /resched/i } // buyer_rescheduled / rescheduled
+      ];
+    } else if (e === 'demorado') {
+      f.$or = [
+        { estado: 'demorado' },
+        { 'estado_meli.substatus': /delay/i }
+      ];
+    } else if (e === 'comprador_ausente') {
+      f.$or = [
+        { estado: 'comprador_ausente' },
+        { 'estado_meli.substatus': /(recipient|buyer|client|addressee).*absent|not[_\s-]?at[_\s-]?home/i }
+      ];
+    } else {
+      f.estado = e; // resto: matchea directo
+    }
+  }
+ 
   // Ventana por defecto: 36h
   if (!desde && !hasta) {
     f[TIME_FIELD] = { $gte: new Date(Date.now() - WINDOW36H_MS) };
