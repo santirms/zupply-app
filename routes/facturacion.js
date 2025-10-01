@@ -9,6 +9,8 @@ const Partido    = require('../models/partidos');
 const Zona       = require('../models/Zona');
 const ZonaPorCP  = require('../models/ZonaPorCP');
 
+const { resolverZonaPorCP } = require('../services/zonaResolver'); // <- el de la 1ra versión
+
 // ---- helpers de normalización ----
 const rmDiacritics = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const normName     = s => rmDiacritics(String(s||'').trim().toLowerCase());
@@ -59,6 +61,33 @@ async function buildMapsForEnvios(envios) {
   }
 
   return { cpToZonaNombre, nombreToZona, partidoToZona, cpToPartido };
+}
+
+function getPrecioFromLista(lista, zonaDoc, zonaNombreN) {
+  // Map por id
+  const precioPorZonaId = new Map();
+  // Map por nombre normalizado
+  const precioPorZonaNombreN = new Map();
+
+  for (const z of (lista.zonas || [])) {
+    const pid = String(z.zona?._id || z.zona || '');
+    const precio = Number(z.precio) || 0;
+    if (pid) precioPorZonaId.set(pid, precio);
+    const zname = z.zona?.nombre
+      ? (z.zona.nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase())
+      : null;
+    if (zname) precioPorZonaNombreN.set(zname, precio);
+  }
+
+  if (zonaDoc) {
+    const p = precioPorZonaId.get(String(zonaDoc._id));
+    if (typeof p === 'number') return p;
+  }
+  if (zonaNombreN) {
+    const p = precioPorZonaNombreN.get(zonaNombreN);
+    if (typeof p === 'number') return p;
+  }
+  return 0;
 }
 
 router.get('/preview', async (req, res) => {
@@ -114,37 +143,51 @@ router.get('/preview', async (req, res) => {
     let total = 0;
 
     for (const e of envios) {
-      const cp = normCP(e.codigo_postal);
-      let partido = e.partido || null;
-      let zonaDoc = null;
-      let zonaNombreN = null; // normalizado
+     // --- Resolución rápida (maps) como ya venías haciendo ---
+const cp = normCP(e.codigo_postal);
+let partido = e.partido || null;
+let zonaDoc = null;
+let zonaNombreN = null;
 
-      // 1) por CP (via ZonaPorCP)
-      const nombreByCPn = cp ? cpToZonaNombre.get(cp) : null;
-      if (nombreByCPn) {
-        zonaNombreN = nombreByCPn;
-        zonaDoc = nombreToZona.get(nombreByCPn) || null;
-      }
+const nombreByCPn = cp ? cpToZonaNombre.get(cp) : null;
+if (nombreByCPn) {
+  zonaNombreN = nombreByCPn;
+  zonaDoc = nombreToZona.get(nombreByCPn) || null;
+} else {
+  if (!partido && cp) partido = cpToPartido.get(cp) || null;
+  if (partido) {
+    const z = partidoToZona.get(normName(partido));
+    if (z) { zonaDoc = z; zonaNombreN = normName(z.nombre); }
+  }
+}
 
-      // 2) por partido si no hubo CP-match
-      if (!zonaDoc && !zonaNombreN) {
-        if (!partido && cp) partido = cpToPartido.get(cp) || null;
-        if (partido) {
-          const z = partidoToZona.get(normName(partido));
-          if (z) { zonaDoc = z; zonaNombreN = normName(z.nombre); }
-        }
-      }
+// Precio con lookup rápido
+let precio = getPrecioFromLista(lista, zonaDoc, zonaNombreN);
 
-      // precio (prioridad: id; fallback: nombre)
-      let precio = 0;
-      if (zonaDoc) {
-        const p = precioPorZonaId.get(String(zonaDoc._id));
-        if (typeof p === 'number') precio = p;
-      }
-      if (!precio && zonaNombreN) {
-        const p = precioPorZonaNombreN.get(zonaNombreN);
-        if (typeof p === 'number') precio = p;
-      }
+// ---------- FALLBACK “lento” SOLO SI SIGUE EN $0 ----------
+if (!precio) {
+  try {
+    const rz = await resolverZonaPorCP(e.codigo_postal, e.partido); // <- versión lenta
+    const zonaIdFallback = rz.zonaId;
+    const zonaNombreNFallback = rz.zonaNombre
+      ? normName(rz.zonaNombre)
+      : null;
+
+    // Intentamos de nuevo con la info del resolver lento
+    if (!zonaDoc && zonaIdFallback) {
+      // Si tenemos id, buscá la Zona en nombreToZona por nombre o directamente arma un doc mínimo
+      zonaDoc = nombreToZona.get(zonaNombreNFallback) || { _id: zonaIdFallback, nombre: rz.zonaNombre };
+      zonaNombreN = zonaNombreNFallback;
+    } else if (!zonaNombreN && rz.zonaNombre) {
+      zonaNombreN = zonaNombreNFallback;
+    }
+    // Recalcular precio
+    precio = getPrecioFromLista(lista, zonaDoc, zonaNombreN);
+  } catch (err) {
+    // log mínimo para diagnóstico sin romper flujo
+    console.warn('[preview:fallback:error]', e.codigo_postal, err.message);
+  }
+}
 
       items.push({
         tracking: e.id_venta || e.meli_id || '',
