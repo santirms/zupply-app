@@ -62,35 +62,124 @@ async function kpisDiaHandler(req,res){
     const entregados = entregadosHoyDocs.filter(isEntregado).length;
 
     // Incidencias (36h) incluyendo substatus de MeLi (resched/delay) y sin chofer
+// --- dentro de kpisDiaHandler, reemplazá el bloque de incidencias ---
+const win36Start = new Date(Date.now() - 36*60*60*1000);
+
+// Traemos lo justo y necesario
+const ult36h = await Envio.find(
+  { fecha: { $gte: win36Start } },
+  'estado estado_meli historial notas chofer'
+).lean();
+
+const norm = s => (s || '').toString().toLowerCase();
+
+let inc_notes = 0, inc_reprog = 0, inc_cancel = 0, inc_sinChofer = 0, inc_patron = 0;
+
+const incidencias = ult36h.filter(e => {
+  const estado    = norm(e.estado);
+  const emStatus  = norm(e.estado_meli?.status);
+  const emSub     = norm(e.estado_meli?.substatus);
+
+  // ⚠️ Excluir RESUELTOS
+  if (estado === 'entregado' || emStatus === 'delivered') return false;
+
+  // A) Con notas (al menos 1)
+  const hasNotes = Array.isArray(e.notas) && e.notas.length > 0;
+
+  // B) Reprogramados (por estado ó por substatus de MeLi)
+  const isReprog =
+    estado === 'reprogramado' ||
+    /resched/.test(emSub) || emSub === 'buyer_rescheduled';
+
+  // C) Cancelados (por estado ó status de MeLi)
+  const isCancel =
+    estado === 'cancelado' || emStatus === 'cancelled' || emStatus === 'canceled';
+
+  // D) Sin chofer asignado (solo cuenta si no está entregado/cancelado)
+  const sinChofer =
+    !e.chofer &&
+    !isCancel &&
+    !isReprog;
+
+  // E) Patrón En camino -> Reprogramado -> En camino en historial
+  let patron = false;
+  if (Array.isArray(e.historial) && e.historial.length >= 3) {
+    const joined = e.historial.map(h => norm(h.estado)).join('|');
+    patron = /en_camino\|reprogramado\|en_camino/.test(joined);
+  }
+
+  // contadores para debug
+  if (hasNotes) inc_notes++;
+  if (isReprog) inc_reprog++;
+  if (isCancel) inc_cancel++;
+  if (sinChofer) inc_sinChofer++;
+  if (patron) inc_patron++;
+
+  return hasNotes || isReprog || isCancel || sinChofer || patron;
+}).length;
+
+res.json({ pendientes, en_ruta, entregados, incidencias });
+  } catch(e){
+    console.error('KPIs /home error', e);
+    res.status(500).json({ error:'server_error' });
+  }
+  }
+// Debug: ver desglose de incidencias
+router.get('/home/debug', async (req, res) => {
+  try {
     const win36Start = new Date(Date.now() - 36*60*60*1000);
     const ult36h = await Envio.find(
       { fecha: { $gte: win36Start } },
       'estado estado_meli historial notas chofer'
     ).lean();
 
-    const incidencias = ult36h.filter(e=>{
-      const st  = (e.estado||'').toLowerCase();
-      const sub = (e.estado_meli?.substatus||'').toLowerCase();
-      const hasNotes  = Array.isArray(e.notas) && e.notas.length>0;
-      const reprogram = st==='reprogramado' || /resched/.test(sub);
-      const cancel    = st==='cancelado';
-      const delay     = /delay/.test(sub);
-      const sinChofer = !e.chofer;
+    const norm = s => (s || '').toString().toLowerCase();
+    let inc_notes = 0, inc_reprog = 0, inc_cancel = 0, inc_sinChofer = 0, inc_patron = 0, total = 0;
+
+    ult36h.forEach(e => {
+      const estado    = norm(e.estado);
+      const emStatus  = norm(e.estado_meli?.status);
+      const emSub     = norm(e.estado_meli?.substatus);
+
+      if (estado === 'entregado' || emStatus === 'delivered') return;
+
+      const hasNotes = Array.isArray(e.notas) && e.notas.length > 0;
+      const isReprog = estado === 'reprogramado' || /resched/.test(emSub) || emSub === 'buyer_rescheduled';
+      const isCancel = estado === 'cancelado' || emStatus === 'cancelled' || emStatus === 'canceled';
+      const sinChofer = !e.chofer && !isCancel && !isReprog;
 
       let patron = false;
-      if (Array.isArray(e.historial) && e.historial.length>=3){
-        const joined = e.historial.map(h => (h.estado||'').toLowerCase()).join('|');
+      if (Array.isArray(e.historial) && e.historial.length >= 3) {
+        const joined = e.historial.map(h => norm(h.estado)).join('|');
         patron = /en_camino\|reprogramado\|en_camino/.test(joined);
       }
-      return hasNotes || reprogram || cancel || delay || sinChofer || patron;
-    }).length;
 
-    res.json({ pendientes, en_ruta, entregados, incidencias });
-  } catch(e){
-    console.error('KPIs /home error', e);
-    res.status(500).json({ error:'server_error' });
+      const hit = hasNotes || isReprog || isCancel || sinChofer || patron;
+      if (hit) {
+        total++;
+        if (hasNotes) inc_notes++;
+        if (isReprog) inc_reprog++;
+        if (isCancel) inc_cancel++;
+        if (sinChofer) inc_sinChofer++;
+        if (patron) inc_patron++;
+      }
+    });
+
+    res.json({
+      ventana_desde: win36Start,
+      total,
+      desglose: {
+        con_notas: inc_notes,
+        reprogramados: inc_reprog,
+        cancelados: inc_cancel,
+        sin_chofer: inc_sinChofer,
+        patron_enCamino_reprog_enCamino: inc_patron
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'server_error' });
   }
-}
+});
 
 router.get('/home', kpisDiaHandler);
 router.get('/dia',  kpisDiaHandler);
