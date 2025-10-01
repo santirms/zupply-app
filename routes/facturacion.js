@@ -149,17 +149,30 @@ let partido = e.partido || null;
 let zonaDoc = null;
 let zonaNombreN = null;
 
+// 1) Intento por CP (via ZonaPorCP -> nombre de zona)
 const nombreByCPn = cp ? cpToZonaNombre.get(cp) : null;
 if (nombreByCPn) {
   zonaNombreN = nombreByCPn;
   zonaDoc = nombreToZona.get(nombreByCPn) || null;
+
+  // ⚠️ Si encontramos nombre por CP pero NO existe Zona con ese nombre,
+  //    NO nos quedamos acá: caemos al flujo por partido.
+  if (!zonaDoc) {
+    if (!partido && cp) partido = cpToPartido.get(cp) || null;
+    if (partido) {
+      const z = partidoToZona.get(normName(partido));
+      if (z) { zonaDoc = z; zonaNombreN = normName(z.nombre); }
+    }
+  }
 } else {
+  // 2) Sin match por CP: voy directo por partido
   if (!partido && cp) partido = cpToPartido.get(cp) || null;
   if (partido) {
     const z = partidoToZona.get(normName(partido));
     if (z) { zonaDoc = z; zonaNombreN = normName(z.nombre); }
   }
 }
+
 
 // Precio con lookup rápido
 let precio = getPrecioFromLista(lista, zonaDoc, zonaNombreN);
