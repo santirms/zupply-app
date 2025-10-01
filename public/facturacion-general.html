@@ -148,5 +148,16 @@
 
   <!-- JS de la pantalla -->
   <script src="/js/facturacion-general.js" defer></script>
+
+  <!-- Overlay de carga -->
+<div id="loading-overlay"
+     class="fixed inset-0 hidden z-[100] bg-black/40 backdrop-blur-sm">
+  <div class="h-full w-full grid place-items-center p-6">
+    <div class="rounded-2xl bg-white dark:bg-[#0B1020] text-center px-6 py-5 shadow-2xl border border-white/10">
+      <div class="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-2 border-slate-300 border-t-transparent"></div>
+      <p id="loading-text" class="text-sm opacity-80">Generando reporte…</p>
+    </div>
+  </div>
+</div>
 </body>
 </html>
