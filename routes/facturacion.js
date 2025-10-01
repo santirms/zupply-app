@@ -1,4 +1,3 @@
-// /routes/facturacion.js
 const express = require('express');
 const router  = express.Router();
 
@@ -6,12 +5,49 @@ const Envio   = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const Lista   = require('../models/listaDePrecios');
 
-const { resolverZonaPorCP } = require('../services/zonaResolver');
+const Partido    = require('../models/partidos');
+const Zona       = require('../models/Zona');
+const ZonaPorCP  = require('../models/ZonaPorCP');
 
-/**
- * GET /facturacion/preview?clienteId=...&desde=YYYY-MM-DD&hasta=YYYY-MM-DD
- * Devuelve { count, total, items[] } donde cada ítem ya trae Partido, Zona y Precio.
- */
+// Helpers: construir mapas una sola vez por request
+async function buildMapsForEnvios(envios) {
+  // 1) Set de CPs únicos del lote
+  const cps = new Set();
+  for (const e of envios) if (e.codigo_postal) cps.add(String(e.codigo_postal).trim());
+
+  // 2) Map CP -> nombreZona (desde ZonaPorCP)
+  const zcpDocs = await ZonaPorCP.find({ codigos_postales: { $in: Array.from(cps) } })
+                                 .select('nombre codigos_postales').lean();
+  const cpToZonaNombre = new Map();
+  for (const z of zcpDocs) {
+    for (const cp of z.codigos_postales || []) {
+      cpToZonaNombre.set(String(cp).trim(), z.nombre);
+    }
+  }
+
+  // 3) Map nombreZona -> Zona (_id) y Map partido -> Zona (_id, nombre)
+  const zonas = await Zona.find({}).select('nombre partidos').lean();
+  const nombreToZona   = new Map();  // nombre (case-insensitive) -> zonaDoc
+  const partidoToZona  = new Map();  // partido (case-insensitive) -> zonaDoc
+  for (const z of zonas) {
+    nombreToZona.set(z.nombre.toLowerCase(), z);
+    for (const p of (z.partidos || [])) {
+      partidoToZona.set(String(p).toLowerCase(), z);
+    }
+  }
+
+  // 4) Partidos para CPs que no tengan zona por CP
+  const cpsSinZona = Array.from(cps).filter(cp => !cpToZonaNombre.has(cp));
+  let cpToPartido = new Map();
+  if (cpsSinZona.length) {
+    const parts = await Partido.find({ codigo_postal: { $in: cpsSinZona } })
+                               .select('codigo_postal partido').lean();
+    cpToPartido = new Map(parts.map(p => [String(p.codigo_postal).trim(), p.partido]));
+  }
+
+  return { cpToZonaNombre, nombreToZona, partidoToZona, cpToPartido };
+}
+
 router.get('/preview', async (req, res) => {
   try {
     const { clienteId, desde, hasta } = req.query;
@@ -44,25 +80,45 @@ router.get('/preview', async (req, res) => {
     .populate('cliente_id', 'nombre codigo_cliente')
     .lean();
 
+    // --- Mapas para resolver rápido ---
+    const { cpToZonaNombre, nombreToZona, partidoToZona, cpToPartido } = await buildMapsForEnvios(envios);
+
+    // Pre-map de precios por zonaId para lookup O(1)
+    const precioPorZonaId = new Map();
+    for (const z of (lista.zonas || [])) {
+      precioPorZonaId.set(String(z.zona), Number(z.precio) || 0);
+    }
+
     const items = [];
     let total = 0;
 
     for (const e of envios) {
-      // Resolver partido+zona
-      const rz = await resolverZonaPorCP(e.codigo_postal, e.partido);
-      const zonaId      = rz.zonaId;
-      const zonaNombre  = rz.zonaNombre;
-      const partido     = rz.partido || e.partido || null;
+      const cp = String(e.codigo_postal || '').trim();
+      let zonaDoc = null;
+      let zonaNombre = null;
+      let partido = e.partido || null;
 
-      // Buscar precio en la lista (matchea por zona ObjectId)
-      let precio = 0;
-      if (zonaId) {
-        const z = (lista.zonas || []).find(z => String(z.zona) === String(zonaId));
-        if (z) precio = Number(z.precio) || 0;
+      // 1) Intento por CP directo (ZonaPorCP)
+      const nombreByCP = cpToZonaNombre.get(cp);
+      if (nombreByCP) {
+        zonaNombre = nombreByCP;
+        const z = nombreToZona.get(nombreByCP.toLowerCase());
+        if (z) zonaDoc = z;
+      } else {
+        // 2) Resuelvo partido por CP si no vino
+        if (!partido) partido = cpToPartido.get(cp) || null;
+        // 3) Intento por partido
+        if (partido) {
+          const z = partidoToZona.get(String(partido).toLowerCase());
+          if (z) { zonaDoc = z; zonaNombre = z.nombre; }
+        }
       }
 
-      // Si ya tenías un precio guardado en el Envio (e.precio) y preferís priorizarlo:
-      // if (typeof e.precio === 'number' && e.precio > 0) precio = e.precio;
+      let precio = 0;
+      if (zonaDoc) {
+        const p = precioPorZonaId.get(String(zonaDoc._id));
+        if (typeof p === 'number') precio = p;
+      }
 
       items.push({
         tracking: e.id_venta || e.meli_id || '',
