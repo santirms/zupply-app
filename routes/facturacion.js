@@ -9,40 +9,53 @@ const Partido    = require('../models/partidos');
 const Zona       = require('../models/Zona');
 const ZonaPorCP  = require('../models/ZonaPorCP');
 
-// Helpers: construir mapas una sola vez por request
-async function buildMapsForEnvios(envios) {
-  // 1) Set de CPs únicos del lote
-  const cps = new Set();
-  for (const e of envios) if (e.codigo_postal) cps.add(String(e.codigo_postal).trim());
+// ---- helpers de normalización ----
+const rmDiacritics = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const normName     = s => rmDiacritics(String(s||'').trim().toLowerCase());
+const normCP       = s => String(s||'').replace(/\D/g,'').trim(); // solo dígitos
 
-  // 2) Map CP -> nombreZona (desde ZonaPorCP)
-  const zcpDocs = await ZonaPorCP.find({ codigos_postales: { $in: Array.from(cps) } })
-                                 .select('nombre codigos_postales').lean();
+async function buildMapsForEnvios(envios) {
+  // 1) set de CPs normalizados
+  const cps = new Set();
+  for (const e of envios) {
+    const cp = normCP(e.codigo_postal);
+    if (cp) cps.add(cp);
+  }
+
+  // 2) CP -> nombreZona (desde ZonaPorCP)
+  const zcpDocs = cps.size
+    ? await ZonaPorCP.find({ codigos_postales: { $in: Array.from(cps) } })
+        .select('nombre codigos_postales').lean()
+    : [];
   const cpToZonaNombre = new Map();
   for (const z of zcpDocs) {
-    for (const cp of z.codigos_postales || []) {
-      cpToZonaNombre.set(String(cp).trim(), z.nombre);
+    const zname = normName(z.nombre);
+    for (const cp of (z.codigos_postales || [])) {
+      const cpn = normCP(cp);
+      if (cpn) cpToZonaNombre.set(cpn, zname);
     }
   }
 
-  // 3) Map nombreZona -> Zona (_id) y Map partido -> Zona (_id, nombre)
+  // 3) Map nombreZona -> ZonaDoc y Map partido -> ZonaDoc
   const zonas = await Zona.find({}).select('nombre partidos').lean();
-  const nombreToZona   = new Map();  // nombre (case-insensitive) -> zonaDoc
-  const partidoToZona  = new Map();  // partido (case-insensitive) -> zonaDoc
+  const nombreToZona   = new Map();  // nombre normalizado -> zonaDoc
+  const partidoToZona  = new Map();  // partido normalizado -> zonaDoc
   for (const z of zonas) {
-    nombreToZona.set(z.nombre.toLowerCase(), z);
+    nombreToZona.set(normName(z.nombre), z);
     for (const p of (z.partidos || [])) {
-      partidoToZona.set(String(p).toLowerCase(), z);
+      partidoToZona.set(normName(p), z);
     }
   }
 
-  // 4) Partidos para CPs que no tengan zona por CP
+  // 4) CP -> partido (sólo para cps sin zona por CP)
   const cpsSinZona = Array.from(cps).filter(cp => !cpToZonaNombre.has(cp));
   let cpToPartido = new Map();
   if (cpsSinZona.length) {
     const parts = await Partido.find({ codigo_postal: { $in: cpsSinZona } })
                                .select('codigo_postal partido').lean();
-    cpToPartido = new Map(parts.map(p => [String(p.codigo_postal).trim(), p.partido]));
+    cpToPartido = new Map(
+      parts.map(p => [ normCP(p.codigo_postal), p.partido ])
+    );
   }
 
   return { cpToZonaNombre, nombreToZona, partidoToZona, cpToPartido };
@@ -62,7 +75,10 @@ router.get('/preview', async (req, res) => {
     const cliente = await Cliente.findById(clienteId).lean();
     if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
 
-    const lista = await Lista.findById(cliente.lista_precios).lean();
+    // ⬅️ poblamos zonas.zona para tener también el NOMBRE (clave para fallback por nombre)
+    const lista = await Lista.findById(cliente.lista_precios)
+                             .populate('zonas.zona', 'nombre')
+                             .lean();
     if (!lista) return res.status(404).json({ error: 'Lista de precios no encontrada' });
 
     // Envíos del periodo para ese cliente (por cliente_id o por sender_id)
@@ -80,43 +96,53 @@ router.get('/preview', async (req, res) => {
     .populate('cliente_id', 'nombre codigo_cliente')
     .lean();
 
-    // --- Mapas para resolver rápido ---
+    // --- mapas en memoria ---
     const { cpToZonaNombre, nombreToZona, partidoToZona, cpToPartido } = await buildMapsForEnvios(envios);
 
-    // Pre-map de precios por zonaId para lookup O(1)
-    const precioPorZonaId = new Map();
+    // Precio por zonaId y también por NOMBRE (normalizado)
+    const precioPorZonaId      = new Map();
+    const precioPorZonaNombreN = new Map();
     for (const z of (lista.zonas || [])) {
-      precioPorZonaId.set(String(z.zona), Number(z.precio) || 0);
+      const pid = String(z.zona?._id || z.zona || '');
+      const precio = Number(z.precio) || 0;
+      if (pid) precioPorZonaId.set(pid, precio);
+      const zname = z.zona?.nombre ? normName(z.zona.nombre) : null;
+      if (zname) precioPorZonaNombreN.set(zname, precio);
     }
 
     const items = [];
     let total = 0;
 
     for (const e of envios) {
-      const cp = String(e.codigo_postal || '').trim();
-      let zonaDoc = null;
-      let zonaNombre = null;
+      const cp = normCP(e.codigo_postal);
       let partido = e.partido || null;
+      let zonaDoc = null;
+      let zonaNombreN = null; // normalizado
 
-      // 1) Intento por CP directo (ZonaPorCP)
-      const nombreByCP = cpToZonaNombre.get(cp);
-      if (nombreByCP) {
-        zonaNombre = nombreByCP;
-        const z = nombreToZona.get(nombreByCP.toLowerCase());
-        if (z) zonaDoc = z;
-      } else {
-        // 2) Resuelvo partido por CP si no vino
-        if (!partido) partido = cpToPartido.get(cp) || null;
-        // 3) Intento por partido
+      // 1) por CP (via ZonaPorCP)
+      const nombreByCPn = cp ? cpToZonaNombre.get(cp) : null;
+      if (nombreByCPn) {
+        zonaNombreN = nombreByCPn;
+        zonaDoc = nombreToZona.get(nombreByCPn) || null;
+      }
+
+      // 2) por partido si no hubo CP-match
+      if (!zonaDoc && !zonaNombreN) {
+        if (!partido && cp) partido = cpToPartido.get(cp) || null;
         if (partido) {
-          const z = partidoToZona.get(String(partido).toLowerCase());
-          if (z) { zonaDoc = z; zonaNombre = z.nombre; }
+          const z = partidoToZona.get(normName(partido));
+          if (z) { zonaDoc = z; zonaNombreN = normName(z.nombre); }
         }
       }
 
+      // precio (prioridad: id; fallback: nombre)
       let precio = 0;
       if (zonaDoc) {
         const p = precioPorZonaId.get(String(zonaDoc._id));
+        if (typeof p === 'number') precio = p;
+      }
+      if (!precio && zonaNombreN) {
+        const p = precioPorZonaNombreN.get(zonaNombreN);
         if (typeof p === 'number') precio = p;
       }
 
@@ -126,7 +152,7 @@ router.get('/preview', async (req, res) => {
         codigo_interno: e.cliente_id?.codigo_cliente || '',
         sender_id: e.sender_id || '',
         partido,
-        zona: zonaNombre,
+        zona: zonaDoc?.nombre || (zonaNombreN ? rmDiacritics(zonaNombreN).toUpperCase() : null),
         precio,
         fecha: e.fecha,
         estado: e.estado
