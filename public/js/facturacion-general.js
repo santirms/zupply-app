@@ -57,6 +57,27 @@ function initTopbar() {
   })();
 }
 
+let BUSY = false;
+let currentAbort = null;
+
+function setBusy(on, msg = 'Generando reporte…') {
+  BUSY = !!on;
+  const ov  = qs('#loading-overlay');
+  const txt = qs('#loading-text');
+  if (txt) txt.textContent = msg;
+  if (ov) ov.classList.toggle('hidden', !on);
+
+  // deshabilitar controles
+  const btns = [
+    ...qsa('button'),
+    qs('#filtroCliente'),
+    qs('#desde'),
+    qs('#hasta')
+  ].filter(Boolean);
+
+  btns.forEach(b => b.disabled = on);
+}
+
 // ====== Cargar clientes para el filtro ======
 async function cargarClientes() {
   try {
@@ -77,6 +98,7 @@ async function cargarClientes() {
 
 // ====== Filtrar (trae envíos por fecha y aplica cliente opcional) ======
 async function filtrar() {
+  if (BUSY) return; // evita doble click
   const desde = qs('#desde').value;
   const hasta = qs('#hasta').value;
   const clienteId = qs('#filtroCliente').value;
@@ -86,20 +108,31 @@ async function filtrar() {
     return;
   }
 
+  // cancelar fetch anterior si aún corría
+  if (currentAbort) currentAbort.abort();
+  currentAbort = new AbortController();
+
+  const url = `/facturacion/preview?clienteId=${encodeURIComponent(clienteId)}&desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`;
+
   try {
-    const url = `/facturacion/preview?clienteId=${encodeURIComponent(clienteId)}&desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`;
-    const res = await fetch(url, { cache: 'no-store' });
+    setBusy(true, 'Generando reporte de facturación…');
+    const res = await fetch(url, { cache: 'no-store', signal: currentAbort.signal });
     if (!res.ok) throw new Error('Error generando preview');
     const { items, total } = await res.json();
 
-    envios = items; // ahora `envios` ya trae precio calculado, zona y partido
+    envios = items;
     pintarTabla();
+
     const info = qs('#total-info');
     const nf = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     info.textContent = `Registros: ${envios.length} · Total facturado: $ ${nf.format(total)}`;
   } catch (err) {
-    console.error(err);
-    alert('No se pudo generar el preview de facturación.');
+    if (err.name !== 'AbortError') {
+      console.error(err);
+      alert('No se pudo generar el preview de facturación.');
+    }
+  } finally {
+    setBusy(false);
   }
 }
 window.filtrar = filtrar;
