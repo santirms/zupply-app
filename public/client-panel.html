@@ -153,33 +153,55 @@
     const fEstado  = document.getElementById('fEstado');
     document.getElementById('btnFiltrar').addEventListener('click',()=>{ page=1; loadTabla(); loadMapData(); });
 
-    // Tabla
-    let page=1, limit=50;
-    async function loadTabla(){
-      const params = new URLSearchParams({ page, limit });
-      if (fEstado.value) params.set('estado', fEstado.value);
-      if (fDesde.value)  params.set('desde',  fDesde.value);
-      if (fHasta.value)  params.set('hasta',  fHasta.value);
+  // Tabla
+  let page=1, limit=50;
+  async function loadTabla(){
+    const params = new URLSearchParams({ page, limit });
+    if (fEstado.value) params.set('estado', fEstado.value);
+    if (fDesde.value)  params.set('desde',  fDesde.value);
+    if (fHasta.value)  params.set('hasta',  fHasta.value);
 
+    const tbody = document.getElementById('tbodyCliente');
+    try {
       const r = await fetch('/api/client-panel/shipments?'+params.toString(), { cache:'no-store' });
-      if (!r.ok) return;
-      const { items, total } = await r.json();
-      const tb = document.getElementById('tbodyCliente');
-      tb.innerHTML = items.map(it => `
-        <tr>
-          <td class="p-2">${it.tracking||'-'}</td>
-          <td class="p-2">${it.id_venta||'-'}</td>
-          <td class="p-2">${it.cliente_nombre||'-'}</td>
-          <td class="p-2">${new Date(it.createdAt).toLocaleString()}</td>
-          <td class="p-2">${(it.destino&&it.destino.partido)||'-'}</td>
-          <td class="p-2">${it.estado||'-'}</td>
-        </tr>`).join('');
-      document.getElementById('pageInfo').textContent = `Página ${page} – ${items.length} / ${total}`;
-    }
-    document.getElementById('prevPage').addEventListener('click',()=>{ if(page>1){ page--; loadTabla(); }});
-    document.getElementById('nextPage').addEventListener('click',()=>{ page++; loadTabla(); });
-    loadTabla();
 
+      // Defender: si no es JSON, mostrar el HTML/404 y abortar
+      const ct = r.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        const text = await r.text();
+        console.error('Respuesta no JSON:', r.status, text.slice(0,200));
+        tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="6">Error ${r.status}: respuesta no JSON</td></tr>`;
+        return;
+      }
+
+      const data = await r.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+      const total = typeof data.total === 'number' ? data.total : items.length;
+
+      tbody.innerHTML = items.map(it => `
+        <tr>
+          <td class="p-2">${it.tracking ?? '-'}</td>
+          <td class="p-2">${it.id_venta ?? '-'}</td>
+          <td class="p-2">${it.cliente_nombre ?? '-'}</td>
+          <td class="p-2">${it.createdAt ? new Date(it.createdAt).toLocaleString() : '-'}</td>
+          <td class="p-2">${it?.destino?.partido ?? '-'}</td>
+          <td class="p-2">${it.estado ?? '-'}</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('pageInfo').textContent =
+        `Página ${page} – ${items.length} / ${total}`;
+
+    } catch (e) {
+      console.error('Error en loadTabla:', e);
+      tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="6">${e.message}</td></tr>`;
+    }
+  }
+  document.getElementById('prevPage').addEventListener('click',()=>{ if(page>1){ page--; loadTabla(); }});
+  document.getElementById('nextPage').addEventListener('click',()=>{ page++; loadTabla(); });
+  loadTabla();
+
+ 
     // Mapa (Leaflet + bounds + debounce)
     let map, markersLayer, mapInited=false, fetchTimer;
     function initMapOnce(){
