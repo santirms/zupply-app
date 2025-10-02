@@ -4,8 +4,6 @@ const ctrl = require('../controllers/usersController');
 
 // 👉 Solo ADMIN puede crear usuarios cliente
 router.post('/create-client', requireRole('admin'), usersCtl.crearCliente);
-
-// (opcional) alta genérica de usuarios, también solo admin
 router.post('/', requireRole('admin'), usersCtl.crear);
 
 router.use(requireAuth, requireRole('admin'));
