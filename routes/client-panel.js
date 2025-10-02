@@ -45,6 +45,8 @@ router.get('/shipments', requireRole('cliente','admin','coordinador'), async (re
     };
 
     const [items, total] = await Promise.all([
+      console.log('[CLIENT-PANEL] user:', req.session?.user);
+      console.log('[CLIENT-PANEL] filter:', filter);
       Envio.find(filter, projection).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
       Envio.countDocuments(filter)
     ]);
