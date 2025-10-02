@@ -49,7 +49,7 @@ router.get('/shipments', requireRole('cliente','admin','coordinador'), async (re
       Envio.find(filter, projection).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
       Envio.countDocuments(filter)
     ]);
-
+    console.log('[CLIENT-PANEL] returning', { count: items.length, page, limit, total });
     res.json({ items, page, limit, total });
   } catch (e) {
     console.error('client-panel /shipments error:', e);
