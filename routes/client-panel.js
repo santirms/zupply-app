@@ -5,6 +5,17 @@ const Envio   = require('../models/Envio');
 
 const { requireRole, applyClientScope } = require('../middlewares/auth');
 
+// Fallback por si en caliente no lo encuentra (evita romper prod)
+const withClientScope = (req, base = {}) => {
+  if (typeof applyClientScope === 'function') return applyClientScope(req, base);
+  const u = req.session?.user;
+  if (u?.role === 'cliente') {
+    const sids = Array.isArray(u.sender_ids) ? u.sender_ids.filter(Boolean) : [];
+    return { ...base, sender_id: { $in: sids.length ? sids : ['__none__'] } };
+  }
+  return base;
+};
+
 // 1) Tabla: Tracking | Id de venta | Cliente | Fecha | Partido | Estado
 router.get('/shipments', requireRole('cliente','admin','coordinador'), async (req, res) => {
   try {
