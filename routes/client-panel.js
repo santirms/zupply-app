@@ -145,4 +145,33 @@ router.get('/shipments/map', requireRole('cliente','admin','coordinador'), async
   }
 });
 
+router.get('/_debug/senders', requireRole('admin','coordinador'), async (req, res) => {
+  try {
+    const agg = await Envio.aggregate([
+      {
+        $project: {
+          s_id:  '$sender_id',
+          sId:   '$senderId',
+          s:     '$sender',
+          t_id:  { $type: '$sender_id' },
+          tId:   { $type: '$senderId' },
+          t:     { $type: '$sender' }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          count: { $sum: 1 },
+          sender_id_examples: { $addToSet: { v: '$s_id', t: '$t_id' } },
+          senderId_examples:  { $addToSet: { v: '$sId',  t: '$tId'  } },
+          sender_examples:    { $addToSet: { v: '$s',    t: '$t'    } }
+        }
+      }
+    ]).exec();
+    res.json(agg[0] || {});
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
