@@ -53,6 +53,18 @@ function onlyManualOrEtiqueta(req, res, next) {
   next();
 }
 
+// Filtra automáticamente por sender_ids si el usuario es rol 'cliente'
+function applyClientScope(req, baseFilter = {}) {
+  const u = req.session?.user;
+  if (u?.role === 'cliente') {
+    const sids = Array.isArray(u.sender_ids) ? u.sender_ids.filter(Boolean) : [];
+    // si no tiene sender_ids, no debe ver nada
+    const scope = sids.length ? { $in: sids } : { $in: ['__none__'] };
+    return { ...baseFilter, sender_id: scope };
+  }
+  return baseFilter;
+}
+
 module.exports = {
   requireAuth,
   requireRole,
