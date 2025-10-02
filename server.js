@@ -169,6 +169,8 @@ app.use('/api/kpis',             require('./routes/kpis'));
 
 // PANEL GENERAL DE ENVÍOS (coordinador solo lectura; ver routes/envios.js)
 app.use('/api/envios',           require('./routes/envios'));
+const clientPanelRouter = require('./routes/client-panel');
+app.use('/api/client-panel',     requireAuth, clientPanelRouter);
 
 app.use('/api/scan-meli',        require('./routes/scan-meli'));   // POST /  y  GET /latest-render/:id
 
