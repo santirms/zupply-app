@@ -4,23 +4,43 @@ const router  = express.Router();
 const Envio   = require('../models/Envio');
 const { requireRole, applyClientScope } = require('../middlewares/auth');
 
+function buildSenderFilter(senderIds) {
+  // aceptá strings y numbers en la DB
+  const asStr = senderIds.map(s => String(s));
+  const asNum = senderIds
+    .map(s => Number(s))
+    .filter(n => Number.isFinite(n));
+
+  // soportá distintos nombres posibles del campo
+  const or = [];
+  if (asStr.length) {
+    or.push({ sender_id: { $in: asStr } });
+    or.push({ senderId:   { $in: asStr } });
+    or.push({ sender:     { $in: asStr } });
+  }
+  if (asNum.length) {
+    or.push({ sender_id: { $in: asNum } });
+    or.push({ senderId:   { $in: asNum } });
+    or.push({ sender:     { $in: asNum } });
+  }
+  // si nada matchea, devolvé un filtro imposible
+  return or.length ? { $or: or } : { _id: { $in: [] } };
+}
+
 // Scope helper estricto
 function getScopedFilter(req, base = {}) {
   const u = req.session?.user;
-  // 1) cliente: usa sus sender_ids
   if (u?.role === 'cliente') {
-    const sids = Array.isArray(u.sender_ids) ? u.sender_ids.map(String).filter(Boolean) : [];
+    const sids = Array.isArray(u.sender_ids) ? u.sender_ids.filter(Boolean) : [];
     if (!sids.length) return { filter: { _id: { $in: [] } }, reason: 'cliente-sin-senders' };
-    return { filter: { ...base, sender_id: { $in: sids } }, reason: 'cliente' };
+    return { filter: { ...base, ...buildSenderFilter(sids) }, reason: 'cliente' };
   }
-  // 2) admin/coordinador: requieren ?sender=ID1,ID2
   if (u?.role === 'admin' || u?.role === 'coordinador') {
     const senderParam = (req.query.sender || req.query.sender_id || '').trim();
     if (!senderParam) return { filter: { _id: { $in: [] } }, reason: 'admin-sin-sender-param' };
-    const sids = senderParam.split(',').map(s => s.trim()).filter(Boolean).map(String);
-    return { filter: { ...base, sender_id: { $in: sids } }, reason: 'admin/coordinador' };
+    const sids = senderParam.split(',').map(s => s.trim()).filter(Boolean);
+    return { filter: { ...base, ...buildSenderFilter(sids) }, reason: 'admin/coordinador' };
   }
-  // 3) otros roles: vacío
   return { filter: { _id: { $in: [] } }, reason: 'otro-rol' };
 }
 
