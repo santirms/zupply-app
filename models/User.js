@@ -5,7 +5,7 @@ const UserSchema = new mongoose.Schema({
   username:{ type: String, trim: true, lowercase: true, unique: false }, // login por nombre para chofer
   phone:   { type: String, trim: true },                                  // útil para chofer
   password_hash: { type: String, required: true, select: false },
-  role:    { type: String, enum: ['admin','coordinador','chofer'], required: true },
+  role:    { type: String, enum: ['admin','coordinador','chofer','cliente'], required: true },
   driver_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Chofer', default: null },
   sender_ids: { type: [String], 'default': () => [], index: true },
   cliente_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente', default: null },
