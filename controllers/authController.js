@@ -37,7 +37,7 @@ async function login(req, res, next) {
     await user.save();
 
     // al final del login, antes de responder:
-    const map = { chofer: '/mis-envios.html', coordinador: '/index.html', admin: '/index.html' };
+    const map = { chofer: '/mis-envios.html', coordinador: '/index.html', admin: '/index.html', cliente: '/client-panel.html' };
     return res.json({ ok: true, role: user.role, redirectTo: map[user.role] || '/index.html' });
     } catch (e) { next(e); }
 }
