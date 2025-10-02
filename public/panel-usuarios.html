@@ -92,6 +92,7 @@
               <option value="admin">admin</option>
               <option value="coordinador">coordinador</option>
               <option value="chofer">chofer</option>
+              <option value="cliente">cliente</option>
             </select>
           </label>
         </div>
@@ -125,6 +126,21 @@
           </label>
         </div>
 
+        <!-- Campos cliente -->
+       <div id="clienteFields" class="grid grid-cols-1 md:grid-cols-3 gap-3 hidden">
+          <label class="text-sm">Email
+          <input id="emailCli" type="email" class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent">
+          </label>
+          <label class="text-sm">Contraseña (opcional)
+          <input id="passwordCli" type="password" class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent" placeholder="opcional">
+          </label>
+         <label class="text-sm">Sender IDs (separados por coma)
+        <input id="senderIds" class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent" placeholder="79954103, 12345678">
+       </label>
+     <label class="text-sm">cliente_id (opcional, ObjectId)
+    <input id="clienteId" class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent" placeholder="6512ab... (opcional)">
+  </label>
+</div>
         <div class="mt-4 flex items-center gap-3">
           <button id="crear"
                   class="px-4 py-2 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">
