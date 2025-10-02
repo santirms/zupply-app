@@ -70,5 +70,6 @@ module.exports = {
   requireRole,
   restrictMethodsForRoles,
   onlyOwnShipments,
-  onlyManualOrEtiqueta
+  onlyManualOrEtiqueta,
+  applyClientScope
 };
