@@ -52,36 +52,35 @@ router.get('/home', async (req, res) => {
     const startDia = atLocal(tISO, '00:00');
     const endDia   = atLocal(tISO, '23:59'); // inclusive; si preferís [00:00, mañana 00:00) usá endNext
 
-    // En ruta desde último reset 23:30
-    const { start: startRuta, end: endRuta } = windowFromReset('23:30');
+    // 36 horas atrás (para EN RUTA)
+    const start36h = new Date(Date.now() - 36 * 60 * 60 * 1000);
 
     // === Consultas (countDocuments) ===
     const [pendientes, en_ruta, entregados, incidencias] = await Promise.all([
-      // pendientes: estado=pendiente, últimas 48h
-      Envio.countDocuments({
-        estado: 'pendiente',
-        fecha: { $gte: start48h }
-      }),
+    // pendientes: estado=pendiente, últimas 48h
+    Envio.countDocuments({
+    estado: 'pendiente',
+    fecha: { $gte: start48h }
+  }),
 
-      // en ruta: estado=en_camino, desde último 23:30 a ahora
-      Envio.countDocuments({
-        estado: 'en_camino',
-        fecha: { $gte: startRuta, $lte: endRuta }
-      }),
+  // en ruta: estado=en_camino, últimas 36h (independiente del reset)
+  Envio.countDocuments({
+    estado: 'en_camino',
+    fecha: { $gte: start36h }
+  }),
 
-      // entregados: hoy (00:00 → 23:59)
-      Envio.countDocuments({
-        estado: 'entregado',
-        fecha: { $gte: startDia, $lte: endDia }
-      }),
+  // entregados: hoy (00:00 → 23:59)
+  Envio.countDocuments({
+    estado: 'entregado',
+    fecha: { $gte: startDia, $lte: endDia }
+  }),
 
-      // incidencias: 48h con estados específicos
-      Envio.countDocuments({
-        estado: { $in: ['reprogramado', 'comprador_ausente', 'demorado'] },
-        fecha: { $gte: start48h }
-      })
-    ]);
-
+  // incidencias: 48h con estados específicos
+  Envio.countDocuments({
+    estado: { $in: ['reprogramado', 'comprador_ausente', 'demorado'] },
+    fecha: { $gte: start48h }
+  })
+]);
     return res.json({ pendientes, en_ruta, entregados, incidencias });
   } catch (e) {
     console.error('KPIs /home error:', e);
