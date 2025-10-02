@@ -32,7 +32,7 @@ router.get('/shipments', requireRole('cliente','admin','coordinador'), async (re
       if (req.query.hasta) filter.createdAt.$lte = new Date(req.query.hasta);
     }
 
-    filter = applyClientScope(req, filter);
+    filter = withClientScope(req, filter);
 
     // proyección mínima
     const projection = {
