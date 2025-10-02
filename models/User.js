@@ -12,6 +12,15 @@ const UserSchema = new mongoose.Schema({
   last_login: { type: Date }
 }, { timestamps: true });
 
+  // ⬇⬇⬇ NUEVO para clientes
+  sender_ids: { type: [String], default: [], index: true },
+  cliente_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente', default: null },
+
+  is_active: { type: Boolean, default: true },
+  must_change_password: { type: Boolean, default: false },
+  last_login: { type: Date }
+}, { timestamps: true });
+
 // índices (parciales, sin $nin/$ne)
 UserSchema.index(
   { email: 1 },
