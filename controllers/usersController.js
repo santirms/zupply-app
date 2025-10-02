@@ -2,6 +2,9 @@ const bcrypt = require('bcryptjs');
 const slugify = require('../utils/slugify');
 const User = require('../models/User');
 const Chofer = require('../models/Chofer');
+const Cliente = require('../models/Cliente');
+
+const uniq = arr => Array.from(new Set(arr.filter(Boolean).map(String)));
 
 const isNonEmptyString = v => typeof v === 'string' && v.trim().length > 0;
 
@@ -17,7 +20,7 @@ exports.crear = async (req, res, next) => {
     let {
       email, username, phone, role, password,
       driver_id, chofer_nombre, chofer_telefono,
-      sender_ids, cliente_id
+      sender_ids = [], cliente_id
     } = req.body || {};
 
     if (!role) return res.status(400).json({ error: 'role requerido' });
@@ -34,14 +37,18 @@ exports.crear = async (req, res, next) => {
     }
 
     // === Soporte CLIENTE (NUEVO) ===
-    if (role === 'cliente') {
-      // Recomendado que tenga email (para login y recuperación)
-      if (!isNonEmptyString(email)) {
-        return res.status(400).json({ error: 'email requerido para usuarios cliente' });
+       if (role === 'cliente') {
+      if (!email) return res.status(400).json({ error: 'email requerido para usuarios cliente' });
+
+      // traer sender_id(s) del Cliente si viene cliente_id
+      if (cliente_id) {
+        const cli = await Cliente.findById(cliente_id).lean();
+        if (cli?.sender_id) {
+          sender_ids = uniq([...(Array.isArray(sender_ids) ? sender_ids : []), ...cli.sender_id]);
+        }
+      } else {
+        sender_ids = uniq(Array.isArray(sender_ids) ? sender_ids : []);
       }
-      // Normalizar sender_ids
-      if (!Array.isArray(sender_ids)) sender_ids = [];
-      sender_ids = sender_ids.map(s => String(s).trim()).filter(Boolean);
     }
 
     // username único si viene
@@ -56,8 +63,8 @@ exports.crear = async (req, res, next) => {
     const rawPass = password || phone || Math.random().toString(36).slice(2,10);
     const password_hash = await bcrypt.hash(String(rawPass), 12);
 
-    const created = await User.create({
-      email: email ? String(email).toLowerCase() : undefined,
+  const created = await User.create({
+      email: email?.toLowerCase(),
       username: username || undefined,
       phone: phone || undefined,
       role,
@@ -65,43 +72,38 @@ exports.crear = async (req, res, next) => {
       password_hash,
       is_active: true,
       must_change_password: !password,
-      // NUEVO: campos del scope cliente
+      // ⬇ guarda el scope del cliente
       sender_ids: role === 'cliente' ? sender_ids : undefined,
       cliente_id: role === 'cliente' ? (cliente_id || null) : undefined
     });
 
-    res.status(201).json({
-      id: created._id,
-      username: created.username,
-      email: created.email,
-      generated_password: password ? undefined : rawPass
-    });
+    res.status(201).json({ id: created._id, username: created.username, email: created.email,
+      generated_password: password ? undefined : rawPass });
   } catch (e) { next(e); }
 };
 
 exports.actualizar = async (req, res, next) => {
   try {
-    const { role, is_active, password, phone, sender_ids, cliente_id } = req.body || {};
+    let { role, is_active, password, phone, sender_ids, cliente_id } = req.body || {};
     const upd = {};
     if (role) upd.role = role;
     if (typeof is_active === 'boolean') upd.is_active = is_active;
     if (phone) upd.phone = phone;
+
     if (password) {
       upd.password_hash = await bcrypt.hash(String(password), 12);
       upd.must_change_password = false;
     }
 
-    // Si el rol es cliente (o va a serlo), permitir tocar el scope
+    // si se edita como cliente, mergear sender_ids con los del Cliente
     if (role === 'cliente' || typeof sender_ids !== 'undefined' || typeof cliente_id !== 'undefined') {
-      if (typeof sender_ids !== 'undefined') {
-        if (!Array.isArray(sender_ids)) {
-          return res.status(400).json({ error: 'sender_ids debe ser un array de strings' });
-        }
-        upd.sender_ids = sender_ids.map(s => String(s).trim()).filter(Boolean);
+      let merged = Array.isArray(sender_ids) ? sender_ids : [];
+      if (cliente_id) {
+        const cli = await Cliente.findById(cliente_id).lean();
+        if (cli?.sender_id) merged = uniq([...merged, ...cli.sender_id]);
+        upd.cliente_id = cliente_id;
       }
-      if (typeof cliente_id !== 'undefined') {
-        upd.cliente_id = cliente_id || null;
-      }
+      if (typeof sender_ids !== 'undefined') upd.sender_ids = uniq(merged);
     }
 
     await User.findByIdAndUpdate(req.params.id, upd);
