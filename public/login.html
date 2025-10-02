@@ -152,7 +152,7 @@
         } catch {}
 
        // OK → redirigir según rol (o usar redirectTo si viene del backend)
-         const map = { chofer: '/mis-envios.html', coordinador: '/index.html', admin: '/index.html' };
+         const map = { chofer: '/mis-envios.html', coordinador: '/index.html', admin: '/index.html', cliente: '/client-panel.html' };
          const dest = (data && typeof data.redirectTo === 'string')
            ? data.redirectTo
            : map[data.role] || '/index.html';
