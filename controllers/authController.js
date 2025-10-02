@@ -25,14 +25,14 @@ async function login(req, res, next) {
     if (!ok) return res.status(401).json({ error: 'Usuario o contraseña inválidos' });
 
     req.session.user = {
-      authenticated: true,
-      _id: user._id,
-      role: user.role,
-      email: user.email,
-      username: user.username,
-      driver_id: user.driver_id || null,
-      sender_ids: Array.isArray(user.sender_ids) ? user.sender_ids.map(String) : [], // <- acá
-      cliente_id: user.cliente_id || null,
+        _id: user._id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        driver_id: user.driver_id || null,
+        sender_ids: Array.isArray(user.sender_ids) ? user.sender_ids.map(String) : [], // ⬅️ importante
+        cliente_id: user.cliente_id || null,
+        authenticated: true
     };
 
     user.last_login = new Date();
