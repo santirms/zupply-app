@@ -7,20 +7,13 @@ const UserSchema = new mongoose.Schema({
   password_hash: { type: String, required: true, select: false },
   role:    { type: String, enum: ['admin','coordinador','chofer'], required: true },
   driver_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Chofer', default: null },
+  sender_ids: { type: [String], 'default': () => [], index: true },
+  cliente_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente', default: null },
   is_active: { type: Boolean, default: true },
   must_change_password: { type: Boolean, default: false }, // para forzar cambio en primer login
   last_login: { type: Date }
 }, { timestamps: true });
-
-  // ⬇⬇⬇ NUEVO para clientes
-  sender_ids: { type: [String], default: [], index: true },
-  cliente_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente', default: null },
-
-  is_active: { type: Boolean, default: true },
-  must_change_password: { type: Boolean, default: false },
-  last_login: { type: Date }
-}, { timestamps: true });
-
+ 
 // índices (parciales, sin $nin/$ne)
 UserSchema.index(
   { email: 1 },
