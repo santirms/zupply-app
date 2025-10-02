@@ -101,5 +101,12 @@ envioSchema.index(
 // (opcional) índice para listar por cliente/fecha más rápido en panel/facturación
 envioSchema.index({ cliente_id: 1, fecha: -1 });
 
+// models/Envio.js
+EnvioSchema.index({ sender_id: 1, createdAt: -1 });
+EnvioSchema.index({ estado: 1, createdAt: -1 });
+EnvioSchema.index({ 'destino.partido': 1, createdAt: -1 });
+// Para mapa (destino.loc = { type: 'Point', coordinates: [lng, lat] })
+EnvioSchema.index({ 'destino.loc': '2dsphere' });
+
 
 module.exports = mongoose.models.Envio || mongoose.model('Envio', envioSchema);
