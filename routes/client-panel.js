@@ -174,4 +174,19 @@ router.get('/_debug/senders', requireRole('admin','coordinador'), async (req, re
   }
 });
 
+// routes/client-panel.js (debajo del otro _debug)
+router.get('/_debug/senders/list', requireRole('admin','coordinador'), async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim(); // prefijo opcional
+    const match = q ? { sender_id: { $regex: '^' + q, $options: 'i' } } : {};
+    const agg = await Envio.aggregate([
+      { $match: match },
+      { $group: { _id: '$sender_id', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 200 }
+    ]).exec();
+    res.json({ items: agg.map(x => ({ sender_id: x._id, count: x.count })) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;
