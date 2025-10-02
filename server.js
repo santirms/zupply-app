@@ -103,6 +103,15 @@ const pagesChofer = [
   '/mis-envios.html'
 ];
 
+const pagesCliente = [
+  '/client-panel.html'
+];
+
+pagesCliente.forEach(p =>
+  app.get(p, requireAuthPage, requireRolePage('cliente','admin','coordinador'),
+    (req, res) => res.sendFile(path.join(__dirname, 'public', p.replace(/^\//,''))))
+);
+
 // Gateo por rol (estas rutas deben ir ANTES del static)
 pagesAdminOnly.forEach(p =>
   app.get(p, requireAuthPage, requireRolePage('admin'),
@@ -137,7 +146,7 @@ app.get('/index', (req, res) => {
 app.get('/', (req, res) => {
   const u = req.session?.user;
   if (!u?.authenticated) return res.redirect('/auth/login');
-  const map = { chofer: '/mis-envios.html', coordinador: '/index.html', admin: '/index.html' };
+  const map = { chofer: '/mis-envios.html', coordinador: '/index.html', admin: '/index.html', cliente: '/client-panel.html' };
   return res.redirect(map[u.role] || '/index.html');
 });
 
@@ -164,14 +173,12 @@ app.use('/api/zonas',            require('./routes/zonas'));
 app.use('/api/listas-de-precios',require('./routes/listasDePrecios'));
 app.use('/api/partidos',         require('./routes/partidos'));
 app.use('/api/clientes',         require('./routes/clientes'));
-app.use('/users',                require('./routes/users')); // detrás del guardia global
+app.use('/api/users',            require('./routes/users'));
 app.use('/api/kpis',             require('./routes/kpis'));
+app.use('/api/client-panel',     require('./routes/client-panel'));
 
 // PANEL GENERAL DE ENVÍOS (coordinador solo lectura; ver routes/envios.js)
 app.use('/api/envios',           require('./routes/envios'));
-const clientPanelRouter = require('./routes/client-panel');
-app.use('/api/client-panel',     requireAuth, clientPanelRouter);
-
 app.use('/api/scan-meli',        require('./routes/scan-meli'));   // POST /  y  GET /latest-render/:id
 
 // Módulos permitidos a admin + coordinador (crear/ingresar/subir)
