@@ -4,122 +4,121 @@ const router  = express.Router();
 const Envio   = require('../models/Envio');
 const { requireRole, applyClientScope } = require('../middlewares/auth');
 
-// fallback por si applyClientScope no está exportado
-function withClientScope(req, base = {}) {
-  if (typeof applyClientScope === 'function') return applyClientScope(req, base);
-
+// Scope helper estricto
+function getScopedFilter(req, base = {}) {
   const u = req.session?.user;
+  // 1) cliente: usa sus sender_ids
   if (u?.role === 'cliente') {
     const sids = Array.isArray(u.sender_ids) ? u.sender_ids.map(String).filter(Boolean) : [];
-    return { ...base, sender_id: { $in: sids.length ? sids : ['__none__'] } };
+    if (!sids.length) return { filter: { _id: { $in: [] } }, reason: 'cliente-sin-senders' };
+    return { filter: { ...base, sender_id: { $in: sids } }, reason: 'cliente' };
   }
-  return base;
+  // 2) admin/coordinador: requieren ?sender=ID1,ID2
+  if (u?.role === 'admin' || u?.role === 'coordinador') {
+    const senderParam = (req.query.sender || req.query.sender_id || '').trim();
+    if (!senderParam) return { filter: { _id: { $in: [] } }, reason: 'admin-sin-sender-param' };
+    const sids = senderParam.split(',').map(s => s.trim()).filter(Boolean).map(String);
+    return { filter: { ...base, sender_id: { $in: sids } }, reason: 'admin/coordinador' };
+  }
+  // 3) otros roles: vacío
+  return { filter: { _id: { $in: [] } }, reason: 'otro-rol' };
 }
 
-// Si NO es cliente, permitir scoping por query (?sender=ID1,ID2) para admins/coordinadores;
-// si no viene, devolvemos vacío (evita descargar toda la colección por error).
-function applyScopeForAnyRole(req, base = {}) {
-  const u = req.session?.user;
-  let filter = withClientScope(req, base);
-  let scoped = u?.role === 'cliente';
+// Normalizador de columnas para la tabla
+function normalizeRow(doc) {
+  // adaptá aquí si tus campos reales tienen otros nombres
+  const tracking = doc.tracking ?? doc.tracking_id ?? doc.numero_seguimiento ?? null;
+  const id_venta = doc.id_venta ?? doc.order_id ?? doc.venta_id ?? null;
+  const cliente_nombre = doc.cliente_nombre ?? doc?.cliente?.nombre ?? null;
+  const createdAt = doc.createdAt ?? doc.fecha ?? doc.created_at ?? null;
+  const partido = doc?.destino?.partido ?? doc?.destino?.localidad ?? doc?.zona?.partido ?? null;
+  const estado = doc.estado ?? doc.status ?? null;
 
-  if (!scoped && (u?.role === 'admin' || u?.role === 'coordinador')) {
-    const sender = (req.query.sender_id || req.query.sender || '').trim();
-    if (sender) {
-      const arr = sender.split(',').map(s => s.trim()).filter(Boolean).map(String);
-      filter = { ...filter, sender_id: { $in: arr } };
-      scoped = true;
-    }
-  }
-  return { filter, scoped };
+  return {
+    tracking,
+    id_venta,
+    cliente_nombre,
+    createdAt,
+    destino: { partido },
+    estado
+  };
 }
 
-// 1) Tabla
+// ─────────────────────────────────────────────────────────────────────────────
+
 router.get('/shipments', requireRole('cliente','admin','coordinador'), async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit||'50',10), 200);
     const page  = Math.max(parseInt(req.query.page||'1',10), 1);
     const skip  = (page - 1) * limit;
 
-    let baseFilter = {};
-    if (req.query.estado) baseFilter.estado = String(req.query.estado);
+    let base = {};
+    if (req.query.estado) base.estado = String(req.query.estado);
     if (req.query.desde || req.query.hasta) {
-      baseFilter.createdAt = {};
-      if (req.query.desde) baseFilter.createdAt.$gte = new Date(req.query.desde);
-      if (req.query.hasta) baseFilter.createdAt.$lte = new Date(req.query.hasta);
+      base.createdAt = {};
+      if (req.query.desde) base.createdAt.$gte = new Date(req.query.desde);
+      if (req.query.hasta) base.createdAt.$lte = new Date(req.query.hasta);
     }
 
-    const { filter, scoped } = applyScopeForAnyRole(req, baseFilter);
-    console.log('[CLIENT-PANEL] filter:', filter, 'scoped:', scoped);
-
-    if (!scoped) {
-      // Nada de scope => vaciamos de forma explícita
-      return res.json({ items: [], page, limit, total: 0, note: 'No scope (cliente sin sender_ids o admin sin ?sender=)' });
-    }
+    const { filter, reason } = getScopedFilter(req, base);
+    console.log('[CLIENT-PANEL] filter:', filter, 'reason:', reason);
 
     const projection = {
-      tracking: 1,
-      id_venta: 1,
-      cliente_nombre: 1,
-      createdAt: 1,
-      'destino.partido': 1,
-      estado: 1
+      tracking: 1, tracking_id: 1, numero_seguimiento: 1,
+      id_venta: 1, order_id: 1, venta_id: 1,
+      cliente_nombre: 1, 'cliente.nombre': 1,
+      createdAt: 1, fecha: 1, created_at: 1,
+      'destino.partido': 1, 'destino.localidad': 1, 'zona.partido': 1,
+      estado: 1, status: 1,
+      sender_id: 1
     };
 
-    const [items, total] = await Promise.all([
+    const [docs, total] = await Promise.all([
       Envio.find(filter, projection).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
       Envio.countDocuments(filter)
     ]);
 
-    // logs seguros
-    console.log('[CLIENT-PANEL] returning', { count: Array.isArray(items) ? items.length : 0, page, limit, total });
-
-    res.json({ items: Array.isArray(items) ? items : [], page, limit, total });
+    const items = Array.isArray(docs) ? docs.map(normalizeRow) : [];
+    res.json({ items, page, limit, total });
   } catch (e) {
     console.error('client-panel /shipments error:', e);
     res.status(500).json({ error: 'server_error', message: e.message });
   }
 });
 
-// 2) Mapa
 router.get('/shipments/map', requireRole('cliente','admin','coordinador'), async (req, res) => {
   try {
-    let baseFilter = {};
+    let base = {};
     const { swLat, swLng, neLat, neLng, estado } = req.query;
-
     if (swLat && swLng && neLat && neLng) {
-      baseFilter['destino.loc'] = {
-        $geoWithin: {
-          $box: [
-            [parseFloat(swLng), parseFloat(swLat)],
-            [parseFloat(neLng), parseFloat(neLat)]
-          ]
-        }
+      base['destino.loc'] = {
+        $geoWithin: { $box: [[parseFloat(swLng), parseFloat(swLat)], [parseFloat(neLng), parseFloat(neLat)]] }
       };
     }
-    if (estado) baseFilter.estado = String(estado);
+    if (estado) base.estado = String(estado);
 
-    const { filter, scoped } = applyScopeForAnyRole(req, baseFilter);
-    console.log('[CLIENT-PANEL MAP] filter:', filter, 'scoped:', scoped);
-
-    if (!scoped) {
-      return res.json({ items: [], limit: 0, note: 'No scope (cliente sin sender_ids o admin sin ?sender=)' });
-    }
+    const { filter, reason } = getScopedFilter(req, base);
+    console.log('[CLIENT-PANEL MAP] filter:', filter, 'reason:', reason);
 
     const projection = {
       _id: 1,
-      tracking: 1,
-      estado: 1,
-      'destino.partido': 1,
-      'destino.loc': 1
+      tracking: 1, tracking_id: 1,
+      estado: 1, status: 1,
+      'destino.partido': 1, 'destino.loc': 1
     };
 
     const limit = Math.min(parseInt(req.query.limit||'500',10), 1000);
-    const items = await Envio.find(filter, projection).sort({ createdAt: -1, _id: -1 }).limit(limit).lean();
+    const docs = await Envio.find(filter, projection).sort({ createdAt: -1, _id: -1 }).limit(limit).lean();
 
-    console.log('[CLIENT-PANEL MAP] returning', { count: Array.isArray(items) ? items.length : 0 });
+    // normalización mínima para popup
+    const items = (docs||[]).map(d => ({
+      _id: d._id,
+      tracking: d.tracking ?? d.tracking_id ?? null,
+      estado: d.estado ?? d.status ?? null,
+      destino: { partido: d?.destino?.partido, loc: d?.destino?.loc }
+    }));
 
-    res.json({ items: Array.isArray(items) ? items : [], limit });
+    res.json({ items, limit });
   } catch (e) {
     console.error('client-panel /shipments/map error:', e);
     res.status(500).json({ error: 'server_error', message: e.message });
