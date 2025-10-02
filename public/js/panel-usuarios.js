@@ -1,116 +1,173 @@
-// public/js/panel-usuarios.js (actualizado: sin columna ID + ocultar admins)
+// /public/js/panel-usuarios.js
+
 const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-// ========== Topbar ==========
-(function initTopbar(){
-  (function(){
-    const btn=$('#userBtn'), menu=$('#userMenu'), wrap=$('#userMenuWrap');
-    if(btn&&menu&&wrap){
-      btn.addEventListener('click', ()=>menu.classList.toggle('hidden'));
-      document.addEventListener('click', e=>{ if(!wrap.contains(e.target)) menu.classList.add('hidden'); });
+const API_BASE = '/api/users'; // <- ahora la API está namespaced
+
+const ui = {
+  role: $('#role'),
+  // admin/coordinador
+  email: $('#email'), password: $('#password'),
+  // coordinador (si usás campos separados; si no, podés ignorarlos)
+  emailC: $('#emailC'), passwordC: $('#passwordC'),
+  // chofer
+  choferNombre: $('#chofer_nombre'),
+  choferTelefono: $('#chofer_telefono'),
+  choferFields: $('#choferFields'),
+  // cliente
+  clienteFields: $('#clienteFields'),
+  emailCli: $('#emailCli'),
+  passwordCli: $('#passwordCli'),
+  senderIds: $('#senderIds'),
+  clienteId: $('#clienteId'),
+  // otros
+  adminFields: $('#adminFields'),
+  coorFields: $('#coorFields'),
+  crearBtn: $('#crear'),
+  msg: $('#msg'),
+  tblBody: document.querySelector('#tbl tbody')
+};
+
+function show(section, on) {
+  if (!section) return;
+  section.classList.toggle('hidden', !on);
+}
+
+function onRoleChange() {
+  const r = ui.role.value;
+  // Mostrar/ocultar secciones según rol
+  show(ui.adminFields, r === 'admin');        // si usás los campos admin
+  show(ui.coorFields, r === 'coordinador');   // si usás los campos coordinador
+  show(ui.choferFields, r === 'chofer');
+  show(ui.clienteFields, r === 'cliente');
+}
+ui.role.addEventListener('change', onRoleChange);
+onRoleChange();
+
+// Helpers
+async function fetchJSON(url, opts = {}) {
+  const r = await fetch(url, opts);
+  const ct = r.headers.get('content-type') || '';
+  // Si no es JSON, evitamos el crash en parseo (404/HTML login, etc.)
+  if (!ct.includes('application/json')) {
+    const text = await r.text();
+    throw new Error(`HTTP ${r.status} – respuesta no JSON: ${text.slice(0, 120)}...`);
+  }
+  const data = await r.json();
+  if (!r.ok) {
+    const msg = data?.error || `HTTP ${r.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+async function loadUsers() {
+  try {
+    const data = await fetchJSON(`${API_BASE}`);
+    const { users = [] } = data;
+    ui.tblBody.innerHTML = users.map(u => `
+      <tr>
+        <td class="px-3 py-2">${u.email || '-'}</td>
+        <td class="px-3 py-2">${u.username || '-'}</td>
+        <td class="px-3 py-2">${u.role}</td>
+        <td class="px-3 py-2">${u.is_active ? 'sí' : 'no'}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    console.error('Error cargando usuarios:', e);
+    ui.tblBody.innerHTML = `<tr><td class="px-3 py-2 text-red-600" colspan="4">No se pudo cargar la lista (${e.message}).</td></tr>`;
+  }
+}
+
+function parseSenderIds(raw) {
+  return String(raw || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+async function crearUsuario() {
+  ui.msg.textContent = 'Creando...';
+  ui.msg.classList.remove('text-red-600');
+  try {
+    const role = ui.role.value;
+
+    // payloads por rol
+    if (role === 'cliente') {
+      const body = {
+        email: ui.emailCli.value || undefined,
+        password: ui.passwordCli.value || undefined,
+        sender_ids: parseSenderIds(ui.senderIds.value),
+        cliente_id: ui.clienteId.value || undefined
+      };
+      await fetchJSON(`${API_BASE}/create-client`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify(body)
+      });
+    } else if (role === 'chofer') {
+      const body = {
+        role,
+        chofer_nombre: ui.choferNombre.value,
+        chofer_telefono: ui.choferTelefono.value
+        // password: si querés, podrías pasarlo, pero en tu controller
+        // ya usa tel o random como fallback
+      };
+      await fetchJSON(`${API_BASE}`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify(body)
+      });
+    } else if (role === 'admin' || role === 'coordinador') {
+      // Si realmente usás campos separados por rol, tomalos del bloque correcto
+      const email = (role === 'admin') ? ui.email.value : ui.emailC.value;
+      const password = (role === 'admin') ? ui.password.value : ui.passwordC.value;
+      const body = { role, email, password };
+      await fetchJSON(`${API_BASE}`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify(body)
+      });
+    } else {
+      throw new Error('Rol no soportado');
     }
-    $('#logoutBtn')?.addEventListener('click', async ()=>{
+
+    ui.msg.textContent = '✅ Usuario creado';
+    await loadUsers();
+  } catch (e) {
+    console.error('Error creando usuario:', e);
+    ui.msg.textContent = `❌ ${e.message}`;
+    ui.msg.classList.add('text-red-600');
+  }
+}
+
+ui.crearBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  crearUsuario();
+});
+
+// utilidad UI ya usada en otras páginas
+(function userMenuAndTheme(){
+  try {
+    const btn=document.getElementById('userBtn'),menu=document.getElementById('userMenu'),wrap=document.getElementById('userMenuWrap');
+    btn?.addEventListener('click',()=>menu.classList.toggle('hidden'));
+    document.addEventListener('click',(e)=>{ if(!wrap.contains(e.target)) menu.classList.add('hidden'); });
+    document.getElementById('logoutBtn')?.addEventListener('click', async ()=>{
       try{ await fetch('/auth/logout',{method:'POST'}) }catch{}
-      try{ localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username'); }catch{}
-      location.href='/auth/login';
+      localStorage.removeItem('zpl_auth'); location.href='/auth/login';
     });
-    fetch('/me',{cache:'no-store'})
-      .then(r=>{ if(!r.ok) throw 0; return r.json(); })
-      .then(me=>{ const n=me.name||me.username||me.email||'Usuario'; const u=$('#username'); if(u) u.textContent=n; })
-      .catch(()=> location.href='/auth/login');
-  })();
 
-  (function(){
-    const order=['light','dark','system'];
-    const btn=$('#themeBtn');
-    if(!btn) return;
-    const apply=(mode)=>{
-      const prefersDark=window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const wantDark=(mode==='dark')||(mode==='system'&&prefersDark);
-      document.documentElement.classList.toggle('dark', wantDark);
-      localStorage.setItem('zpl_theme', mode);
-      btn.textContent='Tema: ' + (mode==='system'?'auto':mode);
-    };
+    fetch('/me',{cache:'no-store'}).then(r=>r.json()).then(me=>{
+      document.getElementById('username').textContent=(me.name||me.username||me.email||'Usuario');
+    }).catch(()=>location.href='/auth/login');
+
+    const order=['light','dark','system']; const btnTheme=document.getElementById('themeBtn');
+    const apply=m=>{const prefers=matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',m==='dark'||(m==='system'&&prefers));localStorage.setItem('zpl_theme',m);btnTheme.textContent='Tema: '+(m==='system'?'auto':m);};
     apply(localStorage.getItem('zpl_theme')||'system');
-    btn.addEventListener('click', ()=>{
-      const cur=localStorage.getItem('zpl_theme')||'system';
-      const next=order[(order.indexOf(cur)+1)%order.length];
-      apply(next);
-    });
-  })();
-
-  const y=document.getElementById('anio'); if(y) y.textContent=new Date().getFullYear();
+    btnTheme?.addEventListener('click',()=>{const c=localStorage.getItem('zpl_theme')||'system';apply(order[(order.indexOf(c)+1)%order.length]);});
+  } catch {}
 })();
 
-// ========== UI del formulario ==========
-const roleSel = document.getElementById('role');
-const adminFields  = document.getElementById('adminFields');
-const coorFields   = document.getElementById('coorFields');
-const choferFields = document.getElementById('choferFields');
-
-const showByRole = (role)=>{
-  adminFields.classList.toggle('hidden', role!=='admin');
-  coorFields.classList.toggle('hidden', role!=='coordinador');
-  choferFields.classList.toggle('hidden', role!=='chofer');
-};
-roleSel.addEventListener('change', ()=> showByRole(roleSel.value));
-showByRole(roleSel.value);
-
-// ========== Carga de usuarios (sin admins) ==========
-async function load() {
-  const r = await fetch('/users', { cache:'no-store' });
-  const { users=[] } = await r.json();
-  const visible = users.filter(u => u.role !== 'admin'); // ocultar admins
-  const tb = document.querySelector('#tbl tbody');
-
-  if (!visible.length) {
-    tb.innerHTML = `<tr><td colspan="4" class="px-3 py-4 text-center opacity-70">No hay usuarios para mostrar</td></tr>`;
-    return;
-  }
-
-  tb.innerHTML = visible.map(u => `
-    <tr class="hover:bg-slate-50 dark:hover:bg-white/10">
-      <td class="px-3 py-2">${u.email || ''}</td>
-      <td class="px-3 py-2">${u.username || ''}</td>
-      <td class="px-3 py-2">${u.role}</td>
-      <td class="px-3 py-2">${u.is_active ? '✔' : '✖'}</td>
-    </tr>
-  `).join('');
-}
-load();
-
-// ========== Crear ==========
-document.getElementById('crear').addEventListener('click', async () => {
-  const msg = document.getElementById('msg');
-  msg.textContent = '';
-  try {
-    const role = roleSel.value;
-    let body = { role };
-
-    if (role === 'admin') {
-      body.email = document.getElementById('email').value.trim();
-      body.password = document.getElementById('password').value;
-    } else if (role === 'coordinador') {
-      body.email = document.getElementById('emailC').value.trim();
-      body.password = document.getElementById('passwordC').value;
-    } else {
-      body.chofer_nombre   = document.getElementById('chofer_nombre').value.trim();
-      body.chofer_telefono = document.getElementById('chofer_telefono').value.trim();
-    }
-
-    const r = await fetch('/users', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(body)
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'Error al crear');
-
-    msg.textContent = role==='chofer'
-      ? `Chofer creado. Usuario: ${data.username || '(ver en listado)'}`
-      : 'Usuario creado.';
-    load();
-  } catch(e) {
-    msg.textContent = e.message;
-  }
-});
+// carga inicial de la lista
+loadUsers();
