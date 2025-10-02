@@ -102,11 +102,11 @@ envioSchema.index(
 envioSchema.index({ cliente_id: 1, fecha: -1 });
 
 // models/Envio.js
-EnvioSchema.index({ sender_id: 1, createdAt: -1 });
-EnvioSchema.index({ estado: 1, createdAt: -1 });
-EnvioSchema.index({ 'destino.partido': 1, createdAt: -1 });
+envioSchema.index({ sender_id: 1, createdAt: -1 });
+envioSchema.index({ estado: 1, createdAt: -1 });
+envioSchema.index({ 'destino.partido': 1, createdAt: -1 });
 // Para mapa (destino.loc = { type: 'Point', coordinates: [lng, lat] })
-EnvioSchema.index({ 'destino.loc': '2dsphere' });
+envioSchema.index({ 'destino.loc': '2dsphere' });
 
 
 module.exports = mongoose.models.Envio || mongoose.model('Envio', envioSchema);
