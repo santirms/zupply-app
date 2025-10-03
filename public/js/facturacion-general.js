@@ -118,28 +118,24 @@ async function filtrar() {
   try {
     setBusy(true, 'Generando reporte de facturación…');
 
-    // Traigo el RESUMEN para la vista del modal "Facturación"
+    // 1) Detalle para la tabla (preview envío x envío)
+    const urlDetalle = `/facturacion/detalle?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}`;
+    const resDet = await fetch(urlDetalle, { cache:'no-store' });
+    if (!resDet.ok) throw new Error('Error generando detalle');
+    const det = await resDet.json();
+    envios = det.items || [];
+    pintarTabla();
+
+    // 2) Resumen para el modal “Facturación”
     const urlResumen = `/facturacion/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}`;
-    const resResumen = await fetch(urlResumen, { cache: 'no-store' });
-    if (!resResumen.ok) throw new Error('Error generando resumen');
-    const resumen = await resResumen.json();
+    const resRes = await fetch(urlResumen, { cache:'no-store' });
+    if (!resRes.ok) throw new Error('Error generando resumen');
+    window.__FACT_RESUMEN__ = await resRes.json();
 
-    // Además, si querés seguir mostrando la tabla detalle como antes,
-    // podés volver a tu endpoint "preview" por cliente. Para "Todos" no
-    // es necesario mostrar el detalle; podés dejar la tabla vacía y usar
-    // solo el modal de Facturación.
-
-    // Guardo en memoria para el modal
-    window.__FACT_RESUMEN__ = resumen;
-
-    // Actualizo total en pie (totalGeneral)
+    // Total al pie: total GENERAL del resumen
     const info = qs('#total-info');
     const nf = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    info.textContent = `Total general: $ ${nf.format(resumen.totalGeneral || 0)} — Líneas: ${resumen.lines?.length || 0}`;
-
-    // Si igual querés pintar detalle por envío, lo dejamos para una fase 2.
-    // Por ahora la tabla queda como está, o podés limpiarla:
-    qs('#tabla-body').innerHTML = '';
+    info.textContent = `Total general: $ ${nf.format(window.__FACT_RESUMEN__.totalGeneral || 0)} — Líneas: ${window.__FACT_RESUMEN__.lines?.length || 0}`;
   } catch (err) {
     console.error(err);
     alert('No se pudo generar el reporte.');
@@ -159,6 +155,8 @@ function pintarTabla() {
     const fecha = e.fecha ? new Date(e.fecha).toLocaleDateString('es-AR') : '-';
     const precioNum = typeof e.precio === 'number' ? e.precio : 0;
     total += precioNum;
+    const isZero = !precioNum || Number(precioNum) === 0;
+    tr.className = 'hover:bg-slate-50 dark:hover:bg-white/10 ' + (isZero ? 'bg-red-50/60 dark:bg-red-900/20' : '');
 
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-slate-50 dark:hover:bg-white/10';
@@ -182,52 +180,51 @@ function pintarTabla() {
 
 // ====== Exportar a Excel (.xlsx) con autofiltros ======
 function exportarExcel() {
-  if (!envios?.length) {
-    return alert('No hay datos para exportar');
+  const nf = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (envios?.length) {
+    // Exportar DETALLE
+    const rows = envios.map(e => ({
+      Tracking:      e.tracking || '',
+      Cliente:       e.cliente || '',
+      CodigoInterno: e.codigo_interno || '',
+      SenderID:      e.sender_id || '',
+      Partido:       e.partido || '',
+      Zona:          e.zona || '',
+      Precio:        typeof e.precio === 'number' ? e.precio : 0,
+      Fecha:         e.fecha ? new Date(e.fecha).toLocaleDateString('es-AR') : ''
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows, { header: ['Tracking','Cliente','CodigoInterno','SenderID','Partido','Zona','Precio','Fecha'] });
+    ws['!autofilter'] = { ref: `A1:H${rows.length + 1}` };
+    ws['!cols'] = [{wch:16},{wch:24},{wch:14},{wch:14},{wch:18},{wch:14},{wch:12},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Detalle');
+    XLSX.writeFile(wb, `facturacion_detalle_${Date.now()}.xlsx`);
+    return;
   }
 
-  const rows = envios.map(e => ({
-    Tracking:       e.id_venta || e.meli_id || '',
-    Cliente:        e.cliente_id?.nombre || '',
-    CodigoInterno:  e.cliente_id?.codigo_cliente || '',
-    SenderID:       e.sender_id || '',
-    Partido:        e.partido || '',
-    Precio:         (typeof e.precio === 'number' ? e.precio : 0).toFixed(2),
-    Fecha:          e.fecha ? new Date(e.fecha).toLocaleDateString('es-AR') : ''
-  }));
+  // Si no hay detalle, exporto RESUMEN
+  const resumen = window.__FACT_RESUMEN__;
+  if (resumen?.lines?.length) {
+    const rows = resumen.lines.map(l => ({
+      Cliente: l.cliente_nombre,
+      Zona: l.zona_nombre,
+      Cantidad: l.cantidad,
+      PrecioUnit: l.precio_unit,
+      Subtotal: l.subtotal
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows, { header: ['Cliente','Zona','Cantidad','PrecioUnit','Subtotal'] });
+    ws['!autofilter'] = { ref: `A1:E${rows.length + 1}` };
+    ws['!cols'] = [{wch:24},{wch:18},{wch:10},{wch:14},{wch:14}];
+    XLSX.utils.book_append_sheet(wb, ws, 'Resumen');
+    XLSX.writeFile(wb, `facturacion_resumen_${Date.now()}.xlsx`);
+    return;
+  }
 
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(rows, { header: [
-    'Tracking','Cliente','CodigoInterno','SenderID','Partido','Precio','Fecha'
-  ]});
-
-  const totalRows = rows.length + 1; // encabezado + datos
-  ws['!autofilter'] = { ref: `A1:G${totalRows}` };
-  ws['!cols'] = [
-    { wch: 16 }, // Tracking
-    { wch: 24 }, // Cliente
-    { wch: 14 }, // CodigoInterno
-    { wch: 14 }, // SenderID
-    { wch: 18 }, // Partido
-    { wch: 12 }, // Precio
-    { wch: 14 }  // Fecha
-  ];
-
-  XLSX.utils.book_append_sheet(wb, ws, 'Facturacion');
-  XLSX.writeFile(wb, `facturacion_${Date.now()}.xlsx`);
+  alert('No hay datos para exportar.');
 }
 window.exportarExcel = exportarExcel;
-
-// ====== Atajos ======
-function initShortcuts(){
-  ['desde','hasta'].forEach(id=>{
-    const el = qs('#'+id);
-    if (!el) return;
-    el.addEventListener('keydown', e => { if (e.key === 'Enter') filtrar(); });
-  });
-  const sel = qs('#filtroCliente');
-  if (sel) sel.addEventListener('keydown', e => { if (e.key === 'Enter') filtrar(); });
-}
 
 // ====== Init ======
 window.addEventListener('DOMContentLoaded', async () => {
