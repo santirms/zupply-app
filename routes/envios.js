@@ -116,19 +116,29 @@ function deriveSub(status, sub, desc) {
 
   // 2) si es "not_delivered" sin sub, inferí por mensaje
   if (st === 'not_delivered' && !sb) {
-    if (/absent|not\s*at\s*home|not_available|no\s*disponible|ausente|no\s*estaba/.test(msg)) {
+    if (/absent|not\s*at\s*home|not_available|no\s*disponible|ausente/.test(msg)) {
       sb = 'recipient_absent';
+    }
+    if (/bad\s*address|direcci[oó]n.*err[oó]nea/.test(msg)) {
+      sb = 'bad_address';
+    }
+    if (/not\s*visited|inaccesible|aver[ií]a/.test(msg)) {
+      sb = 'not_visited';
     }
   }
 
   // 3) aliases/conversiones
-  const aliases = {
+   const aliases = {
     'buyer_not_at_home': 'recipient_absent',
     'receiver_absent': 'recipient_absent',
     'addressee_not_available': 'recipient_absent',
     'client_not_at_home': 'recipient_absent',
     'recipient_not_at_home': 'recipient_absent',
-    'comprador_ausente': 'recipient_absent'
+    'comprador_ausente': 'recipient_absent',
+    // 👇 nuevos
+    'bad address': 'bad_address',
+    'not visited': 'not_visited',
+    'rescheduled by meli': 'rescheduled_by_meli',
   };
   sb = aliases[sb] || sb;
 
