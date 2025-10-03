@@ -275,4 +275,99 @@ router.post('/emitir', async (req, res) => {
   res.json({ ok: true, message: 'Hook de emisión listo. Próximo paso: AFIP/ARCA.' });
 });
 
+// GET /facturacion/detalle?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&clientes=all|id1,id2,...
+// Devuelve items por envío (tracking, cliente, zona, precio, etc.)
+router.get('/detalle', async (req, res) => {
+  try {
+    const { desde, hasta, clientes } = req.query;
+    if (!desde || !hasta) return res.status(400).json({ error: 'Parámetros requeridos: desde, hasta' });
+
+    const dtFrom = new Date(desde);
+    const dtTo   = new Date(hasta);
+    if (isNaN(dtFrom) || isNaN(dtTo)) return res.status(400).json({ error: 'Fechas inválidas' });
+
+    // clientes a incluir
+    let clientesDocs = [];
+    if (clientes === 'all' || !clientes) {
+      clientesDocs = await Cliente.find({}).select('nombre sender_id lista_precios codigo_cliente').lean();
+    } else {
+      const ids = String(clientes).split(',').map(s => s.trim()).filter(Boolean);
+      clientesDocs = await Cliente.find({ _id: { $in: ids } })
+        .select('nombre sender_id lista_precios codigo_cliente').lean();
+    }
+    const cMap = new Map(clientesDocs.map(c => [String(c._id), c]));
+
+    // OR combinado por cliente_id y sender_id
+    const ors = [];
+    for (const c of clientesDocs) {
+      ors.push({ cliente_id: c._id });
+      for (const s of (c.sender_id || [])) ors.push({ sender_id: s });
+    }
+    if (!ors.length) return res.json({ items: [], total: 0 });
+
+    const envios = await Envio.find({
+      fecha: { $gte: dtFrom, $lte: dtTo },
+      $or: ors
+    })
+      .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio')
+      .sort({ fecha: 1 })
+      .populate('cliente_id', 'nombre codigo_cliente lista_precios')
+      .lean();
+
+    // Pre-cargo listas de precios (pobladas con nombres de zona)
+    const listaIds = Array.from(new Set(envios
+      .map(e => e.cliente_id?.lista_precios)
+      .filter(Boolean)
+      .map(x => String(x))
+    ));
+    const listas = await Lista.find({ _id: { $in: listaIds } })
+      .populate('zonas.zona','nombre')
+      .lean();
+    const lMap = new Map(listas.map(l => [String(l._id), l]));
+
+    const items = [];
+    let total = 0;
+
+    for (const e of envios) {
+      const cliente = e.cliente_id;
+      if (!cliente) continue;
+
+      // Resolver zona precisa (la que te andaba bien)
+      const rz = await resolverZonaPorCP(e.codigo_postal, e.partido);
+      const zonaNombre = rz.zonaNombre || null;
+
+      // Precio: por lista del cliente (id o nombre)
+      let precio = 0;
+      const lista = lMap.get(String(cliente.lista_precios));
+      if (lista && zonaNombre) {
+        const z1 = (lista.zonas || []).find(z => z.zona?.nombre?.trim().toLowerCase() === zonaNombre.trim().toLowerCase());
+        if (z1) precio = Number(z1.precio) || 0;
+        else if (rz.zonaId) {
+          const z2 = (lista.zonas || []).find(z => String(z.zona) === String(rz.zonaId));
+          if (z2) precio = Number(z2.precio) || 0;
+        }
+      }
+
+      items.push({
+        tracking: e.id_venta || e.meli_id || '',
+        cliente:  cliente?.nombre || '',
+        codigo_interno: cliente?.codigo_cliente || '',
+        sender_id: e.sender_id || '',
+        partido: rz.partido || e.partido || '',
+        zona: zonaNombre,
+        precio,
+        fecha: e.fecha,
+        estado: e.estado
+      });
+      total += precio;
+    }
+
+    res.json({ items, total });
+  } catch (err) {
+    console.error('[facturacion/detalle] error:', err);
+    res.status(500).json({ error: 'Error generando detalle' });
+  }
+});
+
+
 module.exports = router;
