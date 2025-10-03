@@ -155,10 +155,10 @@ function pintarTabla() {
     const fecha = e.fecha ? new Date(e.fecha).toLocaleDateString('es-AR') : '-';
     const precioNum = typeof e.precio === 'number' ? e.precio : 0;
     total += precioNum;
+    
+    const tr = document.createElement('tr');
     const isZero = !precioNum || Number(precioNum) === 0;
     tr.className = 'hover:bg-slate-50 dark:hover:bg-white/10 ' + (isZero ? 'bg-red-50/60 dark:bg-red-900/20' : '');
-
-    const tr = document.createElement('tr');
     tr.className = 'hover:bg-slate-50 dark:hover:bg-white/10';
     tr.innerHTML = `
       <td class="px-4 py-2">${e.tracking || ''}</td>
