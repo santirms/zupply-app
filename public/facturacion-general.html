@@ -164,5 +164,41 @@
     </div>
   </div>
 </div>
+  <!-- Modal Facturación -->
+<div id="modal-facturacion" class="fixed inset-0 hidden z-[120]">
+  <div class="absolute inset-0 bg-black/50"></div>
+  <div class="relative max-w-3xl mx-auto mt-20 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020] p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-lg font-semibold">Resumen para Facturación</h3>
+      <button id="mf-close" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/10">✕</button>
+    </div>
+    <div id="mf-periodo" class="text-sm opacity-80 mb-2"></div>
+    <div class="overflow-x-auto max-h-[50vh]">
+      <table class="min-w-full table-auto text-sm divide-y divide-slate-200 dark:divide-white/10">
+        <thead class="bg-slate-50 dark:bg-white/5">
+          <tr>
+            <th class="px-3 py-2 text-left">Cliente</th>
+            <th class="px-3 py-2 text-left">Zona</th>
+            <th class="px-3 py-2 text-right">Cant.</th>
+            <th class="px-3 py-2 text-right">Precio Unit.</th>
+            <th class="px-3 py-2 text-right">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody id="mf-body" class="divide-y divide-slate-200 dark:divide-white/10"></tbody>
+      </table>
+    </div>
+    <div id="mf-total" class="mt-3 text-right font-semibold"></div>
+
+    <div class="mt-4 flex flex-wrap gap-2 justify-end">
+      <button id="btnPresupuesto" class="px-4 py-2 rounded-xl border border-slate-300 dark:border-white/10">
+        🧾 Generar Presupuesto (PDF)
+      </button>
+      <button id="btnEmitir" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white">
+        ⚡ Generar Factura Electrónica
+      </button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
