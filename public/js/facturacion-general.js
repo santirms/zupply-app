@@ -96,47 +96,58 @@ async function cargarClientes() {
   }
 }
 
+function getSelectedClientes() {
+  const sel = qs('#filtroCliente');
+  const values = Array.from(sel.selectedOptions).map(o => o.value).filter(v => v !== '');
+  if (values.length === 0) return 'all'; // “Todos”
+  return values.join(',');
+}
+
 // ====== Filtrar (trae envíos por fecha y aplica cliente opcional) ======
 async function filtrar() {
-  if (BUSY) return; // evita doble click
+  if (BUSY) return;
   const desde = qs('#desde').value;
   const hasta = qs('#hasta').value;
-  const clienteId = qs('#filtroCliente').value;
+  const clientesParam = getSelectedClientes(); // 'all' o 'id1,id2'
 
-  if (!clienteId) {
-    alert('Seleccioná un cliente para generar el preview.');
+  if (!desde || !hasta) {
+    alert('Seleccioná rango de fechas.');
     return;
   }
 
-  // cancelar fetch anterior si aún corría
-  if (currentAbort) currentAbort.abort();
-  currentAbort = new AbortController();
-
-  const url = `/facturacion/preview?clienteId=${encodeURIComponent(clienteId)}&desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`;
-
   try {
     setBusy(true, 'Generando reporte de facturación…');
-    const res = await fetch(url, { cache: 'no-store', signal: currentAbort.signal });
-    if (!res.ok) throw new Error('Error generando preview');
-    const { items, total } = await res.json();
 
-    envios = items;
-    pintarTabla();
+    // Traigo el RESUMEN para la vista del modal "Facturación"
+    const urlResumen = `/facturacion/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}`;
+    const resResumen = await fetch(urlResumen, { cache: 'no-store' });
+    if (!resResumen.ok) throw new Error('Error generando resumen');
+    const resumen = await resResumen.json();
 
+    // Además, si querés seguir mostrando la tabla detalle como antes,
+    // podés volver a tu endpoint "preview" por cliente. Para "Todos" no
+    // es necesario mostrar el detalle; podés dejar la tabla vacía y usar
+    // solo el modal de Facturación.
+
+    // Guardo en memoria para el modal
+    window.__FACT_RESUMEN__ = resumen;
+
+    // Actualizo total en pie (totalGeneral)
     const info = qs('#total-info');
     const nf = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    info.textContent = `Registros: ${envios.length} · Total facturado: $ ${nf.format(total)}`;
+    info.textContent = `Total general: $ ${nf.format(resumen.totalGeneral || 0)} — Líneas: ${resumen.lines?.length || 0}`;
+
+    // Si igual querés pintar detalle por envío, lo dejamos para una fase 2.
+    // Por ahora la tabla queda como está, o podés limpiarla:
+    qs('#tabla-body').innerHTML = '';
   } catch (err) {
-    if (err.name !== 'AbortError') {
-      console.error(err);
-      alert('No se pudo generar el preview de facturación.');
-    }
+    console.error(err);
+    alert('No se pudo generar el reporte.');
   } finally {
     setBusy(false);
   }
 }
 window.filtrar = filtrar;
-
 
 // ====== Render tabla + totales ======
 function pintarTabla() {
