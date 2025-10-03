@@ -233,7 +233,7 @@ router.post('/presupuesto', async (req, res) => {
 
     // Cabecera de tabla
     const headers = ['Cliente', 'Zona', 'Cant.', 'Precio Unit.', 'Subtotal'];
-    const widths  = [170, 140, 60, 90, 90];
+    const widths  = [160, 160, 50, 90, 90]; // ajustado para que entre cómodo
 
     doc.fontSize(10).fillColor('#000');
     headers.forEach((h, i) => doc.text(h, 36 + widths.slice(0,i).reduce((a,b)=>a+b,0), doc.y, { width: widths[i], continued: i < headers.length-1 }));
