@@ -399,6 +399,9 @@ function uiStatus(envio){
   const isResched=/resched/.test(subRaw); 
   const isSoon=/(soon[_\s-]?deliver|arriving[_\s-]?soon)/.test(subRaw); 
   const isDelay=/(with_)?delay(ed)?/.test(subRaw);
+  const isBadAddr     = /(bad[_\s-]?address|direcci[oó]n[_\s-]?err[oó]nea)/.test(subRaw);
+  const isNotVisited  = /(not[_\s-]?visited|inaccesible|aver[ií]a)/.test(subRaw);
+  const isReschedMeli = /resched(ule|uled)?(_by)?[_\s-]?meli/.test(subRaw);
   if(isAbsent) norm='comprador_ausente'; 
   else if(isResched) norm='reprogramado'; 
   else if(isDelay) norm='demorado'; 
