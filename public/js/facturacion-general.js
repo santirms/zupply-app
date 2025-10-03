@@ -238,3 +238,89 @@ window.addEventListener('DOMContentLoaded', async () => {
   // (opcional) podés disparar un filtrado inicial:
   // filtrar();
 });
+
+function openFactModal() {
+  const modal = qs('#modal-facturacion');
+  const body  = qs('#mf-body');
+  const tot   = qs('#mf-total');
+  const per   = qs('#mf-periodo');
+  if (!window.__FACT_RESUMEN__) {
+    alert('Primero generá el reporte con "Filtrar".');
+    return;
+  }
+  const { period, lines = [], totalGeneral = 0 } = window.__FACT_RESUMEN__;
+
+  per.textContent = `Período: ${period.desde} a ${period.hasta}`;
+  body.innerHTML = '';
+  const nf = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  lines.forEach(l => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-3 py-2">${l.cliente_nombre || ''}</td>
+      <td class="px-3 py-2">${l.zona_nombre || ''}</td>
+      <td class="px-3 py-2 text-right">${l.cantidad || 0}</td>
+      <td class="px-3 py-2 text-right">$${nf.format(l.precio_unit || 0)}</td>
+      <td class="px-3 py-2 text-right">$${nf.format(l.subtotal || 0)}</td>
+    `;
+    body.appendChild(tr);
+  });
+  tot.textContent = `TOTAL: $ ${nf.format(totalGeneral || 0)}`;
+
+  modal.classList.remove('hidden');
+}
+function closeFactModal(){ qs('#modal-facturacion')?.classList.add('hidden'); }
+
+window.addEventListener('DOMContentLoaded', () => {
+  qs('#btnFacturacion')?.addEventListener('click', openFactModal);
+  qs('#mf-close')?.addEventListener('click', closeFactModal);
+});
+
+// presupuesto (PDF)
+qs('#btnPresupuesto')?.addEventListener('click', async () => {
+  if (!window.__FACT_RESUMEN__) return;
+  try {
+    setBusy(true, 'Generando PDF de presupuesto…');
+    const res = await fetch('/facturacion/presupuesto', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        periodo: window.__FACT_RESUMEN__.period,
+        lines: window.__FACT_RESUMEN__.lines,
+        totalGeneral: window.__FACT_RESUMEN__.totalGeneral
+      })
+    });
+    if (!res.ok) throw new Error('Error generando PDF');
+    // Abrimos el PDF en una pestaña
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  } catch (e) {
+    console.error(e);
+    alert('No se pudo generar el PDF.');
+  } finally {
+    setBusy(false);
+  }
+});
+
+// emitir (hook AFIP/ARCA)
+qs('#btnEmitir')?.addEventListener('click', async () => {
+  if (!window.__FACT_RESUMEN__) return;
+  if (!confirm('¿Confirmás generar comprobantes electrónicos?')) return;
+  try {
+    setBusy(true, 'Preparando emisión…');
+    const res = await fetch('/facturacion/emitir', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(window.__FACT_RESUMEN__) // mismo payload
+    });
+    const data = await res.json();
+    alert(data?.message || 'Listo para emitir (hook ok).');
+  } catch (e) {
+    console.error(e);
+    alert('No se pudo iniciar la emisión.');
+  } finally {
+    setBusy(false);
+  }
+});
+
