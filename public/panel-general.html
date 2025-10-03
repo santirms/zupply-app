@@ -376,18 +376,41 @@ function initMapa(lat,lng){ const cont=document.getElementById('mapa'); if(!cont
 async function cargarResumenDiario(){ try{ const res=await fetch('/api/envios/del-dia',{cache:'no-store'}); const data=await res.json(); document.getElementById('total-paquetes').textContent=data.total ?? 0; }catch(e){ console.error('Error al cargar resumen diario:', e); } }
 
 function uiStatus(envio){
-  window.estadoBadge=function(key,label){ const css={entregado:'bg-green-100 text-green-700 border-green-200',en_camino:'bg-sky-100 text-sky-700 border-sky-200',pendiente:'bg-gray-100 text-gray-700 border-gray-200',asignado:'bg-indigo-100 text-indigo-700 border-indigo-200',demorado:'bg-red-100 text-red-700 border-red-200',reprogramado:'bg-blue-100 text-blue-700 border-blue-200',no_entregado:'bg-amber-100 text-amber-700 border-amber-200',cancelado:'bg-slate-200 text-slate-700 border-slate-300',comprador_ausente:'bg-amber-100 text-amber-700 border-amber-200'}[key]||'bg-gray-100 text-gray-700 border-gray-200'; return `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${css}">${label}</span>`; };
+  window.estadoBadge=function(key,label){ 
+    const css={entregado:'bg-green-100 text-green-700 border-green-200',
+               en_camino:'bg-sky-100 text-sky-700 border-sky-200',
+               pendiente:'bg-gray-100 text-gray-700 border-gray-200',
+               asignado:'bg-indigo-100 text-indigo-700 border-indigo-200',
+               demorado:'bg-red-100 text-red-700 border-red-200',
+               reprogramado:'bg-blue-100 text-blue-700 border-blue-200',
+               no_entregado:'bg-amber-100 text-amber-700 border-amber-200',
+               cancelado:'bg-slate-200 text-slate-700 border-slate-300',
+               comprador_ausente:'bg-amber-100 text-amber-700 border-amber-200',
+               direccion_erronea: 'bg-rose-100 text-rose-700 border-rose-200',
+               inaccesible: 'bg-amber-100 text-amber-700 border-amber-200'
+              }
+      [key]||'bg-gray-100 text-gray-700 border-gray-200'; 
+    return `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${css}">${label}</span>`; };
   window.substatusChip=function(sub){ if(!sub) return ''; return `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${sub}</span>`; };
   const raw=(envio.estado||envio.status||envio.estado_meli?.status||'').toLowerCase();
   const subRaw=(envio.estado_meli?.substatus||'').toLowerCase().trim();
   let norm=({pending:'pendiente',handling:'pendiente',ready_to_ship:'pendiente',shipped:'en_camino',delivered:'entregado',not_delivered:'no_entregado',cancelled:'cancelado'})[raw] || raw || 'pendiente';
   const isAbsent=/(recipient|receiver|buyer|client|addressee|destinatario)[_\s-]?(absent|not[_\s-]?at[_\s-]?home|not[_\s-]?available|no[_\s-]?disponible|no[_\s-]?estaba|ausente)/.test(subRaw)|| subRaw==='comprador_ausente';
-  const isResched=/resched/.test(subRaw); const isSoon=/(soon[_\s-]?deliver|arriving[_\s-]?soon)/.test(subRaw); const isDelay=/(with_)?delay(ed)?/.test(subRaw);
-  if(isAbsent) norm='comprador_ausente'; else if(isResched) norm='reprogramado'; else if(isDelay) norm='demorado'; else if(isSoon) norm='en_camino';
-  let cardLabel=({pendiente:'Pendiente',asignado:'Asignado',en_camino:'En camino',demorado:'Demorado',reprogramado:'Reprogramado',no_entregado:'No entregado',entregado:'Entregado',cancelado:'Cancelado',comprador_ausente:'Comprador ausente'})[norm]||'Pendiente';
+  const isResched=/resched/.test(subRaw); 
+  const isSoon=/(soon[_\s-]?deliver|arriving[_\s-]?soon)/.test(subRaw); 
+  const isDelay=/(with_)?delay(ed)?/.test(subRaw);
+  if(isAbsent) norm='comprador_ausente'; 
+  else if(isResched) norm='reprogramado'; 
+  else if(isDelay) norm='demorado'; 
+  else if(isSoon) norm='en_camino';
+  else if (isNotVisited) norm = 'inaccesible';
+  else if (isBadAddr) norm = 'direccion_erronea';
+  else if (isReschedMeli) norm = 'reprogramado'; // el chip dirá “por demora”
+  let cardLabel=({pendiente:'Pendiente',asignado:'Asignado',en_camino:'En camino',demorado:'Demorado',reprogramado:'Reprogramado',no_entregado:'No entregado',entregado:'Entregado',cancelado:'Cancelado',comprador_ausente:'Comprador ausente',inaccesible: 'Inaccesible/Avería',direccion_erronea: 'Dirección errónea',})[norm]||'Pendiente';
   if(norm==='reprogramado' && /buyer/.test(subRaw)) cardLabel='Reprogramado por comprador';
   if(isSoon) cardLabel='Llega pronto';
   const chip=subRaw? subRaw.replace(/_/g,' ') : '';
+  if (isReschedMeli) chip = 'por demora';
   return { key:norm, label:cardLabel, substatus:chip };
 }
 
