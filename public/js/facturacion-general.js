@@ -227,6 +227,22 @@ function exportarExcel() {
 window.exportarExcel = exportarExcel;
 
 // ====== Init ======
+// ——— Atajos: Enter en filtros ———
+function initShortcuts() {
+  ['desde','hasta'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') filtrar();
+    });
+  });
+  const sel = document.getElementById('filtroCliente');
+  if (sel) {
+    sel.addEventListener('keydown', e => {
+      if (e.key === 'Enter') filtrar();
+    });
+  }
+}
 window.addEventListener('DOMContentLoaded', async () => {
   initTopbar();
   document.getElementById('anio').textContent = new Date().getFullYear();
