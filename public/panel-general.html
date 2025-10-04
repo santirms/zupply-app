@@ -82,6 +82,29 @@
     <p class="text-sm"><strong>Total de envíos del día:</strong> <span id="total-paquetes">...</span></p>
   </div>
 
+  <!-- Mini-KPIs -->
+  <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+      <div class="text-xs opacity-70">Pendientes</div>
+      <div id="kpi-pend" class="text-3xl font-semibold mt-1 tracking-tight text-amber-600">—</div>
+    </div>
+
+    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+      <div class="text-xs opacity-70">En ruta</div>
+      <div id="kpi-ruta" class="text-3xl font-semibold mt-1 tracking-tight text-sky-600 dark:text-sky-300">—</div>
+    </div>
+
+    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+      <div class="text-xs opacity-70">Entregados</div>
+      <div id="kpi-ent" class="text-3xl font-semibold mt-1 tracking-tight text-emerald-600 dark:text-emerald-300">—</div>
+    </div>
+
+    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+      <div class="text-xs opacity-70">Incidencias</div>
+      <div id="kpi-inc" class="text-3xl font-semibold mt-1 tracking-tight text-rose-600 dark:text-rose-300">—</div>
+    </div>
+  </section>
+
   <h1 class="text-2xl font-bold mb-4 text-center">📦 Panel de Envíos</h1>
 
   <!-- Filtros -->
@@ -710,6 +733,36 @@ document.addEventListener('DOMContentLoaded',()=>{
   cargarChoferes();
   cargarPartidos().then(()=>cargarPrimerPagina());
 });
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadKPIs();
+  setInterval(loadKPIs, 60_000);
+});
+
+async function loadKPIs() {
+  const el = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
+
+  try {
+    const r = await fetch('/api/kpis/home', { cache: 'no-store' });
+    if (!r.ok) {
+      if (r.status === 401 || r.status === 403) {
+        location.href = '/auth/login';
+        return;
+      }
+      const text = await r.text();
+      console.error('KPIs HTTP error', r.status, text);
+      throw new Error('kpis_fail');
+    }
+    const j = await r.json();
+    el('kpi-pend', j.pendientes ?? '0');
+    el('kpi-ruta', j.en_ruta ?? '0');
+    el('kpi-ent',  j.entregados ?? '0');
+    el('kpi-inc',  j.incidencias ?? '0');
+  } catch (e) {
+    console.error('No se pudieron cargar los KPIs', e);
+    el('kpi-pend', '—'); el('kpi-ruta', '—'); el('kpi-ent', '—'); el('kpi-inc', '—');
+  }
+}
 
 async function forceSyncMeli(meli_id){
   try{
