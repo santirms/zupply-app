@@ -44,23 +44,80 @@ function getScopedFilter(req, base = {}) {
   return { filter: { _id: { $in: [] } }, reason: 'otro-rol' };
 }
 
-// Normalizador de columnas para la tabla
+// === dentro de routes/client-panel.js ===
+
+// Proyección mínima probando alias para tracking/fecha/estado/partido
+const projection = {
+  // tracking (varios alias)
+  tracking: 1, tracking_id: 1, trackingId: 1,
+  numero_seguimiento: 1, tracking_code: 1, tracking_meli: 1, shipment_id: 1,
+
+  // id de venta
+  id_venta: 1, order_id: 1, venta_id: 1,
+
+  // fechas
+  createdAt: 1, fecha: 1, created_at: 1,
+
+  // destino/partido (sin geocodificar)
+  'destino.partido': 1, 'destino.localidad': 1, 'zona.partido': 1,
+
+  // estado
+  estado: 1, status: 1
+};
+
+// Normalizador para la tabla (sin columna "Cliente")
 function normalizeRow(doc) {
-  // adaptá aquí si tus campos reales tienen otros nombres
-  const tracking = doc.tracking ?? doc.tracking_id ?? doc.numero_seguimiento ?? null;
+  const tracking =
+    doc.tracking ??
+    doc.tracking_id ??
+    doc.trackingId ??
+    doc.numero_seguimiento ??
+    doc.tracking_code ??
+    doc.tracking_meli ??
+    doc.shipment_id ??
+    null;
+
   const id_venta = doc.id_venta ?? doc.order_id ?? doc.venta_id ?? null;
-  const cliente_nombre = doc.cliente_nombre ?? doc?.cliente?.nombre ?? null;
   const createdAt = doc.createdAt ?? doc.fecha ?? doc.created_at ?? null;
-  const partido = doc?.destino?.partido ?? doc?.destino?.localidad ?? doc?.zona?.partido ?? null;
-  const estado = doc.estado ?? doc.status ?? null;
+
+  const partido =
+    doc?.destino?.partido ??
+    doc?.destino?.localidad ??
+    doc?.zona?.partido ??
+    null;
+
+  // Normalizar estado y generar estilos de badge iguales al panel admin/coordinador
+  const rawEstado = (doc.estado ?? doc.status ?? '').toString().toLowerCase();
+  const estadoMap = {
+    pendiente:   ['pendiente','nuevo','created','to_dispatch','ready'],
+    en_camino:   ['en_camino','en camino','out_for_delivery','en_ruta','shipped'],
+    entregado:   ['entregado','delivered','finalizado','closed','complete'],
+    incidencia:  ['incidencia','failed','no_entregado','issue','problema'],
+    reprogramado:['reprogramado','reprogrammed','rescheduled','postergado']
+  };
+  let estado = 'pendiente';
+  for (const k of Object.keys(estadoMap)) {
+    if (estadoMap[k].includes(rawEstado)) { estado = k; break; }
+  }
+
+  const estadoStyle = {
+    pendiente:   'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
+    en_camino:   'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300',
+    entregado:   'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300',
+    incidencia:  'bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300',
+    reprogramado:'bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300'
+  };
 
   return {
     tracking,
     id_venta,
-    cliente_nombre,
     createdAt,
     destino: { partido },
-    estado
+    estado,
+    estado_ui: {
+      text: estado.replace('_',' '),
+      class: 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + (estadoStyle[estado] || estadoStyle.pendiente)
+    }
   };
 }
 
@@ -83,22 +140,11 @@ router.get('/shipments', requireRole('cliente','admin','coordinador'), async (re
     const { filter, reason } = getScopedFilter(req, base);
     console.log('[CLIENT-PANEL] filter:', filter, 'reason:', reason);
 
-    const projection = {
-      tracking: 1, tracking_id: 1, numero_seguimiento: 1,
-      id_venta: 1, order_id: 1, venta_id: 1,
-      cliente_nombre: 1, 'cliente.nombre': 1,
-      createdAt: 1, fecha: 1, created_at: 1,
-      'destino.partido': 1, 'destino.localidad': 1, 'zona.partido': 1,
-      estado: 1, status: 1,
-      sender_id: 1
-    };
-
     const [docs, total] = await Promise.all([
       Envio.find(filter, projection).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
       Envio.countDocuments(filter)
     ]);
-
-    const items = Array.isArray(docs) ? docs.map(normalizeRow) : [];
+    const items = (docs || []).map(normalizeRow);
     res.json({ items, page, limit, total });
   } catch (e) {
     console.error('client-panel /shipments error:', e);
