@@ -170,6 +170,7 @@ for (const [route, file] of Object.entries(pages)) {
 
 /* -------------- A partir de acá, todo requiere sesión ---------------- */
 app.use('/api/zonas',            require('./routes/zonas'));
+app.use('/api/zonas-rack',       require('./routes/zonasRack'));
 app.use('/api/listas-de-precios',require('./routes/listasDePrecios'));
 app.use('/api/partidos',         require('./routes/partidos'));
 app.use('/api/clientes',         require('./routes/clientes'));
