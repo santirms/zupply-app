@@ -299,6 +299,7 @@
 
   function recalcularPartidosAsignados() {
     partidosAsignados = new Set(zonasRack.flatMap(z => z.partidos || []));
+    console.log('Partidos asignados actuales:', Array.from(partidosAsignados));
   }
 
   async function cargarZonasRack() {
@@ -530,8 +531,14 @@
           throw new Error(err.error || 'Error al eliminar');
         }
       }
+
+      // Primero actualizamos el array local para reflejar la eliminación
       zonasRack = zonasRack.filter(z => (z._id || z.id) !== zonaId);
+
+      // Luego recalculamos los partidos asignados con el estado actualizado
       recalcularPartidosAsignados();
+
+      // Finalmente re-renderizamos para mostrar los partidos liberados
       renderConfigZonas();
     } catch (e) {
       alert('Error al eliminar: ' + e.message);
