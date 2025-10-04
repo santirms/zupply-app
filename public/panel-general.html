@@ -76,12 +76,6 @@
     </div>
   </header>
 
-  <!-- Contador Diario -->
-  <div id="resumen-diario" class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-4 mb-4">
-    <h2 class="text-lg font-semibold mb-1">Resumen del Día</h2>
-    <p class="text-sm"><strong>Total de envíos del día:</strong> <span id="total-paquetes">...</span></p>
-  </div>
-
   <!-- Mini-KPIs -->
   <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
     <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
@@ -402,8 +396,6 @@ function qrIconButtonHtml(envioId){ return `<button class="ml-2 inline-flex item
 async function probeQrButtons(){ const slots = Array.from(document.querySelectorAll('[data-qr-probe]')); await Promise.all(slots.map(async slot => { const id = slot.getAttribute('data-qr-probe'); try { const r = await fetch(`/api/scan-meli/latest-render/${id}`, { cache: 'no-store' }); const j = await r.json().catch(()=>null); if (r.ok && j && j.ok && j.url) { slot.outerHTML = qrIconButtonHtml(id); } else { slot.remove(); } } catch { slot.remove(); } })); }
 
 function initMapa(lat,lng){ const cont=document.getElementById('mapa'); if(!cont) return; cont.innerHTML=''; if(!Number.isFinite(lat)||!Number.isFinite(lng)){ cont.innerHTML='<div class="flex items-center justify-center h-full text-slate-500">Sin coordenadas</div>'; return; } if(mapaInstancia){ mapaInstancia.remove(); mapaInstancia=null; } mapaInstancia=L.map('mapa').setView([lat,lng],13); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution:'&copy; OpenStreetMap contributors' }).addTo(mapaInstancia); L.marker([lat,lng]).addTo(mapaInstancia); setTimeout(()=>mapaInstancia.invalidateSize(),0); }
-
-async function cargarResumenDiario(){ try{ const res=await fetch('/api/envios/del-dia',{cache:'no-store'}); const data=await res.json(); document.getElementById('total-paquetes').textContent=data.total ?? 0; }catch(e){ console.error('Error al cargar resumen diario:', e); } }
 
 function uiStatus(envio){
   window.estadoBadge=function(key,label){ 
