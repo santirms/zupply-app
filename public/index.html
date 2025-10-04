@@ -398,12 +398,12 @@
     modal.classList.add('flex');
   }
 
-  function cerrarConfigZonas() {
+  async function cerrarConfigZonas() {
     const modal = document.getElementById('modalConfigZonas');
     if (!modal) return;
     modal.classList.add('hidden');
     modal.classList.remove('flex');
-    cargarZonasRack();
+    await cargarZonasRack();
   }
 
   function renderConfigZonas() {
@@ -524,6 +524,7 @@
     if (!confirm('¿Eliminar esta zona?')) return;
 
     try {
+      // Si no es temporal, eliminar del backend primero
       if (!zonaId.startsWith('temp_')) {
         const resp = await fetch(`/api/zonas-rack/${zonaId}`, { method: 'DELETE' });
         if (!resp.ok) {
@@ -532,15 +533,20 @@
         }
       }
 
-      // Primero actualizamos el array local para reflejar la eliminación
+      // Eliminar la zona del array local
       zonasRack = zonasRack.filter(z => (z._id || z.id) !== zonaId);
 
-      // Luego recalculamos los partidos asignados con el estado actualizado
+      // CRÍTICO: Recalcular los partidos asignados después de eliminar
       recalcularPartidosAsignados();
 
-      // Finalmente re-renderizamos para mostrar los partidos liberados
+      // CRÍTICO: Forzar re-render completo del modal
       renderConfigZonas();
+
+      // Mensaje de confirmación
+      alert('Zona eliminada correctamente. Los partidos están ahora disponibles.');
+
     } catch (e) {
+      console.error('Error al eliminar zona:', e);
       alert('Error al eliminar: ' + e.message);
     }
   }
