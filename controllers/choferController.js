@@ -8,7 +8,11 @@ const User   = require('../models/User');
 /* ====== YA TENÍAS: listar choferes ====== */
 exports.listarChoferes = async (_req, res) => {
   try {
-    const choferes = await Chofer.find().sort('nombre');
+    const filtro = { $or: [{ activo: { $exists: false } }, { activo: true }] };
+    const choferes = await Chofer.find(filtro)
+      .select('nombre username activo')
+      .sort({ nombre: 1 })
+      .lean();
     res.json(choferes);
   } catch (err) { console.error(err); res.status(500).json({ msg: 'Error al listar choferes' }); }
 };

@@ -86,7 +86,7 @@
 
   <!-- Filtros -->
   <div class="rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4 mb-4">
-    <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-3">
+    <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-3">
       <input id="filtroCliente" type="text" placeholder="Cliente, código o sender"
         class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300
                dark:bg-white/10 dark:border-white/10" />
@@ -135,6 +135,12 @@
         <option value="no_entregado">No entregado</option>
         <option value="entregado">Entregado</option>
         <option value="cancelado">Cancelado</option>
+      </select>
+
+      <select id="filtroChofer"
+        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300
+               dark:bg-white/10 dark:border-white/10">
+        <option value="">— Todos los choferes —</option>
       </select>
 
       <button onclick="aplicarFiltro()"
@@ -324,13 +330,14 @@ let enviosCargados = []; let nextCursor = null; let filtrosActivos = {}; let map
 const normalize = s => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 const cleanZona = z => (z || '').replace(/\s+(N|S|E|O|NE|NO|SE|SO)$/i, '').trim();
 
-function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, partidos, cursor, limit=100 }) {
+function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, partidos, chofer, cursor, limit=100 }) {
   const p = new URLSearchParams();
   if (tracking) p.set('tracking', tracking);
   if (id_venta) p.set('id_venta', id_venta);
   if (cliente)  p.set('cliente', cliente);
   if (!tracking) { if (desde) p.set('desde', desde); if (hasta) p.set('hasta', hasta); }
   if (estado) p.set('estado', estado);
+  if (chofer) p.set('chofer', chofer);
   if (Array.isArray(partidos) && partidos.length) p.set('partidos', partidos.join(','));
   if (cursor && !tracking) p.set('cursor', cursor);
   p.set('limit', String(limit)); p.set('ts', String(Date.now()));
@@ -417,6 +424,26 @@ function uiStatus(envio){
   return { key:norm, label:cardLabel, substatus:chip };
 }
 
+async function cargarChoferes(){
+  try{
+    const res = await fetch('/api/choferes', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const choferes = await res.json();
+    const sel = document.getElementById('filtroChofer');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Todos los choferes —</option>';
+    choferes
+      .slice()
+      .sort((a,b)=> (a?.nombre||'').localeCompare(b?.nombre||''))
+      .forEach(c=>{
+        const opt = document.createElement('option');
+        opt.value = c._id;
+        opt.textContent = c.nombre || c.username || c._id;
+        sel.appendChild(opt);
+      });
+  }catch(e){ console.error('Error cargando choferes:', e); }
+}
+
 async function cargarPartidos(){
   try{
     const res=await fetch('/api/partidos',{cache:'no-store'}); const lista=await res.json();
@@ -443,12 +470,13 @@ async function aplicarFiltro(){
   const desde=(document.getElementById('filtroDesde')?.value||'');
   const hasta=(document.getElementById('filtroHasta')?.value||'');
   const estadoSel=(document.getElementById('filtroEstado')?.value||'').toLowerCase();
+  const choferSel=(document.getElementById('filtroChofer')?.value||'');
   const tracking=trackingRaw.trim(); const id_venta=idVentaRaw.trim(); const estado=estadoSel||'';
   const partidos=[]; document.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]:checked').forEach(cb=>partidos.push(cb.getAttribute('data-nombre')));
   const all=document.getElementById('chk_all_partidos'); if(all && all.checked) partidos.length=0;
 
   try{
-    filtrosActivos={ cliente:cliRaw.trim()||undefined, tracking:tracking||undefined, id_venta:id_venta||undefined, desde:desde||undefined, hasta:hasta||undefined, estado:estado||undefined, partidos:partidos, limit:100 };
+    filtrosActivos={ cliente:cliRaw.trim()||undefined, tracking:tracking||undefined, id_venta:id_venta||undefined, desde:desde||undefined, hasta:hasta||undefined, estado:estado||undefined, chofer:choferSel||undefined, partidos:partidos, limit:100 };
     const q=buildQueryParams(filtrosActivos);
     console.log('Query partidos:', q.toString());
     const res=await fetch(`/api/envios?${q.toString()}`,{cache:'no-store'}); const data=await res.json();
@@ -464,6 +492,7 @@ async function limpiarFiltros(){
   document.getElementById('filtroDesde').value='';
   document.getElementById('filtroHasta').value='';
   document.getElementById('filtroEstado').value='';
+  const choferSel=document.getElementById('filtroChofer'); if(choferSel) choferSel.value='';
   seleccionPartidos.clear(); const all=document.getElementById('chk_all_partidos'); if(all) all.checked=true;
   document.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]').forEach(cb=>cb.checked=false);
   updateCountPartidos(); await cargarPrimerPagina();
@@ -677,7 +706,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('modalDetalle').addEventListener('click',(e)=>{ if(e.target===e.currentTarget) cerrarModalDetalle(); });
   document.getElementById('modalEliminar').addEventListener('click',(e)=>{ if(e.target===e.currentTarget) cerrarModalEliminar(); });
   document.addEventListener('keydown',(e)=>{ if(e.key==='Escape'){ cerrarModalDetalle(); cerrarModalEliminar(); } });
-  cargarResumenDiario(); cargarPartidos().then(()=>cargarPrimerPagina());
+  cargarResumenDiario();
+  cargarChoferes();
+  cargarPartidos().then(()=>cargarPrimerPagina());
 });
 
 async function forceSyncMeli(meli_id){

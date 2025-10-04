@@ -39,12 +39,32 @@ const TIME_FIELD = 'fecha'; // usamos "fecha" para ventana/sort/cursor
 
 function buildFiltroList(req) {
   const f = {};
-  const { sender_id, estado, tracking, id_venta, desde, hasta } = req.query;
+  const { sender_id, estado, tracking, id_venta, desde, hasta, chofer } = req.query;
   const partidosRaw = req.query.partidos;
   const partidoRaw = req.query.partido;
 
   if (sender_id) f.sender_id = sender_id;
   if (estado)     f.estado    = estado;
+
+  if (chofer) {
+    const choferId = String(chofer).trim();
+    if (choferId) {
+      const conds = [];
+      if (mongoose.isValidObjectId(choferId)) {
+        const oid = new mongoose.Types.ObjectId(choferId);
+        conds.push({ chofer: oid });
+        conds.push({ chofer_id: oid });
+      }
+      conds.push({ chofer: choferId });
+      conds.push({ chofer_id: choferId });
+      conds.push({ 'chofer._id': choferId });
+      const cond = conds.length > 1 ? { $or: conds } : conds[0];
+      if (cond) {
+        if (f.$and) f.$and.push(cond);
+        else f.$and = [cond];
+      }
+    }
+  }
 
   const partidosList = [];
   if (typeof partidosRaw === 'string' && partidosRaw.trim()) {
