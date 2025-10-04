@@ -331,7 +331,7 @@ function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, p
   if (cliente)  p.set('cliente', cliente);
   if (!tracking) { if (desde) p.set('desde', desde); if (hasta) p.set('hasta', hasta); }
   if (estado) p.set('estado', estado);
-  if (Array.isArray(partidos) && partidos.length) partidos.forEach(n => p.append('partido', n));
+  if (Array.isArray(partidos) && partidos.length) p.set('partidos', partidos.join(','));
   if (cursor && !tracking) p.set('cursor', cursor);
   p.set('limit', String(limit)); p.set('ts', String(Date.now()));
   return p;
@@ -450,6 +450,7 @@ async function aplicarFiltro(){
   try{
     filtrosActivos={ cliente:cliRaw.trim()||undefined, tracking:tracking||undefined, id_venta:id_venta||undefined, desde:desde||undefined, hasta:hasta||undefined, estado:estado||undefined, partidos:partidos, limit:100 };
     const q=buildQueryParams(filtrosActivos);
+    console.log('Query partidos:', q.toString());
     const res=await fetch(`/api/envios?${q.toString()}`,{cache:'no-store'}); const data=await res.json();
     enviosCargados=data.rows||data||[]; nextCursor=data.nextCursor||null;
     renderTabla(); renderPaginacionLikeCursor();

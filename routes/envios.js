@@ -39,11 +39,34 @@ const TIME_FIELD = 'fecha'; // usamos "fecha" para ventana/sort/cursor
 
 function buildFiltroList(req) {
   const f = {};
-  const { sender_id, estado, partido, tracking, id_venta, desde, hasta } = req.query;
+  const { sender_id, estado, tracking, id_venta, desde, hasta } = req.query;
+  const partidosRaw = req.query.partidos;
+  const partidoRaw = req.query.partido;
 
   if (sender_id) f.sender_id = sender_id;
   if (estado)     f.estado    = estado;
-  if (partido)    f.partido   = partido;
+
+  const partidosList = [];
+  if (typeof partidosRaw === 'string' && partidosRaw.trim()) {
+    partidosRaw.split(',').forEach(n => {
+      const nombre = n.trim();
+      if (nombre) partidosList.push(nombre);
+    });
+  } else if (Array.isArray(partidoRaw)) {
+    partidoRaw.forEach(n => {
+      const nombre = String(n || '').trim();
+      if (nombre) partidosList.push(nombre);
+    });
+  } else if (partidoRaw) {
+    const nombre = String(partidoRaw).trim();
+    if (nombre) partidosList.push(nombre);
+  }
+
+  if (partidosList.length === 1) {
+    f.partido = partidosList[0];
+  } else if (partidosList.length > 1) {
+    f.partido = { $in: partidosList };
+  }
   if (id_venta)   f.id_venta  = id_venta;
 
   // Si buscan por tracking, NO limite de fecha
