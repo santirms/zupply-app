@@ -87,7 +87,6 @@
               <tr>
                 <th class="p-2">Tracking</th>
                 <th class="p-2">ID de venta</th>
-                <th class="p-2">Cliente</th>
                 <th class="p-2">Fecha</th>
                 <th class="p-2">Partido</th>
                 <th class="p-2">Estado</th>
@@ -170,7 +169,7 @@
       if (!ct.includes('application/json')) {
         const text = await r.text();
         console.error('Respuesta no JSON:', r.status, text.slice(0,200));
-        tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="6">Error ${r.status}: respuesta no JSON</td></tr>`;
+        tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="5">Error ${r.status}: respuesta no JSON</td></tr>`;
         return;
       }
 
@@ -179,13 +178,16 @@
       const total = typeof data.total === 'number' ? data.total : items.length;
 
       tbody.innerHTML = items.map(it => `
-        <tr>
+        <tr class="border-t">
           <td class="p-2">${it.tracking ?? '-'}</td>
           <td class="p-2">${it.id_venta ?? '-'}</td>
-          <td class="p-2">${it.cliente_nombre ?? '-'}</td>
           <td class="p-2">${it.createdAt ? new Date(it.createdAt).toLocaleString() : '-'}</td>
           <td class="p-2">${it?.destino?.partido ?? '-'}</td>
-          <td class="p-2">${it.estado ?? '-'}</td>
+          <td class="p-2">
+            <span class="${it?.estado_ui?.class || ''}">
+              ${it?.estado_ui?.text || (it.estado ?? '-')}
+            </span>
+          </td>
         </tr>
       `).join('');
 
@@ -194,7 +196,7 @@
 
     } catch (e) {
       console.error('Error en loadTabla:', e);
-      tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="6">${e.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="5">${e.message}</td></tr>`;
     }
   }
   document.getElementById('prevPage').addEventListener('click',()=>{ if(page>1){ page--; loadTabla(); }});
