@@ -104,6 +104,22 @@
       <div id="kpi-inc" class="text-3xl font-semibold mt-1 tracking-tight text-rose-600 dark:text-rose-300">—</div>
     </div>
   </section>
+
+  <section class="mb-6">
+    <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-4">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold">Zonas de Rack (13hs ayer → 13hs hoy)</h3>
+        <button onclick="abrirConfigZonas()"
+          class="px-3 py-1.5 text-sm rounded-xl border border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/10">
+          ⚙️ Configurar zonas
+        </button>
+      </div>
+
+      <div id="kpis-rack" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+        <!-- Se llena dinámicamente -->
+      </div>
+    </div>
+  </section>
 </main>
 
 
@@ -212,6 +228,24 @@
     <footer class="py-6 text-center text-xs opacity-60">© <span id="anio"></span> Zupply</footer>
   </div>
 
+  <div id="modalConfigZonas" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white dark:bg-[#0B1020] rounded-2xl w-11/12 md:w-2/3 lg:w-1/2 max-h-[80vh] overflow-auto p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Configurar Zonas de Rack</h2>
+        <button onclick="cerrarConfigZonas()" class="text-slate-500 hover:text-slate-700">✕</button>
+      </div>
+
+      <div id="lista-zonas-config" class="space-y-3 mb-4">
+        <!-- Zonas existentes -->
+      </div>
+
+      <button onclick="agregarZonaVacia()"
+        class="w-full px-4 py-2 rounded-xl border-2 border-dashed border-slate-300 hover:border-amber-500 hover:bg-amber-50 dark:border-white/10 dark:hover:bg-white/5">
+        + Agregar nueva zona
+      </button>
+    </div>
+  </div>
+
   <script>
     // ====== Fecha / hora en topbar ======
     (function tick(){
@@ -226,16 +260,17 @@
       setTimeout(tick, 1000);
     })();
 
-      document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', () => {
     loadKPIs();
     setInterval(loadKPIs, 60_000);
+    cargarZonasRack();
   });
-    
-async function loadKPIs() {
-  const el = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
 
-  try {
-    const r = await fetch('/api/kpis/home', { cache: 'no-store' });
+  async function loadKPIs() {
+    const el = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
+
+    try {
+      const r = await fetch('/api/kpis/home', { cache: 'no-store' });
     if (!r.ok) {
       // si es auth, mandamos a login
       if (r.status === 401 || r.status === 403) {
@@ -256,6 +291,271 @@ async function loadKPIs() {
     el('kpi-pend', '—'); el('kpi-ruta', '—'); el('kpi-ent', '—'); el('kpi-inc', '—');
   }
 }
+
+  let zonasRack = [];
+  let partidosDisponibles = [];
+  let partidosAsignados = new Set();
+  let kpiRackIntervalId = null;
+
+  function recalcularPartidosAsignados() {
+    partidosAsignados = new Set(zonasRack.flatMap(z => z.partidos || []));
+  }
+
+  async function cargarZonasRack() {
+    try {
+      const [zonasResp, partidosResp] = await Promise.all([
+        fetch('/api/zonas-rack', { cache: 'no-store' }),
+        fetch('/api/partidos', { cache: 'no-store' })
+      ]);
+
+      if (!zonasResp.ok) throw new Error(`HTTP ${zonasResp.status}`);
+      if (!partidosResp.ok) throw new Error(`HTTP ${partidosResp.status}`);
+
+      const [zonas, partidos] = await Promise.all([zonasResp.json(), partidosResp.json()]);
+
+      zonasRack = Array.isArray(zonas) ? zonas : [];
+      partidosDisponibles = Array.isArray(partidos)
+        ? partidos.map(p => p && p.nombre).filter(Boolean)
+        : [];
+      recalcularPartidosAsignados();
+      renderKPIsRack();
+
+      if (!kpiRackIntervalId) {
+        kpiRackIntervalId = setInterval(actualizarKPIsRack, 60_000);
+      }
+    } catch (e) {
+      console.error('Error cargando zonas rack:', e);
+      const container = document.getElementById('kpis-rack');
+      if (container) {
+        container.innerHTML = '<p class="text-sm opacity-70 col-span-full text-center py-4">Error al cargar las zonas</p>';
+      }
+    }
+  }
+
+  function renderKPIsRack() {
+    const container = document.getElementById('kpis-rack');
+    if (!container) return;
+
+    if (!zonasRack.length) {
+      container.innerHTML = '<p class="text-sm opacity-70 col-span-full text-center py-4">No hay zonas configuradas</p>';
+      return;
+    }
+
+    const tarjetas = zonasRack.map(zona => {
+      const zonaId = zona && (zona._id || zona.id);
+      if (!zonaId) return '';
+      const nombre = escapeHtml(zona.nombre || 'Zona sin nombre');
+      return `
+        <div class="rounded-xl p-3 border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5">
+          <div class="text-xs font-medium opacity-70 truncate" title="${nombre}">${nombre}</div>
+          <div id="kpi-rack-${zonaId}" class="text-2xl font-semibold mt-1 text-indigo-600 dark:text-indigo-400">—</div>
+          <div id="kpi-rack-detalle-${zonaId}" class="text-[10px] opacity-60 mt-1">Cargando...</div>
+        </div>
+      `;
+    }).filter(Boolean);
+
+    if (!tarjetas.length) {
+      container.innerHTML = '<p class="text-sm opacity-70 col-span-full text-center py-4">No hay zonas configuradas</p>';
+      return;
+    }
+
+    container.innerHTML = tarjetas.join('');
+
+    zonasRack.forEach(zona => {
+      const zonaId = zona && (zona._id || zona.id);
+      if (zonaId) cargarKPIZona(zonaId);
+    });
+  }
+
+  async function cargarKPIZona(zonaId) {
+    try {
+      const r = await fetch(`/api/zonas-rack/${zonaId}/kpi`, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+
+      const totalEl = document.getElementById(`kpi-rack-${zonaId}`);
+      const detalleEl = document.getElementById(`kpi-rack-detalle-${zonaId}`);
+      if (totalEl) totalEl.textContent = data.total ?? '0';
+      if (detalleEl) detalleEl.textContent = `P:${data.pendientes ?? 0} | R:${data.en_camino ?? 0}`;
+    } catch (e) {
+      console.error('Error KPI zona:', zonaId, e);
+    }
+  }
+
+  function actualizarKPIsRack() {
+    zonasRack.forEach(zona => {
+      const zonaId = zona && (zona._id || zona.id);
+      if (zonaId) cargarKPIZona(zonaId);
+    });
+  }
+
+  function abrirConfigZonas() {
+    renderConfigZonas();
+    const modal = document.getElementById('modalConfigZonas');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function cerrarConfigZonas() {
+    const modal = document.getElementById('modalConfigZonas');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    cargarZonasRack();
+  }
+
+  function renderConfigZonas() {
+    const container = document.getElementById('lista-zonas-config');
+    if (!container) return;
+
+    recalcularPartidosAsignados();
+
+    if (!zonasRack.length) {
+      container.innerHTML = '<p class="text-sm opacity-70 text-center py-4">No hay zonas configuradas</p>';
+      return;
+    }
+
+    container.innerHTML = zonasRack.map(zona => {
+      const zonaId = zona && (zona._id || zona.id);
+      if (!zonaId) return '';
+      const nombre = escapeHtml(zona.nombre || '');
+      const zonaIdAttr = escapeHtml(zonaId);
+      const zonaIdJs = escapeHtml(JSON.stringify(zonaId));
+      return `
+        <div class="border border-slate-200 dark:border-white/10 rounded-xl p-4">
+          <div class="flex gap-3 mb-3">
+            <input type="text" value="${nombre}"
+              data-zona-id="${zonaIdAttr}"
+              class="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 dark:bg-white/10"
+              placeholder="Nombre de la zona (ej: Rack A1 - Sur)">
+            <button onclick="eliminarZona(${zonaIdJs})"
+              class="px-3 py-2 rounded-xl bg-rose-100 text-rose-700 hover:bg-rose-200">
+              🗑️
+            </button>
+          </div>
+
+          <select multiple size="8" data-zona-partidos="${zonaIdAttr}"
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 dark:bg-white/10 text-sm">
+            ${renderOpcionesPartidos(zona.partidos)}
+          </select>
+
+          <button onclick="guardarZona(${zonaIdJs})"
+            class="w-full mt-2 px-4 py-2 rounded-xl bg-amber-500 text-white hover:bg-amber-600">
+            Guardar cambios
+          </button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderOpcionesPartidos(partidosZona = []) {
+    const partidosZonaSet = new Set(partidosZona);
+    return partidosDisponibles.map(p => {
+      const asignado = partidosAsignados.has(p) && !partidosZonaSet.has(p);
+      const selected = partidosZonaSet.has(p) ? 'selected' : '';
+      const disabled = asignado ? 'disabled' : '';
+      const label = asignado ? `${p} (asignado)` : p;
+      const value = escapeHtml(p);
+      const labelHtml = escapeHtml(label);
+      return `<option value="${value}" ${selected} ${disabled}>${labelHtml}</option>`;
+    }).join('');
+  }
+
+  function agregarZonaVacia() {
+    const nuevaZona = {
+      _id: `temp_${Date.now()}`,
+      nombre: `Zona ${zonasRack.length + 1}`,
+      partidos: [],
+      orden: zonasRack.length
+    };
+    zonasRack.push(nuevaZona);
+    recalcularPartidosAsignados();
+    renderConfigZonas();
+  }
+
+  async function guardarZona(zonaId) {
+    const selectorValue = escapeSelector(zonaId);
+    const nombreInput = document.querySelector(`input[data-zona-id="${selectorValue}"]`);
+    const partidosSelect = document.querySelector(`select[data-zona-partidos="${selectorValue}"]`);
+    if (!nombreInput || !partidosSelect) return;
+
+    const nombre = nombreInput.value.trim();
+    const partidos = Array.from(partidosSelect.selectedOptions).map(o => o.value);
+
+    if (!nombre) {
+      alert('Ingresá un nombre para la zona');
+      return;
+    }
+    if (!partidos.length) {
+      alert('Seleccioná al menos un partido');
+      return;
+    }
+
+    try {
+      const orden = zonasRack.findIndex(z => (z._id || z.id) === zonaId);
+      const body = {
+        id: zonaId.startsWith('temp_') ? null : zonaId,
+        nombre,
+        partidos,
+        orden: orden >= 0 ? orden : zonasRack.length
+      };
+
+      const r = await fetch('/api/zonas-rack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || 'Error al guardar');
+      }
+
+      alert('Zona guardada correctamente');
+      cerrarConfigZonas();
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  async function eliminarZona(zonaId) {
+    if (!confirm('¿Eliminar esta zona?')) return;
+
+    try {
+      if (!zonaId.startsWith('temp_')) {
+        const resp = await fetch(`/api/zonas-rack/${zonaId}`, { method: 'DELETE' });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.error || 'Error al eliminar');
+        }
+      }
+      zonasRack = zonasRack.filter(z => (z._id || z.id) !== zonaId);
+      recalcularPartidosAsignados();
+      renderConfigZonas();
+    } catch (e) {
+      alert('Error al eliminar: ' + e.message);
+    }
+  }
+
+  function escapeSelector(value) {
+    const str = String(value ?? '');
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return CSS.escape(str);
+    }
+    return str.replace(/([\s!"#$%&'()*+,./:;<=>?@\[\\\]^`{|}~])/g, '\\$1');
+  }
+
+  function escapeHtml(str = '') {
+    const map = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;"
+    };
+    return String(str).replace(/[&<>"']/g, ch => map[ch] || ch);
+  }
 
     // ====== Menú usuario ======
     (function userMenu(){
