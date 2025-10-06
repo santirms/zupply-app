@@ -434,7 +434,7 @@ function uiStatus(envio){
   let cardLabel=({pendiente:'Pendiente',asignado:'Asignado',en_camino:'En camino',demorado:'Demorado',reprogramado:'Reprogramado',no_entregado:'No entregado',entregado:'Entregado',cancelado:'Cancelado',comprador_ausente:'Comprador ausente',inaccesible: 'Inaccesible/Avería',direccion_erronea: 'Dirección errónea',})[norm]||'Pendiente';
   if(norm==='reprogramado' && /buyer/.test(subRaw)) cardLabel='Reprogramado por comprador';
   if(isSoon) cardLabel='Llega pronto';
-  const chip=subRaw? subRaw.replace(/_/g,' ') : '';
+  let chip=subRaw? subRaw.replace(/_/g,' ') : '';
   if (isReschedMeli) chip = 'por demora';
   return { key:norm, label:cardLabel, substatus:chip };
 }
