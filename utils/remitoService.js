@@ -108,18 +108,6 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
     }
 
     // Cliente S3
-    // ========== DEBUG TEMPORAL ==========
-    console.log('🔍 Verificando credenciales AWS:');
-    console.log('  S3_ACCESS_KEY_ID existe?', !!process.env.S3_ACCESS_KEY_ID);
-    console.log('  S3_ACCESS_KEY_ID primeros 8 chars:', process.env.S3_ACCESS_KEY_ID?.substring(0, 8));
-    console.log('  S3_SECRET_ACCESS_KEY existe?', !!process.env.S3_SECRET_ACCESS_KEY);
-    console.log('  S3_SECRET_ACCESS_KEY primeros 8 chars:', process.env.S3_SECRET_ACCESS_KEY?.substring(0, 8));
-    console.log('  S3_REGION:', process.env.S3_REGION);
-    console.log('  S3_BUCKET:', process.env.S3_BUCKET);
-    console.log('  Tipo de S3_ACCESS_KEY_ID:', typeof process.env.S3_ACCESS_KEY_ID);
-    console.log('  Tipo de S3_SECRET_ACCESS_KEY:', typeof process.env.S3_SECRET_ACCESS_KEY);
-    // ====================================
-
     const s3Client = new S3Client({
       region: process.env.S3_REGION || 'us-east-2',
       endpoint: process.env.S3_ENDPOINT,
@@ -156,18 +144,18 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
 
     await s3Client.send(putCommand);
 
-    // Generar URL pre-firmada válida por 15 días
+    // Generar URL pre-firmada válida por 7 días
     const getCommand = new GetObjectCommand({
       Bucket: bucketName,
       Key: s3Key
     });
 
     const url = await getSignedUrl(s3Client, getCommand, {
-      expiresIn: 15 * 24 * 60 * 60 // 15 días en segundos (1,296,000 segundos)
+      expiresIn: 7 * 24 * 60 * 60 // 7 días en segundos (604,800 segundos - máximo AWS)
     });
 
     console.log(`✓ Remito guardado en S3: ${s3Key}`);
-    console.log(`✓ URL pre-firmada generada (válida 15 días)`);
+    console.log(`✓ URL pre-firmada generada (válida 7 días)`);
 
     return { buffer: pdfBuffer, url, s3Key };
   } catch (error) {
