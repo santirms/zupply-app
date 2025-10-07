@@ -2,6 +2,7 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 const dayjs = require('dayjs');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 function height(doc, text, width) {
   return doc.heightOfString(String(text ?? ''), { width });
@@ -18,6 +19,13 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
   const doc = new PDFDocument({ size: 'A4', margin: 36 });
   const stream = fs.createWriteStream(outPath);
   doc.pipe(stream);
+
+  const bufferPromise = new Promise((resolve, reject) => {
+    const chunks = [];
+    doc.on('data', chunk => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+  });
 
   // Header
   doc.fontSize(18).text('Remito de salida');
@@ -80,8 +88,63 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
   // 👉 firmas eliminadas
 
   doc.end();
-  await new Promise(res => stream.on('finish', res));
-  return { url: `/remitos/${filename}` };
+
+  const [pdfBuffer] = await Promise.all([
+    bufferPromise,
+    new Promise((resolve, reject) => {
+      stream.on('finish', resolve);
+      stream.on('error', reject);
+    })
+  ]);
+
+  try {
+    const bucketName = process.env.AWS_S3_BUCKET_NAME;
+
+    if (!bucketName) {
+      console.warn('AWS_S3_BUCKET_NAME no configurado, PDF solo en memoria/local');
+      return { buffer: pdfBuffer, url: `/remitos/${filename}` };
+    }
+
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION || 'us-east-1',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+      }
+    });
+
+    const fecha = new Date(asignacion.fecha || Date.now());
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+    const day = String(fecha.getDate()).padStart(2, '0');
+    const asgId = String(asignacion._id || asignacion.id || Date.now());
+
+    const s3Key = `remitos/${year}/${month}/${day}/${asgId}.pdf`;
+
+    await s3Client.send(new PutObjectCommand({
+      Bucket: bucketName,
+      Key: s3Key,
+      Body: Buffer.from(pdfBuffer),
+      ContentType: 'application/pdf',
+      Metadata: {
+        'asignacion-id': asgId,
+        'chofer-id': String(chofer?._id || ''),
+        'chofer-nombre': String(chofer?.nombre || ''),
+        'total-paquetes': String(envios?.length || 0),
+        'fecha': fecha.toISOString()
+      }
+    }));
+
+    const region = process.env.AWS_REGION || 'us-east-1';
+    const url = `https://${bucketName}.s3.${region}.amazonaws.com/${s3Key}`;
+
+    console.log(`✓ Remito guardado en S3: ${s3Key}`);
+
+    return { buffer: pdfBuffer, url, s3Key };
+  } catch (error) {
+    console.error('❌ Error subiendo remito a S3:', error.message);
+    return { buffer: pdfBuffer, url: `/remitos/${filename}` };
+  }
 }
 
 module.exports = { buildRemitoPDF };
