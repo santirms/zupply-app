@@ -106,7 +106,7 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
     }
 
     const s3Client = new S3Client({
-      region: process.env.AWS_REGION || 'us-east-1',
+      region: process.env.AWS_REGION || 'us-east-2',
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
@@ -135,7 +135,7 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
       }
     }));
 
-    const region = process.env.AWS_REGION || 'us-east-1';
+    const region = process.env.AWS_REGION || 'us-east-2';
     const url = `https://${bucketName}.s3.${region}.amazonaws.com/${s3Key}`;
 
     console.log(`✓ Remito guardado en S3: ${s3Key}`);
