@@ -56,34 +56,29 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// GET KPIs de una zona específica (13hs ayer → 13hs hoy)
+// GET KPIs de una zona específica por estado
 router.get('/:id/kpi', async (req, res) => {
   try {
     const zona = await ZonaRack.findById(req.params.id);
     if (!zona) return res.status(404).json({ error: 'Zona no encontrada' });
 
-    const now = new Date();
-    const ayer13hs = new Date(now);
-    ayer13hs.setDate(ayer13hs.getDate() - 1);
-    ayer13hs.setHours(13, 0, 0, 0);
+    const { estado } = req.query; // 'pendiente' o 'en_camino'
 
-    const hoy13hs = new Date(now);
-    hoy13hs.setHours(13, 0, 0, 0);
+    if (!estado || !['pendiente', 'en_camino'].includes(estado)) {
+      return res.status(400).json({ error: 'Estado inválido. Debe ser pendiente o en_camino' });
+    }
 
+    // Filtro SIN restricción temporal - TODOS los envíos del estado
     const filtro = {
       partido: { $in: zona.partidos },
-      estado: { $in: ['pendiente', 'en_camino'] },
-      fecha: { $gte: ayer13hs, $lte: hoy13hs }
+      estado: estado
     };
 
-    const [pendientes, en_camino, total] = await Promise.all([
-      Envio.countDocuments({ ...filtro, estado: 'pendiente' }),
-      Envio.countDocuments({ ...filtro, estado: 'en_camino' }),
-      Envio.countDocuments(filtro)
-    ]);
+    const total = await Envio.countDocuments(filtro);
 
-    res.json({ pendientes, en_camino, total });
+    res.json({ total, estado });
   } catch (e) {
+    console.error('KPI zona error:', e);
     res.status(500).json({ error: e.message });
   }
 });
