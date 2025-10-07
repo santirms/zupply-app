@@ -2,7 +2,8 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 const dayjs = require('dayjs');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 function height(doc, text, width) {
   return doc.heightOfString(String(text ?? ''), { width });
@@ -97,14 +98,16 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
     })
   ]);
 
+  // ========== SUBIR A S3 CON URL PRE-FIRMADA ==========
   try {
     const bucketName = process.env.S3_BUCKET;
 
     if (!bucketName) {
-      console.warn('AWS_S3_BUCKET_NAME no configurado, PDF solo en memoria/local');
-      return { buffer: pdfBuffer, url: `/remitos/${filename}` };
+      console.warn('S3_BUCKET no configurado, PDF solo en memoria');
+      return { buffer: pdfBuffer, url: null };
     }
 
+    // Cliente S3
     const s3Client = new S3Client({
       region: process.env.AWS_REGION || 'us-east-2',
       credentials: {
@@ -113,6 +116,7 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
       }
     });
 
+    // Generar ruta S3
     const fecha = new Date(asignacion.fecha || Date.now());
     const year = fecha.getFullYear();
     const month = String(fecha.getMonth() + 1).padStart(2, '0');
@@ -121,7 +125,8 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
 
     const s3Key = `remitos/${year}/${month}/${day}/${asgId}.pdf`;
 
-    await s3Client.send(new PutObjectCommand({
+    // Subir archivo a S3
+    const putCommand = new PutObjectCommand({
       Bucket: bucketName,
       Key: s3Key,
       Body: Buffer.from(pdfBuffer),
@@ -133,17 +138,29 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
         'total-paquetes': String(envios?.length || 0),
         'fecha': fecha.toISOString()
       }
-    }));
+    });
 
-    const region = process.env.AWS_REGION || 'us-east-2';
-    const url = `https://${bucketName}.s3.${region}.amazonaws.com/${s3Key}`;
+    await s3Client.send(putCommand);
+
+    // Generar URL pre-firmada válida por 15 días
+    const getCommand = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: s3Key
+    });
+
+    const url = await getSignedUrl(s3Client, getCommand, {
+      expiresIn: 15 * 24 * 60 * 60 // 15 días en segundos (1,296,000 segundos)
+    });
 
     console.log(`✓ Remito guardado en S3: ${s3Key}`);
+    console.log(`✓ URL pre-firmada generada (válida 15 días)`);
 
     return { buffer: pdfBuffer, url, s3Key };
   } catch (error) {
     console.error('❌ Error subiendo remito a S3:', error.message);
-    return { buffer: pdfBuffer, url: `/remitos/${filename}` };
+    console.error('Stack:', error.stack);
+    // No fallar la asignación si S3 falla
+    return { buffer: pdfBuffer, url: null };
   }
 }
 
