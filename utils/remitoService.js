@@ -98,7 +98,7 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
   ]);
 
   try {
-    const bucketName = process.env.AWS_S3_BUCKET_NAME;
+    const bucketName = process.env.S3_BUCKET;
 
     if (!bucketName) {
       console.warn('AWS_S3_BUCKET_NAME no configurado, PDF solo en memoria/local');
