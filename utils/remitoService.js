@@ -108,6 +108,18 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
     }
 
     // Cliente S3
+    // ========== DEBUG TEMPORAL ==========
+    console.log('🔍 Verificando credenciales AWS:');
+    console.log('  AWS_ACCESS_KEY_ID existe?', !!process.env.AWS_ACCESS_KEY_ID);
+    console.log('  AWS_ACCESS_KEY_ID primeros 8 chars:', process.env.AWS_ACCESS_KEY_ID?.substring(0, 8));
+    console.log('  AWS_SECRET_ACCESS_KEY existe?', !!process.env.AWS_SECRET_ACCESS_KEY);
+    console.log('  AWS_SECRET_ACCESS_KEY primeros 8 chars:', process.env.AWS_SECRET_ACCESS_KEY?.substring(0, 8));
+    console.log('  AWS_REGION:', process.env.AWS_REGION);
+    console.log('  S3_BUCKET:', process.env.S3_BUCKET);
+    console.log('  Tipo de AWS_ACCESS_KEY_ID:', typeof process.env.AWS_ACCESS_KEY_ID);
+    console.log('  Tipo de AWS_SECRET_ACCESS_KEY:', typeof process.env.AWS_SECRET_ACCESS_KEY);
+    // ====================================
+
     const s3Client = new S3Client({
       region: process.env.AWS_REGION || 'us-east-2',
       credentials: {
