@@ -611,34 +611,83 @@ try {
   // **Nunca** dejar substatus en delivered
   if (String(stFinal).toLowerCase() === 'delivered') subFinal = '';
 
+  const TERMINAL = new Set(['entregado', 'cancelado']);
+
   const RANK = {
     pendiente: 0,
     en_camino: 1,
-
-    // Problemas que necesitan atención (rank 2 - más fuerte que "en_camino")
+    comprador_ausente: 2,
     inaccesible: 2,
     direccion_erronea: 2,
     agencia_cerrada: 2,
     demorado: 2,
     reprogramado: 2,
-    comprador_ausente: 2,
     no_entregado: 2,
-
-    // Terminales
     cancelado: 3,
     entregado: 4,
   };
-  function stronger(a, b) {
-    const ra = RANK[a] ?? -1;
-    const rb = RANK[b] ?? -1;
-    return ra >= rb ? a : b;
+
+  // Determinar estado final con lógica temporal
+  const internoNuevo = mapToInterno(stFinal, subFinal);
+  const internoPrev = current?.estado || 'pendiente';
+
+  let estadoFinal = internoNuevo;
+
+  // Regla 1: Si el nuevo estado es TERMINAL, siempre gana
+  if (TERMINAL.has(internoNuevo)) {
+    estadoFinal = internoNuevo;
+  }
+  // Regla 2: Si el estado previo era TERMINAL y el nuevo no, conservar terminal
+  else if (TERMINAL.has(internoPrev) && !TERMINAL.has(internoNuevo)) {
+    estadoFinal = internoPrev;
+  }
+  // Regla 3: Si ambos NO son terminales, usar el más reciente (fecha del evento)
+  else {
+    // Buscar el último evento por tipo de estado
+    const eventosOrdenados = all
+      .filter(h => h?.at)
+      .sort((a, b) => new Date(b.at) - new Date(a.at));
+
+    // Buscar último evento del estado previo
+    const ultimoPrev = eventosOrdenados.find(h => {
+      const st = mapToInterno(
+        h?.estado_meli?.status || h?.estado,
+        h?.estado_meli?.substatus
+      );
+      return st === internoPrev;
+    });
+
+    // Buscar último evento del estado nuevo
+    const ultimoNuevo = eventosOrdenados.find(h => {
+      const st = mapToInterno(
+        h?.estado_meli?.status || h?.estado,
+        h?.estado_meli?.substatus
+      );
+      return st === internoNuevo;
+    });
+
+    const fechaPrev = ultimoPrev?.at ? new Date(ultimoPrev.at) : new Date(0);
+    const fechaNuevo = ultimoNuevo?.at ? new Date(ultimoNuevo.at) : dateFinal;
+
+    // Si el nuevo evento es MÁS RECIENTE, usar nuevo estado
+    if (fechaNuevo >= fechaPrev) {
+      estadoFinal = internoNuevo;
+    }
+    // Si el evento previo es más reciente, conservarlo
+    else {
+      estadoFinal = internoPrev;
+    }
+
+    // Desempate por RANK si las fechas son iguales (mismo día)
+    const diff = Math.abs(fechaNuevo - fechaPrev);
+    if (diff < 60000) { // menos de 1 minuto de diferencia
+      const rankPrev = RANK[internoPrev] ?? -1;
+      const rankNuevo = RANK[internoNuevo] ?? -1;
+      estadoFinal = rankNuevo >= rankPrev ? internoNuevo : internoPrev;
+    }
   }
 
-  const internoNuevo = mapToInterno(stFinal, subFinal);
-  const internoPrev  = current?.estado || 'pendiente';
-  const internoFuerte = stronger(internoNuevo, internoPrev);
-
-  update.$set.estado = internoFuerte;
+  update.$set.estado = estadoFinal;
   update.$set.estado_meli = {
     status: stFinal,
     substatus: subFinal,
