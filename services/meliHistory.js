@@ -205,13 +205,40 @@ function mapHistory(items = []) {
 function mapToInterno(status, substatus) {
   const s = (status || '').toLowerCase();
   const sub = (substatus || '').toLowerCase();
+
+  // 1. Estados terminales (máxima prioridad)
   if (s === 'delivered') return 'entregado';
   if (s === 'cancelled' || s === 'canceled') return 'cancelado';
-  if (s === 'not_delivered') return /receiver[_\s-]?absent/.test(sub) ? 'comprador_ausente' : 'no_entregado';
-  if (s === 'shipped' || s === 'in_transit' || s === 'out_for_delivery') return 'en_camino';
-  if (s === 'ready_to_ship' || s === 'handling' || s === 'ready_to_print' || s === 'printed') return 'pendiente';
+
+  // 2. Problemas de entrega (prioridad alta - ANTES de shipped genérico)
+  if (s === 'not_delivered') {
+    if (/receiver[_\s-]?absent|ausente/.test(sub)) return 'comprador_ausente';
+    if (/not[_\s-]?visited|inaccesible/.test(sub)) return 'inaccesible';
+    if (/bad[_\s-]?address|direcci[oó]n/.test(sub)) return 'direccion_erronea';
+    if (/agency[_\s-]?closed/.test(sub)) return 'agencia_cerrada';
+    return 'no_entregado';
+  }
+
+  // 3. Demoras y reprogramaciones (prioridad media-alta)
+  if (/rescheduled?[_\s-]?by[_\s-]?buyer/.test(sub)) return 'reprogramado';
+  if (/rescheduled?[_\s-]?by[_\s-]?meli/.test(sub)) return 'demorado';
   if (/resched/.test(sub)) return 'reprogramado';
-  if (/delay/.test(sub))   return 'demorado';
+  if (/delay/.test(sub)) return 'demorado';
+
+  // 4. En tránsito activo (prioridad media)
+  if (s === 'shipped' || s === 'in_transit' || s === 'out_for_delivery') {
+    // Si hay substatus problemático, priorizarlo
+    if (/delay/.test(sub)) return 'demorado';
+    if (/resched/.test(sub)) return 'reprogramado';
+    return 'en_camino';
+  }
+
+  // 5. Preparación (prioridad baja)
+  if (s === 'ready_to_ship' || s === 'handling' || s === 'ready_to_print' || s === 'printed') {
+    return 'pendiente';
+  }
+
+  // 6. Fallback
   return 'pendiente';
 }
 
@@ -587,12 +614,19 @@ try {
   const RANK = {
     pendiente: 0,
     en_camino: 1,
-    no_entregado: 1,
-    comprador_ausente: 1,
-    reprogramado: 1,
-    demorado: 1,
-    cancelado: 2,
-    entregado: 3,
+
+    // Problemas que necesitan atención (rank 2 - más fuerte que "en_camino")
+    inaccesible: 2,
+    direccion_erronea: 2,
+    agencia_cerrada: 2,
+    demorado: 2,
+    reprogramado: 2,
+    comprador_ausente: 2,
+    no_entregado: 2,
+
+    // Terminales
+    cancelado: 3,
+    entregado: 4,
   };
   function stronger(a, b) {
     const ra = RANK[a] ?? -1;

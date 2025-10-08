@@ -146,10 +146,17 @@
         <option value="pendiente">Pendiente</option>
         <option value="asignado">Asignado</option>
         <option value="en_camino">En camino</option>
-        <option value="comprador_ausente">Comprador ausente</option>
-        <option value="demorado">Demorado</option>
-        <option value="reprogramado">Reprogramado</option>
-        <option value="no_entregado">No entregado</option>
+
+        <optgroup label="Problemas de entrega">
+          <option value="comprador_ausente">Comprador ausente</option>
+          <option value="inaccesible">Inaccesible/Avería</option>
+          <option value="direccion_erronea">Dirección errónea</option>
+          <option value="agencia_cerrada">Agencia cerrada</option>
+          <option value="demorado">Demorado</option>
+          <option value="reprogramado">Reprogramado</option>
+          <option value="no_entregado">No entregado</option>
+        </optgroup>
+
         <option value="entregado">Entregado</option>
         <option value="cancelado">Cancelado</option>
       </select>
@@ -532,7 +539,19 @@ function renderTabla(){
   lista.forEach(e=>{
     const fecha=new Date(e.updatedAt||e.fecha||e.createdAt||Date.now()).toLocaleString();
     const { key:eKey, label:eLabel, substatus }=uiStatus(e);
-    const estadoHTML=(eKey==='comprador_ausente') ? estadoBadge(eKey,eLabel) : estadoBadge(eKey,eLabel) + substatusChip(substatus);
+
+    // Agregar icono de alerta para estados que necesitan atención
+    const needsAttention = [
+      'comprador_ausente', 'inaccesible', 'direccion_erronea',
+      'agencia_cerrada', 'demorado', 'reprogramado', 'no_entregado'
+    ];
+
+    let iconoAlerta = '';
+    if (needsAttention.includes(eKey)) {
+      iconoAlerta = '<span class="mr-1" title="Requiere atención">⚠️</span>';
+    }
+
+    const estadoHTML = iconoAlerta + estadoBadge(eKey,eLabel) + (substatus ? substatusChip(substatus) : '');
     const partidoUI=(e.partido && e.partido.trim())? e.partido : '-';
     const zonaFact=(e.zona && e.zona.trim())? cleanZona(e.zona) : '';
     const tr=document.createElement('tr');
@@ -715,8 +734,56 @@ function renderHistorial(histArray=[]){
       const safe=(h.note||'').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
       detalleNota=`<div class="mt-1 text-xs italic text-slate-600 dark:text-slate-300 whitespace-pre-wrap">${safe}</div>`;
     }else{
-      const { key,label,substatus }=uiStatus({ estado:h.estado, estado_meli:h.estado_meli });
-      badge=estadoBadge(key,label) + (substatus ? substatusChip(substatus) : '');
+      const tempEnvio = { estado:h.estado, estado_meli:h.estado_meli };
+      const { key,label }=uiStatus(tempEnvio);
+
+      // Construir label enriquecido
+      let fullLabel = label;
+
+      // Extraer substatus crudo de MeLi
+      const subRaw = (h.estado_meli?.substatus || '').toLowerCase();
+
+      // Mapeo de substatuses a texto legible
+      let subDetalle = '';
+      if (subRaw) {
+        if (subRaw.includes('out_for_delivery') || subRaw === 'out for delivery') {
+          subDetalle = 'salió a reparto';
+        } else if (subRaw.includes('in_transit') || subRaw === 'in transit') {
+          subDetalle = 'en tránsito';
+        } else if (subRaw === 'printed') {
+          subDetalle = 'etiqueta impresa';
+        } else if (subRaw === 'ready_to_print') {
+          subDetalle = 'listo para imprimir';
+        } else if (subRaw === 'handling') {
+          subDetalle = 'en preparación';
+        } else if (subRaw.includes('arriving_soon') || subRaw.includes('soon')) {
+          subDetalle = 'llega pronto';
+        } else if (subRaw.includes('delayed') || subRaw.includes('delay')) {
+          subDetalle = 'demorado';
+        } else if (subRaw.includes('rescheduled_by_buyer')) {
+          subDetalle = 'reprog. por comprador';
+        } else if (subRaw.includes('rescheduled_by_meli')) {
+          subDetalle = 'reprog. por MeLi';
+        } else if (subRaw === 'not_visited') {
+          subDetalle = 'no visitado';
+        } else if (subRaw.includes('bad_address')) {
+          subDetalle = 'dirección errónea';
+        } else if (subRaw.includes('agency_closed')) {
+          subDetalle = 'agencia cerrada';
+        } else if (subRaw === 'receiver_absent') {
+          subDetalle = 'ausente';
+        } else {
+          // Substatus desconocido, mostrarlo tal cual (limpiado)
+          subDetalle = subRaw.replace(/_/g, ' ');
+        }
+      }
+
+      badge=estadoBadge(key,fullLabel);
+
+      // SIEMPRE agregar chip si hay detalle
+      if (subDetalle) {
+        badge += substatusChip(subDetalle);
+      }
     }
     const usuario=h.actor_name || h.usuario || '—';
     return `<tr class="border-b border-slate-200 dark:border-white/10 align-top">
