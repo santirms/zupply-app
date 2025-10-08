@@ -80,6 +80,37 @@ exports.scanAndUpsert = async (req, res) => {
           user_id: auth.user_id
         });
 
+        // ========== EXTRAER COORDENADAS ==========
+        let latitud = null;
+        let longitud = null;
+        let geocode_source = null;
+
+        if (meliShipment?.receiver_address) {
+          const addr = meliShipment.receiver_address;
+          const lat = addr.latitude || addr.lat || addr.geolocation?.latitude || null;
+          const lon = addr.longitude || addr.lon || addr.lng || addr.geolocation?.longitude || null;
+
+          if (lat && lon) {
+            const latNum = Number(lat);
+            const lonNum = Number(lon);
+
+            if (
+              !isNaN(latNum) && !isNaN(lonNum) &&
+              latNum !== 0 && lonNum !== 0 &&
+              latNum >= -55.1 && latNum <= -21.7 &&
+              lonNum >= -73.6 && lonNum <= -53.5
+            ) {
+              latitud = latNum;
+              longitud = lonNum;
+              geocode_source = 'mercadolibre';
+              console.log(`📍 Coords de MeLi (scan create): ${meliShipment?.id || tracking}`, { latitud, longitud });
+            } else {
+              console.warn(`⚠️ Coords inválidas/fuera de Argentina para ${meliShipment?.id || tracking}:`, { lat: latNum, lon: lonNum });
+            }
+          }
+        }
+        // ========== FIN EXTRACCIÓN ==========
+
         const base = {
           // claves de identidad
           sender_id: sender_id || meliShipment?.seller_id || meliShipment?.seller?.id || null,
@@ -98,6 +129,9 @@ exports.scanAndUpsert = async (req, res) => {
           destinatario: meliShipment?.receiver_address?.receiver_name || meliShipment?.buyer?.nickname || null,
           direccion:    meliShipment?.receiver_address?.address_line  || null,
           codigo_postal: meliShipment?.receiver_address?.zip_code     || null,
+          latitud,
+          longitud,
+          geocode_source,
 
           // meta QR
           qr_meta: {
@@ -139,6 +173,50 @@ exports.scanAndUpsert = async (req, res) => {
       }
     } else {
       // --- si ya existía el envío, solo actualizamos meta QR ---
+      const needsCoords = (!envio.latitud || !envio.longitud || envio.geocode_source !== 'mercadolibre');
+      if (needsCoords && (meli_id || id_venta)) {
+        try {
+          const meliShipment = await fetchShipmentFromMeli({ tracking: meli_id, id_venta, user_id: auth.user_id });
+
+          if (meliShipment?.receiver_address) {
+            const addr = meliShipment.receiver_address;
+            const lat = addr.latitude || addr.lat || addr.geolocation?.latitude || null;
+            const lon = addr.longitude || addr.lon || addr.lng || addr.geolocation?.longitude || null;
+
+            if (lat && lon) {
+              const latNum = Number(lat);
+              const lonNum = Number(lon);
+
+              if (
+                !isNaN(latNum) && !isNaN(lonNum) &&
+                latNum !== 0 && lonNum !== 0 &&
+                latNum >= -55.1 && latNum <= -21.7 &&
+                lonNum >= -73.6 && lonNum <= -53.5
+              ) {
+                console.log(`📍 Coords de MeLi (scan): ${meliShipment?.id || meli_id}`, { latitud: latNum, longitud: lonNum });
+                await Envio.updateOne(
+                  { _id: envio._id },
+                  {
+                    $set: {
+                      latitud: latNum,
+                      longitud: lonNum,
+                      geocode_source: 'mercadolibre'
+                    }
+                  }
+                );
+                envio.latitud = latNum;
+                envio.longitud = lonNum;
+                envio.geocode_source = 'mercadolibre';
+              } else {
+                console.warn(`⚠️ Coords inválidas/fuera de Argentina para ${meliShipment?.id || meli_id}:`, { lat: latNum, lon: lonNum });
+              }
+            }
+          }
+        } catch (coordsErr) {
+          console.warn('scanAndUpsert: no se pudieron refrescar coords de MeLi:', coordsErr.message);
+        }
+      }
+
       await Envio.updateOne(
         { _id: envio._id },
         {

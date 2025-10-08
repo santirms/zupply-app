@@ -94,24 +94,53 @@ router.post('/meli', async (req, res) => {
       return res.status(404).json({ error: 'Cliente no vinculado a MeLi' });
     }
 
-    // Si no tenemos CP, pedimos a MeLi
-    let destinatario = raw.destinatario;
-    let direccion    = raw.direccion;
-    let referencia   = raw.referencia;
+    // Datos del shipment desde MeLi (para completar información y coordenadas)
+    const access_token = await getValidToken(cliente.user_id);
+    const { data: sh } = await axios.get(
+      `https://api.mercadolibre.com/shipments/${meli_id}`,
+      { headers: { Authorization: `Bearer ${access_token}` } }
+    );
 
-    if (!cp) {
-      const access_token = await getValidToken(cliente.user_id);
-      const { data: sh } = await axios.get(
-        `https://api.mercadolibre.com/shipments/${meli_id}`,
-        { headers: { Authorization: `Bearer ${access_token}` } }
-      );
-      cp          = sh?.receiver_address?.zip_code || '';
-      destinatario= destinatario || sh?.receiver_address?.receiver_name || '';
-      const street= sh?.receiver_address?.street_name || '';
-      const num   = sh?.receiver_address?.street_number || '';
-      direccion   = direccion || [street, num].filter(Boolean).join(' ');
-      referencia  = referencia || sh?.receiver_address?.comment || '';
+    let destinatario = raw.destinatario || sh?.receiver_address?.receiver_name || '';
+    let direccion    = raw.direccion    || '';
+    let referencia   = raw.referencia   || '';
+
+    const street = sh?.receiver_address?.street_name || '';
+    const num    = sh?.receiver_address?.street_number || '';
+    if (!direccion) direccion = [street, num].filter(Boolean).join(' ');
+    if (!referencia) referencia = sh?.receiver_address?.comment || '';
+    if (!cp) cp = sh?.receiver_address?.zip_code || '';
+
+    // ========== EXTRAER COORDENADAS DE MERCADOLIBRE ==========
+    let latitud = null;
+    let longitud = null;
+    let geocode_source = null;
+
+    if (sh?.receiver_address) {
+      const addr = sh.receiver_address;
+      const lat = addr.latitude || addr.lat || addr.geolocation?.latitude || null;
+      const lon = addr.longitude || addr.lon || addr.lng || addr.geolocation?.longitude || null;
+
+      if (lat && lon) {
+        const latNum = Number(lat);
+        const lonNum = Number(lon);
+
+        if (
+          !isNaN(latNum) && !isNaN(lonNum) &&
+          latNum !== 0 && lonNum !== 0 &&
+          latNum >= -55.1 && latNum <= -21.7 &&
+          lonNum >= -73.6 && lonNum <= -53.5
+        ) {
+          latitud = latNum;
+          longitud = lonNum;
+          geocode_source = 'mercadolibre';
+          console.log(`📍 Coords de MeLi (scan legacy): ${meli_id}`, { latitud, longitud });
+        } else {
+          console.warn(`⚠️ Coords inválidas/fuera de Argentina para ${meli_id}:`, { lat: latNum, lon: lonNum });
+        }
+      }
     }
+    // ========== FIN EXTRACCIÓN ==========
 
     // CP -> partido/zona
     const { partido, zona } = await detectarZona(cp);
@@ -140,7 +169,12 @@ router.post('/meli', async (req, res) => {
           destinatario:  destinatario || '',
           direccion:     direccion    || '',
           referencia:    referencia   || '',
-          precio
+          precio,
+          ...(latitud !== null && longitud !== null ? {
+            latitud,
+            longitud,
+            geocode_source
+          } : {})
         }
       },
       { upsert: true }

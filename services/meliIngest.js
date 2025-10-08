@@ -114,6 +114,37 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
   const address = [street, number].filter(Boolean).join(' ').trim();
   const ref     = sh?.receiver_address?.comment || '';
 
+  // ========== EXTRAER COORDENADAS DE MERCADOLIBRE ==========
+  let latitud = null;
+  let longitud = null;
+  let geocode_source = null;
+
+  if (sh?.receiver_address) {
+    const addr = sh.receiver_address;
+    const lat = addr.latitude || addr.lat || addr.geolocation?.latitude || null;
+    const lon = addr.longitude || addr.lon || addr.lng || addr.geolocation?.longitude || null;
+
+    if (lat && lon) {
+      const latNum = Number(lat);
+      const lonNum = Number(lon);
+
+      if (
+        !isNaN(latNum) && !isNaN(lonNum) &&
+        latNum !== 0 && lonNum !== 0 &&
+        latNum >= -55.1 && latNum <= -21.7 &&
+        lonNum >= -73.6 && lonNum <= -53.5
+      ) {
+        latitud = latNum;
+        longitud = lonNum;
+        geocode_source = 'mercadolibre';
+        console.log(`📍 Coords de MeLi: ${sh.id}`, { latitud, longitud });
+      } else {
+        console.warn(`⚠️ Coords inválidas/fuera de Argentina para ${sh.id}:`, { lat: latNum, lon: lonNum });
+      }
+    }
+  }
+  // ========== FIN EXTRACCIÓN ==========
+
   // 3) Partido / Zona / Precio
   const { partido = '', zona: zonaNom = '' } = await detectarZona(cp) || {};
   const precio = await precioPorZona(cliente, zonaNom);
@@ -165,6 +196,20 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
     }
   }
 };
+
+  if (latitud !== null && longitud !== null) {
+    const shouldUpdateCoords =
+      !existing?.latitud ||
+      !existing?.longitud ||
+      existing?.geocode_source !== 'mercadolibre';
+
+    if (shouldUpdateCoords) {
+      update.$set.latitud = latitud;
+      update.$set.longitud = longitud;
+      update.$set.geocode_source = geocode_source;
+      console.log(`💾 Guardando coordenadas de MeLi (ingest): ${sh.id}`, { latitud, longitud });
+    }
+  }
 
 
   const updated = await Envio.findOneAndUpdate(
