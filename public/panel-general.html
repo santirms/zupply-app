@@ -398,7 +398,7 @@ async function probeQrButtons(){ const slots = Array.from(document.querySelector
 function initMapa(lat,lng){ const cont=document.getElementById('mapa'); if(!cont) return; cont.innerHTML=''; if(!Number.isFinite(lat)||!Number.isFinite(lng)){ cont.innerHTML='<div class="flex items-center justify-center h-full text-slate-500">Sin coordenadas</div>'; return; } if(mapaInstancia){ mapaInstancia.remove(); mapaInstancia=null; } mapaInstancia=L.map('mapa').setView([lat,lng],13); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution:'&copy; OpenStreetMap contributors' }).addTo(mapaInstancia); L.marker([lat,lng]).addTo(mapaInstancia); setTimeout(()=>mapaInstancia.invalidateSize(),0); }
 
 function uiStatus(envio){
-  window.estadoBadge=function(key,label){ 
+  window.estadoBadge=function(key,label){
     const css={entregado:'bg-green-100 text-green-700 border-green-200',
                en_camino:'bg-sky-100 text-sky-700 border-sky-200',
                pendiente:'bg-gray-100 text-gray-700 border-gray-200',
@@ -409,31 +409,39 @@ function uiStatus(envio){
                cancelado:'bg-slate-200 text-slate-700 border-slate-300',
                comprador_ausente:'bg-amber-100 text-amber-700 border-amber-200',
                direccion_erronea: 'bg-rose-100 text-rose-700 border-rose-200',
-               inaccesible: 'bg-amber-100 text-amber-700 border-amber-200'
+               inaccesible: 'bg-amber-100 text-amber-700 border-amber-200',
+               agencia_cerrada: 'bg-orange-100 text-orange-700 border-orange-200'
               }
-      [key]||'bg-gray-100 text-gray-700 border-gray-200'; 
+      [key]||'bg-gray-100 text-gray-700 border-gray-200';
     return `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${css}">${label}</span>`; };
   window.substatusChip=function(sub){ if(!sub) return ''; return `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${sub}</span>`; };
   const raw=(envio.estado||envio.status||envio.estado_meli?.status||'').toLowerCase();
   const subRaw=(envio.estado_meli?.substatus||'').toLowerCase().trim();
   let norm=({pending:'pendiente',handling:'pendiente',ready_to_ship:'pendiente',shipped:'en_camino',delivered:'entregado',not_delivered:'no_entregado',cancelled:'cancelado'})[raw] || raw || 'pendiente';
-  const isAbsent=/(recipient|receiver|buyer|client|addressee|destinatario)[_\s-]?(absent|not[_\s-]?at[_\s-]?home|not[_\s-]?available|no[_\s-]?disponible|no[_\s-]?estaba|ausente)/.test(subRaw)|| subRaw==='comprador_ausente';
-  const isResched=/resched/.test(subRaw); 
-  const isSoon=/(soon[_\s-]?deliver|arriving[_\s-]?soon)/.test(subRaw); 
-  const isDelay=/(with_)?delay(ed)?/.test(subRaw);
-  const isBadAddr     = /(bad[_\s-]?address|direcci[oó]n[_\s-]?err[oó]nea)/.test(subRaw);
-  const isNotVisited  = /(not[_\s-]?visited|inaccesible|aver[ií]a)/.test(subRaw);
-  const isReschedMeli = /resched(ule|uled)?(_by)?[_\s-]?meli/.test(subRaw);
-  if(isAbsent) norm='comprador_ausente'; 
-  else if(isResched) norm='reprogramado'; 
-  else if(isDelay) norm='demorado'; 
-  else if(isSoon) norm='en_camino';
+  // Substatuses específicos
+  const isAbsent = /(recipient|receiver|buyer|client|addressee|destinatario)[_\s-]?(absent|not[_\s-]?at[_\s-]?home|ausente)/.test(subRaw) || subRaw==='comprador_ausente';
+  const isNotVisited = /(not[_\s-]?visited|inaccesible|aver[ií]a)/.test(subRaw);
+  const isBadAddr = /(bad[_\s-]?address|direcci[oó]n[_\s-]?err[oó]nea)/.test(subRaw);
+  const isReschedBuyer = /rescheduled?[_\s-]?by[_\s-]?(buyer|client|comprador)/.test(subRaw);
+  const isReschedMeli = /rescheduled?[_\s-]?by[_\s-]?meli/.test(subRaw);
+  const isDelay = /(with_)?delay(ed)?|demora/.test(subRaw);
+  const isSoon = /(arriving[_\s-]?)?soon[_\s-]?(deliver)?|llega[_\s-]?pronto/.test(subRaw);
+  const isAgencyClosed = /agency[_\s-]?closed|sucursal[_\s-]?cerrada/.test(subRaw);
+  const isResched = /resched/.test(subRaw);
+  if (isAbsent) norm = 'comprador_ausente';
   else if (isNotVisited) norm = 'inaccesible';
   else if (isBadAddr) norm = 'direccion_erronea';
-  else if (isReschedMeli) norm = 'reprogramado'; // el chip dirá “por demora”
-  let cardLabel=({pendiente:'Pendiente',asignado:'Asignado',en_camino:'En camino',demorado:'Demorado',reprogramado:'Reprogramado',no_entregado:'No entregado',entregado:'Entregado',cancelado:'Cancelado',comprador_ausente:'Comprador ausente',inaccesible: 'Inaccesible/Avería',direccion_erronea: 'Dirección errónea',})[norm]||'Pendiente';
-  if(norm==='reprogramado' && /buyer/.test(subRaw)) cardLabel='Reprogramado por comprador';
-  if(isSoon) cardLabel='Llega pronto';
+  else if (isAgencyClosed) norm = 'agencia_cerrada';
+  else if (isReschedBuyer) norm = 'reprogramado';
+  else if (isReschedMeli) norm = 'demorado';
+  else if (isDelay) norm = 'demorado';
+  else if (isResched) norm = 'reprogramado';
+  else if (isSoon) norm = 'en_camino';
+  let cardLabel=({pendiente:'Pendiente',asignado:'Asignado',en_camino:'En camino',demorado:'Demorado',reprogramado:'Reprogramado',no_entregado:'No entregado',entregado:'Entregado',cancelado:'Cancelado',comprador_ausente:'Comprador ausente',inaccesible: 'Inaccesible/Avería',direccion_erronea: 'Dirección errónea',agencia_cerrada: 'Agencia cerrada'})[norm]||'Pendiente';
+  if (isReschedBuyer) cardLabel = 'Reprogramado por comprador';
+  if (isReschedMeli) cardLabel = 'Reprogramado por demora';
+  if (isSoon) cardLabel = 'Llega pronto';
+  if (isAgencyClosed) cardLabel = 'Agencia cerrada';
   let chip=subRaw? subRaw.replace(/_/g,' ') : '';
   if (isReschedMeli) chip = 'por demora';
   return { key:norm, label:cardLabel, substatus:chip };
@@ -576,6 +584,15 @@ async function mostrarDetalle(envioId){
       <p><strong>CP:</strong> ${data.codigo_postal || '-'}</p>
       <p><strong>Partido:</strong> ${partido}</p>
       <p><strong>Referencia:</strong> ${data.referencia || '-'}</p>`;
+
+    // Mostrar intentos si existen
+    const ultimoEvento = (data.historial || [])
+      .filter(h => h.estado_meli?.substatus === 'receiver_absent')
+      .sort((a,b) => new Date(b.at) - new Date(a.at))[0];
+
+    if (ultimoEvento?.metadata?.intentos) {
+      cd.innerHTML += `<p><strong>Intentos de entrega:</strong> ${ultimoEvento.metadata.intentos}</p>`;
+    }
 
     // Botón “Ver QR de respaldo”
     (() => {
