@@ -432,6 +432,25 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
   let sh = await getShipment(access, envio.meli_id);
   let shipmentId = envio.meli_id;
 
+  let meliLat = null;
+  let meliLon = null;
+
+  const captureMeliCoords = (shipment, shipmentIdForLog) => {
+    if (shipment?.receiver_address) {
+      const addr = shipment.receiver_address;
+      const lat = addr.latitude || addr.lat || null;
+      const lon = addr.longitude || addr.lon || addr.lng || null;
+
+      if (lat && lon) {
+        meliLat = lat;
+        meliLon = lon;
+        console.log('📍 Coordenadas de MeLi:', { meliLat, meliLon, meli_id: shipmentIdForLog });
+      }
+    }
+  };
+
+  captureMeliCoords(sh, shipmentId);
+
   if (sh?.id) {
     if (`${sh.id}` !== `${envio.meli_id}`) {
       dlog('autocorrect meli_id', { before: envio.meli_id, after: sh.id });
@@ -447,6 +466,7 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
         shipmentId = `${resolved}`;
         await Envio.updateOne({ _id: envio._id }, { $set: { meli_id: shipmentId } });
         sh = await getShipment(access, shipmentId);
+        captureMeliCoords(sh, shipmentId);
       } else {
         dlog('order→shipment no resolvió', { orderId });
       }
@@ -693,6 +713,14 @@ try {
     substatus: subFinal,
     updatedAt: dateFinal,
   };
+
+  // Guardar coordenadas de MeLi si existen y no están ya guardadas
+  if (meliLat && meliLon && (!envio.latitud || !envio.longitud)) {
+    update.$set.latitud = Number(meliLat);
+    update.$set.longitud = Number(meliLon);
+    update.$set.geocode_source = 'mercadolibre';
+    console.log('💾 Guardando coordenadas de MeLi en DB');
+  }
 
   await Envio.updateOne({ _id: envio._id }, update);
 }
