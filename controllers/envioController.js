@@ -78,6 +78,11 @@ try {
   console.warn('geocode util no disponible, sigo sin geocodificar');
 }
 
+function toNumberOrNull(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
 // Crear un envío manual (y geolocalizarlo opcionalmente)
 exports.crearEnvio = async (req, res) => {
   try {
@@ -91,17 +96,29 @@ exports.crearEnvio = async (req, res) => {
       partido,
       destinatario,
       direccion,
-      referencia
+      referencia,
+      latitud: latitudOriginal,
+      longitud: longitudOriginal
     } = req.body;
 
     // Geocode (si tenés util disponible)
     let latitud = null, longitud = null;
-    if (direccion || codigo_postal || partido) {
-      const q = [direccion, codigo_postal, partido, 'Argentina'].filter(Boolean).join(', ');
-      const coords = await geocodeDireccion(q);
+    const latitudInput = toNumberOrNull(latitudOriginal);
+    const longitudInput = toNumberOrNull(longitudOriginal);
+    const shouldGeocode = Boolean(
+      direccion || codigo_postal || partido || (latitudInput !== null && longitudInput !== null)
+    );
+    if (shouldGeocode) {
+      const coords = await geocodeDireccion({
+        direccion,
+        codigo_postal,
+        partido,
+        latitud: latitudInput ?? null,
+        longitud: longitudInput ?? null
+      });
       // Tus campos de esquema son latitud / longitud
-      latitud  = coords?.lat ?? null;
-      longitud = coords?.lon ?? coords?.lng ?? null;
+      latitud  = coords?.lat ?? latitudInput ?? null;
+      longitud = coords?.lon ?? coords?.lng ?? longitudInput ?? null;
     }
 
     const nuevo = await Envio.create({
@@ -258,11 +275,39 @@ exports.labelByTracking = async (req, res) => {
 exports.actualizarEnvio = async (req, res) => {
   try {
     const updates = { ...req.body };
-    if (updates.direccion || updates.codigo_postal || updates.partido) {
-      const q = [updates.direccion, updates.codigo_postal, updates.partido, 'Argentina'].filter(Boolean).join(', ');
-      const coords = await geocodeDireccion(q);
-      updates.latitud  = coords?.lat ?? null;
-      updates.longitud = coords?.lon ?? coords?.lng ?? null;
+    const envioActual = await Envio.findById(req.params.id).lean();
+    if (!envioActual) return res.status(404).json({ msg: 'Envío no encontrado' });
+
+    const direccionFinal     = updates.direccion     ?? envioActual.direccion;
+    const codigoPostalFinal  = updates.codigo_postal ?? envioActual.codigo_postal;
+    const partidoFinal       = updates.partido       ?? envioActual.partido;
+    const latitudInput       = toNumberOrNull(updates.latitud);
+    const longitudInput      = toNumberOrNull(updates.longitud);
+    delete updates.latitud;
+    delete updates.longitud;
+
+    const shouldGeocode = Boolean(
+      updates.direccion ||
+      updates.codigo_postal ||
+      updates.partido ||
+      latitudInput !== null && longitudInput !== null
+    );
+
+    if (shouldGeocode) {
+      const coords = await geocodeDireccion({
+        direccion: direccionFinal,
+        codigo_postal: codigoPostalFinal,
+        partido: partidoFinal,
+        latitud: latitudInput ?? toNumberOrNull(envioActual.latitud),
+        longitud: longitudInput ?? toNumberOrNull(envioActual.longitud)
+      });
+      const latitudResult  = coords?.lat ?? latitudInput ?? toNumberOrNull(envioActual.latitud);
+      const longitudResult = coords?.lon ?? coords?.lng ?? longitudInput ?? toNumberOrNull(envioActual.longitud);
+      updates.latitud  = latitudResult ?? null;
+      updates.longitud = longitudResult ?? null;
+    } else {
+      if (latitudInput !== null) updates.latitud = latitudInput;
+      if (longitudInput !== null) updates.longitud = longitudInput;
     }
     const envio = await Envio.findByIdAndUpdate(req.params.id, updates, { new: true }).lean();
     if (!envio) return res.status(404).json({ msg: 'Envío no encontrado' });
