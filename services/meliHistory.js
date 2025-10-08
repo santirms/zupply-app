@@ -38,16 +38,47 @@ function mapFromTracking(tk) {
     const raw  = String(it.status || it.description || it.detail || '').toLowerCase();
 
     let status = null, sub = '';
+    // Estados de tránsito con substatuses específicos
     if (/out[_\s-]?for[_\s-]?delivery|reparto/.test(raw)) {
       status = 'shipped'; sub = 'out_for_delivery';
+    } else if (/ready[_\s-]?to[_\s-]?ship|listo/.test(raw)) {
+      status = 'ready_to_ship'; sub = 'ready_to_print';
+    } else if (/printed|impres/.test(raw)) {
+      status = 'ready_to_ship'; sub = 'printed';
+    } else if (/handling|preparaci[oó]n/.test(raw)) {
+      status = 'ready_to_ship'; sub = 'handling';
     } else if (/in[_\s-]?transit|transit|camino/.test(raw)) {
-      status = 'shipped'; sub = '';
+      status = 'shipped'; sub = 'in_transit';
+    } else if (/arriving[_\s-]?soon|llega[_\s-]?pronto/.test(raw)) {
+      status = 'shipped'; sub = 'arriving_soon';
+
+    // Estados problemáticos con detalle
+    } else if (/receiver[_\s-]?absent|ausente|comprador[_\s-]?ausente/.test(raw)) {
+      status = 'not_delivered'; sub = 'receiver_absent';
+    } else if (/not[_\s-]?visited|no[_\s-]?visitado|inaccesible/.test(raw)) {
+      status = 'not_delivered'; sub = 'not_visited';
+    } else if (/bad[_\s-]?address|direcci[oó]n[_\s-]?err[oó]nea/.test(raw)) {
+      status = 'not_delivered'; sub = 'bad_address';
+    } else if (/agency[_\s-]?closed|sucursal[_\s-]?cerrada/.test(raw)) {
+      status = 'not_delivered'; sub = 'agency_closed';
+
+    // Demoras y reprogramaciones
+    } else if (/delay(ed)?|demora/.test(raw)) {
+      status = 'shipped'; sub = 'delayed';
+    } else if (/rescheduled[_\s-]?by[_\s-]?meli|reprogramado[_\s-]?por[_\s-]?meli/.test(raw)) {
+      status = 'shipped'; sub = 'rescheduled_by_meli';
+    } else if (/rescheduled[_\s-]?by[_\s-]?buyer|reprogramado[_\s-]?por[_\s-]?comprador/.test(raw)) {
+      status = 'shipped'; sub = 'rescheduled_by_buyer';
+
+    // Entregado
     } else if (/delivered|entregado/.test(raw)) {
       status = 'delivered'; sub = '';
-    } else if (/not[_\s-]?delivered|receiver[_\s-]?absent|ausente/.test(raw)) {
-      status = 'not_delivered'; sub = 'receiver_absent';
+
+    // Cancelado
     } else if (/cancel/.test(raw)) {
       status = 'cancelled'; sub = '';
+    } else if (/not[_\s-]?delivered/.test(raw)) {
+      status = 'not_delivered'; sub = '';
     }
 
     if (status) push(when, status, sub, raw || 'checkpoint');
@@ -309,6 +340,11 @@ function buildHistoryFromShipment(sh) {
   // 5) Intento fallido / ausente
   const dtAbsent = pick(dh.receiver_absent, dh.not_delivered, sh.date_not_delivered, sh.date_receiver_absent);
   if (dtAbsent) push(dtAbsent, 'not_delivered', 'receiver_absent', 'not_delivered|receiver_absent');
+  // Contar intentos de entrega fallidos
+  const intentos = (sh.delivery_attempts || sh.attempts || 0);
+  if (dtAbsent && intentos > 0) {
+    out[out.length - 1].metadata = { intentos };
+  }
 
   // 6) Entregado
   const dtDelivered = pick(dh.delivered, sh.date_delivered, sh.delivered_date, sh.date_first_delivered);
