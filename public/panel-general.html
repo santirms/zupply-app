@@ -765,55 +765,58 @@ function renderHistorial(histArray=[]){
       const safe=(h.note||'').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
       detalleNota=`<div class="mt-1 text-xs italic text-slate-600 dark:text-slate-300 whitespace-pre-wrap">${safe}</div>`;
     }else{
-      const tempEnvio = { estado:h.estado, estado_meli:h.estado_meli };
-      const { key,label }=uiStatus(tempEnvio);
-
-      // Construir label enriquecido
-      let fullLabel = label;
+      const { key, label, substatus } = uiStatus({
+        estado: h.estado,
+        estado_meli: h.estado_meli
+      });
 
       // Extraer substatus crudo de MeLi
-      const subRaw = (h.estado_meli?.substatus || '').toLowerCase();
+      const subRaw = (h.estado_meli?.substatus || '').toLowerCase().trim();
+      const statusRaw = (h.estado_meli?.status || h.estado || '').toLowerCase().trim();
 
-      // Mapeo de substatuses a texto legible
+      // Mapear substatus a texto legible en español
       let subDetalle = '';
       if (subRaw) {
-        if (subRaw.includes('out_for_delivery') || subRaw === 'out for delivery') {
-          subDetalle = 'salió a reparto';
-        } else if (subRaw.includes('in_transit') || subRaw === 'in transit') {
-          subDetalle = 'en tránsito';
-        } else if (subRaw === 'printed') {
-          subDetalle = 'etiqueta impresa';
-        } else if (subRaw === 'ready_to_print') {
-          subDetalle = 'listo para imprimir';
-        } else if (subRaw === 'handling') {
-          subDetalle = 'en preparación';
-        } else if (subRaw.includes('arriving_soon') || subRaw.includes('soon')) {
-          subDetalle = 'llega pronto';
-        } else if (subRaw.includes('delayed') || subRaw.includes('delay')) {
-          subDetalle = 'demorado';
-        } else if (subRaw.includes('rescheduled_by_buyer')) {
-          subDetalle = 'reprog. por comprador';
-        } else if (subRaw.includes('rescheduled_by_meli')) {
-          subDetalle = 'reprog. por MeLi';
-        } else if (subRaw === 'not_visited') {
-          subDetalle = 'no visitado';
-        } else if (subRaw.includes('bad_address')) {
-          subDetalle = 'dirección errónea';
-        } else if (subRaw.includes('agency_closed')) {
-          subDetalle = 'agencia cerrada';
-        } else if (subRaw === 'receiver_absent') {
-          subDetalle = 'ausente';
-        } else {
-          // Substatus desconocido, mostrarlo tal cual (limpiado)
-          subDetalle = subRaw.replace(/_/g, ' ');
-        }
+        const MAP_SUBSTATUS = {
+          'out_for_delivery': '📦 salió a reparto',
+          'in_transit': '🚚 en tránsito',
+          'printed': '🖨️ etiqueta impresa',
+          'ready_to_print': '📋 listo para imprimir',
+          'handling': '📦 en preparación',
+          'arriving_soon': '⏰ llega pronto',
+          'delayed': '⏱️ demorado',
+          'rescheduled_by_buyer': '👤 reprog. por comprador',
+          'rescheduled_by_meli': '🔄 reprog. por MeLi',
+          'receiver_absent': '🚫 ausente',
+          'not_visited': '❌ inaccesible/avería',
+          'bad_address': '📍 dirección errónea',
+          'agency_closed': '🏢 agencia cerrada'
+        };
+
+        subDetalle = MAP_SUBSTATUS[subRaw] || subRaw.replace(/_/g, ' ');
       }
 
-      badge=estadoBadge(key,fullLabel);
+      // Badge principal
+      badge = estadoBadge(key, label);
 
-      // SIEMPRE agregar chip si hay detalle
+      // SIEMPRE agregar chip si hay substatus
       if (subDetalle) {
-        badge += substatusChip(subDetalle);
+        // Color contextual según tipo
+        let chipClass = 'bg-gray-100 text-gray-700 border-gray-200';
+
+        if (subRaw.includes('absent') || subRaw.includes('not_visited') || subRaw.includes('bad_address')) {
+          chipClass = 'bg-rose-100 text-rose-700 border-rose-200';
+        } else if (subRaw.includes('rescheduled')) {
+          chipClass = 'bg-purple-100 text-purple-700 border-purple-200';
+        } else if (subRaw.includes('delay')) {
+          chipClass = 'bg-orange-100 text-orange-700 border-orange-200';
+        } else if (subRaw.includes('delivery') || subRaw.includes('soon')) {
+          chipClass = 'bg-blue-100 text-blue-700 border-blue-200';
+        } else if (subRaw.includes('print') || subRaw.includes('handling')) {
+          chipClass = 'bg-cyan-100 text-cyan-700 border-cyan-200';
+        }
+
+        badge += `<span class="ml-2 text-[11px] px-2 py-0.5 rounded-full border ${chipClass}">${subDetalle}</span>`;
       }
     }
     const usuario=h.actor_name || h.usuario || '—';
