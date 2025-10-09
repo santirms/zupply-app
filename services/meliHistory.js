@@ -650,87 +650,98 @@ try {
   // **Nunca** dejar substatus en delivered
   if (String(stFinal).toLowerCase() === 'delivered') subFinal = '';
 
-  const TERMINAL = new Set(['entregado', 'cancelado']);
+  // ========== LÓGICA DE PRIORIZACIÓN DE ESTADOS ==========
 
-  const RANK = {
-    pendiente: 0,
-    en_camino: 1,
-    comprador_ausente: 2,
-    inaccesible: 2,
-    direccion_erronea: 2,
-    agencia_cerrada: 2,
-    demorado: 2,
-    reprogramado: 2,
-    no_entregado: 2,
-    cancelado: 3,
-    entregado: 4,
-  };
+  // Categorías de eventos por especificidad
+  const EVENTOS_ESPECIFICOS = new Set([
+    'receiver_absent',      // Comprador ausente
+    'not_visited',          // Inaccesible/avería
+    'bad_address',          // Dirección errónea
+    'agency_closed',        // Agencia cerrada
+    'rescheduled_by_buyer', // Reprogramado por comprador
+    'out_for_delivery',     // Salió a reparto
+    'arriving_soon'         // Llega pronto
+  ]);
 
-  // Determinar estado final con lógica temporal
-  const internoNuevo = mapToInterno(stFinal, subFinal);
-  const internoPrev = current?.estado || 'pendiente';
+  const EVENTOS_GENERICOS = new Set([
+    'rescheduled_by_meli',  // Barrido genérico de MeLi
+    'delayed',              // Demorado genérico
+    'in_transit',           // En tránsito genérico
+    'shipped'               // Enviado genérico
+  ]);
 
-  let estadoFinal = internoNuevo;
+  const TERMINALES = new Set(['delivered', 'cancelled']);
 
-  // Regla 1: Si el nuevo estado es TERMINAL, siempre gana
-  if (TERMINAL.has(internoNuevo)) {
-    estadoFinal = internoNuevo;
+  // Función para determinar especificidad de un evento
+  function getEventSpecificity(h) {
+    const sub = (h?.estado_meli?.substatus || '').toLowerCase();
+    const status = (h?.estado_meli?.status || h?.estado || '').toLowerCase();
+
+    if (TERMINALES.has(status)) return 3; // Máxima prioridad
+    if (EVENTOS_ESPECIFICOS.has(sub)) return 2; // Alta prioridad
+    if (EVENTOS_GENERICOS.has(sub)) return 1; // Baja prioridad
+    return 1; // Default: prioridad baja
   }
-  // Regla 2: Si el estado previo era TERMINAL y el nuevo no, conservar terminal
-  else if (TERMINAL.has(internoPrev) && !TERMINAL.has(internoNuevo)) {
-    estadoFinal = internoPrev;
-  }
-  // Regla 3: Si ambos NO son terminales, usar el más reciente (fecha del evento)
-  else {
-    // Buscar el último evento por tipo de estado
-    const eventosOrdenados = all
-      .filter(h => h?.at)
-      .sort((a, b) => new Date(b.at) - new Date(a.at));
 
-    // Buscar último evento del estado previo
-    const ultimoPrev = eventosOrdenados.find(h => {
-      const st = mapToInterno(
-        h?.estado_meli?.status || h?.estado,
-        h?.estado_meli?.substatus
-      );
-      return st === internoPrev;
+  // Obtener el evento más relevante (no solo el más reciente)
+  const eventosOrdenados = all
+    .filter(h => h?.at && h?.estado_meli)
+    .sort((a, b) => {
+      // Primero por especificidad (descendente)
+      const specA = getEventSpecificity(a);
+      const specB = getEventSpecificity(b);
+      if (specA !== specB) return specB - specA;
+
+      // Luego por fecha (descendente)
+      return new Date(b.at) - new Date(a.at);
     });
 
-    // Buscar último evento del estado nuevo
-    const ultimoNuevo = eventosOrdenados.find(h => {
-      const st = mapToInterno(
-        h?.estado_meli?.status || h?.estado,
-        h?.estado_meli?.substatus
-      );
-      return st === internoNuevo;
+  // El primer evento de la lista es el más relevante
+  const eventoRelevante = eventosOrdenados[0];
+
+  let estadoFinal = 'pendiente';
+  let statusFinal = stFinal;
+  let substatusFinal = subFinal;
+  let fechaFinal = dateFinal;
+
+  if (eventoRelevante) {
+    statusFinal = eventoRelevante.estado_meli?.status || eventoRelevante.estado || stFinal;
+    substatusFinal = eventoRelevante.estado_meli?.substatus || subFinal;
+    fechaFinal = eventoRelevante.at || dateFinal;
+
+    // Mapear a estado interno
+    estadoFinal = mapToInterno(statusFinal, substatusFinal);
+
+    console.log(`🎯 Evento más relevante para ${envio._id}:`, {
+      fecha: fechaFinal,
+      status: statusFinal,
+      substatus: substatusFinal,
+      especificidad: getEventSpecificity(eventoRelevante),
+      estadoInterno: estadoFinal
     });
-
-    const fechaPrev = ultimoPrev?.at ? new Date(ultimoPrev.at) : new Date(0);
-    const fechaNuevo = ultimoNuevo?.at ? new Date(ultimoNuevo.at) : dateFinal;
-
-    // Si el nuevo evento es MÁS RECIENTE, usar nuevo estado
-    if (fechaNuevo >= fechaPrev) {
-      estadoFinal = internoNuevo;
-    }
-    // Si el evento previo es más reciente, conservarlo
-    else {
-      estadoFinal = internoPrev;
-    }
-
-    // Desempate por RANK si las fechas son iguales (mismo día)
-    const diff = Math.abs(fechaNuevo - fechaPrev);
-    if (diff < 60000) { // menos de 1 minuto de diferencia
-      const rankPrev = RANK[internoPrev] ?? -1;
-      const rankNuevo = RANK[internoNuevo] ?? -1;
-      estadoFinal = rankNuevo >= rankPrev ? internoNuevo : internoPrev;
-    }
+  } else {
+    // Fallback al último evento conocido
+    estadoFinal = mapToInterno(stFinal, subFinal);
   }
+
+  // Nunca revertir estados terminales
+  const prevEsTerminal = TERMINALES.has((current?.estado_meli?.status || '').toLowerCase());
+  if (prevEsTerminal && !TERMINALES.has((statusFinal || '').toLowerCase())) {
+    const statusPrev = current?.estado_meli?.status || statusFinal;
+    console.log(`🔒 Conservando estado terminal: ${statusPrev}`);
+    estadoFinal = current?.estado || estadoFinal;
+    statusFinal = statusPrev;
+    substatusFinal = current?.estado_meli?.substatus || substatusFinal;
+    fechaFinal = current?.estado_meli?.updatedAt || fechaFinal;
+  }
+
+  // ========== FIN LÓGICA DE PRIORIZACIÓN ==========
 
   update.$set.estado = estadoFinal;
   update.$set.estado_meli = {
-    status: stFinal,
-    substatus: subFinal,
-    updatedAt: dateFinal,
+    status: statusFinal,
+    substatus: substatusFinal,
+    updatedAt: fechaFinal
   };
 
   // Guardar coordenadas de MeLi si existen y no están ya guardadas
