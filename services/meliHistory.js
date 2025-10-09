@@ -670,12 +670,15 @@ try {
     'shipped'               // Enviado genérico
   ]);
 
-  const TERMINALES = new Set(['delivered', 'cancelled']);
+  const TERMINALES = new Set(['delivered', 'cancelled', 'canceled']);
 
   // Función para determinar especificidad de un evento
   function getEventSpecificity(h) {
     const sub = (h?.estado_meli?.substatus || '').toLowerCase();
-    const status = (h?.estado_meli?.status || h?.estado || '').toLowerCase();
+    let status = (h?.estado_meli?.status || h?.estado || '').toLowerCase();
+
+    // Normalizar grafías alternativas de MercadoLibre
+    if (status === 'canceled') status = 'cancelled';
 
     if (TERMINALES.has(status)) return 3; // Máxima prioridad
     if (EVENTOS_ESPECIFICOS.has(sub)) return 2; // Alta prioridad
@@ -725,8 +728,17 @@ try {
   }
 
   // Nunca revertir estados terminales
-  const prevEsTerminal = TERMINALES.has((current?.estado_meli?.status || '').toLowerCase());
-  if (prevEsTerminal && !TERMINALES.has((statusFinal || '').toLowerCase())) {
+  // Normalizar antes de verificar
+  let statusFinalNorm = (statusFinal || '').toLowerCase();
+  if (statusFinalNorm === 'canceled') statusFinalNorm = 'cancelled';
+
+  let statusPrevNorm = (current?.estado_meli?.status || '').toLowerCase();
+  if (statusPrevNorm === 'canceled') statusPrevNorm = 'cancelled';
+
+  const prevEsTerminal = TERMINALES.has(statusPrevNorm);
+  const nuevoEsTerminal = TERMINALES.has(statusFinalNorm);
+
+  if (prevEsTerminal && !nuevoEsTerminal) {
     const statusPrev = current?.estado_meli?.status || statusFinal;
     console.log(`🔒 Conservando estado terminal: ${statusPrev}`);
     estadoFinal = current?.estado || estadoFinal;
