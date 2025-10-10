@@ -210,35 +210,36 @@ function mapToInterno(status, substatus) {
   if (s === 'delivered') return 'entregado';
   if (s === 'cancelled' || s === 'canceled') return 'cancelado';
 
-  // 2. Problemas de entrega (prioridad alta - ANTES de shipped genérico)
-  if (s === 'not_delivered') {
-    if (/receiver[_\s-]?absent|ausente/.test(sub)) return 'comprador_ausente';
-    if (/not[_\s-]?visited|inaccesible/.test(sub)) return 'inaccesible';
-    if (/bad[_\s-]?address|direcci[oó]n/.test(sub)) return 'direccion_erronea';
-    if (/agency[_\s-]?closed/.test(sub)) return 'agencia_cerrada';
-    return 'no_entregado';
-  }
+  // 2. PRIMERO revisar substatuses específicos (ANTES de status genérico)
 
-  // 3. Demoras y reprogramaciones (prioridad media-alta)
+  // Problemas de entrega específicos
+  if (/receiver[_\s-]?absent|ausente/.test(sub)) return 'comprador_ausente';
+  if (/not[_\s-]?visited|inaccesible/.test(sub)) return 'inaccesible';
+  if (/bad[_\s-]?address|direcci[oó]n/.test(sub)) return 'direccion_erronea';
+  if (/agency[_\s-]?closed/.test(sub)) return 'agencia_cerrada';
+
+  // Reprogramaciones
   if (/rescheduled?[_\s-]?by[_\s-]?buyer/.test(sub)) return 'reprogramado';
   if (/rescheduled?[_\s-]?by[_\s-]?meli/.test(sub)) return 'demorado';
   if (/resched/.test(sub)) return 'reprogramado';
+
+  // Demoras
   if (/delay/.test(sub)) return 'demorado';
 
-  // 4. En tránsito activo (prioridad media)
-  if (s === 'shipped' || s === 'in_transit' || s === 'out_for_delivery') {
-    // Si hay substatus problemático, priorizarlo
-    if (/delay/.test(sub)) return 'demorado';
-    if (/resched/.test(sub)) return 'reprogramado';
-    return 'en_camino';
-  }
+  // Salió a reparto (CRÍTICO - prioridad alta)
+  if (/out[_\s-]?for[_\s-]?delivery/.test(sub)) return 'en_camino';
+  if (/arriving[_\s-]?soon/.test(sub)) return 'en_camino';
 
-  // 5. Preparación (prioridad baja)
+  // 3. Si no hay substatus específico, usar status
+  if (s === 'not_delivered') return 'no_entregado';
+
+  if (s === 'shipped' || s === 'in_transit') return 'en_camino';
+
   if (s === 'ready_to_ship' || s === 'handling' || s === 'ready_to_print' || s === 'printed') {
     return 'pendiente';
   }
 
-  // 6. Fallback
+  // 4. Fallback
   return 'pendiente';
 }
 

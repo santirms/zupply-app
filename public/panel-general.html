@@ -754,54 +754,65 @@ function switchTab(which){
   else { det.classList.add('hidden'); his.classList.remove('hidden'); activate(bHis); deactivate(bDet); }
 }
 
-function renderHistorial(histArray=[]){
-  const cont=document.getElementById('contenidoHistorial');
-  if(!Array.isArray(histArray)||!histArray.length){ cont.innerHTML=`<p class="text-sm text-slate-500">Sin eventos por ahora.</p>`; return; }
-  const rows=histArray.slice().sort((a,b)=> new Date(b.at||b.fecha||b.updatedAt||0)-new Date(a.at||a.fecha||a.updatedAt||0)).map(h=>{
-    const fechaStr = h.at ? new Date(h.at).toLocaleString() : h.updatedAt ? new Date(h.updatedAt).toLocaleString() : '-';
-    let badge=''; let detalleNota='';
-    if((h.estado && h.estado.toLowerCase()==='nota') || h.note){
-      badge=`<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border bg-gray-100 text-gray-700">Nota</span>`;
-      const safe=(h.note||'').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      detalleNota=`<div class="mt-1 text-xs italic text-slate-600 dark:text-slate-300 whitespace-pre-wrap">${safe}</div>`;
-    }else{
-      const { key, label, substatus } = uiStatus({
+function renderHistorial(histArray=[]) {
+  const cont = document.getElementById('contenidoHistorial');
+  if (!Array.isArray(histArray) || !histArray.length) {
+    cont.innerHTML = `<p class="text-sm text-slate-500">Sin eventos por ahora.</p>`;
+    return;
+  }
+
+  const rows = histArray.slice().sort((a,b)=>
+    new Date(b.at||b.fecha||b.updatedAt||0)-new Date(a.at||a.fecha||a.updatedAt||0)
+  ).map(h => {
+    const fechaStr = h.at ? new Date(h.at).toLocaleString('es-AR') :
+                     h.updatedAt ? new Date(h.updatedAt).toLocaleString('es-AR') : '-';
+
+    let badge = '';
+    let detalleNota = '';
+
+    if ((h.estado && h.estado.toLowerCase() === 'nota') || h.note) {
+      badge = `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border bg-gray-100 text-gray-700">Nota</span>`;
+      const safe = (h.note||'').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      detalleNota = `<div class="mt-1 text-xs italic text-slate-600 dark:text-slate-300 whitespace-pre-wrap">${safe}</div>`;
+    } else {
+      // Construir objeto temporal para uiStatus
+      const tempEnvio = {
         estado: h.estado,
-        estado_meli: h.estado_meli
-      });
+        estado_meli: h.estado_meli || {}
+      };
+
+      const { key, label } = uiStatus(tempEnvio);
 
       // Extraer substatus crudo de MeLi
       const subRaw = (h.estado_meli?.substatus || '').toLowerCase().trim();
-      const statusRaw = (h.estado_meli?.status || h.estado || '').toLowerCase().trim();
 
-      // Mapear substatus a texto legible en español
+      // Substatuses que NO mostrar (obvios/redundantes)
+      const SKIP_SUBSTATUS = [
+        'in_transit', 'shipped', 'handling', 'ready_to_print', 'printed'
+      ];
+
       let subDetalle = '';
-      if (subRaw) {
+      if (subRaw && !SKIP_SUBSTATUS.includes(subRaw)) {
         const MAP_SUBSTATUS = {
           'out_for_delivery': '📦 salió a reparto',
-          'in_transit': '🚚 en tránsito',
-          'printed': '🖨️ etiqueta impresa',
-          'ready_to_print': '📋 listo para imprimir',
-          'handling': '📦 en preparación',
           'arriving_soon': '⏰ llega pronto',
           'delayed': '⏱️ demorado',
           'rescheduled_by_buyer': '👤 reprog. por comprador',
           'rescheduled_by_meli': '🔄 reprog. por MeLi',
           'receiver_absent': '🚫 ausente',
-          'not_visited': '❌ inaccesible/avería',
+          'not_visited': '⚠️ Inaccesible/Avería',
           'bad_address': '📍 dirección errónea',
           'agency_closed': '🏢 agencia cerrada'
         };
 
-        subDetalle = MAP_SUBSTATUS[subRaw] || subRaw.replace(/_/g, ' ');
+        subDetalle = MAP_SUBSTATUS[subRaw] || '';
       }
 
       // Badge principal
       badge = estadoBadge(key, label);
 
-      // SIEMPRE agregar chip si hay substatus
+      // Agregar chip si hay substatus relevante
       if (subDetalle) {
-        // Color contextual según tipo
         let chipClass = 'bg-gray-100 text-gray-700 border-gray-200';
 
         if (subRaw.includes('absent') || subRaw.includes('not_visited') || subRaw.includes('bad_address')) {
@@ -812,24 +823,31 @@ function renderHistorial(histArray=[]){
           chipClass = 'bg-orange-100 text-orange-700 border-orange-200';
         } else if (subRaw.includes('delivery') || subRaw.includes('soon')) {
           chipClass = 'bg-blue-100 text-blue-700 border-blue-200';
-        } else if (subRaw.includes('print') || subRaw.includes('handling')) {
-          chipClass = 'bg-cyan-100 text-cyan-700 border-cyan-200';
         }
 
         badge += `<span class="ml-2 text-[11px] px-2 py-0.5 rounded-full border ${chipClass}">${subDetalle}</span>`;
       }
     }
-    const usuario=h.actor_name || h.usuario || '—';
+
+    const usuario = h.actor_name || h.usuario || '—';
+
     return `<tr class="border-b border-slate-200 dark:border-white/10 align-top">
-      <td class="px-3 py-2 whitespace-nowrap">${fechaStr}</td>
+      <td class="px-3 py-2 whitespace-nowrap text-xs">${fechaStr}</td>
       <td class="px-3 py-2">${badge}${detalleNota}</td>
-      <td class="px-3 py-2 whitespace-nowrap opacity-80">${usuario}</td>
+      <td class="px-3 py-2 whitespace-nowrap opacity-80 text-xs">${usuario}</td>
     </tr>`;
   }).join('');
-  cont.innerHTML=`<div class="overflow-x-auto"><table class="min-w-full text-sm">
+
+  cont.innerHTML = `<div class="overflow-x-auto"><table class="min-w-full text-sm">
     <thead class="bg-slate-50 dark:bg-white/5">
-      <tr><th class="px-3 py-2 text-left font-semibold">Fecha y hora</th><th class="px-3 py-2 text-left font-semibold">Estado</th><th class="px-3 py-2 text-left font-semibold">Usuario</th></tr>
-    </thead><tbody>${rows}</tbody></table></div>`;
+      <tr>
+        <th class="px-3 py-2 text-left font-semibold">Fecha y hora</th>
+        <th class="px-3 py-2 text-left font-semibold">Estado</th>
+        <th class="px-3 py-2 text-left font-semibold">Usuario</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
