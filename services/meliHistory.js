@@ -233,9 +233,9 @@ function mapToInterno(status, substatus) {
   // 3. Si no hay substatus específico, usar status
   if (s === 'not_delivered') return 'no_entregado';
 
-  if (s === 'shipped' || s === 'in_transit') return 'en_camino';
+ if (s === 'shipped' || s === 'in_transit' || s === 'out_for_delivery') return 'en_camino';
 
-  if (s === 'ready_to_ship' || s === 'handling' || s === 'ready_to_print' || s === 'printed') {
+ if (s === 'ready_to_ship' || s === 'handling' || s === 'ready_to_print' || s === 'printed') {
     return 'pendiente';
   }
 
