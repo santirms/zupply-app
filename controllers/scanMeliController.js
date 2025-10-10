@@ -7,6 +7,7 @@ const {
   getTokenByClienteId, getTokenBySenderId, fetchShipmentFromMeli
 } = require('../utils/meliUtils');
 const { ensureObject, presignGet } = require('../utils/s3');
+const { resolvePartido } = require('../utils/resolvePartido');
 
 const MELI_ENRICH_TIMEOUT_MS = 3000;
 
@@ -205,6 +206,7 @@ exports.scanAndUpsert = async (req, res) => {
 
       let meliShipment = null;
       let enrichedViaMeli = false;
+      let partidoFromMeli = null;
 
       if (auth.user_id && (meli_id || idVentaFromQr)) {
         try {
@@ -229,6 +231,8 @@ exports.scanAndUpsert = async (req, res) => {
           substatus: meliShipment?.substatus || null,
         };
 
+        const shipmentAddress = meliShipment?.receiver_address;
+
         if (!envioData.sender_id) {
           const shipmentSeller = pickFirstString(meliShipment?.seller_id, meliShipment?.seller?.id);
           envioData.sender_id = pickFirstString(senderIdFromQr, shipmentSeller, clienteSender, clienteDoc?.codigo_cliente);
@@ -241,32 +245,39 @@ exports.scanAndUpsert = async (req, res) => {
         }
         if (!envioData.destinatario) {
           envioData.destinatario = pickFirstString(
-            meliShipment?.receiver_address?.receiver_name,
+            shipmentAddress?.receiver_name,
             meliShipment?.buyer?.nickname,
             meliShipment?.buyer?.name
           );
         }
         if (!envioData.direccion) {
           envioData.direccion = pickFirstString(
-            meliShipment?.receiver_address?.address_line,
-            joinParts(meliShipment?.receiver_address?.street_name, meliShipment?.receiver_address?.street_number)
+            shipmentAddress?.address_line,
+            joinParts(shipmentAddress?.street_name, shipmentAddress?.street_number)
           );
         }
         if (!envioData.codigo_postal) {
-          envioData.codigo_postal = pickFirstString(meliShipment?.receiver_address?.zip_code);
+          envioData.codigo_postal = pickFirstString(shipmentAddress?.zip_code);
         }
         if (!envioData.referencia) {
-          envioData.referencia = pickFirstString(meliShipment?.receiver_address?.comment);
-        }
-        if (!envioData.partido) {
-          envioData.partido = pickFirstString(
-            meliShipment?.receiver_address?.city?.name,
-            meliShipment?.receiver_address?.state?.name
-          );
+          envioData.referencia = pickFirstString(shipmentAddress?.comment);
         }
 
-        if (meliShipment?.receiver_address) {
-          const addr = meliShipment.receiver_address;
+        const partidoMeli = pickFirstString(
+          shipmentAddress?.city?.name,
+          shipmentAddress?.municipality?.name,
+          shipmentAddress?.neighborhood?.name,
+          shipmentAddress?.state?.name
+        );
+        if (!envioData.partido) {
+          envioData.partido = partidoMeli;
+        }
+        if (!partidoFromMeli) {
+          partidoFromMeli = partidoMeli;
+        }
+
+        if (shipmentAddress) {
+          const addr = shipmentAddress;
           const lat = addr.latitude || addr.lat || addr.geolocation?.latitude || null;
           const lon = addr.longitude || addr.lon || addr.lng || addr.geolocation?.longitude || null;
 
@@ -301,11 +312,18 @@ exports.scanAndUpsert = async (req, res) => {
         envioData.meli_id = pickFirstString(meli_id);
       }
 
+      const partidoFallback = pickFirstString(envioData.partido, qrPartido, partidoFromMeli);
+
       envioData.sender_id = cleanString(envioData.sender_id);
       envioData.id_venta = cleanString(envioData.id_venta);
       envioData.meli_id = cleanString(envioData.meli_id);
       envioData.codigo_postal = cleanString(envioData.codigo_postal);
-      envioData.partido = cleanString(envioData.partido);
+      const partidoResuelto = await resolvePartido(envioData.codigo_postal, partidoFallback);
+      envioData.partido = cleanString(partidoResuelto);
+      if (!envioData.partido) {
+        const trackingForLog = envioData.meli_id || envioData.id_venta || meli_id || idVentaFromQr || '(sin tracking)';
+        console.warn(`⚠️ Partido no resuelto para tracking ${trackingForLog}. CP: ${envioData.codigo_postal || 'sin CP'}, fallback: ${partidoFallback || 'sin partido'}`);
+      }
       envioData.destinatario = cleanString(envioData.destinatario);
       envioData.direccion = cleanString(envioData.direccion);
       envioData.referencia = cleanString(envioData.referencia);
