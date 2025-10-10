@@ -1,173 +1,312 @@
-// /public/js/panel-usuarios.js
+let usuarios = [];
+let usuarioAEliminar = null;
 
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => Array.from(document.querySelectorAll(s));
-
-const API_BASE = '/api/users'; // <- ahora la API está namespaced
-
-const ui = {
-  role: $('#role'),
-  // admin/coordinador
-  email: $('#email'), password: $('#password'),
-  // coordinador (si usás campos separados; si no, podés ignorarlos)
-  emailC: $('#emailC'), passwordC: $('#passwordC'),
-  // chofer
-  choferNombre: $('#chofer_nombre'),
-  choferTelefono: $('#chofer_telefono'),
-  choferFields: $('#choferFields'),
-  // cliente
-  clienteFields: $('#clienteFields'),
-  emailCli: $('#emailCli'),
-  passwordCli: $('#passwordCli'),
-  senderIds: $('#senderIds'),
-  clienteId: $('#clienteId'),
-  // otros
-  adminFields: $('#adminFields'),
-  coorFields: $('#coorFields'),
-  crearBtn: $('#crear'),
-  msg: $('#msg'),
-  tblBody: document.querySelector('#tbl tbody')
-};
-
-function show(section, on) {
-  if (!section) return;
-  section.classList.toggle('hidden', !on);
-}
-
-function onRoleChange() {
-  const r = ui.role.value;
-  // Mostrar/ocultar secciones según rol
-  show(ui.adminFields, r === 'admin');        // si usás los campos admin
-  show(ui.coorFields, r === 'coordinador');   // si usás los campos coordinador
-  show(ui.choferFields, r === 'chofer');
-  show(ui.clienteFields, r === 'cliente');
-}
-ui.role.addEventListener('change', onRoleChange);
-onRoleChange();
-
-// Helpers
-async function fetchJSON(url, opts = {}) {
-  const r = await fetch(url, opts);
-  const ct = r.headers.get('content-type') || '';
-  // Si no es JSON, evitamos el crash en parseo (404/HTML login, etc.)
-  if (!ct.includes('application/json')) {
-    const text = await r.text();
-    throw new Error(`HTTP ${r.status} – respuesta no JSON: ${text.slice(0, 120)}...`);
-  }
-  const data = await r.json();
-  if (!r.ok) {
-    const msg = data?.error || `HTTP ${r.status}`;
-    throw new Error(msg);
-  }
-  return data;
-}
-
-async function loadUsers() {
+// Cargar usuarios
+async function cargarUsuarios() {
   try {
-    const data = await fetchJSON(`${API_BASE}`);
-    const { users = [] } = data;
-    ui.tblBody.innerHTML = users.map(u => `
-      <tr>
-        <td class="px-3 py-2">${u.email || '-'}</td>
-        <td class="px-3 py-2">${u.username || '-'}</td>
-        <td class="px-3 py-2">${u.role}</td>
-        <td class="px-3 py-2">${u.is_active ? 'sí' : 'no'}</td>
+    const res = await fetch('/api/users', { credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data = await res.json();
+    const lista = Array.isArray(data) ? data : data.users || [];
+    usuarios = lista.map((u) => ({
+      ...u,
+      activo: typeof u.activo === 'boolean' ? u.activo : u.is_active !== false
+    }));
+    renderTabla();
+  } catch (err) {
+    console.error('Error cargando usuarios:', err);
+    alert('No se pudieron cargar los usuarios');
+  }
+}
+
+// Renderizar tabla
+function renderTabla() {
+  const tbody = document.getElementById('tablaUsuarios');
+  if (!tbody) return;
+
+  if (!usuarios.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 opacity-70">No hay usuarios</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = usuarios.map((u) => {
+    const roleBadge = {
+      admin: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+      coordinador: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+      chofer: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+      cliente: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300'
+    }[u.role] || 'bg-gray-100 text-gray-700';
+
+    const activoIcon = u.activo
+      ? '<span class="text-green-600" title="Activo">✓</span>'
+      : '<span class="text-rose-600" title="Inactivo">✗</span>';
+
+    const created = u.createdAt ? new Date(u.createdAt) : null;
+    const createdLabel = created && !Number.isNaN(created.getTime())
+      ? created.toLocaleDateString()
+      : '-';
+
+    return `
+      <tr class="border-b border-slate-200 dark:border-white/10">
+        <td class="px-4 py-3">${u.username || '-'}</td>
+        <td class="px-4 py-3">${u.email || '-'}</td>
+        <td class="px-4 py-3">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${roleBadge}">
+            ${u.role}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-center">${activoIcon}</td>
+        <td class="px-4 py-3 text-sm opacity-70">${createdLabel}</td>
+        <td class="px-4 py-3">
+          <div class="flex gap-2">
+            <button onclick="abrirModalEditar('${u._id}')"
+              class="text-blue-600 hover:text-blue-700 dark:text-blue-400" title="Editar">
+              ✏️
+            </button>
+            <button onclick="toggleActivo('${u._id}')"
+              class="text-amber-600 hover:text-amber-700 dark:text-amber-400" title="${u.activo ? 'Desactivar' : 'Activar'}">
+              ${u.activo ? '🔓' : '🔒'}
+            </button>
+            <button onclick="abrirModalEliminar('${u._id}')"
+              class="text-rose-600 hover:text-rose-700 dark:text-rose-400" title="Eliminar">
+              🗑️
+            </button>
+          </div>
+        </td>
       </tr>
-    `).join('');
-  } catch (e) {
-    console.error('Error cargando usuarios:', e);
-    ui.tblBody.innerHTML = `<tr><td class="px-3 py-2 text-red-600" colspan="4">No se pudo cargar la lista (${e.message}).</td></tr>`;
-  }
+    `;
+  }).join('');
 }
 
-function parseSenderIds(raw) {
-  return String(raw || '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
+// Abrir modal para crear
+function abrirModalCrear() {
+  document.getElementById('modalUsuarioTitulo').textContent = 'Nuevo Usuario';
+  document.getElementById('usuarioId').value = '';
+  document.getElementById('inputUsername').value = '';
+  document.getElementById('inputEmail').value = '';
+  document.getElementById('inputPassword').value = '';
+  document.getElementById('inputPassword').required = true;
+  document.getElementById('passwordHint').classList.add('hidden');
+  document.getElementById('inputRole').value = 'cliente';
+  document.getElementById('inputActivo').checked = true;
+
+  document.getElementById('modalUsuario').classList.remove('hidden');
+  document.getElementById('modalUsuario').classList.add('flex');
 }
 
-async function crearUsuario() {
-  ui.msg.textContent = 'Creando...';
-  ui.msg.classList.remove('text-red-600');
-  try {
-    const role = ui.role.value;
+// Abrir modal para editar
+function abrirModalEditar(id) {
+  const usuario = usuarios.find((u) => u._id === id);
+  if (!usuario) return;
 
-    // payloads por rol
-    if (role === 'cliente') {
-      const body = {
-        email: ui.emailCli.value || undefined,
-        password: ui.passwordCli.value || undefined,
-        sender_ids: parseSenderIds(ui.senderIds.value),
-        cliente_id: ui.clienteId.value || undefined
-      };
-      await fetchJSON(`${API_BASE}/create-client`, {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify(body)
-      });
-    } else if (role === 'chofer') {
-      const body = {
-        role,
-        chofer_nombre: ui.choferNombre.value,
-        chofer_telefono: ui.choferTelefono.value
-        // password: si querés, podrías pasarlo, pero en tu controller
-        // ya usa tel o random como fallback
-      };
-      await fetchJSON(`${API_BASE}`, {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify(body)
-      });
-    } else if (role === 'admin' || role === 'coordinador') {
-      // Si realmente usás campos separados por rol, tomalos del bloque correcto
-      const email = (role === 'admin') ? ui.email.value : ui.emailC.value;
-      const password = (role === 'admin') ? ui.password.value : ui.passwordC.value;
-      const body = { role, email, password };
-      await fetchJSON(`${API_BASE}`, {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify(body)
-      });
-    } else {
-      throw new Error('Rol no soportado');
-    }
+  document.getElementById('modalUsuarioTitulo').textContent = 'Editar Usuario';
+  document.getElementById('usuarioId').value = usuario._id;
+  document.getElementById('inputUsername').value = usuario.username || '';
+  document.getElementById('inputEmail').value = usuario.email || '';
+  document.getElementById('inputPassword').value = '';
+  document.getElementById('inputPassword').required = false;
+  document.getElementById('passwordHint').classList.remove('hidden');
+  document.getElementById('inputRole').value = usuario.role || 'cliente';
+  document.getElementById('inputActivo').checked = usuario.activo !== false;
 
-    ui.msg.textContent = '✅ Usuario creado';
-    await loadUsers();
-  } catch (e) {
-    console.error('Error creando usuario:', e);
-    ui.msg.textContent = `❌ ${e.message}`;
-    ui.msg.classList.add('text-red-600');
-  }
+  document.getElementById('modalUsuario').classList.remove('hidden');
+  document.getElementById('modalUsuario').classList.add('flex');
 }
 
-ui.crearBtn.addEventListener('click', (e) => {
+// Cerrar modal
+function cerrarModalUsuario() {
+  document.getElementById('modalUsuario').classList.add('hidden');
+  document.getElementById('modalUsuario').classList.remove('flex');
+}
+
+// Guardar usuario (crear o editar)
+document.getElementById('formUsuario').addEventListener('submit', async (e) => {
   e.preventDefault();
-  crearUsuario();
-});
 
-// utilidad UI ya usada en otras páginas
-(function userMenuAndTheme(){
+  const id = document.getElementById('usuarioId').value;
+  const data = {
+    username: document.getElementById('inputUsername').value.trim(),
+    email: document.getElementById('inputEmail').value.trim(),
+    role: document.getElementById('inputRole').value,
+    activo: document.getElementById('inputActivo').checked
+  };
+
+  const password = document.getElementById('inputPassword').value.trim();
+  if (password) {
+    data.password = password;
+  }
+
   try {
-    const btn=document.getElementById('userBtn'),menu=document.getElementById('userMenu'),wrap=document.getElementById('userMenuWrap');
-    btn?.addEventListener('click',()=>menu.classList.toggle('hidden'));
-    document.addEventListener('click',(e)=>{ if(!wrap.contains(e.target)) menu.classList.add('hidden'); });
-    document.getElementById('logoutBtn')?.addEventListener('click', async ()=>{
-      try{ await fetch('/auth/logout',{method:'POST'}) }catch{}
-      localStorage.removeItem('zpl_auth'); location.href='/auth/login';
+    const url = id ? `/api/users/${id}` : '/api/users';
+    const method = id ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(data)
     });
 
-    fetch('/me',{cache:'no-store'}).then(r=>r.json()).then(me=>{
-      document.getElementById('username').textContent=(me.name||me.username||me.email||'Usuario');
-    }).catch(()=>location.href='/auth/login');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error al guardar');
+    }
 
-    const order=['light','dark','system']; const btnTheme=document.getElementById('themeBtn');
-    const apply=m=>{const prefers=matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',m==='dark'||(m==='system'&&prefers));localStorage.setItem('zpl_theme',m);btnTheme.textContent='Tema: '+(m==='system'?'auto':m);};
-    apply(localStorage.getItem('zpl_theme')||'system');
-    btnTheme?.addEventListener('click',()=>{const c=localStorage.getItem('zpl_theme')||'system';apply(order[(order.indexOf(c)+1)%order.length]);});
-  } catch {}
-})();
+    alert(id ? 'Usuario actualizado' : 'Usuario creado');
+    cerrarModalUsuario();
+    await cargarUsuarios();
+  } catch (err) {
+    console.error('Error guardando usuario:', err);
+    alert(err.message);
+  }
+});
 
-// carga inicial de la lista
-loadUsers();
+// Toggle activo/inactivo
+async function toggleActivo(id) {
+  try {
+    const res = await fetch(`/api/users/${id}/toggle-activo`, {
+      method: 'PATCH',
+      credentials: 'include'
+    });
+
+    if (!res.ok) throw new Error('Error al cambiar estado');
+
+    const data = await res.json();
+    const usuario = usuarios.find((u) => u._id === id);
+    if (usuario) {
+      usuario.activo = typeof data.activo === 'boolean' ? data.activo : !usuario.activo;
+      renderTabla();
+    }
+  } catch (err) {
+    console.error('Error toggle activo:', err);
+    alert('No se pudo cambiar el estado del usuario');
+  }
+}
+
+// Abrir modal eliminar
+function abrirModalEliminar(id) {
+  usuarioAEliminar = id;
+  document.getElementById('modalEliminar').classList.remove('hidden');
+  document.getElementById('modalEliminar').classList.add('flex');
+}
+
+// Cerrar modal eliminar
+function cerrarModalEliminar() {
+  usuarioAEliminar = null;
+  document.getElementById('modalEliminar').classList.add('hidden');
+  document.getElementById('modalEliminar').classList.remove('flex');
+}
+
+// Confirmar eliminación
+document.getElementById('btnConfirmarEliminar').addEventListener('click', async () => {
+  if (!usuarioAEliminar) return;
+
+  try {
+    const res = await fetch(`/api/users/${usuarioAEliminar}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Error al eliminar');
+    }
+
+    alert('Usuario eliminado');
+    cerrarModalEliminar();
+    await cargarUsuarios();
+  } catch (err) {
+    console.error('Error eliminando usuario:', err);
+    alert(err.message);
+  }
+});
+
+// Cerrar modales con Escape
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    cerrarModalUsuario();
+    cerrarModalEliminar();
+  }
+});
+
+// Cerrar modales clickeando fuera
+document.getElementById('modalUsuario').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) cerrarModalUsuario();
+});
+
+document.getElementById('modalEliminar').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) cerrarModalEliminar();
+});
+
+function initTopbar() {
+  try {
+    const wrap = document.getElementById('userMenuWrap');
+    const btn = document.getElementById('userBtn');
+    const menu = document.getElementById('userMenu');
+    btn?.addEventListener('click', () => menu?.classList.toggle('hidden'));
+    document.addEventListener('click', (ev) => {
+      if (menu && wrap && !wrap.contains(ev.target)) {
+        menu.classList.add('hidden');
+      }
+    });
+
+    document.getElementById('logoutBtn')?.addEventListener('click', async () => {
+      try { await fetch('/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
+      localStorage.removeItem('zpl_auth');
+      location.href = '/auth/login';
+    });
+
+    fetch('/me', { cache: 'no-store', credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((me) => {
+        const usernameEl = document.getElementById('username');
+        if (usernameEl) {
+          usernameEl.textContent = me?.name || me?.username || me?.email || 'Usuario';
+        }
+      })
+      .catch(() => {
+        location.href = '/auth/login';
+      });
+
+    const order = ['light', 'dark', 'system'];
+    const btnTheme = document.getElementById('themeBtn');
+    const apply = (mode) => {
+      const prefers = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const wantDark = mode === 'dark' || (mode === 'system' && prefers);
+      document.documentElement.classList.toggle('dark', wantDark);
+      localStorage.setItem('zpl_theme', mode);
+      if (btnTheme) btnTheme.textContent = `Tema: ${mode === 'system' ? 'auto' : mode}`;
+    };
+    apply(localStorage.getItem('zpl_theme') || 'system');
+    btnTheme?.addEventListener('click', () => {
+      const current = localStorage.getItem('zpl_theme') || 'system';
+      const next = order[(order.indexOf(current) + 1) % order.length];
+      apply(next);
+    });
+  } catch (err) {
+    console.error('Error inicializando topbar:', err);
+  }
+}
+
+function actualizarAnio() {
+  const anio = document.getElementById('anio');
+  if (anio) {
+    anio.textContent = new Date().getFullYear();
+  }
+}
+
+// Cargar al inicio
+document.addEventListener('DOMContentLoaded', () => {
+  cargarUsuarios();
+  initTopbar();
+  actualizarAnio();
+});
+
+// Exponer funciones globales
+window.abrirModalCrear = abrirModalCrear;
+window.abrirModalEditar = abrirModalEditar;
+window.cerrarModalUsuario = cerrarModalUsuario;
+window.toggleActivo = toggleActivo;
+window.abrirModalEliminar = abrirModalEliminar;
+window.cerrarModalEliminar = cerrarModalEliminar;
