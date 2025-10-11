@@ -75,9 +75,65 @@
     </div>
   </header>
 
-  <main class="max-w-6xl mx-auto p-4">
-    <h1 class="text-2xl font-bold mb-4 text-center">Gestión de Choferes</h1>
+  <main class="max-w-6xl mx-auto p-4 space-y-8">
+    <section class="space-y-4">
+      <h1 class="text-2xl font-bold text-center">Gestión de Choferes</h1>
 
+      <div class="flex gap-6 h-[calc(100vh-180px)] text-slate-900 dark:text-slate-100">
+        <aside class="w-64 bg-white dark:bg-[#0B1020] rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden flex flex-col">
+          <div class="p-4 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="font-semibold text-slate-900 dark:text-slate-100">Choferes</h3>
+              <button onclick="fetchDrivers()"
+                class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                title="Refrescar lista" type="button">
+                <span class="text-lg">🔄</span>
+              </button>
+            </div>
+            <input type="text" id="buscarChofer" placeholder="Buscar..."
+              class="w-full px-3 py-1.5 text-sm rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500">
+          </div>
+          <div id="listaChoferes" class="flex-1 overflow-y-auto bg-white dark:bg-[#0B1020]"></div>
+        </aside>
+
+        <section class="flex-1 bg-white dark:bg-[#0B1020] rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden flex flex-col">
+          <div class="p-4 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 space-y-3">
+            <div>
+              <h2 id="nombreChoferSeleccionado" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Seleccioná un chofer</h2>
+              <p id="detalleChoferSeleccionado" class="text-sm text-slate-600 dark:text-slate-400"></p>
+            </div>
+            <div class="relative">
+              <input type="text" id="buscarEnvio" placeholder="Buscar por tracking, dirección..."
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500">
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-hidden">
+            <div class="overflow-auto h-full">
+              <table class="min-w-full">
+                <thead class="bg-slate-50 dark:bg-white/5 sticky top-0">
+                  <tr>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Dirección</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Partido</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaEnvios" class="divide-y divide-slate-200 dark:divide-white/10 bg-white dark:bg-[#0B1020]"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="p-4 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5">
+            <div class="flex justify-between text-sm text-slate-700 dark:text-slate-300">
+              <span class="font-medium">Total envíos:</span>
+              <span id="totalEnvios">0</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="space-y-4">
     <!-- Tabs -->
     <div class="flex gap-3 mb-4">
       <button data-tab="qr"   class="tab-btn px-4 py-2 rounded bg-amber-500 text-white">Asignación por QR</button>
@@ -175,11 +231,327 @@
 <div id="editorRemito" class="mt-4 hidden"></div>
     </div>
   </div>
-</div>  
+</div>
+    </section>
   </main>
 
   <script>
     "use strict";
+
+    // ===== Panel Choferes =====
+    const driverPanelState = {
+      all: [],
+      filtered: [],
+      envios: [],
+      selectedId: null,
+      totalEnvios: 0,
+      driverSearch: '',
+      envioSearch: ''
+    };
+
+    const driverPanelElements = {
+      lista: null,
+      buscarChofer: null,
+      buscarEnvio: null,
+      nombre: null,
+      detalle: null,
+      total: null,
+      tabla: null
+    };
+
+    function renderChofer(driver, selected = false) {
+      const safeName = driver?.nombre || '(Sin nombre)';
+      const telefono = driver?.telefono ? String(driver.telefono).trim() : '';
+      return `
+    <div class="chofer-item p-3 cursor-pointer 
+                border-b border-slate-200 dark:border-white/10 
+                hover:bg-slate-50 dark:hover:bg-white/5 
+                transition-colors
+                ${selected ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500' : ''}"
+         data-chofer-id="${driver?._id ?? ''}">
+      <div class="font-medium text-slate-900 dark:text-slate-100">
+        ${safeName}
+      </div>
+      ${telefono ? `
+        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          ${telefono}
+        </div>
+      ` : ''}
+    </div>
+  `;
+    }
+
+    function getEstadoBadge(estado) {
+      const badges = {
+        'pendiente': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+        'en_camino': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+        'entregado': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+        'no_entregado': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+      };
+      return badges[estado] || 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300';
+    }
+
+    function getEstadoLabel(estado) {
+      if (!estado) return '-';
+      const map = {
+        pendiente: 'Pendiente',
+        en_camino: 'En camino',
+        entregado: 'Entregado',
+        no_entregado: 'No entregado',
+        cancelado: 'Cancelado'
+      };
+      return map[estado] || String(estado).replace(/_/g, ' ');
+    }
+
+    function renderEnvioRow(envio) {
+      return `
+    <tr class="hover:bg-slate-50 dark:hover:bg-white/5 
+               border-b border-slate-200 dark:border-white/10">
+      <td class="px-4 py-3 text-slate-900 dark:text-slate-100">
+        ${envio?.direccion || '-'}
+      </td>
+      <td class="px-4 py-3 text-slate-600 dark:text-slate-400">
+        ${envio?.partido || '-'}
+      </td>
+      <td class="px-4 py-3">
+        <span class="px-2 py-1 text-xs rounded-full 
+                     ${getEstadoBadge(envio?.estado)}">
+          ${getEstadoLabel(envio?.estado)}
+        </span>
+      </td>
+    </tr>
+  `;
+    }
+
+    function updateSelectedDriverInfo(driver) {
+      if (driverPanelElements.nombre) {
+        driverPanelElements.nombre.textContent = driver ? (driver.nombre || 'Chofer sin nombre') : 'Seleccioná un chofer';
+      }
+      if (driverPanelElements.detalle) {
+        if (driver) {
+          const details = [];
+          if (driver.telefono) details.push(`Tel: ${driver.telefono}`);
+          if (driver.username) details.push(`Usuario: ${driver.username}`);
+          driverPanelElements.detalle.textContent = details.join(' • ');
+          driverPanelElements.detalle.classList.toggle('hidden', details.length === 0);
+        } else {
+          driverPanelElements.detalle.textContent = 'Elegí un chofer de la lista para ver sus envíos asignados.';
+          driverPanelElements.detalle.classList.remove('hidden');
+        }
+      }
+    }
+
+    function renderDriverList(list = driverPanelState.filtered) {
+      if (!driverPanelElements.lista) return;
+      const drivers = Array.isArray(list) ? list : [];
+      if (!drivers.length) {
+        const hasAny = driverPanelState.all.length > 0;
+        driverPanelElements.lista.innerHTML = `
+      <div class="p-4 text-sm text-slate-500 dark:text-slate-400">
+        ${hasAny ? 'Sin resultados para la búsqueda.' : 'No hay choferes disponibles.'}
+      </div>
+    `;
+        return;
+      }
+      driverPanelElements.lista.innerHTML = drivers.map(driver => renderChofer(driver, String(driver?._id) === String(driverPanelState.selectedId))).join('');
+    }
+
+    function filterDrivers() {
+      const term = (driverPanelState.driverSearch || '').trim().toLowerCase();
+      if (!term) {
+        driverPanelState.filtered = driverPanelState.all.slice();
+      } else {
+        driverPanelState.filtered = driverPanelState.all.filter(driver => {
+          const nombre = driver?.nombre ? String(driver.nombre).toLowerCase() : '';
+          const telefono = driver?.telefono ? String(driver.telefono).toLowerCase() : '';
+          const username = driver?.username ? String(driver.username).toLowerCase() : '';
+          return nombre.includes(term) || telefono.includes(term) || username.includes(term);
+        });
+      }
+      renderDriverList(driverPanelState.filtered);
+    }
+
+    function handleDriverSearchInput(event) {
+      driverPanelState.driverSearch = event?.target?.value || '';
+      filterDrivers();
+    }
+
+    function renderEnvios() {
+      if (!driverPanelElements.tabla) return;
+      if (!driverPanelState.selectedId) {
+        driverPanelElements.tabla.innerHTML = `
+      <tr>
+        <td colspan="3" class="px-4 py-4 text-sm text-slate-500 dark:text-slate-400">
+          Seleccioná un chofer para ver sus envíos.
+        </td>
+      </tr>
+    `;
+        if (driverPanelElements.total) driverPanelElements.total.textContent = '0';
+        return;
+      }
+
+      const term = (driverPanelState.envioSearch || '').trim().toLowerCase();
+      const filtered = !term ? driverPanelState.envios.slice() : driverPanelState.envios.filter(envio => {
+        const values = [
+          envio?.tracking,
+          envio?.id_venta,
+          envio?.meli_id,
+          envio?.direccion,
+          envio?.destinatario,
+          envio?.partido,
+          envio?.estado
+        ];
+        return values.some(val => val && String(val).toLowerCase().includes(term));
+      });
+
+      if (!filtered.length) {
+        driverPanelElements.tabla.innerHTML = `
+      <tr>
+        <td colspan="3" class="px-4 py-4 text-sm text-slate-500 dark:text-slate-400">
+          No se encontraron envíos.
+        </td>
+      </tr>
+    `;
+      } else {
+        driverPanelElements.tabla.innerHTML = filtered.map(renderEnvioRow).join('');
+      }
+
+      if (driverPanelElements.total) {
+        const totalBase = typeof driverPanelState.totalEnvios === 'number' ? driverPanelState.totalEnvios : driverPanelState.envios.length;
+        driverPanelElements.total.textContent = filtered.length === totalBase ? String(totalBase) : `${filtered.length} de ${totalBase}`;
+      }
+    }
+
+    function handleEnvioSearchInput(event) {
+      driverPanelState.envioSearch = event?.target?.value || '';
+      renderEnvios();
+    }
+
+    async function fetchEnvios(choferId) {
+      if (!choferId || !driverPanelElements.tabla) return;
+      driverPanelElements.tabla.innerHTML = `
+    <tr>
+      <td colspan="3" class="px-4 py-4 text-sm text-slate-500 dark:text-slate-400">
+        Cargando envíos...
+      </td>
+    </tr>
+  `;
+      try {
+        const url = new URL('/api/choferes/asignados', window.location.origin);
+        url.searchParams.set('chofer_id', choferId);
+        const res = await fetch(`${url.pathname}?${url.searchParams.toString()}`, { credentials: 'include' });
+        if (!res.ok) throw new Error('Error cargando envíos');
+        const data = await res.json();
+        const envios = Array.isArray(data?.envios) ? data.envios : [];
+        driverPanelState.envios = envios;
+        driverPanelState.totalEnvios = typeof data?.total === 'number' ? data.total : envios.length;
+        renderEnvios();
+      } catch (err) {
+        console.error('Error al cargar envíos del chofer:', err);
+        driverPanelState.envios = [];
+        driverPanelState.totalEnvios = 0;
+        driverPanelElements.tabla.innerHTML = `
+      <tr>
+        <td colspan="3" class="px-4 py-4 text-sm text-rose-500 dark:text-rose-400">
+          No se pudieron cargar los envíos.
+        </td>
+      </tr>
+    `;
+        if (driverPanelElements.total) driverPanelElements.total.textContent = '0';
+      }
+    }
+
+    function selectDriver(choferId, { skipFetch = false } = {}) {
+      if (!choferId) {
+        driverPanelState.selectedId = null;
+        driverPanelState.envios = [];
+        driverPanelState.totalEnvios = 0;
+        updateSelectedDriverInfo(null);
+        renderDriverList();
+        renderEnvios();
+        return;
+      }
+
+      driverPanelState.selectedId = choferId;
+      const driver = driverPanelState.all.find(d => String(d?._id) === String(choferId));
+      updateSelectedDriverInfo(driver || null);
+      renderDriverList();
+      driverPanelState.envios = driverPanelState.envios || [];
+      if (!skipFetch) fetchEnvios(choferId);
+    }
+
+    async function fetchDrivers() {
+      if (!driverPanelElements.lista) return;
+      try {
+        let res = await fetch('/api/drivers', { credentials: 'include' });
+        if (!res.ok && res.status === 404) {
+          res = await fetch('/api/choferes', { credentials: 'include' });
+        }
+        if (!res.ok) throw new Error('Error cargando choferes');
+
+        const drivers = await res.json();
+        const arr = Array.isArray(drivers) ? drivers : [];
+        const activos = arr.filter(d => d && d.activo !== false);
+
+        console.log(`✓ Choferes activos: ${activos.length} de ${arr.length}`);
+
+        driverPanelState.all = activos;
+        filterDrivers();
+
+        const selectedStillExists = activos.some(d => String(d?._id) === String(driverPanelState.selectedId));
+        if (!selectedStillExists) driverPanelState.selectedId = null;
+
+        if (!driverPanelState.selectedId && activos.length) {
+          selectDriver(String(activos[0]._id));
+        } else {
+          renderDriverList();
+          if (driverPanelState.selectedId) {
+            selectDriver(driverPanelState.selectedId, { skipFetch: false });
+          } else {
+            updateSelectedDriverInfo(null);
+            renderEnvios();
+          }
+        }
+      } catch (err) {
+        console.error('Error cargando choferes:', err);
+        alert('No se pudieron cargar los choferes');
+      }
+    }
+
+    function onDriverListClick(event) {
+      const item = event.target.closest('.chofer-item');
+      if (!item || !item.dataset.choferId) return;
+      selectDriver(item.dataset.choferId);
+    }
+
+    let driverPanelReady = false;
+    function initPanelChoferes() {
+      if (driverPanelReady) return;
+      driverPanelElements.lista = document.getElementById('listaChoferes');
+      if (!driverPanelElements.lista) return;
+      driverPanelElements.buscarChofer = document.getElementById('buscarChofer');
+      driverPanelElements.buscarEnvio = document.getElementById('buscarEnvio');
+      driverPanelElements.nombre = document.getElementById('nombreChoferSeleccionado');
+      driverPanelElements.detalle = document.getElementById('detalleChoferSeleccionado');
+      driverPanelElements.total = document.getElementById('totalEnvios');
+      driverPanelElements.tabla = document.getElementById('tablaEnvios');
+
+      driverPanelState.driverSearch = driverPanelElements.buscarChofer?.value || '';
+      driverPanelState.envioSearch = driverPanelElements.buscarEnvio?.value || '';
+
+      updateSelectedDriverInfo(null);
+
+      driverPanelElements.lista.addEventListener('click', onDriverListClick);
+      if (driverPanelElements.buscarChofer) driverPanelElements.buscarChofer.addEventListener('input', handleDriverSearchInput);
+      if (driverPanelElements.buscarEnvio) driverPanelElements.buscarEnvio.addEventListener('input', handleEnvioSearchInput);
+
+      renderDriverList([]);
+      renderEnvios();
+      driverPanelReady = true;
+      fetchDrivers();
+    }
+
+    document.addEventListener('DOMContentLoaded', initPanelChoferes);
 
     // ===== Helpers
     const $  = (s) => document.querySelector(s);
