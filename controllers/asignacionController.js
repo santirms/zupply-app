@@ -5,6 +5,7 @@ const Envio      = require('../models/Envio');
 const Chofer     = require('../models/Chofer');
 const Cliente    = require('../models/Cliente');
 const { buildRemitoPDF } = require('../utils/remitoService');
+const { formatForWhatsApp } = require('../utils/normalizePhone');
 
 const dayjs = require('dayjs');
 require('dayjs/locale/es');
@@ -230,8 +231,8 @@ const enviosPDF = [
     // -------- WhatsApp --------
     let whatsapp_url = null;
     try {
-      const tel = String(chDoc?.telefono || '').replace(/\D/g, '');
-      if (tel) {
+      const telefonoLimpio = formatForWhatsApp(chDoc?.telefono);
+      if (telefonoLimpio) {
         const now = dayjs.tz(new Date(), process.env.TZ || 'America/Argentina/Buenos_Aires');
         const msj =
           `Hola ${chDoc?.nombre || ''}! tu remito de hoy está listo:\n` +
@@ -239,7 +240,10 @@ const enviosPDF = [
           `📍 Zona: ${listaNombre || zona || ''}\n` +
           `📅 Fecha: ${now.format('DD/MM/YYYY')}\n` +
           `⌚ Hora: ${now.format('HH:mm')}`;
-        whatsapp_url = `https://wa.me/${tel}?text=${encodeURIComponent(msj)}`;
+        whatsapp_url = `https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(msj)}`;
+      }
+      if (!telefonoLimpio && chDoc?.telefono) {
+        console.warn(`⚠️ Teléfono inválido para chofer ${chDoc?.nombre || ''}: ${chDoc?.telefono}`);
       }
     } catch {}
 
@@ -635,7 +639,7 @@ async function whatsappLink(req, res) {
       .lean();
     if (!asg) return res.status(404).json({ error: 'Asignación no encontrada' });
 
-    const tel = (asg.chofer?.telefono || '').replace(/\D/g, '');
+    const tel = formatForWhatsApp(asg.chofer?.telefono);
     const now = dayjs.tz(new Date(), process.env.TZ || 'America/Argentina/Buenos_Aires');
     const fecha = now.format('DD/MM/YYYY');
     const hora  = now.format('HH:mm');
@@ -655,6 +659,9 @@ async function whatsappLink(req, res) {
       `⌚ Hora: ${hora}`;
 
     const whatsapp_url = tel ? `https://wa.me/${tel}?text=${encodeURIComponent(msj)}` : null;
+    if (!tel && asg.chofer?.telefono) {
+      console.warn(`⚠️ Teléfono inválido para chofer ${asg.chofer?.nombre || ''}: ${asg.chofer?.telefono}`);
+    }
     res.json({ ok: true, whatsapp_url });
   } catch (e) {
     console.error('whatsappLink error:', e);

@@ -1,6 +1,65 @@
 let usuarios = [];
 let usuarioAEliminar = null;
 
+// Normalizar teléfono antes de enviar
+function normalizarTelefono(telefono) {
+  if (!telefono) return '';
+
+  const limpioBase = telefono.replace(/\D/g, '');
+  if (!limpioBase) return '';
+
+  if (limpioBase.startsWith('549')) {
+    return limpioBase;
+  }
+
+  if (limpioBase.startsWith('54') && !limpioBase.startsWith('549')) {
+    return '549' + limpioBase.slice(2);
+  }
+
+  if (limpioBase.startsWith('15')) {
+    return '549' + limpioBase.slice(2);
+  }
+
+  if (limpioBase.length === 10 && limpioBase.startsWith('11')) {
+    return '549' + limpioBase;
+  }
+
+  if (limpioBase.length === 10) {
+    return '549' + limpioBase;
+  }
+
+  console.warn(`Formato de teléfono desconocido: ${telefono}, agregando 549`);
+  return '549' + limpioBase;
+}
+
+// Validar formato argentino
+function validarTelefonoArgentino(telefono) {
+  const limpio = normalizarTelefono(telefono);
+
+  // Debe tener entre 12-14 dígitos y empezar con 549
+  if (!limpio.startsWith('549') || limpio.length < 12 || limpio.length > 14) {
+    return false;
+  }
+
+  return true;
+}
+
+function formatearTelefonoDisplay(telefono) {
+  const limpio = normalizarTelefono(telefono);
+  if (!limpio) return '';
+
+  if (limpio.startsWith('549') && limpio.length >= 12) {
+    const pais = limpio.slice(0, 2);
+    const nueve = limpio.slice(2, 3);
+    const area = limpio.slice(3, 5);
+    const primero = limpio.slice(5, 9);
+    const segundo = limpio.slice(9);
+    return `+${pais} ${nueve} ${area} ${primero}-${segundo}`;
+  }
+
+  return limpio;
+}
+
 // Mostrar/ocultar campos de chofer según el rol seleccionado
 function toggleChoferFields() {
   const role = document.getElementById('inputRole').value;
@@ -49,7 +108,7 @@ function renderTabla() {
   if (!tbody) return;
 
   if (!usuarios.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-6 opacity-70">No hay usuarios</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 opacity-70">No hay usuarios</td></tr>';
     return;
   }
 
@@ -70,6 +129,12 @@ function renderTabla() {
       ? created.toLocaleDateString()
       : '-';
 
+    let telefonoDisplay = '-';
+    if (u.role === 'chofer' && u.driver_id?.telefono) {
+      const tel = formatearTelefonoDisplay(u.driver_id.telefono);
+      telefonoDisplay = tel || '-';
+    }
+
     return `
       <tr class="border-b border-slate-200 dark:border-white/10">
         <td class="px-4 py-3">${u.username || '-'}</td>
@@ -79,6 +144,7 @@ function renderTabla() {
             ${u.role}
           </span>
         </td>
+        <td class="px-4 py-3 text-sm font-mono">${telefonoDisplay}</td>
         <td class="px-4 py-3 text-center">${activoIcon}</td>
         <td class="px-4 py-3 text-sm opacity-70">${createdLabel}</td>
         <td class="px-4 py-3">
@@ -141,7 +207,7 @@ function abrirModalEditar(id) {
   // Cargar datos de chofer si aplica
   if (usuario.role === 'chofer' && usuario.driver_id) {
     document.getElementById('inputChoferNombre').value = usuario.driver_id.nombre || '';
-    document.getElementById('inputChoferTelefono').value = usuario.driver_id.telefono || '';
+    document.getElementById('inputChoferTelefono').value = formatearTelefonoDisplay(usuario.driver_id.telefono) || '';
   } else {
     document.getElementById('inputChoferNombre').value = '';
     document.getElementById('inputChoferTelefono').value = '';
@@ -180,15 +246,26 @@ document.getElementById('formUsuario').addEventListener('submit', async (e) => {
 
   if (role === 'chofer') {
     const choferNombre = document.getElementById('inputChoferNombre').value.trim();
-    const choferTelefono = document.getElementById('inputChoferTelefono').value.trim();
+    let choferTelefono = document.getElementById('inputChoferTelefono').value.trim();
 
     if (!choferNombre || !choferTelefono) {
       alert('Para crear un chofer, debes ingresar nombre y teléfono');
       return;
     }
 
+    // Normalizar teléfono (quitar espacios, guiones, +)
+    choferTelefono = normalizarTelefono(choferTelefono);
+
+    // Validar formato
+    if (!validarTelefonoArgentino(choferTelefono)) {
+      alert('Formato de teléfono inválido.\n\nFormatos aceptados:\n• +54 9 11 1234-5678\n• 549 11 1234 5678\n• 11 1234-5678 (se agregará 549)');
+      return;
+    }
+
     data.chofer_nombre = choferNombre;
-    data.chofer_telefono = choferTelefono;
+    data.chofer_telefono = choferTelefono; // Guardamos limpio: "5491112345678"
+
+    console.log('✓ Teléfono normalizado:', choferTelefono);
   }
 
   try {
