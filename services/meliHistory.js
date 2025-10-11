@@ -651,7 +651,7 @@ try {
   // **Nunca** dejar substatus en delivered
   if (String(stFinal).toLowerCase() === 'delivered') subFinal = '';
 
-  // ========== LÓGICA DE PRIORIZACIÓN DE ESTADOS ==========
+  // ========== LÓGICA MEJORADA DE PRIORIZACIÓN DE ESTADOS ==========
 
   // Categorías de eventos por especificidad
   const EVENTOS_ESPECIFICOS = new Set([
@@ -677,31 +677,50 @@ try {
   function getEventSpecificity(h) {
     const sub = (h?.estado_meli?.substatus || '').toLowerCase();
     let status = (h?.estado_meli?.status || h?.estado || '').toLowerCase();
-
-    // Normalizar grafías alternativas de MercadoLibre
+    
+    // Normalizar grafías alternativas
     if (status === 'canceled') status = 'cancelled';
-
+    
     if (TERMINALES.has(status)) return 3; // Máxima prioridad
     if (EVENTOS_ESPECIFICOS.has(sub)) return 2; // Alta prioridad
     if (EVENTOS_GENERICOS.has(sub)) return 1; // Baja prioridad
     return 1; // Default: prioridad baja
   }
 
-  // Obtener el evento más relevante (no solo el más reciente)
-  const eventosOrdenados = all
+  // Obtener el evento más relevante con ventana temporal
+  const ahora = new Date();
+  const eventosConPrioridad = all
     .filter(h => h?.at && h?.estado_meli)
+    .map(h => {
+      const especificidad = getEventSpecificity(h);
+      const fecha = new Date(h.at);
+      const antiguedad = (ahora - fecha) / (1000 * 60 * 60); // Horas
+      
+      // Dar bonus a eventos específicos recientes (últimas 48h)
+      let prioridad = especificidad;
+      if (especificidad === 2 && antiguedad <= 48) {
+        prioridad = 2.5; // Boost a eventos específicos recientes
+      }
+      
+      return { evento: h, especificidad, prioridad, fecha, antiguedad };
+    })
     .sort((a, b) => {
-      // Primero por especificidad (descendente)
-      const specA = getEventSpecificity(a);
-      const specB = getEventSpecificity(b);
-      if (specA !== specB) return specB - specA;
-
-      // Luego por fecha (descendente)
-      return new Date(b.at) - new Date(a.at);
+      // Primero por prioridad (mayor = mejor)
+      if (a.prioridad !== b.prioridad) return b.prioridad - a.prioridad;
+      
+      // Luego por fecha (más reciente = mejor)
+      return b.fecha - a.fecha;
     });
 
+  console.log('🔍 Eventos ordenados por prioridad:', eventosConPrioridad.map(e => ({
+    sub: e.evento.estado_meli?.substatus,
+    especificidad: e.especificidad,
+    prioridad: e.prioridad,
+    antiguedad: `${e.antiguedad.toFixed(1)}h`
+  })));
+
   // El primer evento de la lista es el más relevante
-  const eventoRelevante = eventosOrdenados[0];
+  const eventoRelevante = eventosConPrioridad[0]?.evento;
 
   let estadoFinal = 'pendiente';
   let statusFinal = stFinal;
@@ -712,15 +731,16 @@ try {
     statusFinal = eventoRelevante.estado_meli?.status || eventoRelevante.estado || stFinal;
     substatusFinal = eventoRelevante.estado_meli?.substatus || subFinal;
     fechaFinal = eventoRelevante.at || dateFinal;
-
+    
     // Mapear a estado interno
     estadoFinal = mapToInterno(statusFinal, substatusFinal);
-
+    
     console.log(`🎯 Evento más relevante para ${envio._id}:`, {
       fecha: fechaFinal,
       status: statusFinal,
       substatus: substatusFinal,
-      especificidad: getEventSpecificity(eventoRelevante),
+      especificidad: eventosConPrioridad[0].especificidad,
+      prioridad: eventosConPrioridad[0].prioridad,
       estadoInterno: estadoFinal
     });
   } else {
@@ -729,23 +749,18 @@ try {
   }
 
   // Nunca revertir estados terminales
-  // Normalizar antes de verificar
-  let statusFinalNorm = (statusFinal || '').toLowerCase();
-  if (statusFinalNorm === 'canceled') statusFinalNorm = 'cancelled';
+  const prevStatusNorm = (current?.estado_meli?.status || '').toLowerCase();
+  const statusFinalNorm = statusFinal.toLowerCase();
 
-  let statusPrevNorm = (current?.estado_meli?.status || '').toLowerCase();
-  if (statusPrevNorm === 'canceled') statusPrevNorm = 'cancelled';
-
-  const prevEsTerminal = TERMINALES.has(statusPrevNorm);
-  const nuevoEsTerminal = TERMINALES.has(statusFinalNorm);
+  const prevEsTerminal = TERMINALES.has(prevStatusNorm) || TERMINALES.has(prevStatusNorm === 'canceled' ? 'cancelled' : prevStatusNorm);
+  const nuevoEsTerminal = TERMINALES.has(statusFinalNorm) || TERMINALES.has(statusFinalNorm === 'canceled' ? 'cancelled' : statusFinalNorm);
 
   if (prevEsTerminal && !nuevoEsTerminal) {
-    const statusPrev = current?.estado_meli?.status || statusFinal;
-    console.log(`🔒 Conservando estado terminal: ${statusPrev}`);
-    estadoFinal = current?.estado || estadoFinal;
-    statusFinal = statusPrev;
-    substatusFinal = current?.estado_meli?.substatus || substatusFinal;
-    fechaFinal = current?.estado_meli?.updatedAt || fechaFinal;
+    console.log(`🔒 Conservando estado terminal: ${current.estado_meli.status}`);
+    estadoFinal = current.estado;
+    statusFinal = current.estado_meli.status;
+    substatusFinal = current.estado_meli.substatus;
+    fechaFinal = current.estado_meli.updatedAt || fechaFinal;
   }
 
   // ========== FIN LÓGICA DE PRIORIZACIÓN ==========
