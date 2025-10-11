@@ -88,10 +88,10 @@
     <section id="tab-qr" class="tab">
       <div class="grid sm:grid-cols-3 gap-3 mb-3">
         <label class="text-sm">Chofer
-          <select id="choferSel" class="w-full mt-1 border rounded px-2 py-2"></select>
+          <select id="choferSel" class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded px-2 py-2 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100"></select>
         </label>
         <label class="text-sm">Lista (pago chofer)
-          <select id="listaSel" class="w-full mt-1 border rounded px-2 py-2"></select>
+          <select id="listaSel" class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded px-2 py-2 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100"></select>
         </label>
         <input id="inputZonaQR" type="hidden" value="">
       </div>
@@ -107,22 +107,22 @@
       <div class="border rounded p-3 bg-white dark:bg-white/5">
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
-            <thead>
+            <thead class="bg-slate-50 dark:bg-white/5">
               <tr class="border-b border-black/10 dark:border-white/10">
-                <th class="text-left p-1">Tracking</th>
-                <th class="text-left p-1">Cliente</th>
-                <th class="text-left p-1">Dirección</th>
-                <th class="text-left p-1">CP/Partido</th>
-                <th class="text-left p-1"></th>
+                <th class="text-left p-1 text-slate-900 dark:text-slate-100">Tracking</th>
+                <th class="text-left p-1 text-slate-900 dark:text-slate-100">Cliente</th>
+                <th class="text-left p-1 text-slate-900 dark:text-slate-100">Dirección</th>
+                <th class="text-left p-1 text-slate-900 dark:text-slate-100">CP/Partido</th>
+                <th class="text-left p-1 text-slate-900 dark:text-slate-100"></th>
               </tr>
             </thead>
-            <tbody id="tblQR"></tbody>
+            <tbody id="tblQR" class="bg-white dark:bg-[#0B1020]"></tbody>
           </table>
         </div>
         <div class="mt-3 flex gap-2 justify-end">
           <a id="btnWA" class="hidden px-4 py-2 rounded bg-green-600 text-white" target="_blank" rel="noopener">WhatsApp</a>
           <a id="btnRemito" class="hidden px-4 py-2 rounded bg-slate-700 text-white" target="_blank" rel="noopener">Ver remito</a>
-          <button id="btnAsignarQR" class="px-4 py-2 rounded bg-amber-500 text-white">Asignar</button>
+          <button id="btnAsignarQR" class="px-4 py-2 rounded bg-amber-500 hover:bg-amber-600 text-white">Asignar</button>
         </div>
       </div>
     </section>
@@ -205,12 +205,13 @@
     async function cargarDropdowns() {
       try {
         const [choferRes, listaRes, cliRes] = await Promise.all([
-          fetch('/api/choferes', { credentials: 'same-origin' }),
+          fetch('/api/choferes', { credentials: 'include' }),
           fetch('/api/listas-de-precios?prefix=Choferes', { credentials: 'same-origin' }),
           fetch('/api/clientes', { credentials: 'same-origin' })
         ]);
 
-        const choferes = choferRes.ok ? await choferRes.json() : [];
+        const choferesRaw = choferRes.ok ? await choferRes.json() : [];
+        const choferes = choferesRaw.filter(c => c.activo !== false);
         const listas   = listaRes.ok  ? await listaRes.json()  : [];
         const clientes = cliRes.ok    ? await cliRes.json()    : [];
 
@@ -349,11 +350,11 @@
       const tb = $('#tblQR');
       tb.innerHTML = stateQR.items.map(it => `
         <tr class="border-b border-black/10 dark:border-white/10">
-          <td class="p-1">${it.tracking}${it.externo ? ' <em class="text-amber-600">(externo)</em>' : ''}</td>
-          <td class="p-1">${it.cliente||''}</td>
-          <td class="p-1">${it.direccion||''}</td>
-          <td class="p-1">${[it.codigo_postal||'', it.partido||''].filter(Boolean).join(' ')}</td>
-          <td class="p-1 text-right"><button class="text-red-600 hover:underline" data-trk="${it.tracking}">Quitar</button></td>
+          <td class="p-1 text-slate-900 dark:text-slate-100">${it.tracking}${it.externo ? ' <em class="text-amber-600">(externo)</em>' : ''}</td>
+          <td class="p-1 text-slate-900 dark:text-slate-100">${it.cliente||''}</td>
+          <td class="p-1 text-slate-900 dark:text-slate-100">${it.direccion||''}</td>
+          <td class="p-1 text-slate-600 dark:text-slate-400">${[it.codigo_postal||'', it.partido||''].filter(Boolean).join(' ')}</td>
+          <td class="p-1 text-right text-slate-600 dark:text-slate-400"><button class="text-red-600 hover:underline" data-trk="${it.tracking}">Quitar</button></td>
         </tr>
       `).join('');
       $('#countQR').textContent = `Total: ${stateQR.items.length}`;
@@ -527,8 +528,9 @@ async function abrirHistorial() {
   try {
     const res = await fetch('/api/choferes', { credentials:'include' });
     const arr = await res.json().catch(()=>[]);
+    const activos = arr.filter(c => c.activo !== false);
     const sel = $('#fChofer');
-    sel.innerHTML = `<option value="">(todos)</option>` + arr.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
+    sel.innerHTML = `<option value="">(todos)</option>` + activos.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
   } catch {}
   await cargarRemitos();
   $('#modalRemitos').classList.remove('hidden');
@@ -543,7 +545,7 @@ async function abrirEditorRemito(asgId) {
   if (!editorState.choferes.length) {
     try {
       const r = await fetch('/api/choferes', { credentials:'include' });
-      editorState.choferes = r.ok ? (await r.json()) : [];
+      editorState.choferes = r.ok ? (await r.json()).filter(c => c.activo !== false) : [];
     } catch {}
   }
   await recargarEditor();
