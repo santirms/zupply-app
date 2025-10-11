@@ -170,22 +170,44 @@ router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
 
+    console.log(`🗑️ Intentando eliminar usuario: ${id}`);
+
     const user = await User.findById(id);
     if (!user) {
+      console.warn(`❌ Usuario no encontrado: ${id}`);
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
+    console.log(`📋 Usuario encontrado: ${user.username || user.email} (${user.role})`);
+
     if (user.role === 'admin') {
-      const adminCount = await User.countDocuments({ role: 'admin' });
+      const adminCount = await User.countDocuments({ role: 'admin', is_active: { $ne: false } });
       if (adminCount <= 1) {
+        console.warn('❌ No se puede eliminar el último admin');
         return res.status(400).json({ error: 'No se puede eliminar el último administrador' });
       }
     }
 
+    if (user.driver_id) {
+      console.log(`🚛 Eliminando chofer asociado: ${user.driver_id}`);
+      try {
+        await Chofer.findByIdAndDelete(user.driver_id);
+        console.log(`✓ Chofer eliminado: ${user.driver_id}`);
+      } catch (driverErr) {
+        console.error(`⚠️ Error eliminando chofer: ${driverErr.message}`);
+      }
+    }
+
     await User.findByIdAndDelete(id);
-    res.json({ ok: true, message: 'Usuario eliminado' });
+    console.log(`✓ Usuario eliminado: ${user.username || user.email || id}`);
+
+    res.json({
+      ok: true,
+      message: 'Usuario eliminado correctamente',
+      username: user.username
+    });
   } catch (err) {
-    console.error('Error eliminando usuario:', err);
+    console.error('❌ Error eliminando usuario:', err);
     res.status(500).json({ error: err.message });
   }
 });
