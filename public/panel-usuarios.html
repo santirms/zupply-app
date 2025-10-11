@@ -125,15 +125,15 @@
         <input type="hidden" id="usuarioId" value="">
 
         <div>
-          <label class="block text-sm font-medium mb-1">Usuario</label>
+          <label class="block text-sm font-medium mb-1">Usuario <span class="text-rose-500">*</span></label>
           <input type="text" id="inputUsername" required
             class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 dark:bg-[#0B1020] dark:text-slate-100"
             placeholder="nombre_usuario">
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-1">Email</label>
-          <input type="email" id="inputEmail" required
+          <label class="block text-sm font-medium mb-1">Email <span class="text-xs opacity-70">(opcional)</span></label>
+          <input type="email" id="inputEmail"
             class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 dark:bg-[#0B1020] dark:text-slate-100"
             placeholder="usuario@ejemplo.com">
         </div>
@@ -146,14 +146,34 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-1">Rol</label>
-          <select id="inputRole" required
+          <label class="block text-sm font-medium mb-1">Rol <span class="text-rose-500">*</span></label>
+          <select id="inputRole" required onchange="toggleChoferFields()"
             class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 dark:bg-[#0B1020] dark:text-slate-100">
             <option value="cliente">Cliente</option>
             <option value="chofer">Chofer</option>
             <option value="coordinador">Coordinador</option>
             <option value="admin">Administrador</option>
           </select>
+        </div>
+
+        <!-- Campos específicos para CHOFER (se muestran/ocultan dinámicamente) -->
+        <div id="choferFields" class="hidden space-y-4 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+          <p class="text-sm font-medium text-blue-700 dark:text-blue-300">📦 Datos del chofer</p>
+
+          <div>
+            <label class="block text-sm font-medium mb-1">Nombre completo <span class="text-rose-500">*</span></label>
+            <input type="text" id="inputChoferNombre"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 dark:bg-[#0B1020] dark:text-slate-100"
+              placeholder="Juan Pérez">
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-1">Teléfono (WhatsApp) <span class="text-rose-500">*</span></label>
+            <input type="tel" id="inputChoferTelefono"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 dark:bg-[#0B1020] dark:text-slate-100"
+              placeholder="+54 9 11 1234-5678">
+            <p class="text-xs opacity-70 mt-1">Se usa para enviar notificaciones de asignación</p>
+          </div>
         </div>
 
         <div>

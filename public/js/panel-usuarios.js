@@ -1,6 +1,29 @@
 let usuarios = [];
 let usuarioAEliminar = null;
 
+// Mostrar/ocultar campos de chofer según el rol seleccionado
+function toggleChoferFields() {
+  const role = document.getElementById('inputRole').value;
+  const choferFields = document.getElementById('choferFields');
+  const choferNombre = document.getElementById('inputChoferNombre');
+  const choferTelefono = document.getElementById('inputChoferTelefono');
+
+  if (role === 'chofer') {
+    choferFields.classList.remove('hidden');
+    choferNombre.required = true;
+    choferTelefono.required = true;
+  } else {
+    choferFields.classList.add('hidden');
+    choferNombre.required = false;
+    choferTelefono.required = false;
+    choferNombre.value = '';
+    choferTelefono.value = '';
+  }
+}
+
+// Exponer globalmente
+window.toggleChoferFields = toggleChoferFields;
+
 // Cargar usuarios
 async function cargarUsuarios() {
   try {
@@ -91,6 +114,11 @@ function abrirModalCrear() {
   document.getElementById('inputRole').value = 'cliente';
   document.getElementById('inputActivo').checked = true;
 
+  // Limpiar campos de chofer
+  document.getElementById('inputChoferNombre').value = '';
+  document.getElementById('inputChoferTelefono').value = '';
+  toggleChoferFields(); // Ocultar campos de chofer inicialmente
+
   document.getElementById('modalUsuario').classList.remove('hidden');
   document.getElementById('modalUsuario').classList.add('flex');
 }
@@ -107,8 +135,19 @@ function abrirModalEditar(id) {
   document.getElementById('inputPassword').value = '';
   document.getElementById('inputPassword').required = false;
   document.getElementById('passwordHint').classList.remove('hidden');
-  document.getElementById('inputRole').value = usuario.role || 'cliente';
+  document.getElementById('inputRole').value = usuario.role;
   document.getElementById('inputActivo').checked = usuario.activo !== false;
+
+  // Cargar datos de chofer si aplica
+  if (usuario.role === 'chofer' && usuario.driver_id) {
+    document.getElementById('inputChoferNombre').value = usuario.driver_id.nombre || '';
+    document.getElementById('inputChoferTelefono').value = usuario.driver_id.telefono || '';
+  } else {
+    document.getElementById('inputChoferNombre').value = '';
+    document.getElementById('inputChoferTelefono').value = '';
+  }
+
+  toggleChoferFields(); // Mostrar/ocultar según rol
 
   document.getElementById('modalUsuario').classList.remove('hidden');
   document.getElementById('modalUsuario').classList.add('flex');
@@ -125,16 +164,31 @@ document.getElementById('formUsuario').addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const id = document.getElementById('usuarioId').value;
+  const role = document.getElementById('inputRole').value;
+
   const data = {
     username: document.getElementById('inputUsername').value.trim(),
-    email: document.getElementById('inputEmail').value.trim(),
-    role: document.getElementById('inputRole').value,
+    email: document.getElementById('inputEmail').value.trim() || undefined, // Opcional
+    role,
     activo: document.getElementById('inputActivo').checked
   };
 
   const password = document.getElementById('inputPassword').value.trim();
   if (password) {
     data.password = password;
+  }
+
+  if (role === 'chofer') {
+    const choferNombre = document.getElementById('inputChoferNombre').value.trim();
+    const choferTelefono = document.getElementById('inputChoferTelefono').value.trim();
+
+    if (!choferNombre || !choferTelefono) {
+      alert('Para crear un chofer, debes ingresar nombre y teléfono');
+      return;
+    }
+
+    data.chofer_nombre = choferNombre;
+    data.chofer_telefono = choferTelefono;
   }
 
   try {

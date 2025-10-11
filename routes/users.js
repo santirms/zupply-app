@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const ctrl = require('../controllers/usersController');
 const User = require('../models/User');
+const Chofer = require('../models/Chofer');
 const slugify = require('../utils/slugify');
 
 // Todas las rutas de /api/users requieren estar logueado
@@ -21,7 +22,19 @@ router.patch('/:id', requireRole('admin'), ctrl.actualizar);
 
 // ── LECTURA ──────────────────────────────────────────────────
 // Listar: admin o coordinador (ajustá si querés que sea solo admin)
-router.get('/', requireRole('admin','coordinador'), ctrl.listar);
+router.get('/', requireRole('admin','coordinador'), async (_req, res) => {
+  try {
+    const users = await User.find()
+      .select('-password_hash')
+      .populate('driver_id', 'nombre telefono activo')
+      .sort({ createdAt: -1 });
+
+    res.json(users.map(toPublicUser));
+  } catch (err) {
+    console.error('Error listando usuarios:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 const parseBool = (value, defaultValue) => {
   if (typeof value === 'boolean') return value;
@@ -38,12 +51,24 @@ const parseBool = (value, defaultValue) => {
 const toPublicUser = (user) => {
   if (!user) return null;
   const plain = typeof user.toObject === 'function' ? user.toObject() : user;
+  const driverRaw = plain.driver_id;
+  const driverPlain = driverRaw && typeof driverRaw.toObject === 'function' ? driverRaw.toObject() : driverRaw;
+  const driverData = driverPlain
+    ? {
+        _id: driverPlain._id,
+        nombre: driverPlain.nombre || null,
+        telefono: driverPlain.telefono || null,
+        activo: driverPlain.activo !== false
+      }
+    : null;
+
   return {
     _id: plain._id,
     username: plain.username,
     email: plain.email,
     role: plain.role,
     activo: plain.is_active !== false,
+    driver_id: driverData,
     createdAt: plain.createdAt,
     updatedAt: plain.updatedAt
   };
@@ -53,7 +78,13 @@ const toPublicUser = (user) => {
 router.put('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { username, email, role, activo, password } = req.body || {};
+    const { username, email, role, activo, password, chofer_nombre, chofer_telefono } = req.body || {};
+
+    const userActual = await User.findById(id).populate('driver_id');
+
+    if (!userActual) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
 
     const updateData = {};
 
@@ -64,16 +95,18 @@ router.put('/:id', requireAuth, requireRole('admin'), async (req, res) => {
       }
       updateData.username = slug;
     }
+
     if (typeof email !== 'undefined') {
       const mail = String(email).trim().toLowerCase();
-      if (!mail) {
-        return res.status(400).json({ error: 'Email inválido' });
-      }
-      updateData.email = mail;
+      updateData.email = mail || undefined;
     }
+
+    let finalRole = userActual.role;
     if (typeof role !== 'undefined') {
       updateData.role = role;
+      finalRole = role;
     }
+
     if (typeof activo !== 'undefined') {
       const parsed = parseBool(activo, undefined);
       if (typeof parsed === 'boolean') {
@@ -87,11 +120,39 @@ router.put('/:id', requireAuth, requireRole('admin'), async (req, res) => {
       updateData.must_change_password = false;
     }
 
+    if (finalRole === 'chofer') {
+      const nombreTrim = typeof chofer_nombre === 'string' ? chofer_nombre.trim() : '';
+      const telefonoTrim = typeof chofer_telefono === 'string' ? chofer_telefono.trim() : '';
+
+      if (!userActual.driver_id && (!nombreTrim || !telefonoTrim)) {
+        return res.status(400).json({ error: 'chofer_nombre y chofer_telefono requeridos para chofer' });
+      }
+
+      if (userActual.driver_id) {
+        const updateChofer = {};
+        if (nombreTrim) updateChofer.nombre = nombreTrim;
+        if (telefonoTrim) updateChofer.telefono = telefonoTrim;
+
+        if (Object.keys(updateChofer).length) {
+          await Chofer.findByIdAndUpdate(userActual.driver_id._id, { $set: updateChofer });
+        }
+      } else if (nombreTrim && telefonoTrim) {
+        const nuevoChofer = await Chofer.create({
+          nombre: nombreTrim,
+          telefono: telefonoTrim,
+          activo: true
+        });
+        updateData.driver_id = nuevoChofer._id;
+      }
+    }
+
     const user = await User.findByIdAndUpdate(
       id,
       { $set: updateData },
       { new: true, runValidators: true }
-    ).select('-password_hash');
+    )
+      .select('-password_hash')
+      .populate('driver_id', 'nombre telefono activo');
 
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado' });

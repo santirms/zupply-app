@@ -18,12 +18,24 @@ const parseBool = (value, defaultValue) => {
   return defaultValue;
 };
 
+const toPublicDriver = (driver) => {
+  if (!driver) return null;
+  const plain = typeof driver.toObject === 'function' ? driver.toObject() : driver;
+  return {
+    _id: plain._id,
+    nombre: plain.nombre || null,
+    telefono: plain.telefono || null,
+    activo: plain.activo !== false
+  };
+};
+
 const toPublicUser = (user = {}) => ({
   _id: user._id,
   username: user.username || null,
   email: user.email || null,
   role: user.role,
   activo: user.is_active !== false,
+  driver_id: toPublicDriver(user.driver_id),
   createdAt: user.createdAt,
   updatedAt: user.updatedAt
 });
@@ -32,7 +44,11 @@ const isNonEmptyString = v => typeof v === 'string' && v.trim().length > 0;
 
 exports.listar = async (_req, res, next) => {
   try {
-    const users = await User.find().select('-password_hash').sort({ createdAt: -1 }).lean();
+    const users = await User.find()
+      .select('-password_hash')
+      .populate('driver_id', 'nombre telefono activo')
+      .sort({ createdAt: -1 })
+      .lean();
     res.json({ ok: true, users: users.map(toPublicUser) });
   } catch (e) { next(e); }
 };
@@ -109,8 +125,28 @@ exports.crear = async (req, res, next) => {
 
 exports.actualizar = async (req, res, next) => {
   try {
-    let { role, is_active, password, phone, sender_ids, cliente_id, username, email, activo } = req.body || {};
+    let {
+      role,
+      is_active,
+      password,
+      phone,
+      sender_ids,
+      cliente_id,
+      username,
+      email,
+      activo,
+      chofer_nombre,
+      chofer_telefono
+    } = req.body || {};
+
+    const userActual = await User.findById(req.params.id).populate('driver_id');
+    if (!userActual) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
     const upd = {};
+    const finalRole = role || userActual.role;
+
     if (role) upd.role = role;
     const parsedIsActive = parseBool(is_active, undefined);
     if (typeof parsedIsActive === 'boolean') upd.is_active = parsedIsActive;
@@ -118,15 +154,43 @@ exports.actualizar = async (req, res, next) => {
     if (typeof parsedActivo === 'boolean') upd.is_active = parsedActivo;
     if (phone) upd.phone = phone;
     if (username) upd.username = slugify(username);
-    if (email) upd.email = email.toLowerCase();
+    if (typeof email !== 'undefined') {
+      const mail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+      upd.email = mail || undefined;
+    }
 
     if (password) {
       upd.password_hash = await bcrypt.hash(String(password), 12);
       upd.must_change_password = false;
     }
 
+    if (finalRole === 'chofer') {
+      const nombreTrim = typeof chofer_nombre === 'string' ? chofer_nombre.trim() : '';
+      const telefonoTrim = typeof chofer_telefono === 'string' ? chofer_telefono.trim() : '';
+
+      if (!userActual.driver_id && (!nombreTrim || !telefonoTrim)) {
+        return res.status(400).json({ error: 'chofer_nombre y chofer_telefono requeridos para chofer' });
+      }
+
+      if (userActual.driver_id) {
+        const updateChofer = {};
+        if (nombreTrim) updateChofer.nombre = nombreTrim;
+        if (telefonoTrim) updateChofer.telefono = telefonoTrim;
+        if (Object.keys(updateChofer).length) {
+          await Chofer.findByIdAndUpdate(userActual.driver_id._id, { $set: updateChofer });
+        }
+      } else if (nombreTrim && telefonoTrim) {
+        const nuevoChofer = await Chofer.create({
+          nombre: nombreTrim,
+          telefono: telefonoTrim,
+          activo: true
+        });
+        upd.driver_id = nuevoChofer._id;
+      }
+    }
+
     // si se edita como cliente, mergear sender_ids con los del Cliente
-    if (role === 'cliente' || typeof sender_ids !== 'undefined' || typeof cliente_id !== 'undefined') {
+    if (finalRole === 'cliente' || typeof sender_ids !== 'undefined' || typeof cliente_id !== 'undefined') {
       let merged = Array.isArray(sender_ids) ? sender_ids : [];
       if (cliente_id) {
         const cli = await Cliente.findById(cliente_id).lean();
@@ -136,7 +200,8 @@ exports.actualizar = async (req, res, next) => {
       if (typeof sender_ids !== 'undefined') upd.sender_ids = uniq(merged);
     }
 
-    const updated = await User.findByIdAndUpdate(req.params.id, upd, { new: true });
+    const updated = await User.findByIdAndUpdate(req.params.id, upd, { new: true })
+      .populate('driver_id', 'nombre telefono activo');
     res.json({ ok: true, user: updated ? toPublicUser(updated) : null });
   } catch (e) { next(e); }
 };
