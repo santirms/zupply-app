@@ -827,4 +827,77 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// ========== CAMBIO DE ESTADO MANUAL (NUEVO) ==========
+
+/**
+ * Cambiar estado de un envío manual (no sincronizado con MeLi)
+ * PATCH /api/envios/:id/cambiar-estado
+ */
+router.patch('/:id/cambiar-estado', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nuevo_estado, nota } = req.body;
+    const usuarioCambio = req.user?.username || req.user?.email || 'Sistema';
+
+    // Buscar envío
+    const envio = await Envio.findById(id);
+    if (!envio) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
+
+    // Validar que sea un envío manual (NO MeLi)
+    if (envio.requiere_sync_meli !== false) {
+      return res.status(400).json({
+        error: 'Este envío se sincroniza con MercadoLibre. No se puede editar manualmente.'
+      });
+    }
+
+    // Estados permitidos para cambio manual
+    const ESTADOS_VALIDOS = [
+      'en_preparacion',
+      'en_planta',
+      'en_camino',
+      'comprador_ausente',
+      'entregado',
+      'rechazado'
+    ];
+
+    if (!ESTADOS_VALIDOS.includes(nuevo_estado)) {
+      return res.status(400).json({
+        error: `Estado no válido. Permitidos: ${ESTADOS_VALIDOS.join(', ')}`
+      });
+    }
+
+    // Guardar estado anterior para logging
+    const estadoAnterior = envio.estado;
+
+    // Actualizar estado
+    envio.estado = nuevo_estado;
+
+    // Agregar al historial
+    if (!envio.historial) envio.historial = [];
+    envio.historial.push({
+      fecha: new Date(),
+      estado: nuevo_estado,
+      usuario: usuarioCambio,
+      nota: nota || `Cambio manual: ${estadoAnterior} → ${nuevo_estado}`
+    });
+
+    await envio.save();
+
+    console.log(`✓ Estado de envío ${id} cambiado de "${estadoAnterior}" a "${nuevo_estado}" por ${usuarioCambio}`);
+
+    res.json({
+      ok: true,
+      envio,
+      estado_anterior: estadoAnterior,
+      estado_nuevo: nuevo_estado,
+      message: `Estado actualizado a: ${nuevo_estado}`
+    });
+  } catch (err) {
+    console.error('Error cambiando estado de envío:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
