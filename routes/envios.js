@@ -291,6 +291,8 @@ router.get('/', async (req, res) => {
           zona: 1, partido: 1,
           destinatario: 1, direccion: 1, codigo_postal: 1,
           fecha: 1, createdAt: 1, ts: 1,
+          requiere_sync_meli: 1,
+          origen: 1,
           cliente_id: 1, chofer: 1,
           has_notes: { $gt: [ { $size: { $ifNull: ['$notas', []] } }, 0 ] }
         }
@@ -345,7 +347,10 @@ router.post('/guardar-masivo', async (req, res) => {
       id_venta:      p.idVenta            || p.id_venta || '',
       referencia:    p.referencia         || '',
       fecha:         new Date(),
-      precio:        p.manual_precio      ? Number(p.precio) || 0 : 0
+      precio:        p.manual_precio      ? Number(p.precio) || 0 : 0,
+      estado:        'en_preparacion',
+      requiere_sync_meli: false,
+      origen:        'ingreso_manual'
       // precio real se calculará en GET /envios si es 0
     }));
 
@@ -402,18 +407,21 @@ router.post('/cargar-masivo', async (req, res) => {
   }
 
       return {
-       meli_id:       et.tracking_id      || '',
-       sender_id:     et.sender_id        || '',
-       cliente_id:    cl?._id             || null,
-       codigo_postal: cp,
-       partido,                      // 👈 ahora lo seteamos
-       zona,                         // 👈 y también la zona (para facturación)
-       destinatario:  et.destinatario     || '',
-       direccion:     et.direccion        || '',
-       referencia:    et.referencia       || '',
-      fecha:         fechaEtiqueta,
-      id_venta:      et.id_venta || et.order_id || et.tracking_id || '', // usa lo que tengas
-      precio:        0
+        meli_id:       et.tracking_id      || '',
+        sender_id:     et.sender_id        || '',
+        cliente_id:    cl?._id             || null,
+        codigo_postal: cp,
+        partido,                      // 👈 ahora lo seteamos
+        zona,                         // 👈 y también la zona (para facturación)
+        destinatario:  et.destinatario     || '',
+        direccion:     et.direccion        || '',
+        referencia:    et.referencia       || '',
+        fecha:         fechaEtiqueta,
+        id_venta:      et.id_venta || et.order_id || et.tracking_id || '', // usa lo que tengas
+        precio:        0,
+        estado:        'en_planta',
+        requiere_sync_meli: false,
+        origen:        'etiquetas'
       };
     }));
 
@@ -475,7 +483,10 @@ router.post('/manual', async (req, res) => {
         id_venta:      idVenta,     // 👈 tracking del sistema
         referencia:    p.referencia,
         precio:        costo,
-        fecha:         new Date()
+        fecha:         new Date(),
+        estado:        'en_preparacion',
+        requiere_sync_meli: false,
+        origen:        'ingreso_manual'
       });
 
       // Generar etiqueta 10x15 + QR usando id_venta
@@ -824,6 +835,81 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error('Error DELETE /envios/:id:', err);
     return res.status(500).json({ error: 'Error al eliminar envío' });
+  }
+});
+
+// ========== CAMBIO DE ESTADO MANUAL ==========
+
+/**
+ * Cambiar estado de un envío manual (no sincronizado con MeLi)
+ * PATCH /api/envios/:id/cambiar-estado
+ */
+router.patch('/:id/cambiar-estado', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nuevo_estado, nota } = req.body;
+
+    // Buscar envío
+    const envio = await Envio.findById(id);
+    if (!envio) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
+
+    // Validar que sea un envío manual (NO MeLi)
+    if (envio.requiere_sync_meli !== false) {
+      return res.status(400).json({
+        error: 'Este envío se sincroniza con MercadoLibre. No se puede editar manualmente.'
+      });
+    }
+
+    // Estados permitidos para cambio manual
+    const ESTADOS_VALIDOS = [
+      'en_preparacion',
+      'en_planta',
+      'en_camino',
+      'comprador_ausente',
+      'entregado',
+      'rechazado'
+    ];
+
+    if (!ESTADOS_VALIDOS.includes(nuevo_estado)) {
+      return res.status(400).json({
+        error: `Estado no válido. Permitidos: ${ESTADOS_VALIDOS.join(', ')}`
+      });
+    }
+
+    // Guardar estado anterior para logging
+    const estadoAnterior = envio.estado;
+
+    // Actualizar estado
+    envio.estado = nuevo_estado;
+
+    const actor = req.user?.username || req.user?.email || 'Sistema';
+
+    // Agregar al historial
+    if (!envio.historial) envio.historial = [];
+    envio.historial.push({
+      at: new Date(),
+      estado: nuevo_estado,
+      source: 'panel-manual',
+      actor_name: actor,
+      note: nota || `Cambio manual: ${estadoAnterior} → ${nuevo_estado}`
+    });
+
+    await envio.save();
+
+    console.log(`✓ Estado de envío ${id} cambiado de "${estadoAnterior}" a "${nuevo_estado}" por ${actor}`);
+
+    res.json({
+      ok: true,
+      envio,
+      estado_anterior: estadoAnterior,
+      estado_nuevo: nuevo_estado,
+      message: `Estado actualizado a: ${nuevo_estado}`
+    });
+  } catch (err) {
+    console.error('Error cambiando estado de envío:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

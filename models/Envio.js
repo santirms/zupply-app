@@ -60,7 +60,11 @@ const envioSchema = new Schema({
   zonaAsignada:   { type: Schema.Types.ObjectId, ref: 'Zona',   default: null },
   estado: {
   type: String,
-  enum: ['pendiente','asignado','en_camino','demorado','reprogramado','no_entregado','entregado','cancelado'],
+  enum: [
+    'pendiente','asignado','en_preparacion','en_planta','en_camino','demorado',
+    'reprogramado','no_entregado','comprador_ausente','inaccesible','direccion_erronea',
+    'agencia_cerrada','entregado','rechazado','cancelado'
+  ],
   default: 'pendiente'
   },
   estado_meli: {
@@ -74,7 +78,20 @@ const envioSchema = new Schema({
 
   label_url:  { type: String }, // /labels/<id_venta>.pdf
   qr_png:     { type: String }, // DataURL para previsualizar QR
-  meli_history_last_sync: { type: Date, default: null }     // <<< NUEVO
+  meli_history_last_sync: { type: Date, default: null },     // <<< NUEVO
+
+  // Flag para identificar si el envío se sincroniza con MeLi
+  requiere_sync_meli: {
+    type: Boolean,
+    default: true  // true = MeLi (sincroniza), false = manual/etiquetas (editable)
+  },
+
+  // Origen del envío
+  origen: {
+    type: String,
+    enum: ['mercadolibre', 'ingreso_manual', 'etiquetas', 'otro'],
+    default: 'mercadolibre'
+  }
   }, { timestamps: false });
 
 const NotaSchema = new Schema({

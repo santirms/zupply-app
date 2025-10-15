@@ -435,28 +435,114 @@ async function probeQrButtons(){ const slots = Array.from(document.querySelector
 
 function initMapa(lat,lng){ const cont=document.getElementById('mapa'); if(!cont) return; cont.innerHTML=''; if(!Number.isFinite(lat)||!Number.isFinite(lng)){ cont.innerHTML='<div class="flex items-center justify-center h-full text-slate-500">Sin coordenadas</div>'; return; } if(mapaInstancia){ mapaInstancia.remove(); mapaInstancia=null; } mapaInstancia=L.map('mapa').setView([lat,lng],13); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution:'&copy; OpenStreetMap contributors' }).addTo(mapaInstancia); L.marker([lat,lng]).addTo(mapaInstancia); setTimeout(()=>mapaInstancia.invalidateSize(),0); }
 
+function estadoBadge(key,label){
+  const BADGE_CONFIG = {
+    en_preparacion: {
+      classes: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800',
+      icon: '📦'
+    },
+    en_planta: {
+      classes: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+      icon: '🏪'
+    },
+    en_camino: {
+      classes: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800',
+      icon: '🚚'
+    },
+    comprador_ausente: {
+      classes: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+      icon: '🚫'
+    },
+    entregado: {
+      classes: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
+      icon: '✅'
+    },
+    rechazado: {
+      classes: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
+      icon: '❌'
+    },
+    pendiente: {
+      classes: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-700',
+      icon: '⏳'
+    },
+    asignado: {
+      classes: 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800',
+      icon: '🗂️'
+    },
+    demorado: {
+      classes: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
+      icon: '⏱️'
+    },
+    reprogramado: {
+      classes: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+      icon: '🔄'
+    },
+    no_entregado: {
+      classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+      icon: '⚠️'
+    },
+    cancelado: {
+      classes: 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-slate-700/30 dark:text-slate-200 dark:border-slate-700',
+      icon: '🛑'
+    },
+    direccion_erronea: {
+      classes: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
+      icon: '📍'
+    },
+    inaccesible: {
+      classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+      icon: '🚧'
+    },
+    agencia_cerrada: {
+      classes: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+      icon: '🏢'
+    }
+  };
+
+  const cfg = BADGE_CONFIG[key] || {
+    classes: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-700',
+    icon: '❓'
+  };
+
+  return `<span class="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full border ${cfg.classes}">${cfg.icon} ${label}</span>`;
+}
+window.estadoBadge = estadoBadge;
+
+function substatusChip(sub){
+  if(!sub) return '';
+  return `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600 dark:bg-gray-900/40 dark:text-gray-300 dark:border-gray-700">${sub}</span>`;
+}
+window.substatusChip = substatusChip;
+
+function getEstadoColorClass(estado){
+  const COLORES = {
+    en_preparacion: 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+    en_planta: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+    en_camino: 'bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
+    comprador_ausente: 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800',
+    entregado: 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
+    rechazado: 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+  };
+  return COLORES[estado] || 'bg-gray-50 dark:bg-gray-900/20 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-white/10';
+}
+window.getEstadoColorClass = getEstadoColorClass;
+
 function uiStatus(envio){
-  window.estadoBadge=function(key,label){
-    const css={entregado:'bg-green-100 text-green-700 border-green-200',
-               en_camino:'bg-sky-100 text-sky-700 border-sky-200',
-               pendiente:'bg-gray-100 text-gray-700 border-gray-200',
-               asignado:'bg-indigo-100 text-indigo-700 border-indigo-200',
-               demorado:'bg-red-100 text-red-700 border-red-200',
-               reprogramado:'bg-blue-100 text-blue-700 border-blue-200',
-               no_entregado:'bg-amber-100 text-amber-700 border-amber-200',
-               cancelado:'bg-slate-200 text-slate-700 border-slate-300',
-               comprador_ausente:'bg-amber-100 text-amber-700 border-amber-200',
-               direccion_erronea: 'bg-rose-100 text-rose-700 border-rose-200',
-               inaccesible: 'bg-amber-100 text-amber-700 border-amber-200',
-               agencia_cerrada: 'bg-orange-100 text-orange-700 border-orange-200'
-              }
-      [key]||'bg-gray-100 text-gray-700 border-gray-200';
-    return `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${css}">${label}</span>`; };
-  window.substatusChip=function(sub){ if(!sub) return ''; return `<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 border text-gray-600">${sub}</span>`; };
   const raw=(envio.estado||envio.status||envio.estado_meli?.status||'').toLowerCase();
   const subRaw=(envio.estado_meli?.substatus||'').toLowerCase().trim();
-  let norm=({pending:'pendiente',handling:'pendiente',ready_to_ship:'pendiente',shipped:'en_camino',delivered:'entregado',not_delivered:'no_entregado',cancelled:'cancelado'})[raw] || raw || 'pendiente';
-  // Substatuses específicos
+
+  const STATUS_ALIAS = {
+    pending: 'pendiente',
+    handling: 'pendiente',
+    ready_to_ship: 'pendiente',
+    shipped: 'en_camino',
+    delivered: 'entregado',
+    not_delivered: 'no_entregado',
+    cancelled: 'cancelado'
+  };
+
+  let norm = STATUS_ALIAS[raw] || raw || 'pendiente';
+
   const isAbsent = /(recipient|receiver|buyer|client|addressee|destinatario)[_\s-]?(absent|not[_\s-]?at[_\s-]?home|ausente)/.test(subRaw) || subRaw==='comprador_ausente';
   const isNotVisited = /(not[_\s-]?visited|inaccesible|aver[ií]a)/.test(subRaw);
   const isBadAddr = /(bad[_\s-]?address|direcci[oó]n[_\s-]?err[oó]nea)/.test(subRaw);
@@ -466,6 +552,7 @@ function uiStatus(envio){
   const isSoon = /(arriving[_\s-]?)?soon[_\s-]?(deliver)?|llega[_\s-]?pronto/.test(subRaw);
   const isAgencyClosed = /agency[_\s-]?closed|sucursal[_\s-]?cerrada/.test(subRaw);
   const isResched = /resched/.test(subRaw);
+
   if (isAbsent) norm = 'comprador_ausente';
   else if (isNotVisited) norm = 'inaccesible';
   else if (isBadAddr) norm = 'direccion_erronea';
@@ -475,13 +562,39 @@ function uiStatus(envio){
   else if (isDelay) norm = 'demorado';
   else if (isResched) norm = 'reprogramado';
   else if (isSoon) norm = 'en_camino';
-  let cardLabel=({pendiente:'Pendiente',asignado:'Asignado',en_camino:'En camino',demorado:'Demorado',reprogramado:'Reprogramado',no_entregado:'No entregado',entregado:'Entregado',cancelado:'Cancelado',comprador_ausente:'Comprador ausente',inaccesible: 'Inaccesible/Avería',direccion_erronea: 'Dirección errónea',agencia_cerrada: 'Agencia cerrada'})[norm]||'Pendiente';
+
+  const STATUS_LABELS = {
+    pendiente: 'Pendiente',
+    asignado: 'Asignado',
+    en_preparacion: 'En preparación',
+    en_planta: 'En planta',
+    en_camino: 'En camino',
+    demorado: 'Demorado',
+    reprogramado: 'Reprogramado',
+    no_entregado: 'No entregado',
+    entregado: 'Entregado',
+    cancelado: 'Cancelado',
+    comprador_ausente: 'Comprador ausente',
+    inaccesible: 'Inaccesible/Avería',
+    direccion_erronea: 'Dirección errónea',
+    agencia_cerrada: 'Agencia cerrada',
+    rechazado: 'Rechazado'
+  };
+
+  let cardLabel = STATUS_LABELS[norm];
+  if (!cardLabel) {
+    const fallback = norm ? norm.replace(/_/g,' ') : 'Pendiente';
+    cardLabel = fallback.replace(/\b\w/g, c => c.toUpperCase());
+  }
+
   if (isReschedBuyer) cardLabel = 'Reprogramado por comprador';
   if (isReschedMeli) cardLabel = 'Reprogramado por demora';
   if (isSoon) cardLabel = 'Llega pronto';
   if (isAgencyClosed) cardLabel = 'Agencia cerrada';
+
   let chip=subRaw? subRaw.replace(/_/g,' ') : '';
   if (isReschedMeli) chip = 'por demora';
+
   return { key:norm, label:cardLabel, substatus:chip };
 }
 
@@ -574,7 +687,7 @@ function renderTabla(){
     // Agregar icono de alerta para estados que necesitan atención
     const needsAttention = [
       'comprador_ausente', 'inaccesible', 'direccion_erronea',
-      'agencia_cerrada', 'demorado', 'reprogramado', 'no_entregado'
+      'agencia_cerrada', 'demorado', 'reprogramado', 'no_entregado', 'rechazado'
     ];
 
     let iconoAlerta = '';
@@ -582,7 +695,26 @@ function renderTabla(){
       iconoAlerta = '<span class="mr-1" title="Requiere atención">⚠️</span>';
     }
 
-    const estadoHTML = iconoAlerta + estadoBadge(eKey,eLabel) + (substatus ? substatusChip(substatus) : '');
+    let estadoHTML;
+    const estadoActual = (e.estado || '').toLowerCase();
+
+    if (e.requiere_sync_meli === false) {
+      const actual = estadoActual || 'en_preparacion';
+      const colorClass = getEstadoColorClass(actual);
+      estadoHTML = (
+        `${iconoAlerta}<select onchange="cambiarEstadoEnvio('${e._id}', this.value)"
+          class="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100 ${colorClass} cursor-pointer hover:border-slate-400 dark:hover:border-white/20 transition-colors">
+          <option value="en_preparacion" ${actual === 'en_preparacion' ? 'selected' : ''}>📦 En preparación</option>
+          <option value="en_planta" ${actual === 'en_planta' ? 'selected' : ''}>🏪 En planta</option>
+          <option value="en_camino" ${actual === 'en_camino' ? 'selected' : ''}>🚚 En camino</option>
+          <option value="comprador_ausente" ${actual === 'comprador_ausente' ? 'selected' : ''}>🚫 Comprador ausente</option>
+          <option value="entregado" ${actual === 'entregado' ? 'selected' : ''}>✅ Entregado</option>
+          <option value="rechazado" ${actual === 'rechazado' ? 'selected' : ''}>❌ Rechazado</option>
+        </select>`
+      ).trim();
+    } else {
+      estadoHTML = iconoAlerta + estadoBadge(eKey,eLabel) + (substatus ? substatusChip(substatus) : '');
+    }
     const partidoUI=(e.partido && e.partido.trim())? e.partido : '-';
     const zonaFact=(e.zona && e.zona.trim())? cleanZona(e.zona) : '';
     const tr=document.createElement('tr');
@@ -845,6 +977,54 @@ function renderHistorial(histArray=[]) {
     <tbody>${rows}</tbody>
   </table></div>`;
 }
+
+
+// ========== CAMBIO DE ESTADO MANUAL ==========
+
+async function cambiarEstadoEnvio(envioId, nuevoEstado) {
+  if (!envioId || !nuevoEstado) {
+    console.warn('cambiarEstadoEnvio: faltan parámetros');
+    return;
+  }
+
+  const recargar = async () => {
+    if (typeof aplicarFiltro === 'function') {
+      await aplicarFiltro();
+    } else if (typeof cargarPrimerPagina === 'function') {
+      await cargarPrimerPagina();
+    }
+  };
+
+  try {
+    const res = await fetch(`/api/envios/${envioId}/cambiar-estado`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        nuevo_estado: nuevoEstado,
+        nota: 'Cambio manual de estado'
+      })
+    });
+
+    let payload = null;
+    try {
+      payload = await res.json();
+    } catch (_) {}
+
+    if (!res.ok) {
+      throw new Error(payload?.error || 'Error al cambiar estado');
+    }
+
+    console.log('✓ Estado actualizado:', payload?.estado_nuevo || nuevoEstado);
+  } catch (err) {
+    console.error('Error cambiando estado:', err);
+    alert(`Error: ${err.message}`);
+  } finally {
+    await recargar();
+  }
+}
+
+window.cambiarEstadoEnvio = cambiarEstadoEnvio;
 
 
 
