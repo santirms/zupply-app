@@ -66,6 +66,9 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
         fecha:         fechaEtiqueta,
         id_venta:      et.id_venta || et.order_id || et.tracking_id || '',
         precio:        0,
+        estado:        'en_planta',
+        requiere_sync_meli: false,
+        origen:        'etiquetas',
         source:        'pdf' // 👈 marca origen etiquetas
       };
     }));
