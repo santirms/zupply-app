@@ -436,75 +436,21 @@ async function probeQrButtons(){ const slots = Array.from(document.querySelector
 function initMapa(lat,lng){ const cont=document.getElementById('mapa'); if(!cont) return; cont.innerHTML=''; if(!Number.isFinite(lat)||!Number.isFinite(lng)){ cont.innerHTML='<div class="flex items-center justify-center h-full text-slate-500">Sin coordenadas</div>'; return; } if(mapaInstancia){ mapaInstancia.remove(); mapaInstancia=null; } mapaInstancia=L.map('mapa').setView([lat,lng],13); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution:'&copy; OpenStreetMap contributors' }).addTo(mapaInstancia); L.marker([lat,lng]).addTo(mapaInstancia); setTimeout(()=>mapaInstancia.invalidateSize(),0); }
 
 function estadoBadge(key,label){
-  const BADGE_CONFIG = {
-    en_preparacion: {
-      classes: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800',
-      icon: '📦'
-    },
-    en_planta: {
-      classes: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
-      icon: '🏪'
-    },
-    en_camino: {
-      classes: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800',
-      icon: '🚚'
-    },
-    comprador_ausente: {
-      classes: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
-      icon: '🚫'
-    },
-    entregado: {
-      classes: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
-      icon: '✅'
-    },
-    rechazado: {
-      classes: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
-      icon: '❌'
-    },
-    pendiente: {
-      classes: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-700',
-      icon: '⏳'
-    },
-    asignado: {
-      classes: 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800',
-      icon: '🗂️'
-    },
-    demorado: {
-      classes: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
-      icon: '⏱️'
-    },
-    reprogramado: {
-      classes: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
-      icon: '🔄'
-    },
-    no_entregado: {
-      classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
-      icon: '⚠️'
-    },
-    cancelado: {
-      classes: 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-slate-700/30 dark:text-slate-200 dark:border-slate-700',
-      icon: '🛑'
-    },
-    direccion_erronea: {
-      classes: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
-      icon: '📍'
-    },
-    inaccesible: {
-      classes: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
-      icon: '🚧'
-    },
-    agencia_cerrada: {
-      classes: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
-      icon: '🏢'
-    }
+  const BADGE_CLASSES = {
+    en_preparacion: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800',
+    en_planta: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+    comprador_ausente: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+    rechazado: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
+    pendiente: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-800',
+    en_camino: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800',
+    entregado: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
+    no_entregado: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+    demorado: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800'
   };
 
-  const cfg = BADGE_CONFIG[key] || {
-    classes: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-700',
-    icon: '❓'
-  };
+  const classes = BADGE_CLASSES[key] || 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300';
 
-  return `<span class="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full border ${cfg.classes}">${cfg.icon} ${label}</span>`;
+  return `<span class="inline-flex items-center text-xs px-2.5 py-0.5 rounded-full border ${classes}">${label}</span>`;
 }
 window.estadoBadge = estadoBadge;
 
@@ -704,12 +650,24 @@ function renderTabla(){
       estadoHTML = (
         `${iconoAlerta}<select onchange="cambiarEstadoEnvio('${e._id}', this.value)"
           class="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100 ${colorClass} cursor-pointer hover:border-slate-400 dark:hover:border-white/20 transition-colors">
-          <option value="en_preparacion" ${actual === 'en_preparacion' ? 'selected' : ''}>📦 En preparación</option>
-          <option value="en_planta" ${actual === 'en_planta' ? 'selected' : ''}>🏪 En planta</option>
-          <option value="en_camino" ${actual === 'en_camino' ? 'selected' : ''}>🚚 En camino</option>
-          <option value="comprador_ausente" ${actual === 'comprador_ausente' ? 'selected' : ''}>🚫 Comprador ausente</option>
-          <option value="entregado" ${actual === 'entregado' ? 'selected' : ''}>✅ Entregado</option>
-          <option value="rechazado" ${actual === 'rechazado' ? 'selected' : ''}>❌ Rechazado</option>
+          <option value="en_preparacion" ${actual === 'en_preparacion' ? 'selected' : ''}>
+            En preparación
+          </option>
+          <option value="en_planta" ${actual === 'en_planta' ? 'selected' : ''}>
+            En planta
+          </option>
+          <option value="en_camino" ${actual === 'en_camino' ? 'selected' : ''}>
+            En camino
+          </option>
+          <option value="comprador_ausente" ${actual === 'comprador_ausente' ? 'selected' : ''}>
+            Comprador ausente
+          </option>
+          <option value="entregado" ${actual === 'entregado' ? 'selected' : ''}>
+            Entregado
+          </option>
+          <option value="rechazado" ${actual === 'rechazado' ? 'selected' : ''}>
+            Rechazado
+          </option>
         </select>`
       ).trim();
     } else {
