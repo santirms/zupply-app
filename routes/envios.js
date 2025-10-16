@@ -710,8 +710,22 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    let envioDoc = await Envio.findById(id).populate('cliente_id');
+    let envioDoc = await Envio.findById(id)
+      .populate('cliente_id')
+      .populate('chofer')
+      .populate('chofer_id');
     if (!envioDoc) return res.status(404).json({ error: 'Envío no encontrado' });
+
+    const user = req.session?.user;
+    if (user?.role === 'cliente') {
+      const envioClienteId = envioDoc.cliente_id?._id || envioDoc.cliente_id;
+      const clienteMatch = envioClienteId && user.cliente_id
+        ? String(envioClienteId) === String(user.cliente_id)
+        : false;
+      if (!clienteMatch) {
+        return res.status(403).json({ error: 'No tenés permiso para ver este envío' });
+      }
+    }
 
     // coords (puede devolver otra instancia, pero no importa)
     envioDoc = await ensureCoords(envioDoc);
@@ -720,7 +734,49 @@ router.get('/:id', async (req, res) => {
     try { await ensureMeliHistory(envioDoc); } catch (e) { console.warn('meli-history skip:', e.message); }
 
     // ⬅️ RE-LEER fresco desde DB (ya con historial guardado por el servicio)
-    const plain = await Envio.findById(id).populate('cliente_id').lean();
+    const plain = await Envio.findById(id)
+      .populate('cliente_id')
+      .populate('chofer')
+      .populate('chofer_id')
+      .lean();
+
+    if (!plain) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
+
+    if (user?.role === 'cliente') {
+      const envioClienteId = plain?.cliente_id?._id || plain?.cliente_id;
+      const clienteMatch = envioClienteId && user.cliente_id
+        ? String(envioClienteId) === String(user.cliente_id)
+        : false;
+      if (!clienteMatch) {
+        return res.status(403).json({ error: 'No tenés permiso para ver este envío' });
+      }
+    }
+
+    const cliente = plain.cliente_id;
+    if (cliente && typeof cliente === 'object') {
+      plain.cliente_id = {
+        _id: cliente._id ? String(cliente._id) : null,
+        nombre: cliente.nombre || null,
+        email: cliente.email || null,
+        codigo_cliente: cliente.codigo_cliente || null
+      };
+    }
+
+    const choferData = plain.chofer_id || plain.chofer;
+    if (choferData && typeof choferData === 'object') {
+      plain.chofer_id = {
+        _id: choferData._id ? String(choferData._id) : null,
+        nombre: choferData.nombre || choferData.alias || null,
+        telefono: choferData.telefono || choferData.phone || null
+      };
+    } else if (choferData) {
+      plain.chofer_id = { _id: null, nombre: choferData, telefono: null };
+    } else {
+      plain.chofer_id = null;
+    }
+    delete plain.chofer;
 
     // timeline para el front (mergea historial+eventos)
     plain.timeline = buildTimeline(plain);

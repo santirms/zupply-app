@@ -81,56 +81,89 @@
     <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-4 md:p-6 shadow-sm max-w-4xl mx-auto">
       <h1 class="text-2xl md:text-3xl font-bold mb-6">Ingreso Manual de Envíos</h1>
 
-      <!-- Cliente y Código Interno -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <label class="block text-sm">
-          Cliente
-          <select id="cliente" name="cliente_id" required
-                  class="select-dark mt-1 block w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]"></select>
-        </label>
-        <label class="block text-sm">
-          Código Interno
-          <input id="codigo_interno" type="text" readonly
-                 class="mt-1 block w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-white/5"/>
-        </label>
-      </div>
+      <form id="formIngresoManual" class="space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div id="selectClienteContainer">
+            <label class="block text-sm font-medium mb-1 text-slate-900 dark:text-slate-100">
+              Cliente <span class="text-rose-500">*</span>
+            </label>
+            <select id="cliente_id" required
+              class="select-dark w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100">
+              <option value="">Seleccionar cliente...</option>
+            </select>
+          </div>
 
-      <!-- Referencia -->
-      <label class="block text-sm mb-6">
-        Referencia
-        <input id="referencia" name="referencia" type="text" placeholder="Ej: Entrega urgente" required
-               class="mt-1 block w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
-      </label>
+          <div id="clienteInfoContainer" class="hidden p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+            <p class="text-sm text-blue-700 dark:text-blue-300">
+              📦 Los envíos se crearán a tu nombre automáticamente
+            </p>
+          </div>
+        </div>
 
-      <!-- Paquetes -->
-      <div id="paquetes" class="space-y-4 mb-6"></div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Destinatario <span class="text-rose-500">*</span></label>
+            <input id="destinatario" type="text" required
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Teléfono</label>
+            <input id="telefono" type="tel"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]" />
+          </div>
+        </div>
 
-      <!-- Acciones -->
-      <div class="flex flex-wrap gap-2">
-        <button type="button" onclick="agregarPaquete()"
-                class="px-4 py-2 rounded-2xl font-semibold shadow-sm bg-[var(--z-primary)] text-[var(--z-primary-fg)] hover:bg-[var(--z-primary-dark)]">
-          + Agregar paquete
-        </button>
-        <button type="button" onclick="guardar()"
-                class="px-4 py-2 rounded-2xl font-semibold border border-[var(--z-primary)] text-[var(--z-primary)] hover:bg-[var(--z-primary)]/10">
-          Guardar todos
-        </button>
-      </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Dirección <span class="text-rose-500">*</span></label>
+          <input id="direccion" type="text" required
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]" />
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Código Postal <span class="text-rose-500">*</span></label>
+            <input id="codigo_postal" type="text" required
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]" />
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Partido</label>
+            <input id="partido" type="text"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Referencia</label>
+          <textarea id="referencia" rows="3"
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]"></textarea>
+        </div>
+
+        <div class="flex justify-end">
+          <button type="submit"
+            class="px-5 py-2 rounded-xl font-semibold bg-[var(--z-primary)] text-[var(--z-primary-fg)] hover:bg-[var(--z-primary-dark)]">
+            Crear envío
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
-  <!-- Modal resultados -->
-  <div id="modal-resultados" class="hidden fixed inset-0 bg-black/50 items-center justify-center z-50">
-    <div class="bg-white dark:bg-[#0B1020] rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl w-full max-w-2xl p-6">
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold">Envíos creados</h2>
-        <button onclick="closeModalResultados()" class="px-2.5 py-1 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">✕</button>
+  <!-- Modal de etiqueta -->
+  <div id="modalEtiqueta" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white dark:bg-[#0B1020] rounded-2xl w-11/12 md:w-1/2 p-6 border border-slate-200 dark:border-white/10">
+      <h2 class="text-xl font-semibold mb-4 text-slate-900 dark:text-slate-100">Etiqueta generada</h2>
+
+      <div id="contenidoEtiqueta" class="border border-slate-300 dark:border-white/10 rounded-xl p-4 bg-white dark:bg-[#0B1020] mb-4">
       </div>
-      <ul id="res-list" class="max-h-[60vh] overflow-auto space-y-3"></ul>
-      <div class="mt-4 flex justify-end gap-2">
-        <button onclick="closeModalResultados()"
-                class="px-4 py-2 rounded-2xl font-semibold bg-[var(--z-primary)] text-[var(--z-primary-fg)] hover:bg-[var(--z-primary-dark)]">
-          Listo
+
+      <div class="flex gap-2 justify-end">
+        <button onclick="cerrarModalEtiqueta()"
+          class="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/10 text-slate-900 dark:text-slate-100">
+          Cerrar
+        </button>
+        <button onclick="imprimirEtiqueta()"
+          class="px-4 py-2 rounded-xl bg-amber-500 text-white hover:bg-amber-600">
+          🖨️ Imprimir
         </button>
       </div>
     </div>

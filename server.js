@@ -184,6 +184,7 @@ app.use('/api/scan-meli',        require('./routes/scan-meli'));   // POST /  y 
 
 // Módulos permitidos a admin + coordinador (crear/ingresar/subir)
 app.use('/api/ingreso',          require('./routes/ingreso'));     // /manual, /guardar-masivo
+app.use('/api/ingreso-manual',   require('./routes/ingresoManual'));
 app.use('/api/etiquetas',        require('./routes/etiquetas'));   // /cargar-masivo
 app.use('/api/choferes',         require('./routes/choferes'));    // asignación por qr/mapa
 
