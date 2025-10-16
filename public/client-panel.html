@@ -22,7 +22,6 @@
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet/dist/leaflet.js" defer></script>
-  <script src="/js/panel-clientes.js" defer></script>
 
   <style>
     :root{ --z-primary:#F59E0B; --z-primary-dark:#D97706; --z-primary-fg:#111827; }
@@ -42,10 +41,6 @@
         <span class="text-sm opacity-80">Panel Cliente</span>
 
         <div class="ml-auto flex items-center gap-2">
-          <a href="ingreso-manual.html"
-            class="px-4 py-2 text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg">
-            Crear envío
-          </a>
           <div class="relative" id="userMenuWrap">
             <button id="userBtn" class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
               <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
@@ -182,45 +177,19 @@
       const items = Array.isArray(data.items) ? data.items : [];
       const total = typeof data.total === 'number' ? data.total : items.length;
 
-      const esc = (value) => {
-        return String(value ?? '')
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#39;');
-      };
-
-      tbody.innerHTML = items.map(it => {
-        const trackingRaw = it.tracking ?? it.id_venta ?? '-';
-        const trackingSafe = esc(trackingRaw || '-');
-        const envioId = it._id || it.id || it.envio_id || it.envioId || '';
-        const envioIdAttr = esc(envioId);
-        const fecha = it.createdAt || it.fecha || it.created_at;
-        const fechaTexto = (() => {
-          if (!fecha) return '-';
-          const parsed = new Date(fecha);
-          return Number.isNaN(parsed.getTime()) ? '-' : esc(parsed.toLocaleString());
-        })();
-        const partido = it?.destino?.partido ?? it.partido ?? '-';
-        const estadoBadge = typeof window.obtenerBadgeEstado === 'function'
-          ? window.obtenerBadgeEstado(it.estado ?? it?.estado_ui?.text)
-          : `<span class="${it?.estado_ui?.class || ''}">${esc(it?.estado_ui?.text || it.estado || '-')}</span>`;
-
-        const trackingContent = envioId
-          ? `<button onclick="abrirModalDetalleCliente('${envioIdAttr}')" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline font-mono">${trackingSafe}</button>`
-          : `<span class="font-mono">${trackingSafe}</span>`;
-
-        return `
-        <tr class="border-t border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
-          <td class="p-2">${trackingContent}</td>
-          <td class="p-2">${esc(it.id_venta ?? '-')}</td>
-          <td class="p-2">${fechaTexto}</td>
-          <td class="p-2">${esc(partido ?? '-')}</td>
-          <td class="p-2">${estadoBadge}</td>
+      tbody.innerHTML = items.map(it => `
+        <tr class="border-t">
+          <td class="p-2">${it.tracking ?? '-'}</td>
+          <td class="p-2">${it.id_venta ?? '-'}</td>
+          <td class="p-2">${it.createdAt ? new Date(it.createdAt).toLocaleString() : '-'}</td>
+          <td class="p-2">${it?.destino?.partido ?? '-'}</td>
+          <td class="p-2">
+            <span class="${it?.estado_ui?.class || ''}">
+              ${it?.estado_ui?.text || (it.estado ?? '-')}
+            </span>
+          </td>
         </tr>
-      `;
-      }).join('');
+      `).join('');
 
       document.getElementById('pageInfo').textContent =
         `Página ${page} – ${items.length} / ${total}`;
@@ -232,9 +201,7 @@
   }
   document.getElementById('prevPage').addEventListener('click',()=>{ if(page>1){ page--; loadTabla(); }});
   document.getElementById('nextPage').addEventListener('click',()=>{ page++; loadTabla(); });
-  window.addEventListener('DOMContentLoaded', () => {
-    loadTabla();
-  });
+  loadTabla();
 
  
     // Mapa (Leaflet + bounds + debounce)
@@ -272,102 +239,5 @@
       }
     }
   </script>
-
-<!-- Modal de detalle de envío (SOLO para panel-clientes.html) -->
-<div id="modalDetalleCliente" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
-  <div class="bg-white dark:bg-[#0B1020] rounded-2xl w-11/12 md:w-2/3 lg:w-1/2 max-h-[90vh] overflow-y-auto p-6 border border-slate-200 dark:border-white/10">
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Detalle del envío</h2>
-      <button onclick="cerrarModalDetalleCliente()" class="text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-2xl">×</button>
-    </div>
-
-    <div class="flex border-b border-slate-200 dark:border-white/10 mb-4">
-      <button id="tabDetalleCliente" onclick="cambiarTabCliente('detalle')"
-        class="px-4 py-2 font-medium border-b-2 border-amber-500 text-amber-600 dark:text-amber-400">
-        Detalle del envío
-      </button>
-      <button id="tabHistorialCliente" onclick="cambiarTabCliente('historial')"
-        class="px-4 py-2 font-medium border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
-        Historial
-      </button>
-    </div>
-
-    <div id="contenidoDetalleCliente" class="space-y-4">
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Tracking</label>
-          <p id="detTrackingCliente" class="text-slate-900 dark:text-slate-100 font-mono">-</p>
-        </div>
-        <div>
-          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Estado</label>
-          <div id="detEstadoCliente" class="mt-1">-</div>
-        </div>
-      </div>
-
-      <div>
-        <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Destinatario</label>
-        <p id="detDestinatarioCliente" class="text-slate-900 dark:text-slate-100">-</p>
-      </div>
-
-      <div>
-        <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Dirección</label>
-        <p id="detDireccionCliente" class="text-slate-900 dark:text-slate-100">-</p>
-      </div>
-
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Código Postal</label>
-          <p id="detCPCliente" class="text-slate-900 dark:text-slate-100">-</p>
-        </div>
-        <div>
-          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Partido</label>
-          <p id="detPartidoCliente" class="text-slate-900 dark:text-slate-100">-</p>
-        </div>
-      </div>
-
-      <div>
-        <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Teléfono</label>
-        <p id="detTelefonoCliente" class="text-slate-900 dark:text-slate-100">-</p>
-      </div>
-
-      <div>
-        <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Referencia</label>
-        <p id="detReferenciaCliente" class="text-slate-900 dark:text-slate-100 text-sm">-</p>
-      </div>
-
-      <div>
-        <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Fecha de creación</label>
-        <p id="detFechaCliente" class="text-slate-900 dark:text-slate-100">-</p>
-      </div>
-
-      <div id="detChoferContainerCliente" class="hidden">
-        <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Chofer asignado</label>
-        <p id="detChoferCliente" class="text-slate-900 dark:text-slate-100">-</p>
-      </div>
-    </div>
-
-    <div id="contenidoHistorialCliente" class="hidden">
-      <div class="overflow-x-auto">
-        <table class="min-w-full">
-          <thead class="bg-slate-50 dark:bg-white/5">
-            <tr>
-              <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300">Fecha y hora</th>
-              <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300">Estado</th>
-              <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300">Observaciones</th>
-            </tr>
-          </thead>
-          <tbody id="tablaHistorialCliente" class="divide-y divide-slate-200 dark:divide-white/10"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="mt-6 flex justify-end">
-      <button onclick="cerrarModalDetalleCliente()"
-        class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-900 dark:text-slate-100">
-        Cerrar
-      </button>
-    </div>
-  </div>
-</div>
 </body>
 </html>

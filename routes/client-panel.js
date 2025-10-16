@@ -109,7 +109,6 @@ function normalizeRow(doc) {
   };
 
   return {
-    _id: doc._id ? doc._id.toString() : null,
     tracking,
     id_venta,
     createdAt,

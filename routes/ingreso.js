@@ -12,45 +12,17 @@ const { requireAuth, requireRole } = require('../middlewares/auth');
 // Requiere login para todo este módulo
 router.use(requireAuth);
 
-// 🟢 ADMIN, COORDINADOR y CLIENTE pueden crear manualmente (uno o varios)
-router.post('/manual', requireRole('admin','coordinador','cliente'), async (req, res) => {
+// 🟢 ADMIN y COORDINADOR pueden crear manualmente (uno o varios)
+router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
   try {
     const { paquetes } = req.body;
     if (!Array.isArray(paquetes) || !paquetes.length) {
       return res.status(400).json({ error: 'No hay paquetes.' });
     }
 
-    const sessionUser = req.session?.user || {};
-    const clientesCache = new Map();
-
-    let clienteSesion = null;
-    if (sessionUser.role === 'cliente') {
-      const clienteIdSesion = sessionUser.cliente_id || sessionUser.client_id;
-      if (!clienteIdSesion) {
-        return res.status(400).json({ error: 'Usuario sin cliente asociado' });
-      }
-
-      clienteSesion = await Cliente.findById(clienteIdSesion).populate('lista_precios');
-      if (!clienteSesion) {
-        return res.status(400).json({ error: 'Cliente no encontrado' });
-      }
-
-      console.log(`Cliente ${sessionUser.username || sessionUser.email || sessionUser._id} creando ${paquetes.length} envío(s) manual(es)`);
-    }
-
-    async function obtenerCliente(id) {
-      if (!id) return null;
-      const key = id.toString();
-      if (clientesCache.has(key)) return clientesCache.get(key);
-      const doc = await Cliente.findById(id).populate('lista_precios');
-      clientesCache.set(key, doc);
-      return doc;
-    }
-
     const results = [];
     for (const p of paquetes) {
-      const clienteId = p.cliente_id || p.clienteId;
-      const cl = clienteSesion || await obtenerCliente(clienteId);
+      const cl = await Cliente.findById(p.cliente_id).populate('lista_precios');
       if (!cl) throw new Error('Cliente no encontrado');
 
       const idVenta = (p.id_venta || p.idVenta || '').trim()
@@ -72,7 +44,7 @@ router.post('/manual', requireRole('admin','coordinador','cliente'), async (req,
 
       const envio = await Envio.create({
         cliente_id:    cl._id,
-        sender_id:     cl.codigo_cliente || p.sender_id || '',
+        sender_id:     cl.codigo_cliente,
         destinatario:  p.destinatario,
         direccion:     p.direccion,
         codigo_postal: p.codigo_postal,

@@ -710,48 +710,8 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    let envioDoc = await Envio.findById(id)
-      .populate('cliente_id')
-      .populate('chofer_id', 'nombre telefono');
+    let envioDoc = await Envio.findById(id).populate('cliente_id');
     if (!envioDoc) return res.status(404).json({ error: 'Envío no encontrado' });
-
-    const normalizeId = (value) => {
-      if (!value) return null;
-      if (typeof value === 'string') return value.trim();
-      if (typeof value === 'number') return String(value);
-      if (typeof value === 'object') {
-        if (value._id) return normalizeId(value._id);
-        if (typeof value.toString === 'function') {
-          const str = value.toString();
-          const trimmed = typeof str === 'string' ? str.trim() : '';
-          if (trimmed && trimmed !== '[object Object]') return trimmed;
-        }
-      }
-      return null;
-    };
-
-    const sessionUser = req.session?.user;
-    if (sessionUser?.role === 'cliente') {
-      const allowedClientId = normalizeId(sessionUser.cliente_id || sessionUser.client_id);
-      const allowedSenderIds = Array.isArray(sessionUser.sender_ids)
-        ? sessionUser.sender_ids.map((s) => normalizeId(s)).filter(Boolean)
-        : [];
-
-      const envioClienteId = normalizeId(envioDoc.cliente_id);
-      const envioSenderId = normalizeId(envioDoc.sender_id);
-
-      let autorizado = false;
-      if (allowedClientId && envioClienteId && allowedClientId === envioClienteId) {
-        autorizado = true;
-      }
-      if (!autorizado && envioSenderId && allowedSenderIds.includes(envioSenderId)) {
-        autorizado = true;
-      }
-
-      if (!autorizado) {
-        return res.status(403).json({ error: 'No tenés permiso para ver este envío' });
-      }
-    }
 
     // coords (puede devolver otra instancia, pero no importa)
     envioDoc = await ensureCoords(envioDoc);
@@ -760,10 +720,7 @@ router.get('/:id', async (req, res) => {
     try { await ensureMeliHistory(envioDoc); } catch (e) { console.warn('meli-history skip:', e.message); }
 
     // ⬅️ RE-LEER fresco desde DB (ya con historial guardado por el servicio)
-    const plain = await Envio.findById(id)
-      .populate('cliente_id')
-      .populate('chofer_id', 'nombre telefono')
-      .lean();
+    const plain = await Envio.findById(id).populate('cliente_id').lean();
 
     // timeline para el front (mergea historial+eventos)
     plain.timeline = buildTimeline(plain);
