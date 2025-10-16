@@ -7,8 +7,6 @@ const PARTIDO_CP_API   = '/api/partidos/cp';
 const ENVIO_MANUAL_API = '/api/envios/manual';
 
 let clientes = [];
-let userRole = null;
-let userClientId = null;
 
 // ===== Topbar (usuario + tema) =====
 (function initTopbar(){
@@ -56,64 +54,20 @@ let userClientId = null;
 
 // ===== Página =====
 window.addEventListener('DOMContentLoaded', () => {
-  detectarRolYCargar();
+  cargarClientes();
   agregarPaquete();
 });
-
-async function detectarRolYCargar() {
-  try {
-    const res = await fetch('/api/users/me', { credentials: 'include' });
-    if (!res.ok) {
-      if (res.status === 401) {
-        location.href = '/auth/login';
-        return;
-      }
-      throw new Error('No se pudo obtener el usuario actual');
-    }
-
-    const user = await res.json();
-    userRole = user.role;
-    userClientId = user.client_id;
-
-    const nombre = user.username || user.email || user.cliente_nombre || 'Usuario';
-    console.log(`Usuario: ${nombre} (${userRole})`);
-
-    if (userRole === 'cliente') {
-      const selectContainer = document.getElementById('selectClienteContainer');
-      const select = qs('#cliente_id');
-      if (selectContainer) selectContainer.style.display = 'none';
-      if (select) select.required = false;
-      if (!userClientId) {
-        console.warn('Cliente sin client_id asociado en la sesión');
-      }
-      const codigoInput = qs('#codigo_interno');
-      if (codigoInput) {
-        codigoInput.value = '';
-        codigoInput.placeholder = 'Se asigna automáticamente';
-      }
-      console.log('Cliente: select oculto, no se carga lista de clientes');
-    } else {
-      await cargarClientes();
-    }
-  } catch (err) {
-    console.error('Error detectando rol:', err);
-    alert('Error al cargar datos del usuario');
-  }
-}
 
 async function cargarClientes() {
   try{
     const res = await fetch(CLIENTES_API, { cache:'no-store' });
     if (!res.ok) throw res.status;
     clientes = await res.json();
-    const sel = qs('#cliente_id');
-    if (!sel) return;
-    sel.innerHTML = ['<option value="">Seleccionar cliente...</option>', ...clientes.map(c=>`<option value="${c._id}">${c.nombre}</option>`)].join('');
+    const sel = qs('#cliente');
+    sel.innerHTML = clientes.map(c=>`<option value="${c._id}">${c.nombre}</option>`).join('');
     sel.addEventListener('change', ()=>{
       const cl = clientes.find(x=>x._id===sel.value);
-      const codigo = cl?.codigo_cliente || '';
-      const codigoInput = qs('#codigo_interno');
-      if (codigoInput) codigoInput.value = codigo;
+      qs('#codigo_interno').value = cl?.codigo_cliente || '';
     });
     sel.dispatchEvent(new Event('change'));
   }catch(e){
@@ -194,17 +148,9 @@ function detectarPartido(input) {
 }
 
 async function guardar() {
+  const clienteId  = qs('#cliente').value;
+  const codigoInt  = qs('#codigo_interno').value;
   const referencia = qs('#referencia').value.trim();
-  const clienteSelect = qs('#cliente_id');
-  const clienteId = clienteSelect?.value?.trim() || '';
-  const codigoInt = qs('#codigo_interno')?.value?.trim() || '';
-
-  if (userRole !== 'cliente') {
-    if (!clienteId) {
-      alert('Debe seleccionar un cliente');
-      return;
-    }
-  }
 
   const paquetes = qsa('.paquete-group').map(div => {
     let idVenta = div.querySelector("[name='id_venta']").value.trim();
@@ -212,26 +158,18 @@ async function guardar() {
     const manual = div.querySelector("[name='manual_precio']").checked;
     const precioManual = Number(div.querySelector("[name='precio']").value);
 
-    const paquete = {
+    return {
+      cliente_id:    clienteId,
+      sender_id:     codigoInt,
       destinatario:  div.querySelector("[name='destinatario']").value.trim(),
       direccion:     div.querySelector("[name='direccion']").value.trim(),
       codigo_postal: div.querySelector("[name='codigo_postal']").value.trim(),
       partido:       div.querySelector("[name='partido']").value.trim(),
       id_venta:      idVenta,
       referencia,
-      manual_precio: manual
+      manual_precio: manual,
+      precio:        manual? precioManual : undefined
     };
-
-    if (manual && Number.isFinite(precioManual)) {
-      paquete.precio = precioManual;
-    }
-
-    if (userRole !== 'cliente') {
-      paquete.cliente_id = clienteId;
-      if (codigoInt) paquete.sender_id = codigoInt;
-    }
-
-    return paquete;
   });
 
   try {
