@@ -705,13 +705,50 @@ router.get('/mis', requireAuth, requireRole('chofer'), async (req, res, next) =>
 // GET /envios/:id
 router.get('/:id', async (req, res) => {
   try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    const rawId = String(req.params.id || '').trim();
+    if (!rawId) {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    let envioDoc = await Envio.findById(id).populate('cliente_id');
-    if (!envioDoc) return res.status(404).json({ error: 'Envío no encontrado' });
+    const isObjectId = mongoose.Types.ObjectId.isValid(rawId);
+    const altFields = [
+      'tracking', 'tracking_id', 'trackingId', 'numero_seguimiento', 'tracking_code', 'tracking_meli',
+      'id_venta', 'order_id', 'venta_id', 'meli_id', 'shipment_id'
+    ];
+    let query = isObjectId
+      ? { _id: rawId }
+      : { $or: altFields.map((field) => ({ [field]: rawId })) };
+
+    let envioDoc = await Envio.findOne(query)
+      .populate('cliente_id', 'nombre email razon_social sender_id')
+      .populate('driver_id', 'nombre telefono')
+      .populate('chofer', 'nombre telefono');
+
+    if (!envioDoc && isObjectId) {
+      query = { $or: altFields.map((field) => ({ [field]: rawId })) };
+      envioDoc = await Envio.findOne(query)
+        .populate('cliente_id', 'nombre email razon_social sender_id')
+        .populate('driver_id', 'nombre telefono')
+        .populate('chofer', 'nombre telefono');
+    }
+
+    if (!envioDoc) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
+
+    const user = req.session?.user;
+    if (user?.role === 'cliente') {
+      const envioClienteId = envioDoc.cliente_id?._id || envioDoc.cliente_id;
+      const sameCliente = envioClienteId && user.cliente_id && envioClienteId.toString() === user.cliente_id.toString();
+
+      const envioSender = envioDoc.sender_id ?? envioDoc.senderId ?? envioDoc.sender ?? null;
+      const senderIds = Array.isArray(user.sender_ids) ? user.sender_ids.map(String) : [];
+      const sameSender = envioSender && senderIds.includes(String(envioSender));
+
+      if (!sameCliente && !sameSender) {
+        return res.status(403).json({ error: 'No tenés permiso para ver este envío' });
+      }
+    }
 
     // coords (puede devolver otra instancia, pero no importa)
     envioDoc = await ensureCoords(envioDoc);
@@ -720,7 +757,11 @@ router.get('/:id', async (req, res) => {
     try { await ensureMeliHistory(envioDoc); } catch (e) { console.warn('meli-history skip:', e.message); }
 
     // ⬅️ RE-LEER fresco desde DB (ya con historial guardado por el servicio)
-    const plain = await Envio.findById(id).populate('cliente_id').lean();
+    const plain = await Envio.findOne(query)
+      .populate('cliente_id', 'nombre email razon_social sender_id')
+      .populate('driver_id', 'nombre telefono')
+      .populate('chofer', 'nombre telefono')
+      .lean();
 
     // timeline para el front (mergea historial+eventos)
     plain.timeline = buildTimeline(plain);
