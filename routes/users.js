@@ -10,19 +10,6 @@ const slugify = require('../utils/slugify');
 // Todas las rutas de /api/users requieren estar logueado
 router.use(requireAuth);
 
-router.get('/me', (req, res) => {
-  const u = req.session?.user;
-  if (!u?.authenticated) return res.status(401).json({ error: 'No autenticado' });
-  res.json({
-    _id: u._id || null,
-    username: u.username || null,
-    email: u.email || null,
-    role: u.role,
-    cliente_id: u.cliente_id || null,
-    sender_ids: Array.isArray(u.sender_ids) ? u.sender_ids : []
-  });
-});
-
 // ── ADMIN-ONLY ────────────────────────────────────────────────
 // Crear usuario cliente (fuerza role='cliente' en el controller)
 router.post('/create-client', requireRole('admin'), ctrl.crearCliente);
