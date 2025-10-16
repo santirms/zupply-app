@@ -111,6 +111,113 @@
     <footer class="py-6 text-center text-xs opacity-60">© <span id="anio"></span> Zupply</footer>
   </div>
 
+  <!-- Modal de detalle del envío -->
+  <div id="modalDetalleEnvio" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white dark:bg-[#0B1020] rounded-2xl w-11/12 md:w-2/3 lg:w-1/2 max-h-[90vh] overflow-y-auto p-6 border border-slate-200 dark:border-white/10">
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Detalle del envío</h2>
+        <button onclick="cerrarModalDetalle()" class="text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-2xl leading-none">×</button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex border-b border-slate-200 dark:border-white/10 mb-4">
+        <button id="tabDetalle" onclick="cambiarTab('detalle')"
+          class="px-4 py-2 font-medium border-b-2 border-amber-500 text-amber-600 dark:text-amber-400">
+          Detalle
+        </button>
+        <button id="tabHistorial" onclick="cambiarTab('historial')"
+          class="px-4 py-2 font-medium border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
+          Historial
+        </button>
+      </div>
+
+      <!-- Contenido: Detalle -->
+      <div id="contenidoDetalle" class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Tracking</label>
+            <p id="modalTracking" class="text-slate-900 dark:text-slate-100 font-mono">-</p>
+          </div>
+          <div>
+            <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Estado</label>
+            <div id="modalEstado" class="mt-1">-</div>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Destinatario</label>
+          <p id="modalDestinatario" class="text-slate-900 dark:text-slate-100">-</p>
+        </div>
+
+        <div>
+          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Dirección</label>
+          <p id="modalDireccion" class="text-slate-900 dark:text-slate-100">-</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Código Postal</label>
+            <p id="modalCP" class="text-slate-900 dark:text-slate-100">-</p>
+          </div>
+          <div>
+            <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Partido</label>
+            <p id="modalPartido" class="text-slate-900 dark:text-slate-100">-</p>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Teléfono</label>
+          <p id="modalTelefono" class="text-slate-900 dark:text-slate-100">-</p>
+        </div>
+
+        <div>
+          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Referencia</label>
+          <p id="modalReferencia" class="text-slate-900 dark:text-slate-100 text-sm">-</p>
+        </div>
+
+        <div>
+          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Fecha de creación</label>
+          <p id="modalFecha" class="text-slate-900 dark:text-slate-100">-</p>
+        </div>
+
+        <div id="modalChoferContainer" class="hidden">
+          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Chofer asignado</label>
+          <p id="modalChofer" class="text-slate-900 dark:text-slate-100">-</p>
+        </div>
+      </div>
+
+      <!-- Contenido: Historial -->
+      <div id="contenidoHistorial" class="hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full">
+            <thead class="bg-slate-50 dark:bg-white/5">
+              <tr>
+                <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300">Fecha y hora</th>
+                <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300">Estado</th>
+                <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300">Observaciones</th>
+              </tr>
+            </thead>
+            <tbody id="tablaHistorial" class="divide-y divide-slate-200 dark:divide-white/10">
+              <!-- Dinámico -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="mt-6 flex justify-end">
+        <button onclick="cerrarModalDetalle()"
+          class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-900 dark:text-slate-100">
+          Cerrar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="/js/panel-clientes.js"></script>
+
   <script>
     document.getElementById('anio').textContent=new Date().getFullYear();
     // user/tema/menu
@@ -177,19 +284,26 @@
       const items = Array.isArray(data.items) ? data.items : [];
       const total = typeof data.total === 'number' ? data.total : items.length;
 
-      tbody.innerHTML = items.map(it => `
-        <tr class="border-t">
-          <td class="p-2">${it.tracking ?? '-'}</td>
-          <td class="p-2">${it.id_venta ?? '-'}</td>
-          <td class="p-2">${it.createdAt ? new Date(it.createdAt).toLocaleString() : '-'}</td>
-          <td class="p-2">${it?.destino?.partido ?? '-'}</td>
-          <td class="p-2">
-            <span class="${it?.estado_ui?.class || ''}">
-              ${it?.estado_ui?.text || (it.estado ?? '-')}
-            </span>
-          </td>
+      tbody.innerHTML = items.map(it => {
+        const tracking = it.tracking ?? it.id_venta ?? '-';
+        const envioId = it._id ?? it.id ?? it.envio_id ?? it.tracking ?? it.id_venta ?? '';
+        const trackingCell = envioId
+          ? `<button onclick='abrirModalDetalle(${JSON.stringify(String(envioId))})' class="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline font-mono text-left">${tracking}</button>`
+          : `<span class="font-mono text-slate-900 dark:text-slate-100">${tracking}</span>`;
+        const fecha = it.createdAt ? new Date(it.createdAt).toLocaleString('es-AR') : '-';
+        const partido = it?.destino?.partido ?? '-';
+        const estadoBadge = crearBadgeEstado(it.estado);
+
+        return `
+        <tr class="border-t border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
+          <td class="p-2">${trackingCell}</td>
+          <td class="p-2 text-slate-900 dark:text-slate-100">${it.id_venta ?? '-'}</td>
+          <td class="p-2 text-slate-900 dark:text-slate-100">${fecha}</td>
+          <td class="p-2 text-slate-900 dark:text-slate-100">${partido}</td>
+          <td class="p-2">${estadoBadge}</td>
         </tr>
-      `).join('');
+        `;
+      }).join('');
 
       document.getElementById('pageInfo').textContent =
         `Página ${page} – ${items.length} / ${total}`;
