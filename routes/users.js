@@ -10,32 +10,6 @@ const slugify = require('../utils/slugify');
 // Todas las rutas de /api/users requieren estar logueado
 router.use(requireAuth);
 
-router.get('/me', async (req, res) => {
-  try {
-    const sessionUser = req.session?.user;
-    const user = await User.findById(sessionUser?._id)
-      .select('-password_hash')
-      .populate('cliente_id', 'nombre codigo_cliente');
-
-    if (!user) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-
-    res.json({
-      _id: user._id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      client_id: user.cliente_id?._id || null,
-      cliente_nombre: user.cliente_id?.nombre || null,
-      activo: user.is_active !== false
-    });
-  } catch (err) {
-    console.error('Error obteniendo usuario actual:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ── ADMIN-ONLY ────────────────────────────────────────────────
 // Crear usuario cliente (fuerza role='cliente' en el controller)
 router.post('/create-client', requireRole('admin'), ctrl.crearCliente);

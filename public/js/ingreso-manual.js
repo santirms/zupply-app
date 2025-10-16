@@ -7,8 +7,6 @@ const PARTIDO_CP_API   = '/api/partidos/cp';
 const ENVIO_MANUAL_API = '/api/envios/manual';
 
 let clientes = [];
-let userRole = null;
-let currentClientId = null;
 
 // ===== Topbar (usuario + tema) =====
 (function initTopbar(){
@@ -56,65 +54,22 @@ let currentClientId = null;
 
 // ===== Página =====
 window.addEventListener('DOMContentLoaded', () => {
-  detectarRol();
   cargarClientes();
   agregarPaquete();
 });
-
-async function detectarRol() {
-  try {
-    const res = await fetch('/api/users/me', { credentials: 'include' });
-    if (!res.ok) throw new Error('No autenticado');
-
-    const user = await res.json();
-    userRole = user.role || null;
-    currentClientId = user.client_id || user.cliente_id || null;
-
-    console.log(`Usuario: ${user.username || user.email || 'desconocido'} (${userRole || 'sin rol'})`);
-
-    if (userRole === 'cliente') {
-      const selectContainer = document.getElementById('selectClienteContainer');
-      const select = document.getElementById('cliente_id');
-      if (selectContainer) selectContainer.style.display = 'none';
-      if (select) {
-        select.required = false;
-        if (currentClientId) select.value = currentClientId;
-      }
-    }
-
-    aplicarClienteSeleccionado();
-  } catch (err) {
-    console.error('Error detectando rol:', err);
-  }
-}
-
-function aplicarClienteSeleccionado() {
-  const select = document.getElementById('cliente_id');
-  const codigoInterno = document.getElementById('codigo_interno');
-  if (!select || !codigoInterno) return;
-
-  if (userRole === 'cliente' && currentClientId) {
-    select.value = currentClientId;
-  } else if (!select.value && clientes.length === 1) {
-    select.value = clientes[0]._id;
-  }
-
-  const seleccionado = clientes.find(c => c._id === select.value);
-  codigoInterno.value = seleccionado?.codigo_cliente || '';
-}
 
 async function cargarClientes() {
   try{
     const res = await fetch(CLIENTES_API, { cache:'no-store' });
     if (!res.ok) throw res.status;
     clientes = await res.json();
-    const sel = document.getElementById('cliente_id');
-    if (sel) {
-      sel.innerHTML = `<option value="">Seleccionar cliente...</option>` +
-        clientes.map(c => `<option value="${c._id}">${c.nombre || 'Sin nombre'}</option>`).join('');
-      sel.addEventListener('change', aplicarClienteSeleccionado);
-    }
-    aplicarClienteSeleccionado();
+    const sel = qs('#cliente');
+    sel.innerHTML = clientes.map(c=>`<option value="${c._id}">${c.nombre}</option>`).join('');
+    sel.addEventListener('change', ()=>{
+      const cl = clientes.find(x=>x._id===sel.value);
+      qs('#codigo_interno').value = cl?.codigo_cliente || '';
+    });
+    sel.dispatchEvent(new Event('change'));
   }catch(e){
     console.error('Clientes:', e);
     alert('No se pudieron cargar los clientes');
@@ -193,17 +148,9 @@ function detectarPartido(input) {
 }
 
 async function guardar() {
-  const select = document.getElementById('cliente_id');
+  const clienteId  = qs('#cliente').value;
   const codigoInt  = qs('#codigo_interno').value;
-  const clienteId = userRole === 'cliente'
-    ? currentClientId
-    : (select ? select.value : '');
   const referencia = qs('#referencia').value.trim();
-
-  if (userRole !== 'cliente' && !clienteId) {
-    alert('Debe seleccionar un cliente');
-    return;
-  }
 
   const paquetes = qsa('.paquete-group').map(div => {
     let idVenta = div.querySelector("[name='id_venta']").value.trim();
@@ -211,7 +158,8 @@ async function guardar() {
     const manual = div.querySelector("[name='manual_precio']").checked;
     const precioManual = Number(div.querySelector("[name='precio']").value);
 
-    const payload = {
+    return {
+      cliente_id:    clienteId,
       sender_id:     codigoInt,
       destinatario:  div.querySelector("[name='destinatario']").value.trim(),
       direccion:     div.querySelector("[name='direccion']").value.trim(),
@@ -219,18 +167,9 @@ async function guardar() {
       partido:       div.querySelector("[name='partido']").value.trim(),
       id_venta:      idVenta,
       referencia,
-      manual_precio: manual
+      manual_precio: manual,
+      precio:        manual? precioManual : undefined
     };
-
-    if (manual) {
-      payload.precio = precioManual;
-    }
-
-    if (userRole !== 'cliente') {
-      payload.cliente_id = clienteId;
-    }
-
-    return payload;
   });
 
   try {
