@@ -17,35 +17,47 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
 
     const pdfBuffer = await fsp.readFile(filePath);
     const data = await pdfParse(pdfBuffer);
-    const { text, numpages } = data;
+    const { text: textoCompleto, numpages } = data;
 
-    const paginas = text
-      .split(/\f+/)
-      .map(p => p.trim())
-      .filter(Boolean);
+    console.log(`📄 PDF procesado: ${numpages} páginas, ${textoCompleto.length} caracteres`);
 
-    console.log('📊 Información del PDF:', {
-      totalPaginas: numpages,
-      paginasDetectadas: paginas.length,
-      rangoAProcesar: paginas.length ? `1 a ${paginas.length}` : '—'
-    });
+    const bloques = textoCompleto.split(/(?=Envio:)/);
+    console.log(`📦 ${bloques.length} etiquetas detectadas`);
+
+    const etiquetasValidas = bloques.filter(bloque => bloque.trim().length > 0);
+    console.log(`✓ ${etiquetasValidas.length} etiquetas válidas para procesar`);
 
     const resultados = [];
     let procesadas = 0;
+    const errores = [];
 
-    for (let i = 0; i < paginas.length; i++) {
-      const pagina = paginas[i];
-      const numeroPagina = i + 1;
-      console.log(`  📄 Procesando página ${numeroPagina} de ${paginas.length}`);
+    const extraer = (texto, regex) => {
+      const match = texto.match(regex);
+      return match ? match[1].trim() : null;
+    };
+
+    for (let i = 0; i < etiquetasValidas.length; i++) {
+      const bloque = etiquetasValidas[i];
+      console.log(`\n--- Procesando etiqueta ${i + 1}/${etiquetasValidas.length} ---`);
 
       try {
-        const get = (regex) => {
-          const match = pagina.match(regex);
-          return match ? match[1].trim() : null;
-        };
+        const tracking =
+          extraer(bloque, /Tracking:\s*([^\n\r]+)/i) ||
+          extraer(bloque, /Envio:\s*([^\n\r]+)/i);
 
-        const tracking_id = get(/Envio:\s?(\d+)/i);
-        const codigo_postal = get(/CP:\s?(\d+)/i);
+        if (!tracking) {
+          console.warn(`⚠️ Etiqueta ${i + 1}: Sin tracking ni número de envío, saltando`);
+          errores.push({
+            etiqueta: i + 1,
+            error: 'Sin tracking ni número de envío',
+            texto: bloque.substring(0, 100)
+          });
+          continue;
+        }
+
+        const codigo_postal =
+          extraer(bloque, /CP:\s*(\d{4,})/i) ||
+          extraer(bloque, /Codigo Postal:\s*(\d{4,})/i);
 
         let partido = 'Desconocido';
         let localidad = 'Desconocida';
@@ -63,30 +75,45 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
         }
 
         resultados.push({
-          tracking_id,
-          sender_id: get(/#(\d+)/),
-          fecha: get(/Entrega:\s?(.*)/),
+          tracking_id: tracking,
+          sender_id: extraer(bloque, /#(\d+)/),
+          fecha: extraer(bloque, /Entrega:\s*([^\n\r]+)/i),
           codigo_postal,
           partido,
           localidad,
-          direccion: get(/Direccion:\s?([^\n]+)/i),
-          referencia: get(/Ref(?:e|ie)rencia:\s?([^\n]+)/i),
-          destinatario: get(/Destinatario:\s?([^\n]+)/i)
+          direccion: extraer(bloque, /Direccion:\s*([^\n\r]+)/i),
+          referencia: extraer(bloque, /Ref(?:e|ie)rencia:\s*([^\n\r]+)/i),
+          destinatario: extraer(bloque, /Destinatario:\s*([^\n\r]+)/i)
         });
 
         procesadas += 1;
-        console.log(`  ✓ Página ${numeroPagina}/${paginas.length} procesada`);
+        console.log(`  ✓ Etiqueta ${i + 1}/${etiquetasValidas.length} procesada`);
       } catch (pageErr) {
-        console.error(`  ❌ Error en página ${numeroPagina}:`, pageErr);
+        console.error(`  ❌ Error procesando etiqueta ${i + 1}:`, pageErr);
+        errores.push({
+          etiqueta: i + 1,
+          error: pageErr.message,
+          texto: bloque.substring(0, 100)
+        });
       }
     }
 
-    console.log(`✅ Resultado: ${procesadas} de ${paginas.length} páginas procesadas`);
-    if (procesadas < paginas.length) {
-      console.warn(`⚠️ ATENCIÓN: Se perdieron ${paginas.length - procesadas} páginas`);
-    }
+    console.log(`\n═══════════════════════════════════════════════════════`);
+    console.log(`✅ Resultado final:`);
+    console.log(`   Total etiquetas: ${etiquetasValidas.length}`);
+    console.log(`   Creados: ${procesadas}`);
+    console.log(`   Errores: ${errores.length}`);
+    console.log(`═══════════════════════════════════════════════════════\n`);
 
-    res.json({ etiquetas: resultados });
+    res.json({
+      etiquetas: resultados,
+      resumen: {
+        total: etiquetasValidas.length,
+        procesadas,
+        errores: errores.length,
+        detalleErrores: errores
+      }
+    });
   } catch (error) {
     console.error('Error al leer etiquetas:', error);
     res.status(500).json({ error: 'No se pudo procesar el archivo PDF' });
