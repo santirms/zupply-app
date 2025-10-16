@@ -29,7 +29,17 @@ const ctrl   = require('../controllers/envioController');
 router.use(requireAuth);
 
 // ⬇️ COORDINADOR = SOLO LECTURA EN ESTE PANEL
-router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE']));
+router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE'], {
+  exceptions: [
+    { path: '/manual', methods: ['POST'] },
+    { path: '/guardar-masivo', methods: ['POST'] },
+    { path: '/cargar-masivo', methods: ['POST'] },
+    {
+      path: (req) => /^\/[^/]+\/cambiar-estado$/.test(req.path),
+      methods: ['PATCH']
+    }
+  ]
+}));
 
 // ——— Meli history on-demand con hora real ———
 const HYDRATE_TTL_MIN = 15;  // re-hidratar si pasaron >15'
@@ -324,7 +334,7 @@ router.get('/', async (req, res) => {
 
 
 // POST /guardar-masivo
-router.post('/guardar-masivo', async (req, res) => {
+router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, res) => {
   try {
     const paquetes = req.body;
     console.log('guardar-masivo payload:', paquetes);
@@ -364,7 +374,7 @@ router.post('/guardar-masivo', async (req, res) => {
 });
 
 // POST /cargar-masivo
-router.post('/cargar-masivo', async (req, res) => {
+router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, res) => {
   try {
     const etiquetas = req.body.etiquetas || req.body.envios;
     if (!Array.isArray(etiquetas) || etiquetas.length === 0) {
@@ -443,7 +453,7 @@ router.post('/cargar-masivo', async (req, res) => {
 });
 
 // POST /manual  (SOLO este bloque cambia respecto a tu versión)
-router.post('/manual', async (req, res) => {
+router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
   try {
     const { paquetes } = req.body;
     if (!Array.isArray(paquetes) || !paquetes.length) {
@@ -844,7 +854,7 @@ router.delete('/:id', async (req, res) => {
  * Cambiar estado de un envío manual (no sincronizado con MeLi)
  * PATCH /api/envios/:id/cambiar-estado
  */
-router.patch('/:id/cambiar-estado', requireAuth, async (req, res) => {
+router.patch('/:id/cambiar-estado', requireAuth, requireRole('admin','coordinador'), async (req, res) => {
   try {
     const { id } = req.params;
     const { nuevo_estado, nota } = req.body;

@@ -14,10 +14,44 @@ function requireRole(...roles) {
 }
 
 /** Bloquea métodos de escritura para un rol (p.ej. coordinador solo-lectura en panel general) */
-function restrictMethodsForRoles(role, blocked = ['POST','PUT','PATCH','DELETE']) {
+function restrictMethodsForRoles(role, blocked = ['POST','PUT','PATCH','DELETE'], options = {}) {
+  const exceptions = Array.isArray(options.exceptions) ? options.exceptions : [];
+
+  const matchesException = (req) => {
+    return exceptions.some((ex) => {
+      if (!ex) return false;
+
+      if (typeof ex === 'function') {
+        return ex(req) === true;
+      }
+
+      const methods = ex.methods || ex.method;
+      if (methods) {
+        const list = Array.isArray(methods) ? methods : [methods];
+        if (!list.includes(req.method)) return false;
+      }
+
+      const { path } = ex;
+      if (!path) return false;
+      if (Array.isArray(path)) {
+        return path.includes(req.path);
+      }
+      if (typeof path === 'string') {
+        return req.path === path;
+      }
+      if (path instanceof RegExp) {
+        return path.test(req.path);
+      }
+      if (typeof path === 'function') {
+        return path(req) === true;
+      }
+      return false;
+    });
+  };
+
   return (req, res, next) => {
     const u = req.session?.user;
-    if (u?.role === role && blocked.includes(req.method)) {
+    if (u?.role === role && blocked.includes(req.method) && !matchesException(req)) {
       return res.status(403).json({ error: 'Solo lectura para tu rol' });
     }
     next();
