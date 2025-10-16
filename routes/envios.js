@@ -721,14 +721,12 @@ router.get('/:id', async (req, res) => {
 
     let envioDoc = await Envio.findOne(query)
       .populate('cliente_id', 'nombre email razon_social sender_id')
-      .populate('driver_id', 'nombre telefono')
       .populate('chofer', 'nombre telefono');
 
     if (!envioDoc && isObjectId) {
       query = { $or: altFields.map((field) => ({ [field]: rawId })) };
       envioDoc = await Envio.findOne(query)
         .populate('cliente_id', 'nombre email razon_social sender_id')
-        .populate('driver_id', 'nombre telefono')
         .populate('chofer', 'nombre telefono');
     }
 
@@ -759,7 +757,6 @@ router.get('/:id', async (req, res) => {
     // ⬅️ RE-LEER fresco desde DB (ya con historial guardado por el servicio)
     const plain = await Envio.findOne(query)
       .populate('cliente_id', 'nombre email razon_social sender_id')
-      .populate('driver_id', 'nombre telefono')
       .populate('chofer', 'nombre telefono')
       .lean();
 

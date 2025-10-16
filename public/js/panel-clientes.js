@@ -78,20 +78,8 @@ async function abrirModalDetalle(envioId) {
 
     document.getElementById('modalEstado').innerHTML = crearBadgeEstado(envio.estado);
 
-    const driverData = envio.driver_id || envio.chofer || envio.chofer_id || envio.driver || null;
-    const choferContainer = document.getElementById('modalChoferContainer');
-    if (driverData) {
-      let choferNombre = '-';
-      if (typeof driverData === 'object' && driverData !== null) {
-        choferNombre = driverData.nombre || driverData.name || driverData.fullname || '-';
-      } else {
-        choferNombre = driverData;
-      }
-      document.getElementById('modalChofer').textContent = choferNombre;
-      choferContainer.classList.remove('hidden');
-    } else {
-      choferContainer.classList.add('hidden');
-    }
+    // Ocultar sección de chofer (el schema no incluye driver_id)
+    document.getElementById('modalChoferContainer').classList.add('hidden');
 
     const historial = Array.isArray(envio.historial) && envio.historial.length
       ? envio.historial
