@@ -86,9 +86,10 @@
             <thead class="text-left text-slate-500">
               <tr>
                 <th class="p-2">Tracking</th>
-                <th class="p-2">Dirección</th>
-                <th class="p-2">Estado</th>
+                <th class="p-2">ID de venta</th>
                 <th class="p-2">Fecha</th>
+                <th class="p-2">Partido</th>
+                <th class="p-2">Estado</th>
               </tr>
             </thead>
             <tbody id="tbodyCliente" class="divide-y divide-slate-100 dark:divide-white/10"></tbody>
@@ -168,7 +169,7 @@
       if (!ct.includes('application/json')) {
         const text = await r.text();
         console.error('Respuesta no JSON:', r.status, text.slice(0,200));
-        tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="4">Error ${r.status}: respuesta no JSON</td></tr>`;
+        tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="5">Error ${r.status}: respuesta no JSON</td></tr>`;
         return;
       }
 
@@ -176,24 +177,26 @@
       const items = Array.isArray(data.items) ? data.items : [];
       const total = typeof data.total === 'number' ? data.total : items.length;
 
-      if (!items.length) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="4" class="p-4 text-center text-slate-500 dark:text-slate-400">
-              No hay envíos para los filtros seleccionados
-            </td>
-          </tr>
-        `;
-      } else {
-        tbody.innerHTML = items.map(renderFilaEnvio).join('');
-      }
+      tbody.innerHTML = items.map(it => `
+        <tr class="border-t">
+          <td class="p-2">${it.tracking ?? '-'}</td>
+          <td class="p-2">${it.id_venta ?? '-'}</td>
+          <td class="p-2">${it.createdAt ? new Date(it.createdAt).toLocaleString() : '-'}</td>
+          <td class="p-2">${it?.destino?.partido ?? '-'}</td>
+          <td class="p-2">
+            <span class="${it?.estado_ui?.class || ''}">
+              ${it?.estado_ui?.text || (it.estado ?? '-')}
+            </span>
+          </td>
+        </tr>
+      `).join('');
 
       document.getElementById('pageInfo').textContent =
         `Página ${page} – ${items.length} / ${total}`;
 
     } catch (e) {
       console.error('Error en loadTabla:', e);
-      tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="4">${e.message}</td></tr>`;
+      tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="5">${e.message}</td></tr>`;
     }
   }
   document.getElementById('prevPage').addEventListener('click',()=>{ if(page>1){ page--; loadTabla(); }});
@@ -235,277 +238,6 @@
          .bindPopup(`<b>${it.tracking||''}</b><br>${it.estado||''}<br>${it?.destino?.partido||''}`);
       }
     }
-
-    // ========== MODAL DETALLE ==========
-
-    const escapeHtml = (value) => {
-      if (value === null || value === undefined) return '';
-      return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    };
-
-    const escapeAttr = (value) => escapeHtml(value);
-
-    function obtenerBadgeEstado(estado, estadoUi) {
-      if (estadoUi?.class) {
-        const label = estadoUi?.text || estado || 'Pendiente';
-        return `<span class="${estadoUi.class}">${escapeHtml(label)}</span>`;
-      }
-
-      const COLORES = {
-        en_preparacion: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300',
-        en_planta: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300',
-        en_camino: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300',
-        entregado: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300',
-        comprador_ausente: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300',
-        rechazado: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300'
-      };
-
-      const color = COLORES[estado] || 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300';
-      const label = estado
-        ? estado.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-        : 'Pendiente';
-      return `<span class="inline-flex items-center text-xs px-2.5 py-0.5 rounded-full border ${color}">${escapeHtml(label)}</span>`;
-    }
-
-    function renderFilaEnvio(envio) {
-      const tracking = envio?.tracking || envio?.id_venta || '-';
-      const direccion = envio?.direccion || envio?.destino?.partido || '-';
-      const estadoBadge = obtenerBadgeEstado(envio?.estado, envio?.estado_ui);
-      const fecha = envio?.createdAt ? new Date(envio.createdAt).toLocaleDateString('es-AR') : '-';
-      const envioId = envio?._id ? String(envio._id) : '';
-
-      const trackingContent = envioId
-        ? `<button onclick="abrirModalDetalle('${escapeAttr(envioId)}')" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:underline font-mono">${escapeHtml(tracking)}</button>`
-        : `<span class="font-mono">${escapeHtml(tracking)}</span>`;
-
-      return `
-        <tr class="border-t border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
-          <td class="p-2">${trackingContent}</td>
-          <td class="p-2 text-slate-900 dark:text-slate-100">${escapeHtml(direccion || '-')}</td>
-          <td class="p-2">${estadoBadge}</td>
-          <td class="p-2 text-slate-600 dark:text-slate-300 text-sm">${escapeHtml(fecha)}</td>
-        </tr>
-      `;
-    }
-
-    let envioActual = null;
-
-    async function abrirModalDetalle(envioId) {
-      try {
-        const res = await fetch(`/api/envios/${encodeURIComponent(envioId)}`, { credentials: 'include' });
-        if (!res.ok) throw new Error('Error al cargar envío');
-
-        envioActual = await res.json();
-
-        const tracking = envioActual.tracking || envioActual.id_venta || '-';
-        document.getElementById('detTracking').textContent = tracking;
-        document.getElementById('detDestinatario').textContent = envioActual.destinatario || '-';
-        document.getElementById('detDireccion').textContent = envioActual.direccion || '-';
-        document.getElementById('detCP').textContent = envioActual.codigo_postal || '-';
-        document.getElementById('detPartido').textContent = envioActual.partido || '-';
-        document.getElementById('detTelefono').textContent = envioActual.telefono || '-';
-        document.getElementById('detReferencia').textContent = envioActual.referencia || '-';
-        document.getElementById('detFecha').textContent = envioActual.fecha
-          ? new Date(envioActual.fecha).toLocaleString('es-AR')
-          : '-';
-
-        document.getElementById('detEstado').innerHTML = obtenerBadgeEstado(envioActual.estado, envioActual.estado_ui);
-
-        const choferNombre = envioActual?.chofer_id?.nombre || envioActual?.chofer?.nombre || envioActual?.chofer_id;
-        if (choferNombre) {
-          document.getElementById('detChoferContainer').classList.remove('hidden');
-          document.getElementById('detChofer').textContent = choferNombre;
-        } else {
-          document.getElementById('detChoferContainer').classList.add('hidden');
-        }
-
-        renderHistorial(envioActual.historial || envioActual.timeline || []);
-
-        cambiarTab('detalle');
-        const modal = document.getElementById('modalDetalleEnvio');
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
-      } catch (err) {
-        console.error('Error abriendo modal:', err);
-        alert('No se pudo cargar el detalle del envío');
-      }
-    }
-
-    function cerrarModalDetalle() {
-      const modal = document.getElementById('modalDetalleEnvio');
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-      envioActual = null;
-    }
-
-    function cambiarTab(tab) {
-      const tabDetalle = document.getElementById('tabDetalle');
-      const tabHistorial = document.getElementById('tabHistorial');
-      const contDetalle = document.getElementById('contenidoDetalle');
-      const contHistorial = document.getElementById('contenidoHistorial');
-
-      tabDetalle.classList.remove('border-amber-500', 'text-amber-600', 'dark:text-amber-400');
-      tabDetalle.classList.add('border-transparent', 'text-slate-600', 'dark:text-slate-400');
-      tabHistorial.classList.remove('border-amber-500', 'text-amber-600', 'dark:text-amber-400');
-      tabHistorial.classList.add('border-transparent', 'text-slate-600', 'dark:text-slate-400');
-
-      contDetalle.classList.add('hidden');
-      contHistorial.classList.add('hidden');
-
-      if (tab === 'detalle') {
-        tabDetalle.classList.add('border-amber-500', 'text-amber-600', 'dark:text-amber-400');
-        tabDetalle.classList.remove('border-transparent', 'text-slate-600', 'dark:text-slate-400');
-        contDetalle.classList.remove('hidden');
-      } else {
-        tabHistorial.classList.add('border-amber-500', 'text-amber-600', 'dark:text-amber-400');
-        tabHistorial.classList.remove('border-transparent', 'text-slate-600', 'dark:text-slate-400');
-        contHistorial.classList.remove('hidden');
-      }
-    }
-
-    function renderHistorial(historial) {
-      const tbody = document.getElementById('tablaHistorial');
-      if (!Array.isArray(historial) || historial.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-slate-500 dark:text-slate-400">No hay historial</td></tr>';
-        return;
-      }
-
-      const sorted = historial.slice().sort((a, b) => {
-        const fa = a.fecha || a.at || 0;
-        const fb = b.fecha || b.at || 0;
-        return new Date(fb) - new Date(fa);
-      });
-
-      tbody.innerHTML = sorted.map((item) => {
-        const fecha = item.fecha || item.at;
-        const fechaStr = fecha ? new Date(fecha).toLocaleString('es-AR') : '-';
-        const badge = obtenerBadgeEstado(item.estado, item.estado_ui);
-        const nota = item.nota || item.observaciones || item.description || '';
-
-        return `
-          <tr class="border-b border-slate-200 dark:border-white/10">
-            <td class="px-3 py-2 text-sm text-slate-900 dark:text-slate-100">${escapeHtml(fechaStr)}</td>
-            <td class="px-3 py-2">${badge}</td>
-            <td class="px-3 py-2 text-sm text-slate-600 dark:text-slate-400">${escapeHtml(nota || '-')}</td>
-          </tr>
-        `;
-      }).join('');
-    }
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') cerrarModalDetalle();
-    });
-
-    document.getElementById('modalDetalleEnvio')?.addEventListener('click', (e) => {
-      if (e.target === e.currentTarget) cerrarModalDetalle();
-    });
-
-    window.abrirModalDetalle = abrirModalDetalle;
-    window.cerrarModalDetalle = cerrarModalDetalle;
-    window.cambiarTab = cambiarTab;
   </script>
-
-  <!-- Modal de detalle de envío -->
-  <div id="modalDetalleEnvio" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
-    <div class="bg-white dark:bg-[#0B1020] rounded-2xl w-11/12 md:w-2/3 lg:w-1/2 max-h-[90vh] overflow-y-auto p-6 border border-slate-200 dark:border-white/10">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Detalle del envío</h2>
-        <button onclick="cerrarModalDetalle()" class="text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-2xl">×</button>
-      </div>
-
-      <div class="flex border-b border-slate-200 dark:border-white/10 mb-4">
-        <button id="tabDetalle" onclick="cambiarTab('detalle')"
-          class="px-4 py-2 font-medium border-b-2 border-amber-500 text-amber-600 dark:text-amber-400">
-          Detalle del envío
-        </button>
-        <button id="tabHistorial" onclick="cambiarTab('historial')"
-          class="px-4 py-2 font-medium border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
-          Historial
-        </button>
-      </div>
-
-      <div id="contenidoDetalle" class="space-y-4">
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Tracking</label>
-            <p id="detTracking" class="text-slate-900 dark:text-slate-100 font-mono">-</p>
-          </div>
-          <div>
-            <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Estado</label>
-            <div id="detEstado" class="mt-1">-</div>
-          </div>
-        </div>
-
-        <div>
-          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Destinatario</label>
-          <p id="detDestinatario" class="text-slate-900 dark:text-slate-100">-</p>
-        </div>
-
-        <div>
-          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Dirección</label>
-          <p id="detDireccion" class="text-slate-900 dark:text-slate-100">-</p>
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Código Postal</label>
-            <p id="detCP" class="text-slate-900 dark:text-slate-100">-</p>
-          </div>
-          <div>
-            <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Partido</label>
-            <p id="detPartido" class="text-slate-900 dark:text-slate-100">-</p>
-          </div>
-        </div>
-
-        <div>
-          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Teléfono</label>
-          <p id="detTelefono" class="text-slate-900 dark:text-slate-100">-</p>
-        </div>
-
-        <div>
-          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Referencia</label>
-          <p id="detReferencia" class="text-slate-900 dark:text-slate-100 text-sm">-</p>
-        </div>
-
-        <div>
-          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Fecha de creación</label>
-          <p id="detFecha" class="text-slate-900 dark:text-slate-100">-</p>
-        </div>
-
-        <div id="detChoferContainer" class="hidden">
-          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Chofer asignado</label>
-          <p id="detChofer" class="text-slate-900 dark:text-slate-100">-</p>
-        </div>
-      </div>
-
-      <div id="contenidoHistorial" class="hidden">
-        <div class="overflow-x-auto">
-          <table class="min-w-full">
-            <thead class="bg-slate-50 dark:bg-white/5">
-              <tr>
-                <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300">Fecha y hora</th>
-                <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300">Estado</th>
-                <th class="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300">Observaciones</th>
-              </tr>
-            </thead>
-            <tbody id="tablaHistorial" class="divide-y divide-slate-200 dark:divide-white/10"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="mt-6 flex justify-end">
-        <button onclick="cerrarModalDetalle()"
-          class="px-4 py-2 rounded-xl bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-900 dark:text-slate-100">
-          Cerrar
-        </button>
-      </div>
-
-    </div>
-  </div>
 </body>
 </html>

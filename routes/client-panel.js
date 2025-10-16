@@ -48,7 +48,6 @@ function getScopedFilter(req, base = {}) {
 
 // Proyección mínima probando alias para tracking/fecha/estado/partido
 const projection = {
-  _id: 1,
   // tracking (varios alias)
   tracking: 1, tracking_id: 1, trackingId: 1,
   numero_seguimiento: 1, tracking_code: 1, tracking_meli: 1, shipment_id: 1,
@@ -59,14 +58,6 @@ const projection = {
   // fechas
   createdAt: 1, fecha: 1, created_at: 1,
 
-  // info básica para tabla
-  direccion: 1,
-  partido: 1,
-  telefono: 1,
-  destinatario: 1,
-  referencia: 1,
-  codigo_postal: 1,
-
   // destino/partido (sin geocodificar)
   'destino.partido': 1, 'destino.localidad': 1, 'zona.partido': 1,
 
@@ -76,7 +67,6 @@ const projection = {
 
 // Normalizador para la tabla (sin columna "Cliente")
 function normalizeRow(doc) {
-  const id = doc._id ? String(doc._id) : null;
   const tracking =
     doc.tracking ??
     doc.tracking_id ??
@@ -89,11 +79,6 @@ function normalizeRow(doc) {
 
   const id_venta = doc.id_venta ?? doc.order_id ?? doc.venta_id ?? null;
   const createdAt = doc.createdAt ?? doc.fecha ?? doc.created_at ?? null;
-
-  const direccion =
-    doc.direccion ??
-    doc?.destino?.direccion ??
-    null;
 
   const partido =
     doc?.destino?.partido ??
@@ -124,11 +109,9 @@ function normalizeRow(doc) {
   };
 
   return {
-    _id: id,
     tracking,
     id_venta,
     createdAt,
-    direccion,
     destino: { partido },
     estado,
     estado_ui: {

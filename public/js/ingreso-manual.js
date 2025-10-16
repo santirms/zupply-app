@@ -1,212 +1,214 @@
-const qs = (selector) => document.querySelector(selector);
+// public/js/ingreso-manual.js (mismo flujo + estilos dark/topbar)
+const qs  = s => document.querySelector(s);
+const qsa = s => Array.from(document.querySelectorAll(s));
 
-const CLIENTES_API = '/api/clientes';
-const PARTIDO_CP_API = '/api/partidos/cp';
-const CREAR_ENVIO_API = '/api/ingreso-manual/crear';
+const CLIENTES_API     = '/api/clientes';
+const PARTIDO_CP_API   = '/api/partidos/cp';
+const ENVIO_MANUAL_API = '/api/envios/manual';
 
-let userRole = null;
-let clienteIdActual = null;
+let clientes = [];
 
+// ===== Topbar (usuario + tema) =====
 (function initTopbar(){
-  const btn = qs('#userBtn');
-  const menu = qs('#userMenu');
-  const wrap = qs('#userMenuWrap');
-  if (btn && menu && wrap) {
-    btn.addEventListener('click', () => menu.classList.toggle('hidden'));
-    document.addEventListener('click', (e) => {
-      if (!wrap.contains(e.target)) menu.classList.add('hidden');
+  // usuario
+  (function(){
+    const btn=qs('#userBtn'), menu=qs('#userMenu'), wrap=qs('#userMenuWrap');
+    if(btn&&menu&&wrap){
+      btn.addEventListener('click', ()=>menu.classList.toggle('hidden'));
+      document.addEventListener('click', e=>{ if(!wrap.contains(e.target)) menu.classList.add('hidden'); });
+    }
+    qs('#logoutBtn')?.addEventListener('click', async ()=>{
+      try{ await fetch('/auth/logout',{method:'POST'}) }catch{}
+      try{ localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username'); }catch{}
+      location.href='/auth/login';
     });
-  }
+    fetch('/me',{cache:'no-store'})
+      .then(r=>{ if(!r.ok) throw 0; return r.json(); })
+      .then(me=>{
+        const n=me.name||me.username||me.email||'Usuario';
+        const u=qs('#username'); if(u) u.textContent=n;
+      })
+      .catch(()=> location.href='/auth/login');
+  })();
 
-  qs('#logoutBtn')?.addEventListener('click', async () => {
-    try { await fetch('/auth/logout', { method: 'POST' }); } catch {}
-    try {
-      localStorage.removeItem('zpl_auth');
-      localStorage.removeItem('zpl_username');
-    } catch {}
-    location.href = '/auth/login';
-  });
-
-  const themeBtn = qs('#themeBtn');
-  if (themeBtn) {
-    const order = ['light','dark','system'];
-    const apply = (mode) => {
-      const media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
-      const wantDark = mode === 'dark' || (mode === 'system' && media?.matches);
-      document.documentElement.classList.toggle('dark', !!wantDark);
+  // tema
+  (function(){
+    const order=['light','dark','system'];
+    const btn=qs('#themeBtn');
+    if(!btn) return;
+    const apply=(mode)=>{
+      const prefersDark=window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const wantDark=(mode==='dark')||(mode==='system'&&prefersDark);
+      document.documentElement.classList.toggle('dark', wantDark);
       localStorage.setItem('zpl_theme', mode);
-      themeBtn.textContent = 'Tema: ' + (mode === 'system' ? 'auto' : mode);
+      btn.textContent='Tema: ' + (mode==='system'?'auto':mode);
     };
-    const saved = localStorage.getItem('zpl_theme') || 'system';
-    apply(saved);
-    themeBtn.addEventListener('click', () => {
-      const current = localStorage.getItem('zpl_theme') || 'system';
-      const next = order[(order.indexOf(current) + 1) % order.length];
+    apply(localStorage.getItem('zpl_theme')||'system');
+    btn.addEventListener('click', ()=>{
+      const cur=localStorage.getItem('zpl_theme')||'system';
+      const next=order[(order.indexOf(cur)+1)%order.length];
       apply(next);
     });
-  }
+  })();
 })();
 
-async function inicializar() {
-  try {
-    const res = await fetch('/api/users/me', { credentials: 'include' });
-    if (!res.ok) throw new Error('No autenticado');
-
-    const user = await res.json();
-    userRole = user.role;
-    clienteIdActual = user.cliente_id || null;
-
-    const username = user.username || user.email || 'Usuario';
-    const usernameEl = qs('#username');
-    if (usernameEl) usernameEl.textContent = username;
-
-    if (userRole === 'cliente') {
-      qs('#selectClienteContainer')?.classList.add('hidden');
-      qs('#clienteInfoContainer')?.classList.remove('hidden');
-      const select = qs('#cliente_id');
-      if (select) select.required = false;
-    } else {
-      await cargarClientes();
-    }
-  } catch (err) {
-    console.error('Error inicializando:', err);
-    alert('Error al cargar datos del usuario');
-    location.href = '/auth/login';
-  }
-}
+// ===== Página =====
+window.addEventListener('DOMContentLoaded', () => {
+  cargarClientes();
+  agregarPaquete();
+});
 
 async function cargarClientes() {
-  try {
-    const res = await fetch(CLIENTES_API, { credentials: 'include', cache: 'no-store' });
-    if (!res.ok) throw new Error('No se pudieron cargar los clientes');
-    const clientes = await res.json();
-
-    const select = qs('#cliente_id');
-    if (!select) return;
-
-    const options = ['<option value="">Seleccionar cliente...</option>'];
-    clientes.forEach((cliente) => {
-      const nombre = cliente?.nombre || 'Sin nombre';
-      options.push(`<option value="${cliente._id}">${nombre}</option>`);
+  try{
+    const res = await fetch(CLIENTES_API, { cache:'no-store' });
+    if (!res.ok) throw res.status;
+    clientes = await res.json();
+    const sel = qs('#cliente');
+    sel.innerHTML = clientes.map(c=>`<option value="${c._id}">${c.nombre}</option>`).join('');
+    sel.addEventListener('change', ()=>{
+      const cl = clientes.find(x=>x._id===sel.value);
+      qs('#codigo_interno').value = cl?.codigo_cliente || '';
     });
-    select.innerHTML = options.join('');
-
-    if (clienteIdActual) {
-      select.value = clienteIdActual;
-    }
-  } catch (err) {
-    console.error(err);
+    sel.dispatchEvent(new Event('change'));
+  }catch(e){
+    console.error('Clientes:', e);
     alert('No se pudieron cargar los clientes');
   }
 }
 
-async function detectarPartido(cp) {
-  if (!cp) return;
-  try {
-    const res = await fetch(`${PARTIDO_CP_API}/${encodeURIComponent(cp)}`, { credentials: 'include' });
-    if (!res.ok) throw new Error('CP no encontrado');
-    const data = await res.json();
-    if (data?.partido) {
-      qs('#partido').value = data.partido;
-    }
-  } catch (err) {
-    console.warn('No se pudo detectar partido:', err);
-  }
-}
+function paqueteMarkup(){
+  return `
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <label class="block text-sm">Destinatario
+        <input name="destinatario" required class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
+      </label>
+      <label class="block text-sm">Dirección
+        <input name="direccion" required class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
+      </label>
 
-async function manejarSubmit(e) {
-  e.preventDefault();
+      <label class="block text-sm">Código Postal
+        <input name="codigo_postal" required
+               class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"
+               onblur="detectarPartido(this)" oninput="detectarPartido(this)"/>
+      </label>
+      <label class="block text-sm">Partido (auto)
+        <input name="partido" readonly
+               class="mt-1 w-full p-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5"/>
+      </label>
 
-  const data = {
-    direccion: qs('#direccion')?.value?.trim() || '',
-    codigo_postal: qs('#codigo_postal')?.value?.trim() || '',
-    partido: qs('#partido')?.value?.trim() || '',
-    destinatario: qs('#destinatario')?.value?.trim() || '',
-    telefono: qs('#telefono')?.value?.trim() || '',
-    referencia: qs('#referencia')?.value?.trim() || ''
-  };
-
-  if (userRole !== 'cliente') {
-    const select = qs('#cliente_id');
-    data.cliente_id = select?.value || '';
-    if (!data.cliente_id) {
-      alert('Debe seleccionar un cliente');
-      return;
-    }
-  }
-
-  try {
-    const res = await fetch(CREAR_ENVIO_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(data)
-    });
-
-    const result = await res.json();
-    if (!res.ok || !result.ok) {
-      throw new Error(result.error || 'Error al crear envío');
-    }
-
-    alert('✅ Envío creado correctamente');
-    abrirModalEtiqueta(result.envio);
-    qs('#formIngresoManual').reset();
-
-    if (userRole === 'cliente') {
-      qs('#partido').value = '';
-    }
-  } catch (err) {
-    console.error('Error creando envío:', err);
-    alert(`Error: ${err.message}`);
-  }
-}
-
-function abrirModalEtiqueta(envio) {
-  if (!envio) return;
-  const contenido = qs('#contenidoEtiqueta');
-  if (!contenido) return;
-
-  const tracking = envio.tracking || envio.id_venta || '-';
-  const partido = envio.partido ? ` - ${envio.partido}` : '';
-
-  contenido.innerHTML = `
-    <div class="text-center space-y-2">
-      <h3 class="font-bold text-lg">Envío: ${tracking}</h3>
-      <p><strong>Destinatario:</strong> ${envio.destinatario || '-'}</p>
-      <p><strong>Dirección:</strong> ${envio.direccion || '-'}</p>
-      <p><strong>CP:</strong> ${envio.codigo_postal || ''}${partido}</p>
-      <p><strong>Tel:</strong> ${envio.telefono || '-'}</p>
-      <div class="mt-4">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(tracking)}" alt="QR" class="mx-auto">
+      <div class="flex items-center gap-2 mt-1">
+        <input id="chk" type="checkbox" name="manual_precio" onchange="togglePrecioManual(this)"
+               class="w-5 h-5 accent-amber-600">
+        <label for="chk" class="text-sm">Precio manual</label>
       </div>
+
+      <label class="block text-sm">Precio a facturar ($)
+        <input type="number" step="0.01" name="precio" readonly
+               class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
+      </label>
+
+      <label class="block text-sm">ID de venta (opcional)
+        <input name="id_venta" placeholder="Si se omite, se autogenera"
+               class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
+      </label>
+    </div>
+
+    <div class="mt-3 flex justify-between">
+      <div class="text-xs opacity-60">Se valida el CP→Partido automáticamente</div>
+      <button type="button" onclick="this.closest('.paquete-group').remove()"
+        class="px-3 py-1.5 rounded-lg border border-rose-400/30 text-rose-600 dark:text-rose-300 hover:bg-rose-400/10">
+        Eliminar paquete
+      </button>
     </div>
   `;
-
-  const modal = qs('#modalEtiqueta');
-  modal?.classList.remove('hidden');
-  modal?.classList.add('flex');
 }
 
-function cerrarModalEtiqueta() {
-  const modal = qs('#modalEtiqueta');
-  modal?.classList.add('hidden');
-  modal?.classList.remove('flex');
+function agregarPaquete() {
+  const div = document.createElement('div');
+  div.className = 'paquete-group rounded-2xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-white/5';
+  div.innerHTML = paqueteMarkup();
+  qs('#paquetes').appendChild(div);
 }
 
-function imprimirEtiqueta() {
-  window.print();
+function togglePrecioManual(cb) {
+  const grp = cb.closest('.paquete-group');
+  const inp = grp.querySelector("input[name='precio']");
+  inp.readOnly = !cb.checked;
+  if (!cb.checked) inp.value = '';
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  inicializar();
+function detectarPartido(input) {
+  const cp = input.value.trim();
+  const partidoI = input.closest('.paquete-group').querySelector("input[name='partido']");
+  if (!cp) { partidoI.value = ''; return; }
+  fetch(`${PARTIDO_CP_API}/${encodeURIComponent(cp)}`)
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(d => partidoI.value = d.partido || 'No encontrado')
+    .catch(() => partidoI.value = 'Error');
+}
 
-  const cpInput = qs('#codigo_postal');
-  cpInput?.addEventListener('blur', (e) => detectarPartido(e.target.value.trim()));
-  cpInput?.addEventListener('change', (e) => detectarPartido(e.target.value.trim()));
+async function guardar() {
+  const clienteId  = qs('#cliente').value;
+  const codigoInt  = qs('#codigo_interno').value;
+  const referencia = qs('#referencia').value.trim();
 
-  qs('#formIngresoManual')?.addEventListener('submit', manejarSubmit);
-});
+  const paquetes = qsa('.paquete-group').map(div => {
+    let idVenta = div.querySelector("[name='id_venta']").value.trim();
+    if (!idVenta) idVenta = Math.random().toString(36).substr(2,8).toUpperCase();
+    const manual = div.querySelector("[name='manual_precio']").checked;
+    const precioManual = Number(div.querySelector("[name='precio']").value);
 
-window.abrirModalEtiqueta = abrirModalEtiqueta;
-window.cerrarModalEtiqueta = cerrarModalEtiqueta;
-window.imprimirEtiqueta = imprimirEtiqueta;
+    return {
+      cliente_id:    clienteId,
+      sender_id:     codigoInt,
+      destinatario:  div.querySelector("[name='destinatario']").value.trim(),
+      direccion:     div.querySelector("[name='direccion']").value.trim(),
+      codigo_postal: div.querySelector("[name='codigo_postal']").value.trim(),
+      partido:       div.querySelector("[name='partido']").value.trim(),
+      id_venta:      idVenta,
+      referencia,
+      manual_precio: manual,
+      precio:        manual? precioManual : undefined
+    };
+  });
+
+  try {
+    const res = await fetch(ENVIO_MANUAL_API, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ paquetes })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Error al guardar');
+
+    renderModalResultados(data.docs || []);
+    openModalResultados();
+  } catch (err) {
+    console.error('Error saving:', err);
+    alert('No se pudo guardar');
+  }
+}
+
+// ===== Modal resultados =====
+function renderModalResultados(items) {
+  const list = qs('#res-list');
+  list.innerHTML = '';
+  items.forEach(x => {
+    const li = document.createElement('li');
+    li.className = 'border border-slate-200 dark:border-white/10 rounded-xl p-3';
+    li.innerHTML = `
+      <div class="flex items-center gap-4">
+        <img alt="QR" class="w-20 h-20 object-contain rounded bg-white dark:bg-white/10"/>
+        <div class="flex-1">
+          <div class="font-semibold">Tracking (id_venta): ${x.id_venta}</div>
+          <div class="text-sm opacity-80">${x.destinatario||''} — ${x.direccion||''} (${x.codigo_postal||''}) ${x.partido||''}</div>
+          ${x.label_url ? `<a class="text-amber-600 hover:underline" href="${x.label_url}" target="_blank" rel="noopener">Descargar etiqueta 10×15</a>` : '<span class="text-xs opacity-60">sin etiqueta</span>'}
+        </div>
+      </div>
+    `;
+    li.querySelector('img').src = x.qr_png || '';
+    list.appendChild(li);
+  });
+}
+function openModalResultados(){ const m=qs('#modal-resultados'); m.classList.remove('hidden'); m.classList.add('flex'); }
+function closeModalResultados(){ const m=qs('#modal-resultados'); m.classList.add('hidden'); m.classList.remove('flex'); }
