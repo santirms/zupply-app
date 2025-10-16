@@ -453,16 +453,46 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
 });
 
 // POST /manual  (SOLO este bloque cambia respecto a tu versión)
-router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
+router.post('/manual', requireRole('admin','coordinador','cliente'), async (req, res) => {
   try {
     const { paquetes } = req.body;
     if (!Array.isArray(paquetes) || !paquetes.length) {
       return res.status(400).json({ error: 'No hay paquetes.' });
     }
 
+    const sessionUser = req.session?.user;
+    const isCliente = sessionUser?.role === 'cliente';
+    const sessionClientId = sessionUser?.cliente_id;
+
+    if (isCliente && !sessionClientId) {
+      return res.status(400).json({ error: 'Usuario sin cliente asociado' });
+    }
+
+    const clientesCache = new Map();
+    const obtenerCliente = async (id) => {
+      if (!id) return null;
+      const key = id.toString();
+      if (!clientesCache.has(key)) {
+        const doc = await Cliente.findById(id).populate('lista_precios');
+        clientesCache.set(key, doc || null);
+      }
+      return clientesCache.get(key);
+    };
+
     const results = [];
     for (const p of paquetes) {
-      const cl = await Cliente.findById(p.cliente_id).populate('lista_precios');
+      const providedClienteId = p.cliente_id || p.clienteId || p.cliente?.id || p.cliente?._id;
+      const effectiveClienteId = isCliente ? sessionClientId : providedClienteId;
+
+      if (!effectiveClienteId) {
+        return res.status(400).json({ error: 'Debe especificar un cliente' });
+      }
+
+      if (isCliente && String(effectiveClienteId) !== String(sessionClientId)) {
+        console.warn(`Cliente ${sessionUser?.username || sessionUser?.email} intentó crear envío para ${effectiveClienteId}`);
+      }
+
+      const cl = await obtenerCliente(effectiveClienteId);
       if (!cl) throw new Error('Cliente no encontrado');
 
       const idVenta = (p.id_venta || p.idVenta || '').trim()
@@ -490,7 +520,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         codigo_postal: p.codigo_postal,
         zona:          zonaName,
         partido:       zonaName,
-        id_venta:      idVenta,     // 👈 tracking del sistema
+        id_venta:      idVenta,
         referencia:    p.referencia,
         precio:        costo,
         fecha:         new Date(),
@@ -499,15 +529,14 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         origen:        'ingreso_manual'
       });
 
-      // Generar etiqueta 10x15 + QR usando id_venta
       const { url: label_url } = await buildLabelPDF(envio.toObject());
       const qr_png = await QRCode.toDataURL(idVenta, { width: 256, margin: 0 });
       await Envio.updateOne({ _id: envio._id }, { $set: { label_url, qr_png } });
 
       results.push({
         _id: envio._id.toString(),
-        id_venta: idVenta,            // 👈 lo devolvemos explícito
-        tracking: idVenta,            // 👈 alias por si el front espera "tracking"
+        id_venta: idVenta,
+        tracking: idVenta,
         label_url,
         qr_png,
         destinatario: envio.destinatario,
@@ -710,19 +739,49 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
-    let envioDoc = await Envio.findById(id).populate('cliente_id');
-    if (!envioDoc) return res.status(404).json({ error: 'Envío no encontrado' });
+    const user = req.session?.user;
 
-    // coords (puede devolver otra instancia, pero no importa)
+    let envioDoc = await Envio.findById(id)
+      .populate('cliente_id', 'nombre razon_social codigo_cliente email')
+      .populate('driver_id', 'nombre telefono activo')
+      .populate('chofer', 'nombre telefono activo');
+
+    if (!envioDoc) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
+
+    if (user?.role === 'cliente') {
+      const envioClienteId = envioDoc.cliente_id?._id || envioDoc.cliente_id;
+      const userClientId = user.cliente_id;
+      if (!envioClienteId || !userClientId || envioClienteId.toString() !== userClientId.toString()) {
+        return res.status(403).json({ error: 'No tenés permiso para ver este envío' });
+      }
+    }
+
     envioDoc = await ensureCoords(envioDoc);
 
-    // 🔁 hidratá historial desde MeLi (usa el servicio que escribe directo en DB)
-    try { await ensureMeliHistory(envioDoc); } catch (e) { console.warn('meli-history skip:', e.message); }
+    try {
+      await ensureMeliHistory(envioDoc);
+    } catch (e) {
+      console.warn('meli-history skip:', e.message);
+    }
 
-    // ⬅️ RE-LEER fresco desde DB (ya con historial guardado por el servicio)
-    const plain = await Envio.findById(id).populate('cliente_id').lean();
+    const plain = await Envio.findById(id)
+      .populate('cliente_id', 'nombre razon_social codigo_cliente email')
+      .populate('driver_id', 'nombre telefono activo')
+      .populate('chofer', 'nombre telefono activo')
+      .lean();
 
-    // timeline para el front (mergea historial+eventos)
+    if (!plain) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
+
+    if (plain && !plain.driver_id && plain.chofer) {
+      plain.driver_id = typeof plain.chofer === 'object'
+        ? plain.chofer
+        : { _id: plain.chofer };
+    }
+
     plain.timeline = buildTimeline(plain);
     return res.json(plain);
   } catch (err) {

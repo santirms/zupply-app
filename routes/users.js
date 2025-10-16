@@ -10,6 +10,43 @@ const slugify = require('../utils/slugify');
 // Todas las rutas de /api/users requieren estar logueado
 router.use(requireAuth);
 
+router.get('/me', async (req, res) => {
+  try {
+    const sessionUser = req.session?.user;
+    if (!sessionUser?._id) {
+      return res.status(401).json({ error: 'No autenticado' });
+    }
+
+    const user = await User.findById(sessionUser._id)
+      .select('-password_hash')
+      .populate('cliente_id', 'nombre razon_social codigo_cliente')
+      .populate('driver_id', 'nombre telefono activo');
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.json({
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      client_id: user.cliente_id?._id || user.cliente_id || null,
+      cliente_nombre: user.cliente_id?.nombre || user.cliente_id?.razon_social || null,
+      driver_id: user.driver_id ? {
+        _id: user.driver_id._id,
+        nombre: user.driver_id.nombre || null,
+        telefono: user.driver_id.telefono || null,
+        activo: user.driver_id.activo !== false
+      } : null,
+      activo: user.is_active !== false
+    });
+  } catch (err) {
+    console.error('Error obteniendo usuario actual:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── ADMIN-ONLY ────────────────────────────────────────────────
 // Crear usuario cliente (fuerza role='cliente' en el controller)
 router.post('/create-client', requireRole('admin'), ctrl.crearCliente);
