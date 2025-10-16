@@ -2,9 +2,12 @@
 const express = require('express');
 const router  = express.Router();
 const Cliente = require('../models/Cliente');
+const { requireAuth, requireRole } = require('../middlewares/auth');
+
+router.use(requireAuth);
 
 // GET todos
-router.get('/', async (req, res) => {
+router.get('/', requireRole('admin','coordinador'), async (req, res) => {
   const clientes = await Cliente.find().populate('lista_precios');
   res.json(clientes);
 });

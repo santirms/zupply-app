@@ -83,11 +83,15 @@
 
       <!-- Cliente y Código Interno -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <label class="block text-sm">
-          Cliente
-          <select id="cliente" name="cliente_id" required
-                  class="select-dark mt-1 block w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020]"></select>
-        </label>
+        <div id="selectClienteContainer">
+          <label class="block text-sm font-medium mb-1 text-slate-900 dark:text-slate-100">
+            Cliente <span class="text-rose-500">*</span>
+          </label>
+          <select id="cliente_id" name="cliente_id" required
+            class="select-dark w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100">
+            <option value="">Seleccionar cliente...</option>
+          </select>
+        </div>
         <label class="block text-sm">
           Código Interno
           <input id="codigo_interno" type="text" readonly
