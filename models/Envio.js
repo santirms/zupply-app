@@ -49,6 +49,18 @@ const envioSchema = new Schema({
 
   fecha:          { type: Date, default: Date.now },
   destinatario:   { type: String, required: true },
+  telefono: {
+    type: String,
+    required: false,
+    default: null,
+    validate: {
+      validator: function(v) {
+        if (!v) return true;
+        return /^549\d{9,10}$/.test(v);
+      },
+      message: 'Teléfono debe tener formato 549XXXXXXXXXX'
+    }
+  },
   direccion:      { type: String, required: true },
   referencia:     { type: String },
 

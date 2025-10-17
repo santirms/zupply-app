@@ -8,6 +8,9 @@ const ENVIO_MANUAL_API = '/api/envios/manual';
 
 let clientes = [];
 
+const TELEFONO_MIN = 12;
+const TELEFONO_MAX = 13;
+
 // ===== Topbar (usuario + tema) =====
 (function initTopbar(){
   // usuario
@@ -82,6 +85,16 @@ function paqueteMarkup(){
       <label class="block text-sm">Destinatario
         <input name="destinatario" required class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
       </label>
+      <label class="block text-sm">Teléfono <span class="text-slate-400 text-xs">(opcional)</span>
+        <input type="tel" name="telefono" maxlength="13" pattern="[0-9]{12,13}" inputmode="numeric"
+               class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"
+               placeholder="5491123456789"
+               title="Formato: 549 + código de área + número (ej: 5491123456789)"/>
+        <small class="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+          Formato: <code class="bg-slate-100 dark:bg-white/5 px-1 rounded">549 + código de área + número</code><br>
+          <span class="text-slate-400">Ejemplo AMBA: 5491123456789 | Provincia: 5492214567890</span>
+        </small>
+      </label>
       <label class="block text-sm">Dirección
         <input name="direccion" required class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
       </label>
@@ -123,11 +136,82 @@ function paqueteMarkup(){
   `;
 }
 
+function setTelefonoVisualState(input, state) {
+  if (!input) return;
+  input.classList.remove('border-green-500', 'border-red-500');
+  if (state === 'valid') input.classList.add('border-green-500');
+  if (state === 'invalid') input.classList.add('border-red-500');
+}
+
+function initTelefonoInput(input) {
+  if (!input) return;
+  input.addEventListener('input', () => {
+    let value = input.value.replace(/\D/g, '');
+    if (value.length > TELEFONO_MAX) value = value.slice(0, TELEFONO_MAX);
+    input.value = value;
+
+    if (!value.length) {
+      setTelefonoVisualState(input, null);
+      return;
+    }
+
+    if (value.startsWith('549') && value.length >= TELEFONO_MIN && value.length <= TELEFONO_MAX) {
+      setTelefonoVisualState(input, 'valid');
+    } else {
+      setTelefonoVisualState(input, 'invalid');
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    const value = input.value.trim();
+    if (!value) {
+      setTelefonoVisualState(input, null);
+      return;
+    }
+    const clean = value.replace(/\D/g, '').slice(0, TELEFONO_MAX);
+    input.value = clean;
+    if (clean.startsWith('549') && clean.length >= TELEFONO_MIN && clean.length <= TELEFONO_MAX) {
+      setTelefonoVisualState(input, 'valid');
+    } else {
+      setTelefonoVisualState(input, 'invalid');
+    }
+  });
+}
+
+function validarTelefonoInput(input, index) {
+  if (!input) return null;
+  const raw = input.value.trim();
+  if (!raw) {
+    setTelefonoVisualState(input, null);
+    return null;
+  }
+
+  const clean = raw.replace(/\D/g, '');
+  if (clean.length < TELEFONO_MIN || clean.length > TELEFONO_MAX) {
+    setTelefonoVisualState(input, 'invalid');
+    alert(`El teléfono del paquete #${index + 1} debe tener entre 12 y 13 dígitos.\n\nFormato: 549 + código de área + número\nEjemplo: 5491123456789`);
+    input.focus();
+    return false;
+  }
+
+  if (!clean.startsWith('549')) {
+    setTelefonoVisualState(input, 'invalid');
+    alert(`El teléfono del paquete #${index + 1} debe comenzar con 549 (código Argentina + prefijo celular).\n\nEjemplo: 5491123456789`);
+    input.focus();
+    return false;
+  }
+
+  input.value = clean;
+  setTelefonoVisualState(input, 'valid');
+  return clean;
+}
+
 function agregarPaquete() {
   const div = document.createElement('div');
   div.className = 'paquete-group rounded-2xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-white/5';
   div.innerHTML = paqueteMarkup();
   qs('#paquetes').appendChild(div);
+  initTelefonoInput(div.querySelector("input[name='telefono']"));
 }
 
 function togglePrecioManual(cb) {
@@ -152,25 +236,32 @@ async function guardar() {
   const codigoInt  = qs('#codigo_interno').value;
   const referencia = qs('#referencia').value.trim();
 
-  const paquetes = qsa('.paquete-group').map(div => {
+  const grupos = qsa('.paquete-group');
+  const paquetes = [];
+
+  for (let i = 0; i < grupos.length; i++) {
+    const div = grupos[i];
     let idVenta = div.querySelector("[name='id_venta']").value.trim();
     if (!idVenta) idVenta = Math.random().toString(36).substr(2,8).toUpperCase();
     const manual = div.querySelector("[name='manual_precio']").checked;
     const precioManual = Number(div.querySelector("[name='precio']").value);
+    const telefono = validarTelefonoInput(div.querySelector("[name='telefono']"), i);
+    if (telefono === false) return;
 
-    return {
+    paquetes.push({
       cliente_id:    clienteId,
       sender_id:     codigoInt,
       destinatario:  div.querySelector("[name='destinatario']").value.trim(),
       direccion:     div.querySelector("[name='direccion']").value.trim(),
       codigo_postal: div.querySelector("[name='codigo_postal']").value.trim(),
       partido:       div.querySelector("[name='partido']").value.trim(),
+      telefono:      telefono ?? null,
       id_venta:      idVenta,
       referencia,
       manual_precio: manual,
       precio:        manual? precioManual : undefined
-    };
-  });
+    });
+  }
 
   try {
     const res = await fetch(ENVIO_MANUAL_API, {
