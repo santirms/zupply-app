@@ -9,6 +9,23 @@ const { buildLabelPDF } = require('../utils/labelService');
 
 const { requireAuth, requireRole } = require('../middlewares/auth');
 
+function sanitizeTelefono(rawTelefono) {
+  if (rawTelefono === undefined || rawTelefono === null || rawTelefono === '') {
+    return null;
+  }
+
+  const limpio = String(rawTelefono).trim().replace(/\D/g, '');
+  if (!limpio) {
+    return null;
+  }
+
+  if (limpio.length < 12 || limpio.length > 13 || !limpio.startsWith('549')) {
+    throw new Error('Formato de teléfono inválido. Debe ser 549 + código de área + número (ej: 5491123456789)');
+  }
+
+  return limpio;
+}
+
 // Requiere login para todo este módulo
 router.use(requireAuth);
 
@@ -21,7 +38,16 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
     }
 
     const results = [];
-    for (const p of paquetes) {
+    for (let index = 0; index < paquetes.length; index++) {
+      const p = paquetes[index];
+
+      let telefonoLimpio = null;
+      try {
+        telefonoLimpio = sanitizeTelefono(p.telefono);
+      } catch (err) {
+        return res.status(400).json({ error: `Paquete #${index + 1}: ${err.message}` });
+      }
+
       const cl = await Cliente.findById(p.cliente_id).populate('lista_precios');
       if (!cl) throw new Error('Cliente no encontrado');
 
@@ -51,6 +77,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         zona:          zonaName,
         partido:       zonaName,
         id_venta:      idVenta,
+        telefono:      telefonoLimpio,
         referencia:    p.referencia,
         precio:        costo,
         fecha:         new Date(),
@@ -98,22 +125,35 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
       return res.status(400).json({ error: 'Cliente no encontrado.' });
     }
 
-    const docs = paquetes.map(p => ({
-      cliente_id:    cliente._id,
-      sender_id:     cliente.codigo_cliente,
-      destinatario:  p.destinatario      || '',
-      direccion:     p.direccion          || '',
-      codigo_postal: p.codigo_postal      || p.cp || '',
-      zona:          p.zona               || '',
-      id_venta:      p.idVenta            || p.id_venta || '',
-      referencia:    p.referencia         || '',
-      fecha:         new Date(),
-      precio:        p.manual_precio      ? Number(p.precio) || 0 : 0,
-      estado:        'en_preparacion',
-      requiere_sync_meli: false,
-      origen:        'ingreso_manual',
-      source:        'panel'
-    }));
+    const docs = [];
+    for (let index = 0; index < paquetes.length; index++) {
+      const p = paquetes[index];
+
+      let telefonoLimpio = null;
+      try {
+        telefonoLimpio = sanitizeTelefono(p.telefono);
+      } catch (err) {
+        return res.status(400).json({ error: `Paquete #${index + 1}: ${err.message}` });
+      }
+
+      docs.push({
+        cliente_id:    cliente._id,
+        sender_id:     cliente.codigo_cliente,
+        destinatario:  p.destinatario      || '',
+        direccion:     p.direccion          || '',
+        codigo_postal: p.codigo_postal      || p.cp || '',
+        zona:          p.zona               || '',
+        id_venta:      p.idVenta            || p.id_venta || '',
+        telefono:      telefonoLimpio,
+        referencia:    p.referencia         || '',
+        fecha:         new Date(),
+        precio:        p.manual_precio      ? Number(p.precio) || 0 : 0,
+        estado:        'en_preparacion',
+        requiere_sync_meli: false,
+        origen:        'ingreso_manual',
+        source:        'panel'
+      });
+    }
 
     const inserted = await Envio.insertMany(docs);
     return res.status(201).json({ inserted: inserted.length, docs: inserted });
