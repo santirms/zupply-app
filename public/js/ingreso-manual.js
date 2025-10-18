@@ -272,8 +272,30 @@ async function guardar() {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || 'Error al guardar');
 
-    renderModalResultados(data.docs || []);
-    openModalResultados();
+    const docs = Array.isArray(data.docs) ? data.docs : [];
+
+    const referenciaInput = qs('#referencia');
+    if (referenciaInput) referenciaInput.value = '';
+    const paquetesContainer = qs('#paquetes');
+    if (paquetesContainer) {
+      paquetesContainer.innerHTML = '';
+      agregarPaquete();
+    }
+
+    if (docs.length === 1) {
+      const envioDoc = docs[0] || {};
+      const paqueteOriginal = paquetes[0] || {};
+
+      abrirModalConfirmacion({
+        tracking: envioDoc.tracking || envioDoc.id_venta || paqueteOriginal.id_venta,
+        destinatario: envioDoc.destinatario || paqueteOriginal.destinatario,
+        telefono: paqueteOriginal.telefono || envioDoc.telefono || null,
+        label_url: envioDoc.label_url || null
+      });
+    } else {
+      renderModalResultados(docs);
+      openModalResultados();
+    }
   } catch (err) {
     console.error('Error saving:', err);
     alert('No se pudo guardar');
@@ -303,3 +325,107 @@ function renderModalResultados(items) {
 }
 function openModalResultados(){ const m=qs('#modal-resultados'); m.classList.remove('hidden'); m.classList.add('flex'); }
 function closeModalResultados(){ const m=qs('#modal-resultados'); m.classList.add('hidden'); m.classList.remove('flex'); }
+
+// ========== MODAL DE CONFIRMACIÓN ==========
+
+let envioActual = null;
+
+function abrirModalConfirmacion(envio) {
+  if (!envio) return;
+
+  envioActual = envio;
+
+  document.getElementById('confTracking').textContent = envio.tracking || '-';
+  document.getElementById('confDestinatario').textContent = envio.destinatario || '-';
+
+  const tracking = envio.tracking || '';
+  const linkSeguimiento = tracking ? `https://zupply.tech/track/${tracking}` : '';
+  document.getElementById('confLink').value = linkSeguimiento;
+
+  const btnWhatsApp = document.getElementById('btnWhatsAppModal');
+  if (envio.telefono) {
+    btnWhatsApp.classList.remove('hidden');
+  } else {
+    btnWhatsApp.classList.add('hidden');
+  }
+
+  const modal = document.getElementById('modalConfirmacion');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function cerrarModalConfirmacion() {
+  const modal = document.getElementById('modalConfirmacion');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  envioActual = null;
+}
+
+function copiarLink() {
+  const input = document.getElementById('confLink');
+  const texto = input.value;
+
+  if (!texto) return;
+
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(texto).catch(() => {
+      input.select();
+      document.execCommand('copy');
+    });
+  } else {
+    input.select();
+    document.execCommand('copy');
+  }
+
+  const winEvent = typeof window !== 'undefined' ? window.event : undefined;
+  const btn = winEvent?.target instanceof HTMLElement ? winEvent.target : null;
+  if (btn) {
+    const textoOriginal = btn.textContent;
+    btn.textContent = '✓ Copiado';
+    setTimeout(() => {
+      btn.textContent = textoOriginal;
+    }, 2000);
+  }
+}
+
+function enviarWhatsApp() {
+  if (!envioActual || !envioActual.telefono) {
+    alert('No hay número de teléfono para este envío');
+    return;
+  }
+
+  const destinatario = envioActual.destinatario || 'Cliente';
+  const tracking = envioActual.tracking || '';
+  const linkSeguimiento = tracking ? `https://zupply.tech/track/${tracking}` : '';
+  const telefono = typeof envioActual.telefono === 'string'
+    ? envioActual.telefono.replace(/\D/g, '')
+    : '';
+
+  if (!telefono) {
+    alert('El número de teléfono no es válido');
+    return;
+  }
+
+  const mensaje = `Hola ${destinatario}! 👋
+Tu envío está en camino 📦
+Seguí tu pedido en tiempo real: ${linkSeguimiento}
+Tracking: ${tracking}`;
+
+  const linkWhatsApp = `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
+  window.open(linkWhatsApp, '_blank');
+}
+
+function imprimirEtiqueta() {
+  if (!envioActual || !envioActual.label_url) {
+    alert('La etiqueta no está disponible por el momento');
+    return;
+  }
+
+  window.open(envioActual.label_url, '_blank');
+}
+
+window.abrirModalConfirmacion = abrirModalConfirmacion;
+window.cerrarModalConfirmacion = cerrarModalConfirmacion;
+window.copiarLink = copiarLink;
+window.enviarWhatsApp = enviarWhatsApp;
+window.imprimirEtiqueta = imprimirEtiqueta;
