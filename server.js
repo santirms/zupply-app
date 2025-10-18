@@ -50,12 +50,16 @@ app.get('/auth/login', (_req, res) => {
 app.use('/auth', require('./routes/auth'));
 app.use('/api/tracking', trackingRoutes);
 
-app.get('/track/:tracking', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'track.html'));
-});
+const trackHtmlPath = path.join(__dirname, 'public', 'track.html');
 
-app.get('/track', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'track.html'));
+if (!fs.existsSync(trackHtmlPath)) {
+  console.error('❌ ERROR: public/track.html NO EXISTE');
+} else {
+  console.log('✅ track.html encontrado');
+}
+
+app.get('/track/:tracking?', (_req, res) => {
+  res.sendFile(trackHtmlPath);
 });
 
 /* -------- Guardia global: bloquea TODO lo no público si no hay sesión ------- */
