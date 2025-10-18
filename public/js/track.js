@@ -1,3 +1,16 @@
+/**
+ * Escapa caracteres HTML para prevenir XSS
+ */
+function escapeHtml(unsafe) {
+  if (!unsafe) return '';
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // Obtener tracking de la URL
 const urlParams = new URLSearchParams(window.location.search);
 const tracking = urlParams.get('t') || window.location.pathname.split('/').pop();
@@ -134,20 +147,20 @@ function obtenerInfoEstado(estado) {
 
 function renderizarHistorial(historial) {
   const timeline = document.getElementById('timeline');
-  
+
   if (!historial || historial.length === 0) {
     timeline.innerHTML = '<p class="text-gray-500">No hay historial disponible</p>';
     return;
   }
 
   // Ordenar por fecha ascendente (más antiguo primero)
-  const sorted = historial.slice().sort((a, b) => 
+  const sorted = historial.slice().sort((a, b) =>
     new Date(a.fecha || a.at || 0) - new Date(b.fecha || b.at || 0)
   );
 
   timeline.innerHTML = sorted.map((item, index) => {
     const fecha = item.fecha || item.at;
-    const fechaStr = fecha 
+    const fechaStr = fecha
       ? new Date(fecha).toLocaleString('es-AR', {
           day: '2-digit',
           month: 'short',
@@ -159,6 +172,7 @@ function renderizarHistorial(historial) {
 
     const esUltimo = index === sorted.length - 1;
     const estadoInfo = obtenerInfoEstado(item.estado);
+    const notaSegura = escapeHtml(item.nota || item.observaciones);
 
     return `
       <div class="relative pb-8 ${esUltimo ? '' : 'border-l-2 border-gray-200'} pl-8 ml-2">
@@ -166,7 +180,7 @@ function renderizarHistorial(historial) {
         <div class="bg-gray-50 rounded-lg p-4">
           <p class="text-sm text-gray-500 mb-1">${fechaStr}</p>
           <p class="font-semibold text-gray-900 mb-1">${estadoInfo.titulo}</p>
-          ${item.nota || item.observaciones ? `<p class="text-sm text-gray-600">${item.nota || item.observaciones}</p>` : ''}
+          ${notaSegura ? `<p class="text-sm text-gray-600">${notaSegura}</p>` : ''}
         </div>
       </div>
     `;
