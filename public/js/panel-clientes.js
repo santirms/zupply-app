@@ -65,6 +65,33 @@ async function abrirModalDetalle(envioId) {
       '-';
     document.getElementById('modalTelefono').textContent = telefono;
 
+    const btnWhatsApp = document.getElementById('btnWhatsAppDetalle');
+    if (btnWhatsApp) {
+      const numeroWhatsApp = typeof telefono === 'string' ? telefono.replace(/\D/g, '') : '';
+      if (numeroWhatsApp) {
+        const destinatario =
+          envio.destinatario ||
+          envio.nombre_destinatario ||
+          envio?.destino?.nombre ||
+          'Cliente';
+        const trackingParaMensaje = tracking !== '-' ? tracking : (envio.id_venta || envio._id || '');
+        const linkSeguimiento = trackingParaMensaje
+          ? `https://zupply.tech/track/${trackingParaMensaje}`
+          : '';
+
+        const mensaje = `Hola ${destinatario}! 👋
+Tu envío está en camino 📦
+Seguí tu pedido en tiempo real: ${linkSeguimiento}
+Tracking: ${trackingParaMensaje}`;
+
+        btnWhatsApp.href = `https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(mensaje)}`;
+        btnWhatsApp.classList.remove('hidden');
+      } else {
+        btnWhatsApp.classList.add('hidden');
+        btnWhatsApp.href = '#';
+      }
+    }
+
     const referencia =
       envio.referencia ||
       envio.indicaciones ||
