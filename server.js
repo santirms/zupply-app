@@ -6,6 +6,7 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');   // ← importa el store
 const cors = require('cors');
 const mongoose = require('mongoose');
+const trackingRoutes = require('./routes/tracking');
 
 
 const app = express();
@@ -47,6 +48,15 @@ app.get('/auth/login', (_req, res) => {
 
 // Auth público (login/logout)
 app.use('/auth', require('./routes/auth'));
+app.use('/api/tracking', trackingRoutes);
+
+app.get('/track/:tracking', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'track.html'));
+});
+
+app.get('/track', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'track.html'));
+});
 
 /* -------- Guardia global: bloquea TODO lo no público si no hay sesión ------- */
 app.use((req, res, next) => {
@@ -57,7 +67,8 @@ app.use((req, res, next) => {
     req.path.startsWith('/assets') ||
     req.path === '/favicon.ico' ||
     req.path === '/robots.txt' ||
-    req.path === '/manifest.json'
+    req.path === '/manifest.json' ||
+    req.path === '/js/track.js'
   ) return next();
   if (req.session?.user) return next();
 
