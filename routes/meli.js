@@ -2,6 +2,7 @@
 const express = require('express');
 const router  = express.Router();
 const axios   = require('axios');
+const cors    = require('cors');
 
 const Token   = require('../models/Token');
 const Cliente = require('../models/Cliente');
@@ -137,9 +138,17 @@ router.get('/ping/:clienteId', async (req, res) => {
  * POST /api/auth/meli/webhook
  * ----------------------------------------- */
 // routes/meli.js  (webhook)
-router.post('/webhook', async (req, res) => {
+router.options('/webhook', cors());
+router.post('/webhook', cors(), async (req, res) => {
   const startTime = Date.now();
   try {
+    logger.info('[ML Webhook DEBUG] Headers', {
+      headers: req.headers,
+      hasAuth: !!req.headers?.authorization,
+      path: req.path,
+      baseUrl: req.baseUrl
+    });
+
     const { user_id, resource, topic } = req.body || {};
     res.status(200).json({ ok: true });           // respondé rápido
 
