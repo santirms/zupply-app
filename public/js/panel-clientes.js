@@ -76,7 +76,7 @@ async function abrirModalDetalle(envioId) {
           'Cliente';
         const trackingParaMensaje = tracking !== '-' ? tracking : (envio.id_venta || envio._id || '');
         const linkSeguimiento = trackingParaMensaje
-          ? `https://zupply.tech/track/${trackingParaMensaje}`
+          ? `https://app.zupply.tech/track/${trackingParaMensaje}`
           : '';
 
         const mensaje = `Hola ${destinatario}! 👋
