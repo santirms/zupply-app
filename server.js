@@ -69,7 +69,15 @@ app.get('/track/:tracking?', (_req, res) => {
 app.use((req, res, next) => {
   // Permitir auth y archivos públicos
   if (req.path.startsWith('/auth')) return next();
-  if (req.path.startsWith('/api/auth/meli')) return next();
+  const publicPaths = [
+    '/api/auth/meli/webhook',
+    '/api/tracking',
+    '/track'
+  ];
+
+  if (publicPaths.some(path => req.path === path || req.path.startsWith(path + '/'))) {
+    return next();
+  }
   if (req.path.startsWith('/auth/meli')) return next();
   // assets públicos necesarios para el login
   if (
