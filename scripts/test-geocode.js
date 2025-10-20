@@ -1,3 +1,4 @@
+require('../utils/logger');
 #!/usr/bin/env node
 const mongoose = require('mongoose');
 const Envio = require('../models/Envio');

@@ -1,3 +1,4 @@
+require('../utils/logger');
 // scripts/runMeliMaintenance.js
 require('dotenv').config();
 const mongoose = require('mongoose');

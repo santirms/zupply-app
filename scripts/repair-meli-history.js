@@ -1,3 +1,4 @@
+require('../utils/logger');
 #!/usr/bin/env node
 /* repair-meli-history v2: corrige fechas de delivered, sintetiza ready_to_ship/shipped/delivered
    - no retrocede estados (entregado gana)

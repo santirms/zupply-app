@@ -4,6 +4,7 @@ const Cliente = require('../models/Cliente');
 const Envio   = require('../models/Envio');
 const { getValidToken } = require('../utils/meliUtils');
 const { mapMeliToInterno } = require('../utils/meliStatus');
+const logger = require('../utils/logger');
 
 async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
   // 1) Traigo los clientes que TIENEN user_id (vinculados a MeLi)
@@ -34,8 +35,11 @@ async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
   const totalOfLinkedClients = await Envio.countDocuments({
     meli_id: { $ne: null }, cliente_id: { $in: idsVinc }
   });
-  console.log('[meliSync] diag:',
-    { enviosConMeliId: totalAll, deClientesVinculados: totalOfLinkedClients, clientesVinculados: clientesVinc.length });
+  logger.info('[meliSync] diag', {
+    enviosConMeliId: totalAll,
+    deClientesVinculados: totalOfLinkedClients,
+    clientesVinculados: clientesVinc.length
+  });
 
   // 4) Si no hay pendientes de clientes vinculados, corto rápido (evita “54” inútiles)
   if (!pendientes.length) {
@@ -68,16 +72,39 @@ async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
 
       if (!cliente?.user_id) {
         skipped_no_user++;
-        console.warn('[meliSync] skipped_no_user -> envio', e._id.toString(), 'cliente_id:', e.cliente_id?.toString?.());
+        logger.warn('[meliSync] skipped_no_user', {
+          envio_id: e._id.toString(),
+          cliente_id: e.cliente_id?.toString?.()
+        });
         continue;
       }
 
       // Pido estado actual a MeLi
       const access_token = await getValidToken(cliente.user_id);
-      const { data: sh } = await axios.get(
-        `https://api.mercadolibre.com/shipments/${meli_id}`,
-        { headers: { Authorization: `Bearer ${access_token}` } }
-      );
+      const url = `/shipments/${meli_id}`;
+      const startTime = Date.now();
+      let sh;
+
+      try {
+        const response = await axios.get(
+          `https://api.mercadolibre.com${url}`,
+          { headers: { Authorization: `Bearer ${access_token}` } }
+        );
+        sh = response.data;
+        logger.ml('Shipment sync fetched', meli_id, {
+          status: response.status,
+          duration_ms: Date.now() - startTime
+        });
+      } catch (error) {
+        logger.api(
+          'MercadoLibre',
+          'GET',
+          url,
+          error.response?.status || 0,
+          Date.now() - startTime
+        );
+        throw error;
+      }
 
       const estado_meli = {
         status:    sh?.status || null,
@@ -95,13 +122,20 @@ async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
     } catch (err) {
       errors_api++;
       fail++;
-      console.error('[meliSync] sync item error:', e._id.toString(), e.meli_id, err?.response?.data || err.message);
+      logger.error('[meliSync] sync item error', {
+        envio_id: e._id.toString(),
+        meli_id: e.meli_id,
+        error: err?.response?.data || err.message
+      });
     }
     // rate limit suave
     await new Promise(r => setTimeout(r, delayMs));
   }
 
-  return { total: pendientes.length, ok, fail, skipped_no_user, skipped_no_meli_id, errors_api };
+  const resumen = { total: pendientes.length, ok, fail, skipped_no_user, skipped_no_meli_id, errors_api };
+  logger.info('[meliSync] resumen', resumen);
+
+  return resumen;
 }
 
 module.exports = { syncPendingShipments };

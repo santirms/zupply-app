@@ -3,10 +3,15 @@ const axios = require('axios');
 const Envio = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const { getValidToken } = require('../utils/meliUtils');
+const logger = require('../utils/logger');
 
 const HYDRATE_TTL_MIN = 15;
 const DEBUG = process.env.MELI_HISTORY_DEBUG === '1';
-function dlog(...a){ if (DEBUG) console.log('[meli-history]', ...a); }
+function dlog(message, meta = {}) {
+  if (DEBUG) {
+    logger.debug(`[meli-history] ${message}`, meta);
+  }
+}
 
 // ---------------------------- helpers ----------------------------
 // --- Tracking: mapea checkpoints a nuestro esquema ---
@@ -456,11 +461,19 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
         );
 
         if (isValid) {
-          console.log(`📍 Coords de MeLi para ${shipmentIdForLog}:`, { lat: latNum, lon: lonNum });
+          logger.debug('Coords de MeLi (history)', {
+            shipment_id: shipmentIdForLog,
+            lat: latNum,
+            lon: lonNum
+          });
           meliLat = latNum;
           meliLon = lonNum;
         } else {
-          console.warn(`⚠️ Coords inválidas/fuera de Argentina para ${shipmentIdForLog}:`, { lat: latNum, lon: lonNum });
+          logger.warn('Coords inválidas/fuera de Argentina (history)', {
+            shipment_id: shipmentIdForLog,
+            lat: latNum,
+            lon: lonNum
+          });
           meliLat = null;
           meliLon = null;
         }
@@ -712,12 +725,15 @@ try {
       return b.fecha - a.fecha;
     });
 
-  console.log('🔍 Eventos ordenados por prioridad:', eventosConPrioridad.map(e => ({
-    sub: e.evento.estado_meli?.substatus,
-    especificidad: e.especificidad,
-    prioridad: e.prioridad,
-    antiguedad: `${e.antiguedad.toFixed(1)}h`
-  })));
+  logger.debug('Eventos ordenados por prioridad', {
+    envio_id: envio._id?.toString?.(),
+    eventos: eventosConPrioridad.map(e => ({
+      sub: e.evento.estado_meli?.substatus,
+      especificidad: e.especificidad,
+      prioridad: e.prioridad,
+      antiguedad_horas: Number(e.antiguedad.toFixed(1))
+    }))
+  });
 
   // El primer evento de la lista es el más relevante
   const eventoRelevante = eventosConPrioridad[0]?.evento;
@@ -735,13 +751,14 @@ try {
     // Mapear a estado interno
     estadoFinal = mapToInterno(statusFinal, substatusFinal);
     
-    console.log(`🎯 Evento más relevante para ${envio._id}:`, {
+    logger.info('Evento MeLi relevante', {
+      envio_id: envio._id?.toString?.(),
       fecha: fechaFinal,
       status: statusFinal,
       substatus: substatusFinal,
       especificidad: eventosConPrioridad[0].especificidad,
       prioridad: eventosConPrioridad[0].prioridad,
-      estadoInterno: estadoFinal
+      estado_interno: estadoFinal
     });
   } else {
     // Fallback al último evento conocido
@@ -756,7 +773,10 @@ try {
   const nuevoEsTerminal = TERMINALES.has(statusFinalNorm) || TERMINALES.has(statusFinalNorm === 'canceled' ? 'cancelled' : statusFinalNorm);
 
   if (prevEsTerminal && !nuevoEsTerminal) {
-    console.log(`🔒 Conservando estado terminal: ${current.estado_meli.status}`);
+    logger.debug('Conservando estado terminal', {
+      envio_id: envio._id?.toString?.(),
+      status: current.estado_meli.status
+    });
     estadoFinal = current.estado;
     statusFinal = current.estado_meli.status;
     substatusFinal = current.estado_meli.substatus;
@@ -780,7 +800,10 @@ try {
       update.$set.latitud = meliLat;
       update.$set.longitud = meliLon;
       update.$set.geocode_source = 'mercadolibre';
-      console.log(`💾 Guardando coordenadas de MeLi para ${shipmentId}`);
+      logger.debug('Guardando coordenadas de MeLi (history)', {
+        shipment_id: shipmentId,
+        envio_id: envio._id?.toString?.()
+      });
     }
   }
 

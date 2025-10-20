@@ -6,7 +6,9 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');   // ← importa el store
 const cors = require('cors');
 const mongoose = require('mongoose');
+const logger = require('./backend/utils/logger');
 const trackingRoutes = require('./routes/tracking');
+const requestLogger = require('./backend/middleware/requestLogger');
 
 
 const app = express();
@@ -17,6 +19,7 @@ app.use(cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(requestLogger);
 
 /* --------------------------- Sesión segura -------------------------- */
 app.use(session({
@@ -53,9 +56,9 @@ app.use('/api/tracking', trackingRoutes);
 const trackHtmlPath = path.join(__dirname, 'public', 'track.html');
 
 if (!fs.existsSync(trackHtmlPath)) {
-  console.error('❌ ERROR: public/track.html NO EXISTE');
+  logger.error('Track HTML missing', { path: trackHtmlPath });
 } else {
-  console.log('✅ track.html encontrado');
+  logger.info('track.html disponible', { path: trackHtmlPath });
 }
 
 app.get('/track/:tracking?', (_req, res) => {
@@ -228,14 +231,40 @@ app.use(express.static(path.join(__dirname, '../zupply-app')));
 app.use('/labels',  express.static(path.join(__dirname, 'public', 'labels')));
 app.use('/remitos', express.static(path.join(__dirname, 'public', 'remitos')));
 
+/* -------------------- Manejo de errores global -------------------- */
+app.use((err, req, res, _next) => {
+  logger.error('Unhandled error', {
+    error: err.message,
+    stack: err.stack,
+    request_id: req.requestId,
+    url: req.url,
+    method: req.method
+  });
+
+  res.status(500).json({
+    error: 'Internal server error',
+    request_id: req.requestId
+  });
+});
+
 /* -------------------- DB & server start -------------------- */
 const PORT = process.env.PORT || 4000;
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
-    console.log('Conectado a MongoDB');
-    app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
+    logger.info('MongoDB conectado');
+    app.listen(PORT, () => {
+      logger.info(`Servidor corriendo en puerto ${PORT}`, {
+        environment: process.env.NODE_ENV || 'development',
+        node_version: process.version
+      });
+    });
   })
-  .catch(err => console.error('Error de conexión:', err));
+  .catch(err => {
+    logger.error('Error de conexión a MongoDB', {
+      error: err.message,
+      stack: err.stack
+    });
+  });
 
 /* ------- Limpieza de archivos viejos en /public/remitos cada 24h -------- */
 function cleanupOldRemitos() {
@@ -255,3 +284,18 @@ function cleanupOldRemitos() {
 }
 cleanupOldRemitos();
 setInterval(cleanupOldRemitos, 24 * 60 * 60 * 1000);
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Rejection', {
+    reason: reason?.message || reason,
+    stack: reason?.stack
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception', {
+    error: error.message,
+    stack: error.stack
+  });
+  process.exit(1);
+});

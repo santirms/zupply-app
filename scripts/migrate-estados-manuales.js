@@ -1,3 +1,4 @@
+require('../utils/logger');
 require('dotenv').config();
 const mongoose = require('mongoose');
 const Envio = require('../models/Envio');

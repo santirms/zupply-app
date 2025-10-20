@@ -6,6 +6,7 @@ const Chofer     = require('../models/Chofer');
 const Cliente    = require('../models/Cliente');
 const { buildRemitoPDF } = require('../utils/remitoService');
 const { formatForWhatsApp } = require('../utils/normalizePhone');
+const logger = require('../utils/logger');
 
 const dayjs = require('dayjs');
 require('dayjs/locale/es');
@@ -225,7 +226,11 @@ const enviosPDF = [
       remito_url = out?.url || null;
       if (remito_url) await Asignacion.updateOne({ _id: asg._id }, { $set: { remito_url } });
     } catch (e) {
-      console.error('Error al generar remito:', e);
+      logger.error('Error al generar remito', {
+        error: e.message,
+        stack: e.stack,
+        asignacion_id: asg?._id?.toString?.()
+      });
     }
 
     // -------- WhatsApp --------
@@ -243,7 +248,10 @@ const enviosPDF = [
         whatsapp_url = `https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(msj)}`;
       }
       if (!telefonoLimpio && chDoc?.telefono) {
-        console.warn(`⚠️ Teléfono inválido para chofer ${chDoc?.nombre || ''}: ${chDoc?.telefono}`);
+        logger.warn('Teléfono inválido para chofer', {
+          chofer: chDoc?.nombre || '',
+          telefono: chDoc?.telefono
+        });
       }
     } catch {}
 
@@ -256,7 +264,10 @@ const enviosPDF = [
       externos: subdocsExternos.length
     });
   } catch (err) {
-    console.error('asignarViaQR fatal:', err);
+    logger.error('asignarViaQR fatal', {
+      error: err.message,
+      stack: err.stack
+    });
     return res.status(500).json({ error: 'No se pudo crear la asignación', detail: err.message });
   }
 }
@@ -274,7 +285,10 @@ async function asignarViaMapa(req, res) {
     req.body.tracking_ids = envios.map(e => e.id_venta || e.meli_id).filter(Boolean);
     return asignarViaQR(req, res);
   } catch (err) {
-    console.error('asignarViaMapa error:', err);
+    logger.error('asignarViaMapa error', {
+      error: err.message,
+      stack: err.stack
+    });
     return res.status(500).json({ error: 'No se pudo crear la asignación' });
   }
 }
@@ -335,7 +349,10 @@ async function listarAsignaciones(req, res) {
 
     res.json(out);
   } catch (e) {
-    console.error('listarAsignaciones error:', e);
+    logger.error('listarAsignaciones error', {
+      error: e.message,
+      stack: e.stack
+    });
     res.status(500).json({ error: 'Error al listar asignaciones' });
   }
 }
@@ -445,7 +462,11 @@ async function detalleAsignacion(req, res) {
 
     return res.json(out);
   } catch (e) {
-    console.error('detalleAsignacion error:', e);
+    logger.error('detalleAsignacion error', {
+      error: e.message,
+      stack: e.stack,
+      asignacion_id: req.params?.id
+    });
     res.status(500).json({ error: e.message || 'Error al obtener detalle' });
   }
 }
@@ -624,7 +645,11 @@ async function agregarEnvios(req, res) {
       externos: extSubdocs.length
     });
   } catch (err) {
-    console.error('agregarEnvios error:', err);
+    logger.error('agregarEnvios error', {
+      error: err.message,
+      stack: err.stack,
+      asignacion_id: req.params?.id
+    });
     return res.status(500).json({ error: 'No se pudo agregar' });
   }
 }
@@ -660,11 +685,19 @@ async function whatsappLink(req, res) {
 
     const whatsapp_url = tel ? `https://wa.me/${tel}?text=${encodeURIComponent(msj)}` : null;
     if (!tel && asg.chofer?.telefono) {
-      console.warn(`⚠️ Teléfono inválido para chofer ${asg.chofer?.nombre || ''}: ${asg.chofer?.telefono}`);
+      logger.warn('Teléfono inválido para chofer', {
+        chofer: asg.chofer?.nombre || '',
+        telefono: asg.chofer?.telefono,
+        asignacion_id: asg._id?.toString?.()
+      });
     }
     res.json({ ok: true, whatsapp_url });
   } catch (e) {
-    console.error('whatsappLink error:', e);
+    logger.error('whatsappLink error', {
+      error: e.message,
+      stack: e.stack,
+      asignacion_id: req.params?.id
+    });
     res.status(500).json({ error: 'No se pudo generar el WhatsApp' });
   }
 }
@@ -709,7 +742,11 @@ async function eliminarAsignacion(req, res) {
     await Asignacion.deleteOne({ _id: id });
     return res.json({ ok: true, reverted: countExist });
   } catch (e) {
-    console.error('eliminarAsignacion error:', e);
+    logger.error('eliminarAsignacion error', {
+      error: e.message,
+      stack: e.stack,
+      asignacion_id: req.params?.id
+    });
     res.status(500).json({ error: 'Error al eliminar asignación' });
   }
 }

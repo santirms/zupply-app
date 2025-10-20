@@ -1,3 +1,4 @@
+require('../utils/logger');
 #!/usr/bin/env node
 /**
  * Hydrate MeLi history for candidate shipments.
