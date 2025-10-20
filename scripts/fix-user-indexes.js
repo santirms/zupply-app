@@ -1,3 +1,4 @@
+require('../utils/logger');
 // scripts/fix-user-indexes.js
 const mongoose = require('mongoose');
 const User = require('../models/User');

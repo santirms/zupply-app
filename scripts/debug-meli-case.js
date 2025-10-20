@@ -1,3 +1,4 @@
+require('../utils/logger');
 // scripts/debug-meli-case.js
 require('dotenv').config();
 const mongoose = require('mongoose');

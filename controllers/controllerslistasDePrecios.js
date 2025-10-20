@@ -1,10 +1,11 @@
 // backend/controllers/listasDePreciosController.js
 const ListaDePrecios = require('../models/ListaDePrecios');
+const logger = require('../utils/logger');
 
 exports.listarListas = async (req, res) => {
   try {
     const prefix = req.query.prefix || '';
-    console.log('[listarListas] prefix=', prefix);
+    logger.info('[listarListas] consulta', { prefix });
 
     // Si recibimos un prefijo, filtramos; si no, devolvemos todo.
     const filter = prefix
@@ -12,11 +13,17 @@ exports.listarListas = async (req, res) => {
       : {};
 
     const listas = await ListaDePrecios.find(filter);
-    console.log(`[listarListas] encontradas ${listas.length} listas`);
+    logger.info('[listarListas] resultado', {
+      prefix,
+      total: listas.length
+    });
 
     return res.json(listas);
   } catch (err) {
-    console.error('[listarListas] ERROR', err);
+    logger.error('[listarListas] error', {
+      error: err.message,
+      stack: err.stack
+    });
     return res.status(500).json({ msg: 'Error listando listas' });
   }
 };
@@ -31,7 +38,10 @@ exports.crearLista = async (req, res) => {
     await nueva.save();
     return res.status(201).json(nueva);
   } catch (err) {
-    console.error('[crearLista] ERROR', err);
+    logger.error('[crearLista] error', {
+      error: err.message,
+      stack: err.stack
+    });
     return res.status(500).json({ msg: 'Error creando lista' });
   }
 };

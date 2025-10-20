@@ -1,3 +1,4 @@
+require('../utils/logger');
 // scripts/fix-meli-id.js
 // Corrige meli_id guardados como tracking → shipment.id (requiere OAuth del cliente)
 require('dotenv').config();

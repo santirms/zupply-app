@@ -12,6 +12,7 @@ const { ingestShipment } = require('../services/meliIngest'); // ÚNICA fuente d
 const { assertCronAuth } = require('../middlewares/cronAuth');
 const { backfillCliente } = require('../services/meliBackfill');
 const { ensureMeliHistory } = require('../services/meliHistory');
+const logger = require('../utils/logger');
 
 const CLIENT_ID     = process.env.MERCADOLIBRE_CLIENT_ID;
 const CLIENT_SECRET = process.env.MERCADOLIBRE_CLIENT_SECRET;
@@ -90,7 +91,11 @@ router.get('/callback', async (req, res) => {
     return res.redirect(303, url.toString());
 
   } catch (err) {
-    console.error('Error en OAuth callback:', err?.response?.data || err.message);
+    logger.error('Error en OAuth callback', {
+      error: err?.response?.data || err.message,
+      stack: err?.stack,
+      request_id: req.requestId
+    });
 
     const u = new URL('https://linked.zupply.tech/');
     u.searchParams.set('ok', '0');
@@ -118,7 +123,11 @@ router.get('/ping/:clienteId', async (req, res) => {
 
     return res.json({ ok: true, user_id: r.data.id, nickname: r.data.nickname });
   } catch (err) {
-    console.error('Ping token error:', err.response?.data || err.message);
+    logger.error('Ping token error', {
+      error: err.response?.data || err.message,
+      stack: err.stack,
+      request_id: req.requestId
+    });
     return res.status(500).json({ ok:false, error: err.response?.data?.message || err.message });
   }
 });
@@ -129,6 +138,7 @@ router.get('/ping/:clienteId', async (req, res) => {
  * ----------------------------------------- */
 // routes/meli.js  (webhook)
 router.post('/webhook', async (req, res) => {
+  const startTime = Date.now();
   try {
     const { user_id, resource, topic } = req.body || {};
     res.status(200).json({ ok: true });           // respondé rápido
@@ -139,14 +149,31 @@ router.post('/webhook', async (req, res) => {
     if (!cliente || !cliente.auto_ingesta) return;
 
     const shipmentId = String(resource.split('/').pop());
+    logger.ml('Webhook received', shipmentId, {
+      topic,
+      resource,
+      user_id,
+      request_id: req.requestId
+    });
+
     await ingestShipment({ shipmentId, cliente });
 
     // ✅ hidratar historial con horas reales de MeLi
     const token = await getValidToken(cliente.user_id);
     const envio = await Envio.findOne({ meli_id: shipmentId }).lean();
     if (envio) await ensureMeliHistory(envio._id, { token, force: true });
+
+    logger.ml('Webhook processed', shipmentId, {
+      result: 'success',
+      duration_ms: Date.now() - startTime,
+      request_id: req.requestId
+    });
   } catch (err) {
-    console.error('Webhook ML error:', err?.response?.data || err.message);
+    logger.error('Webhook ML error', {
+      error: err?.response?.data || err.message,
+      stack: err?.stack,
+      request_id: req.requestId
+    });
   }
 });
 
@@ -172,7 +199,11 @@ router.post('/force-sync/:meli_id', async (req, res) => {
     const latest = await Envio.findById(envio._id).lean();
     res.json({ ok: true, envio: latest || updated });
   } catch (err) {
-    console.error('force-sync error:', err.response?.data || err.message);
+    logger.error('force-sync error', {
+      error: err.response?.data || err.message,
+      stack: err.stack,
+      request_id: req.requestId
+    });
     res.status(500).json({ error: 'Error al sincronizar' });
   }
 });
@@ -205,13 +236,21 @@ router.post('/sync-pending', assertCronAuth, async (req, res) => {
         ok++;
       } catch (err) {
         fail++;
-        console.error('sync item error:', e._id, err?.response?.data || err.message);
+        logger.error('sync item error', {
+          envio_id: e._id,
+          error: err?.response?.data || err.message,
+          stack: err?.stack
+        });
       }
       await new Promise(r => setTimeout(r, 150)); // rate limit suave
     }
     res.json({ ok, fail, hist, total: pendientes.length });
   } catch (err) {
-    console.error('sync-pending error:', err);
+    logger.error('sync-pending error', {
+      error: err.message,
+      stack: err.stack,
+      request_id: req.requestId
+    });
     res.status(500).json({ error: 'Error en sync-pending' });
   }
 });
@@ -239,7 +278,10 @@ router.post('/sync-pending', assertCronAuth, async (req, res) => {
         await ensureMeliHistory(e._id, { token, force: true });
         await new Promise(r => setTimeout(r, 120)); // rate-limit suave
       } catch (err) {
-        console.warn('hydrate-today item fail:', e._id, err.message);
+        logger.warn('hydrate-today item fail', {
+          envio_id: e._id,
+          error: err.message
+        });
       }
     }
 
@@ -295,7 +337,11 @@ router.post('/sync-pending', assertCronAuth, async (req, res) => {
       sampleUltimos: resumen.slice(0, 20)
     });
   } catch (err) {
-    console.error('hydrate-today error:', err);
+    logger.error('hydrate-today error', {
+      error: err.message,
+      stack: err.stack,
+      request_id: req.requestId
+    });
     res.status(500).json({ ok:false, error: err.message });
   }
 });
@@ -320,13 +366,21 @@ router.post('/backfill-order-id', async (req, res) => {
         ok++;
       } catch (err) {
         fail++;
-        console.error('backfill item error:', e._id, err?.response?.data || err.message);
+        logger.error('backfill item error', {
+          envio_id: e._id,
+          error: err?.response?.data || err.message,
+          stack: err?.stack
+        });
       }
       await new Promise(r => setTimeout(r, 120));
     }
     res.json({ ok, fail, total: toFix.length });
   } catch (err) {
-    console.error('backfill-order-id error:', err);
+    logger.error('backfill-order-id error', {
+      error: err.message,
+      stack: err.stack,
+      request_id: req.requestId
+    });
     res.status(500).json({ error: 'Error en backfill-order-id' });
   }
 });
@@ -342,7 +396,11 @@ router.post('/backfill/:clienteId', async (req, res) => {
     const r = await backfillCliente({ cliente, days });
     return res.json({ ok:true, ...r });
   } catch (err) {
-    console.error('backfill cliente error:', err.response?.data || err.message);
+    logger.error('backfill cliente error', {
+      error: err.response?.data || err.message,
+      stack: err.stack,
+      request_id: req.requestId
+    });
     res.status(500).json({ ok:false, error:'Error en backfill' });
   }
 });
@@ -364,7 +422,11 @@ router.post('/backfill-all', async (req, res) => {
     }
     res.json({ ok:true, totalClientes: clientes.length, stats });
   } catch (err) {
-    console.error('backfill-all error:', err.response?.data || err.message);
+    logger.error('backfill-all error', {
+      error: err.response?.data || err.message,
+      stack: err.stack,
+      request_id: req.requestId
+    });
     res.status(500).json({ ok:false, error:'Error en backfill-all' });
   }
 });
@@ -392,7 +454,10 @@ router.get('/debug/pending-linked', async (req, res) => {
       sample: linkedPending
     });
   } catch (e) {
-    console.error('debug/pending-linked', e);
+    logger.error('debug/pending-linked', {
+      error: e.message,
+      stack: e.stack
+    });
     res.status(500).json({ ok:false, error:'debug failed' });
   }
 });

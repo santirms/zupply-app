@@ -1,3 +1,4 @@
+require('../utils/logger');
 // scripts/seedAdmin.js
 require('dotenv').config();
 const mongoose = require('mongoose');

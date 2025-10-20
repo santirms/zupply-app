@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+require('../utils/logger');
 const mongoose = require('mongoose');
 
 const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI;

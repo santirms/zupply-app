@@ -7,6 +7,7 @@ const Zona   = require('../models/Zona');
 const { getValidToken }   = require('../utils/meliUtils');
 const { mapMeliToInterno }= require('../utils/meliStatus');
 const detectarZona        = require('../utils/detectarZona');
+const logger              = require('../utils/logger');
 
 // ---------- precio por zona ----------
 async function precioPorZona(cliente, zonaNombre) {
@@ -23,31 +24,91 @@ async function precioPorZona(cliente, zonaNombre) {
 // ---------- fetch ML ----------
 async function fetchShipment(shipmentId, user_id) {
   const access_token = await getValidToken(user_id);
-  const { data } = await axios.get(
-    `https://api.mercadolibre.com/shipments/${shipmentId}`,
-    { headers: { Authorization: `Bearer ${access_token}` } }
-  );
-  return data || {};
+  const url = `/shipments/${shipmentId}`;
+  const startTime = Date.now();
+
+  try {
+    const { data, status } = await axios.get(
+      `https://api.mercadolibre.com${url}`,
+      { headers: { Authorization: `Bearer ${access_token}` } }
+    );
+
+    logger.ml('Shipment fetched', shipmentId, {
+      status,
+      duration_ms: Date.now() - startTime
+    });
+
+    return data || {};
+  } catch (error) {
+    logger.api(
+      'MercadoLibre',
+      'GET',
+      url,
+      error.response?.status || 0,
+      Date.now() - startTime
+    );
+    throw error;
+  }
 }
 
 async function fetchShipmentHistory(shipmentId, user_id) {
   const access_token = await getValidToken(user_id);
-  const { data } = await axios.get(
-    `https://api.mercadolibre.com/shipments/${shipmentId}/history`,
-    { headers: { Authorization: `Bearer ${access_token}` } }
-  );
-  // Puede venir como array o como {results:[...]}
-  return Array.isArray(data) ? data : (data?.results || []);
+  const url = `/shipments/${shipmentId}/history`;
+  const startTime = Date.now();
+
+  try {
+    const { data, status } = await axios.get(
+      `https://api.mercadolibre.com${url}`,
+      { headers: { Authorization: `Bearer ${access_token}` } }
+    );
+
+    logger.ml('Shipment history fetched', shipmentId, {
+      status,
+      duration_ms: Date.now() - startTime
+    });
+
+    // Puede venir como array o como {results:[...]}
+    return Array.isArray(data) ? data : (data?.results || []);
+  } catch (error) {
+    logger.api(
+      'MercadoLibre',
+      'GET',
+      url,
+      error.response?.status || 0,
+      Date.now() - startTime
+    );
+    throw error;
+  }
 }
 
 async function fetchPackIdFromOrder(orderId, user_id) {
   if (!orderId) return null;
   const access_token = await getValidToken(user_id);
-  const { data: order } = await axios.get(
-    `https://api.mercadolibre.com/orders/${orderId}`,
-    { headers: { Authorization: `Bearer ${access_token}` } }
-  );
-  return order?.pack_id || null;
+  const url = `/orders/${orderId}`;
+  const startTime = Date.now();
+
+  try {
+    const { data: order, status } = await axios.get(
+      `https://api.mercadolibre.com${url}`,
+      { headers: { Authorization: `Bearer ${access_token}` } }
+    );
+
+    logger.ml('Order fetched', orderId, {
+      status,
+      duration_ms: Date.now() - startTime
+    });
+
+    return order?.pack_id || null;
+  } catch (error) {
+    logger.api(
+      'MercadoLibre',
+      'GET',
+      url,
+      error.response?.status || 0,
+      Date.now() - startTime
+    );
+    throw error;
+  }
 }
 
 // ---------- util ML ----------
@@ -137,9 +198,13 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
         latitud = latNum;
         longitud = lonNum;
         geocode_source = 'mercadolibre';
-        console.log(`📍 Coords de MeLi: ${sh.id}`, { latitud, longitud });
+        logger.debug('Coords de MeLi', { shipment_id: sh.id, latitud, longitud });
       } else {
-        console.warn(`⚠️ Coords inválidas/fuera de Argentina para ${sh.id}:`, { lat: latNum, lon: lonNum });
+        logger.warn('Coords inválidas/fuera de Argentina', {
+          shipment_id: sh.id,
+          lat: latNum,
+          lon: lonNum
+        });
       }
     }
   }
@@ -207,7 +272,11 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
       update.$set.latitud = latitud;
       update.$set.longitud = longitud;
       update.$set.geocode_source = geocode_source;
-      console.log(`💾 Guardando coordenadas de MeLi (ingest): ${sh.id}`, { latitud, longitud });
+      logger.debug('Guardando coordenadas de MeLi (ingest)', {
+        shipment_id: sh.id,
+        latitud,
+        longitud
+      });
     }
   }
 

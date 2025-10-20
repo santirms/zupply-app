@@ -1,3 +1,4 @@
+require('../utils/logger');
 // scripts/runSyncPending.js
 require('dotenv').config();
 const mongoose = require('mongoose');
