@@ -553,7 +553,7 @@ function generarMensajeWhatsApp(envio = {}) {
     '',
     'Tu envío está en camino 📦',
     '',
-    '📍 Seguí tu pedido en tiempo real:',
+    '📍 Seguí tu pedido en este link:',
     linkSeguimiento,
     '',
     `Tracking: ${tracking}`,
