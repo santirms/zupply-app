@@ -549,17 +549,20 @@ function generarMensajeWhatsApp(envio = {}) {
   const linkSeguimiento = tracking ? `https://app.zupply.tech/track/${tracking}` : '';
 
   const lineas = [
-    `Hola ${destinatario}! 👋`,
+    `Hola ${destinatario}!`,
     '',
-    'Tu envío está en camino 📦',
-    '',
-    '📍 Seguí tu pedido en este link:',
-    linkSeguimiento,
-    '',
-    `Tracking: ${tracking}`,
-    '',
-    '¡Gracias por tu compra!'
+    'Tu envío está en camino 📦'
   ];
+
+  if (linkSeguimiento) {
+    lineas.push('', 'Seguí tu pedido en este link:', linkSeguimiento);
+  }
+
+  if (tracking) {
+    lineas.push('', `Tracking: ${tracking}`);
+  }
+
+  lineas.push('', 'Gracias por tu compra!');
 
   return lineas.join('\n');
 }

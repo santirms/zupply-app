@@ -79,10 +79,23 @@ async function abrirModalDetalle(envioId) {
           ? `https://app.zupply.tech/track/${trackingParaMensaje}`
           : '';
 
-        const mensaje = `Hola ${destinatario}! 👋
-Tu envío está en camino 📦
-Seguí tu pedido en tiempo real: ${linkSeguimiento}
-Tracking: ${trackingParaMensaje}`;
+        const lineasMensaje = [
+          `Hola ${destinatario}!`,
+          '',
+          'Tu envío está en camino 📦'
+        ];
+
+        if (linkSeguimiento) {
+          lineasMensaje.push('', 'Seguí tu pedido en este link:', linkSeguimiento);
+        }
+
+        if (trackingParaMensaje) {
+          lineasMensaje.push('', `Tracking: ${trackingParaMensaje}`);
+        }
+
+        lineasMensaje.push('', 'Gracias por tu compra!');
+
+        const mensaje = lineasMensaje.join('\n');
 
         btnWhatsApp.href = `https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(mensaje)}`;
         btnWhatsApp.classList.remove('hidden');
