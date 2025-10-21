@@ -98,6 +98,12 @@ const envioSchema = new Schema({
     default: true  // true = MeLi (sincroniza), false = manual/etiquetas (editable)
   },
 
+  comprador_ausente_confirmado: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+
   // Origen del envío
   origen: {
     type: String,
