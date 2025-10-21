@@ -647,6 +647,11 @@ try {
     return /(receiver|buyer|client|addressee)[_\s-]?absent/.test(sub);
   });
 
+  const huboAusenteEnBD = currentArr.some(h => {
+    const sub = (h?.estado_meli?.substatus || '').toLowerCase();
+    return /(receiver|buyer|client|addressee)[_\s-]?absent/.test(sub);
+  });
+
   // ¿Hay delivered en la línea de tiempo? (con su fecha real)
   const deliveredEvt = (Array.isArray(all) ? all : [])
     .filter(h => (h?.estado_meli?.status || h?.estado || '').toString().toLowerCase() === 'delivered')
@@ -669,6 +674,17 @@ try {
   // Si hay delivered real, priorizamos ese estado/fecha
   let stFinal   = deliveredEvt ? 'delivered' : stBase;
   let subFinal  = deliveredEvt ? (deliveredEvt?.estado_meli?.substatus || '') : subBase;
+
+  // ===== DEBUG =====
+  console.log('🔍 [DEBUG] Envío:', envio.meli_id);
+  console.log('   SubFinal:', subFinal);
+  console.log('   huboAusente (nuevo):', huboAusente);
+  console.log('   huboAusente (BD):', huboAusenteEnBD);
+  console.log('   Flag:', envio.comprador_ausente_confirmado);
+  console.log('   Substatuses en BD:', currentArr.map(h => h?.estado_meli?.substatus).filter(Boolean));
+  // ===== FIN DEBUG =====
+
+  const huboAusenteFinal = huboAusente || huboAusenteEnBD || envio.comprador_ausente_confirmado;
   const dateFinal = deliveredEvt ? (deliveredEvt.at || fallbackDate) : (lastEvt?.at || fallbackDate);
 
   // **Nunca** dejar substatus en delivered
@@ -761,7 +777,7 @@ try {
     // Mapear a estado interno
     estadoFinal = mapToInterno(statusFinal, substatusFinal);
 
-    if (huboAusente && /resched.*meli/.test((substatusFinal || '').toLowerCase())) {
+    if (huboAusenteFinal && /resched.*meli/.test((substatusFinal || '').toLowerCase())) {
       console.log('[meliHistory] Preservando comprador_ausente (ML cambió post-11pm)');
       estadoFinal = 'comprador_ausente';
     }
