@@ -13,6 +13,130 @@ function dlog(message, meta = {}) {
   }
 }
 
+function sanitizeStr(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+  return null;
+}
+
+function pickFirst(...values) {
+  for (const value of values) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === 'string' && value.trim() === '') continue;
+    return value;
+  }
+  return null;
+}
+
+function toNumberOrNull(value) {
+  if (value === undefined || value === null) return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function normalizeLocation(rawLocation) {
+  if (!rawLocation || typeof rawLocation !== 'object') return null;
+
+  const lat = toNumberOrNull(pickFirst(
+    rawLocation.latitude,
+    rawLocation.lat,
+    rawLocation.latitud,
+    rawLocation.location?.latitude,
+    rawLocation.coordinates?.latitude,
+    rawLocation.geo?.latitude,
+    rawLocation.geo?.lat
+  ));
+
+  const lng = toNumberOrNull(pickFirst(
+    rawLocation.longitude,
+    rawLocation.lon,
+    rawLocation.longitud,
+    rawLocation.location?.longitude,
+    rawLocation.coordinates?.longitude,
+    rawLocation.geo?.longitude,
+    rawLocation.geo?.lng
+  ));
+
+  const descripcion = sanitizeStr(pickFirst(
+    rawLocation.descripcion,
+    rawLocation.description,
+    rawLocation.address_line,
+    rawLocation.address,
+    rawLocation.comment,
+    rawLocation.title,
+    rawLocation.agency,
+    rawLocation.branch,
+    rawLocation.name,
+    rawLocation.city?.name,
+    rawLocation.city,
+    rawLocation.state?.name,
+    rawLocation.state_name,
+    rawLocation.zip_code,
+    rawLocation.reference
+  ));
+
+  const location = {};
+  if (lat !== null) location.lat = lat;
+  if (lng !== null) location.lng = lng;
+  if (descripcion) location.descripcion = descripcion;
+
+  return Object.keys(location).length ? location : null;
+}
+
+function metaValue(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'object') {
+    return metaValue(value.name || value.description || value.label || value.title || value.id || value.code);
+  }
+  return null;
+}
+
+function buildMetadataFromEvent(evt) {
+  if (!evt || typeof evt !== 'object') return null;
+  const meta = {};
+  const assign = (key, value) => {
+    const val = metaValue(value);
+    if (val !== null && val !== undefined) {
+      meta[key] = val;
+    }
+  };
+
+  assign('status_code', evt.status_code);
+  assign('status_category', evt.status_category);
+  assign('source', evt.source || evt.origin);
+  assign('shipping_mode', evt.shipping_mode);
+  assign('carrier', evt.carrier || evt.logistic_type);
+  assign('agency', evt.agency || evt.branch);
+  assign('tracking_number', evt.tracking_number || evt.tracking_id);
+  assign('checkpoint_status', evt.checkpoint_status);
+
+  return Object.keys(meta).length ? meta : null;
+}
+
+function buildDescripcion(status, substatus, detail) {
+  const detailStr = sanitizeStr(detail);
+  if (detailStr) return detailStr;
+  const statusStr = sanitizeStr(status);
+  const subStr = sanitizeStr(substatus);
+  if (statusStr && subStr) return `${statusStr} · ${subStr}`;
+  return statusStr || subStr || null;
+}
+
 // ---------------------------- helpers ----------------------------
 // --- Tracking: mapea checkpoints a nuestro esquema ---
 function mapFromTracking(tk) {
@@ -25,17 +149,34 @@ function mapFromTracking(tk) {
               : Array.isArray(tk.checkpoints) ? tk.checkpoints
               : [];
 
-  const push = (dateVal, status, substatus, sourceKey) => {
+  const push = (dateVal, status, substatus, sourceKey, rawEvent = {}) => {
     if (!dateVal) return;
     const dt = new Date(dateVal);
     if (isNaN(+dt)) return;
-    out.push({
+
+    const detalle = sanitizeStr(rawEvent.status_detail || rawEvent.detail || rawEvent.description);
+    const subTexto = sanitizeStr(rawEvent.substatus || substatus);
+    const descripcion = buildDescripcion(status, subTexto, detalle);
+    const metadata = buildMetadataFromEvent(rawEvent);
+    const ubicacion = normalizeLocation(rawEvent.location || rawEvent.address || rawEvent.place);
+
+    const entry = {
       at: dt,
       estado: status,
       estado_meli: { status, substatus: substatus || '' },
       actor_name: 'MeLi',
       source: `meli-history:tracking:${sourceKey}`
-    });
+    };
+
+    entry.descripcion = descripcion || null;
+    entry.substatus_texto = subTexto || null;
+    entry.notas = detalle || null;
+
+    if (metadata) entry.metadata = metadata;
+    if (ubicacion) entry.ubicacion = ubicacion;
+    if (rawEvent?.id) entry.meli_event_id = String(rawEvent.id);
+
+    out.push(entry);
   };
 
   for (const it of items) {
@@ -86,14 +227,14 @@ function mapFromTracking(tk) {
       status = 'not_delivered'; sub = '';
     }
 
-    if (status) push(when, status, sub, raw || 'checkpoint');
+    if (status) push(when, status, sub, raw || 'checkpoint', it);
   }
 
   // orden + dedupe
   out.sort((a,b) => +new Date(a.at) - +new Date(b.at));
   const seen = new Set();
   const res = [];
-  const key = h => `${+new Date(h.at)}|${(h.estado||'').toLowerCase()}|${(h.estado_meli?.substatus||'').toLowerCase()}|${(h.source||'').toLowerCase()}`;
+  const key = h => keyOf(h);
   for (const h of out) {
     const k = key(h);
     if (!seen.has(k)) { seen.add(k); res.push(h); }
@@ -170,9 +311,16 @@ function synthesizeFromShipment(shipment, ventaDateIso /* string o null */) {
 function keyOf(h) {
   const ts  = +new Date(h?.at || h?.updatedAt || 0);
   const mst = (h?.estado_meli?.status || h?.estado || h?.tipo || '').toLowerCase();
-  const mss = (h?.estado_meli?.substatus || '').toLowerCase();
+  const mss = (h?.estado_meli?.substatus || h?.substatus_texto || '').toLowerCase();
   const src = (h?.source || '').toLowerCase();
-  return `${ts}|${mst}|${mss}|${src}`;
+  const eventId = (h?.meli_event_id || '').toLowerCase();
+  const desc = (h?.descripcion || h?.notas || h?.note || '').toString().toLowerCase();
+
+  if (eventId) {
+    return `${eventId}|${ts}|${src}`;
+  }
+
+  return `${ts}|${mst}|${mss}|${src}|${desc}`;
 }
 
 // Mapea el /history crudo de MeLi a nuestro formato
@@ -196,13 +344,30 @@ function mapHistory(items = []) {
     const at = new Date(rawDate);
     if (isNaN(+at)) continue;
 
-    out.push({
+    const detalle = sanitizeStr(e?.status_detail || e?.description || e?.detail);
+    const subTexto = sanitizeStr(e?.substatus);
+    const descripcion = buildDescripcion(e?.status, subTexto || sub, detalle);
+    const metadata = buildMetadataFromEvent(e);
+    const ubicacion = normalizeLocation(e?.location || e?.address || e?.place || e?.agency_address);
+
+    const entry = {
       at,
       estado: e?.status || '',
       estado_meli: { status: e?.status || '', substatus: sub },
       actor_name: 'MeLi',
       source: 'meli-history',
-    });
+      descripcion: descripcion || null,
+      substatus_texto: subTexto || null,
+      notas: detalle || null
+    };
+
+    if (metadata) entry.metadata = metadata;
+    if (ubicacion) entry.ubicacion = ubicacion;
+    if (e?.id || e?.uid || e?.event_id) {
+      entry.meli_event_id = String(e.id || e.uid || e.event_id);
+    }
+
+    out.push(entry);
   }
   return out;
 }
@@ -329,17 +494,33 @@ function buildHistoryFromShipment(sh) {
   const dh = sh.date_history && typeof sh.date_history === 'object' ? sh.date_history : {};
 
   // helper
-  const push = (dateVal, status, substatus, sourceKey) => {
+  const push = (dateVal, status, substatus, sourceKey, extra = {}) => {
     if (!dateVal) return;
     const dt = new Date(dateVal);
     if (isNaN(+dt)) return;
-    out.push({
+    const detalle = sanitizeStr(extra.notas || extra.detalle);
+    const subTexto = sanitizeStr(extra.substatus_texto || substatus);
+    const descripcion = buildDescripcion(status, subTexto || substatus, detalle);
+
+    const entry = {
       at: dt,
       estado: status,
       estado_meli: { status, substatus: substatus || '' },
       actor_name: 'MeLi',
-      source: `meli-history:shipment:${sourceKey}`
-    });
+      source: `meli-history:shipment:${sourceKey}`,
+      descripcion: descripcion || null,
+      substatus_texto: subTexto || null,
+      notas: detalle || null
+    };
+
+    const metadata = extra.metadata && typeof extra.metadata === 'object' && Object.keys(extra.metadata).length
+      ? extra.metadata
+      : null;
+    if (metadata) entry.metadata = metadata;
+    if (extra.ubicacion) entry.ubicacion = extra.ubicacion;
+    if (extra.meli_event_id) entry.meli_event_id = extra.meli_event_id;
+
+    out.push(entry);
   };
   const pick = (...vals) => {
     for (const v of vals) {
@@ -376,11 +557,10 @@ function buildHistoryFromShipment(sh) {
 
   // 5) Intento fallido / ausente
   const dtAbsent = pick(dh.receiver_absent, dh.not_delivered, sh.date_not_delivered, sh.date_receiver_absent);
-  if (dtAbsent) push(dtAbsent, 'not_delivered', 'receiver_absent', 'not_delivered|receiver_absent');
-  // Contar intentos de entrega fallidos
-  const intentos = (sh.delivery_attempts || sh.attempts || 0);
-  if (dtAbsent && intentos > 0) {
-    out[out.length - 1].metadata = { intentos };
+  if (dtAbsent) {
+    const intentos = (sh.delivery_attempts || sh.attempts || 0);
+    const extra = intentos > 0 ? { metadata: { intentos } } : undefined;
+    push(dtAbsent, 'not_delivered', 'receiver_absent', 'not_delivered|receiver_absent', extra);
   }
 
   // 6) Entregado
@@ -407,7 +587,6 @@ function buildHistoryFromShipment(sh) {
   out.sort((a,b) => +new Date(a.at) - +new Date(b.at));
   const seen = new Set();
   const res = [];
-  const keyOf = (h) => `${+new Date(h.at)}|${(h.estado||'').toLowerCase()}|${(h.estado_meli?.substatus||'').toLowerCase()}|${(h.source||'').toLowerCase()}`;
   for (const h of out) {
     const k = keyOf(h);
     if (!seen.has(k)) { seen.add(k); res.push(h); }
