@@ -762,7 +762,7 @@ try {
     estadoFinal = mapToInterno(statusFinal, substatusFinal);
 
     if (huboAusente && /resched.*meli/.test((substatusFinal || '').toLowerCase())) {
-      console.log('[meliHistory] Preservando comprador_ausente (ML cambió post-11am)');
+      console.log('[meliHistory] Preservando comprador_ausente (ML cambió post-11pm)');
       estadoFinal = 'comprador_ausente';
     }
 
@@ -780,7 +780,7 @@ try {
     estadoFinal = mapToInterno(stFinal, subFinal);
 
     if (huboAusente && /resched.*meli/.test((subFinal || '').toLowerCase())) {
-      console.log('[meliHistory] Preservando comprador_ausente (ML cambió post-11am)');
+      console.log('[meliHistory] Preservando comprador_ausente (ML cambió post-11pm)');
       estadoFinal = 'comprador_ausente';
     }
   }
