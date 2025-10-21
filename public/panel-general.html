@@ -468,7 +468,8 @@ function estadoBadge(key,label){
 
     // Estados de recepción
     ready_for_pickup: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800',
-    picking: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800'
+    picking: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800',
+    listo_retiro: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800'
   };
 
   const classes = BADGE_CLASSES[key] || 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300';
@@ -496,39 +497,40 @@ function getEstadoColorClass(estado){
 }
 window.getEstadoColorClass = getEstadoColorClass;
 
+const SUBSTATUS_LABELS = {
+  buyer_rescheduled: 'Buyer rescheduled',
+  rescheduled_by_meli: 'Rescheduled by MeLi',
+  delayed: 'Delayed',
+  in_transit: 'In transit',
+  out_for_delivery: 'Out for delivery',
+  at_hub: 'At hub',
+  rescheduled_by_buyer: 'Rescheduled by buyer',
+  rescheduled_by_receiver: 'Rescheduled by receiver'
+};
+
+function resolveSubstatusDisplay(envio){
+  if(!envio) return '';
+  if(envio.substatus_display) return envio.substatus_display;
+  const raw = envio.substatus || envio.ml_substatus || envio.estado_meli?.substatus || '';
+  if(!raw) return '';
+  const key = String(raw).toLowerCase();
+  return SUBSTATUS_LABELS[key] || String(raw).replace(/_/g,' ');
+}
+
 function uiStatus(envio){
   const raw=(envio.estado||envio.status||envio.estado_meli?.status||'').toLowerCase();
-  const subRaw=(envio.estado_meli?.substatus||'').toLowerCase().trim();
 
   const STATUS_ALIAS = {
     pending: 'pendiente',
-    handling: 'handling',
     ready_to_ship: 'pendiente',
+    handling: 'en_planta',
     shipped: 'en_camino',
     delivered: 'entregado',
     not_delivered: 'no_entregado',
     cancelled: 'cancelado'
   };
 
-  let norm = STATUS_ALIAS[raw] || raw || 'pendiente';
-
-  const isAbsent = /(recipient|receiver|buyer|client|addressee|destinatario)[_\s-]?(absent|not[_\s-]?at[_\s-]?home|ausente)/.test(subRaw) || subRaw==='comprador_ausente';
-  const isNotVisited = /(not[_\s-]?visited|inaccesible|aver[ií]a)/.test(subRaw);
-  const isBadAddr = /(bad[_\s-]?address|direcci[oó]n[_\s-]?err[oó]nea)/.test(subRaw);
-  const isReschedByBuyer = /(resched.*by[_\s-]?receiver|resched.*by[_\s-]?buyer)/.test(subRaw);
-  const isReschedByMeli = /resched.*by[_\s-]?meli/.test(subRaw);
-  const isDelay = /(with_)?delay(ed)?|demora/.test(subRaw);
-  const isSoon = /(arriving[_\s-]?)?soon[_\s-]?(deliver)?|llega[_\s-]?pronto/.test(subRaw);
-  const isAgencyClosed = /agency[_\s-]?closed|sucursal[_\s-]?cerrada/.test(subRaw);
-
-  if (isAbsent) norm = 'comprador_ausente';
-  else if (isNotVisited) norm = 'inaccesible';
-  else if (isBadAddr) norm = 'direccion_erronea';
-  else if (isAgencyClosed) norm = 'agencia_cerrada';
-  else if (isReschedByBuyer) norm = 'reprogramado';
-  else if (isReschedByMeli) norm = 'demorado';
-  else if (isDelay) norm = 'demorado';
-  else if (isSoon) norm = 'en_camino';
+  const norm = STATUS_ALIAS[raw] || raw || 'pendiente';
 
   const STATUS_LABELS = {
     // Estados manuales
@@ -562,7 +564,10 @@ function uiStatus(envio){
 
     // Estados de recepción
     ready_for_pickup: 'Listo para retirar',
-    picking: 'Preparando'
+    picking: 'Preparando',
+
+    // Estados especiales
+    listo_retiro: 'Listo para retirar'
   };
 
   let cardLabel = STATUS_LABELS[norm];
@@ -571,15 +576,9 @@ function uiStatus(envio){
     cardLabel = fallback.replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  if (isReschedByBuyer) cardLabel = 'Reprogramado por comprador';
-  if (isReschedByMeli) cardLabel = 'Demorado';
-  if (isSoon) cardLabel = 'Llega pronto';
-  if (isAgencyClosed) cardLabel = 'Agencia cerrada';
+  const substatusDisplay = resolveSubstatusDisplay(envio);
 
-  let chip=subRaw? subRaw.replace(/_/g,' ') : '';
-  if (isReschedByMeli) chip = 'por demora';
-
-  return { key:norm, label:cardLabel, substatus:chip };
+  return { key:norm, label:cardLabel, substatus:substatusDisplay };
 }
 
 async function cargarChoferes(){

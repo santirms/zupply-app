@@ -3,6 +3,7 @@ const Envio = require('../models/Envio');
 const QRCode = require('qrcode');
 const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
 const axios = require('axios');
+const { formatSubstatus } = require('../services/meliHistory');
 
 // ——— CONFIG ———
 const HYDRATE_TTL_MIN = 15; // re-hidratar si pasaron > 15 min
@@ -155,7 +156,12 @@ exports.crearEnvio = async (req, res) => {
 exports.listarEnvios = async (req, res) => {
   try {
     const envios = await Envio.find().lean();
-    res.json(envios);
+    const enriquecidos = envios.map(envio => {
+      const substatus = envio.substatus || envio.ml_substatus || envio.estado_meli?.substatus || null;
+      const display = envio.substatus_display || (substatus ? formatSubstatus(substatus) : null);
+      return { ...envio, substatus_display: display };
+    });
+    res.json(enriquecidos);
   } catch (err) {
     console.error('Error listarEnvios:', err);
     res.status(500).json({ error: 'Error al listar envíos' });
@@ -223,7 +229,10 @@ exports.getEnvioByTracking = async (req, res) => {
     const full = await Envio.findById(envio._id)
       .populate('cliente_id', 'nombre codigo_cliente')
       .lean();
-    
+
+    const substatus = full.substatus || full.ml_substatus || full.estado_meli?.substatus || null;
+    const substatusDisplay = full.substatus_display || (substatus ? formatSubstatus(substatus) : null);
+
     const timeline = buildTimeline(full);
     const chofer_mostrar = full?.chofer?.nombre || full.chofer_nombre || '';
  
@@ -237,6 +246,10 @@ exports.getEnvioByTracking = async (req, res) => {
       codigo_postal: full.codigo_postal,
       partido: full.partido,
       estado: full.estado || 'pendiente',
+      substatus: substatus,
+      substatus_display: substatusDisplay,
+      ml_status: full.ml_status || full.estado_meli?.status || null,
+      ml_substatus: full.ml_substatus || full.estado_meli?.substatus || null,
       label_url: full.label_url || null,
       chofer_mostrar,
       timeline
