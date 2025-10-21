@@ -47,7 +47,11 @@ const { ensureMeliHistory } = require('../services/meliHistory');
 
   console.log('[hydrate-one] eventos MeLi:');
   for (const e of meliEvts) {
-    console.log('  -', e.at, (e.estado_meli?.status || e.estado || e.tipo), e.estado_meli?.substatus || '', e.source);
+    const status = e.estado_meli?.status || e.estado || e.tipo;
+    const substatus = e.estado_meli?.substatus || '';
+    const detalle = e.descripcion || e.notas || e.note || '';
+    const extra = detalle ? ` → ${detalle}` : '';
+    console.log('  -', e.at, status, substatus, `${e.source}${extra}`.trim());
   }
 
   await mongoose.disconnect();

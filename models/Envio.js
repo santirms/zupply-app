@@ -2,6 +2,12 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
+const HistLocationSchema = new Schema({
+  descripcion: { type: String, default: null },
+  lat:         { type: Number, default: null },
+  lng:         { type: Number, default: null }
+}, { _id: false });
+
 const HistItemSchema = new mongoose.Schema({
   at:        { type: Date, default: Date.now },
   estado:    { type: String }, // tu estado unificado
@@ -11,7 +17,13 @@ const HistItemSchema = new mongoose.Schema({
   },
   source:     { type: String, default: 'panel' }, // 'meli:webhook' | 'meli:cron' | 'meli:force-sync' | 'panel' | 'scan' | 'api'
   actor_name: { type: String, default: null },    // tu chofer/operador si corresponde
-  note:       { type: String, default: '' }
+  note:       { type: String, default: '' },
+  descripcion:      { type: String, default: null },
+  substatus_texto:  { type: String, default: null },
+  notas:            { type: String, default: null },
+  ubicacion:        { type: HistLocationSchema, default: undefined },
+  metadata:         { type: Schema.Types.Mixed, default: null },
+  meli_event_id:    { type: String, default: null }
 }, { _id: false });
 
 const envioSchema = new Schema({
