@@ -641,17 +641,6 @@ try {
     : [...currentArr, ...((update.$push?.historial?.$each) || [])]
   );
 
-  // Verificar si hubo ausencia del comprador en el historial
-  const huboAusente = all.some(h => {
-    const sub = (h?.estado_meli?.substatus || '').toLowerCase();
-    return /(receiver|buyer|client|addressee)[_\s-]?absent/.test(sub);
-  });
-
-  const huboAusenteEnBD = currentArr.some(h => {
-    const sub = (h?.estado_meli?.substatus || '').toLowerCase();
-    return /(receiver|buyer|client|addressee)[_\s-]?absent/.test(sub);
-  });
-
   // ¿Hay delivered en la línea de tiempo? (con su fecha real)
   const deliveredEvt = (Array.isArray(all) ? all : [])
     .filter(h => (h?.estado_meli?.status || h?.estado || '').toString().toLowerCase() === 'delivered')
@@ -662,29 +651,47 @@ try {
     .slice()
     .sort((a, b) => new Date(b.at || b.updatedAt || 0) - new Date(a.at || a.updatedAt || 0))[0];
 
-    const fallbackDate =
-      (sh && (sh.date_delivered || sh.date_first_delivered)) ? new Date(sh.date_delivered || sh.date_first_delivered)
+  const fallbackDate =
+    (sh && (sh.date_delivered || sh.date_first_delivered)) ? new Date(sh.date_delivered || sh.date_first_delivered)
     : (sh && (sh.status_history?.date_shipped || sh.date_shipped)) ? new Date(sh.status_history?.date_shipped || sh.date_shipped)
     : (sh && sh.date_created) ? new Date(sh.date_created)
     : new Date();
 
-   const stBase  = (lastEvt?.estado_meli?.status || lastEvt?.estado || sh?.status || envio?.estado_meli?.status || '').toString();
-   const subBase = (lastEvt?.estado_meli?.substatus || sh?.substatus || envio?.estado_meli?.substatus || '').toString();
+  const stBase  = (lastEvt?.estado_meli?.status || lastEvt?.estado || sh?.status || envio?.estado_meli?.status || '').toString();
+  const subBase = (lastEvt?.estado_meli?.substatus || sh?.substatus || envio?.estado_meli?.substatus || '').toString();
 
   // Si hay delivered real, priorizamos ese estado/fecha
   let stFinal   = deliveredEvt ? 'delivered' : stBase;
   let subFinal  = deliveredEvt ? (deliveredEvt?.estado_meli?.substatus || '') : subBase;
 
-  // ===== DEBUG =====
-  console.log('🔍 [DEBUG] Envío:', envio.meli_id);
-  console.log('   SubFinal:', subFinal);
-  console.log('   huboAusente (nuevo):', huboAusente);
-  console.log('   huboAusente (BD):', huboAusenteEnBD);
-  console.log('   Flag:', envio.comprador_ausente_confirmado);
-  console.log('   Substatuses en BD:', currentArr.map(h => h?.estado_meli?.substatus).filter(Boolean));
-  // ===== FIN DEBUG =====
+  // Buscar ausencia en historial nuevo
+  const huboAusente = all.some(h => {
+    const sub = (h?.estado_meli?.substatus || '').toLowerCase();
+    return /(receiver|buyer|client|addressee)[_\s-]?absent/.test(sub);
+  });
 
+  // Buscar ausencia en historial que ya está en BD
+  const huboAusenteEnBD = currentArr.some(h => {
+    const sub = (h?.estado_meli?.substatus || '').toLowerCase();
+    return /(receiver|buyer|client|addressee)[_\s-]?absent/.test(sub);
+  });
+
+  // Combinar todas las detecciones
   const huboAusenteFinal = huboAusente || huboAusenteEnBD || envio.comprador_ausente_confirmado;
+
+  // Debug logging
+  logger.info('[meliHistory] Detección de ausencia', {
+    envio_id: envio.meli_id || envio._id,
+    subFinal: subFinal,
+    statusFinal: stFinal,
+    huboAusente_nuevo: huboAusente,
+    huboAusente_BD: huboAusenteEnBD,
+    flag_confirmado: envio.comprador_ausente_confirmado,
+    huboAusenteFinal: huboAusenteFinal,
+    historial_nuevo_length: all.length,
+    historial_BD_length: currentArr.length,
+    substatuses_BD: currentArr.slice(-5).map(h => h?.estado_meli?.substatus).filter(Boolean)
+  });
   const dateFinal = deliveredEvt ? (deliveredEvt.at || fallbackDate) : (lastEvt?.at || fallbackDate);
 
   // **Nunca** dejar substatus en delivered
@@ -778,7 +785,10 @@ try {
     estadoFinal = mapToInterno(statusFinal, substatusFinal);
 
     if (huboAusenteFinal && /resched.*meli/.test((substatusFinal || '').toLowerCase())) {
-      console.log('[meliHistory] Preservando comprador_ausente (ML cambió post-11pm)');
+      logger.info('[meliHistory] Preservando comprador_ausente', {
+        envio_id: envio.meli_id || envio._id,
+        razon: 'hubo receiver_absent previo'
+      });
       estadoFinal = 'comprador_ausente';
     }
 
@@ -796,7 +806,10 @@ try {
     estadoFinal = mapToInterno(stFinal, subFinal);
 
     if (huboAusente && /resched.*meli/.test((subFinal || '').toLowerCase())) {
-      console.log('[meliHistory] Preservando comprador_ausente (ML cambió post-11pm)');
+      logger.info('[meliHistory] Preservando comprador_ausente', {
+        envio_id: envio.meli_id || envio._id,
+        razon: 'hubo receiver_absent previo'
+      });
       estadoFinal = 'comprador_ausente';
     }
   }
