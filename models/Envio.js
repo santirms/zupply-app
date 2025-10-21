@@ -58,9 +58,9 @@ const envioSchema = new Schema({
   partido:        { type: String },
   
   qr_meta: {
-    last_scan_at: { type: Date, default: null },
-    valid_until:  { type: Date, default: null },
-    last_hash:    { type: String, default: null }
+  last_scan_at: { type: Date, default: null },
+  valid_until:  { type: Date, default: null },
+  last_hash:    { type: String, default: null }
   },
   /**
    * 💰 Usar en Facturación:
@@ -98,36 +98,23 @@ const envioSchema = new Schema({
   chofer:         { type: Schema.Types.ObjectId, ref: 'Chofer', default: null },
   zonaAsignada:   { type: Schema.Types.ObjectId, ref: 'Zona',   default: null },
   estado: {
-    type: String,
-    enum: [
-      'pendiente',
-      'asignado',
-      'en_preparacion',
-      'en_planta',
-      'en_camino',
-      'a_retirar',
-      'listo_retiro',
-      'llega_pronto',
-      'entregado',
-      'reprogramado',
-      'demorado',
-      'comprador_ausente',
-      'inaccesible',
-      'sucursal_cerrada',
-      'rechazado',
-      'devolucion',
-      'no_entregado',
-      'cancelado',
-      'direccion_erronea',
-      'agencia_cerrada'
-    ],
-    default: 'pendiente'
+  type: String,
+  enum: [
+    'pendiente','asignado','en_preparacion','en_planta','en_camino','demorado',
+    'reprogramado','no_entregado','comprador_ausente','inaccesible','direccion_erronea',
+    'agencia_cerrada','entregado','rechazado','cancelado'
+  ],
+  default: 'pendiente'
   },
   substatus:       { type: String, default: null },
   substatus_display: { type: String, default: null },
+  estado_meli: {
+  status:    { type: String, default: null },   // p.ej. shipped, delivered, not_delivered...
+  substatus: { type: String, default: null },   // p.ej. delayed, returning_to_sender...
+  updatedAt: { type: Date,   default: null }
+  },
   ml_status:    { type: String, default: null },
   ml_substatus: { type: String, default: null },
-  ml_status_updated_at: { type: Date, default: null },
 
   latitud:        { type: Number, default: null },
   longitud:       { type: Number, default: null },
@@ -170,64 +157,9 @@ const NotaSchema = new Schema({
  * Único sólo cuando meli_id existe y no es vacío.
  */
 envioSchema.add({
-  historial: { type: [HistItemSchema], default: [] },
+historial: { type: [HistItemSchema], default: [] },
   notas: [NotaSchema]
 });
-
-envioSchema.virtual('estado_meli')
-  .get(function() {
-    return {
-      status: this.ml_status || null,
-      substatus: this.ml_substatus || null,
-      updatedAt: this.ml_status_updated_at || null
-    };
-  })
-  .set(function(value) {
-    if (!value || typeof value !== 'object') {
-      this.ml_status = null;
-      this.ml_substatus = null;
-      this.ml_status_updated_at = null;
-      return;
-    }
-
-    if (value.status !== undefined) {
-      this.ml_status = value.status;
-    }
-
-    if (value.substatus !== undefined) {
-      this.ml_substatus = value.substatus;
-    }
-
-    if (value.updatedAt !== undefined) {
-      if (!value.updatedAt) {
-        this.ml_status_updated_at = null;
-      } else {
-        const parsed = value.updatedAt instanceof Date ? value.updatedAt : new Date(value.updatedAt);
-        this.ml_status_updated_at = Number.isNaN(+parsed) ? null : parsed;
-      }
-    }
-  });
-
-envioSchema.set('toObject', { virtuals: true });
-envioSchema.set('toJSON', { virtuals: true });
-
-function ensureLeanVirtuals(next) {
-  const opts = this.mongooseOptions();
-  if (opts.lean) {
-    if (opts.lean === true) {
-      this.lean({ virtuals: true });
-    } else if (typeof opts.lean === 'object') {
-      opts.lean.virtuals = true;
-    }
-  }
-  next();
-}
-
-envioSchema.pre('find', ensureLeanVirtuals);
-envioSchema.pre('findOne', ensureLeanVirtuals);
-envioSchema.pre('findOneAndUpdate', ensureLeanVirtuals);
-envioSchema.pre('findOneAndDelete', ensureLeanVirtuals);
-envioSchema.pre('findOneAndRemove', ensureLeanVirtuals);
 
 envioSchema.index(
   { meli_id: 1 },
