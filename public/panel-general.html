@@ -516,7 +516,7 @@ function uiStatus(envio){
   const isNotVisited = /(not[_\s-]?visited|inaccesible|aver[ií]a)/.test(subRaw);
   const isBadAddr = /(bad[_\s-]?address|direcci[oó]n[_\s-]?err[oó]nea)/.test(subRaw);
   const isReschedByBuyer = /(resched.*by[_\s-]?receiver|resched.*by[_\s-]?buyer)/.test(subRaw);
-  const isReschedByMeli = /(resched.*by[_\s-]?meli)/.test(subRaw);
+  const isReschedByMeli = /resched.*by[_\s-]?meli/.test(subRaw);
   const isDelay = /(with_)?delay(ed)?|demora/.test(subRaw);
   const isSoon = /(arriving[_\s-]?)?soon[_\s-]?(deliver)?|llega[_\s-]?pronto/.test(subRaw);
   const isAgencyClosed = /agency[_\s-]?closed|sucursal[_\s-]?cerrada/.test(subRaw);
@@ -572,7 +572,7 @@ function uiStatus(envio){
   }
 
   if (isReschedByBuyer) cardLabel = 'Reprogramado por comprador';
-  if (isReschedByMeli) cardLabel = 'Reprogramado por demora';
+  if (isReschedByMeli) cardLabel = 'Demorado';
   if (isSoon) cardLabel = 'Llega pronto';
   if (isAgencyClosed) cardLabel = 'Agencia cerrada';
 
