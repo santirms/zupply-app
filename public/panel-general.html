@@ -515,21 +515,19 @@ function uiStatus(envio){
   const isAbsent = /(recipient|receiver|buyer|client|addressee|destinatario)[_\s-]?(absent|not[_\s-]?at[_\s-]?home|ausente)/.test(subRaw) || subRaw==='comprador_ausente';
   const isNotVisited = /(not[_\s-]?visited|inaccesible|aver[ií]a)/.test(subRaw);
   const isBadAddr = /(bad[_\s-]?address|direcci[oó]n[_\s-]?err[oó]nea)/.test(subRaw);
-  const isReschedBuyer = /rescheduled?[_\s-]?by[_\s-]?(buyer|client|comprador)/.test(subRaw);
-  const isReschedMeli = /rescheduled?[_\s-]?by[_\s-]?meli/.test(subRaw);
+  const isReschedByBuyer = /(resched.*by[_\s-]?receiver|resched.*by[_\s-]?buyer)/.test(subRaw);
+  const isReschedByMeli = /(resched.*by[_\s-]?meli)/.test(subRaw);
   const isDelay = /(with_)?delay(ed)?|demora/.test(subRaw);
   const isSoon = /(arriving[_\s-]?)?soon[_\s-]?(deliver)?|llega[_\s-]?pronto/.test(subRaw);
   const isAgencyClosed = /agency[_\s-]?closed|sucursal[_\s-]?cerrada/.test(subRaw);
-  const isResched = /resched/.test(subRaw);
 
   if (isAbsent) norm = 'comprador_ausente';
   else if (isNotVisited) norm = 'inaccesible';
   else if (isBadAddr) norm = 'direccion_erronea';
   else if (isAgencyClosed) norm = 'agencia_cerrada';
-  else if (isReschedBuyer) norm = 'reprogramado';
-  else if (isReschedMeli) norm = 'demorado';
+  else if (isReschedByBuyer) norm = 'reprogramado';
+  else if (isReschedByMeli) norm = 'demorado';
   else if (isDelay) norm = 'demorado';
-  else if (isResched) norm = 'reprogramado';
   else if (isSoon) norm = 'en_camino';
 
   const STATUS_LABELS = {
@@ -573,13 +571,13 @@ function uiStatus(envio){
     cardLabel = fallback.replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  if (isReschedBuyer) cardLabel = 'Reprogramado por comprador';
-  if (isReschedMeli) cardLabel = 'Reprogramado por demora';
+  if (isReschedByBuyer) cardLabel = 'Reprogramado por comprador';
+  if (isReschedByMeli) cardLabel = 'Reprogramado por demora';
   if (isSoon) cardLabel = 'Llega pronto';
   if (isAgencyClosed) cardLabel = 'Agencia cerrada';
 
   let chip=subRaw? subRaw.replace(/_/g,' ') : '';
-  if (isReschedMeli) chip = 'por demora';
+  if (isReschedByMeli) chip = 'por demora';
 
   return { key:norm, label:cardLabel, substatus:chip };
 }

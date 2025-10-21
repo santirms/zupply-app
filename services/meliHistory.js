@@ -226,7 +226,11 @@ function mapToInterno(status, substatus) {
   // Reprogramaciones
   if (/rescheduled?[_\s-]?by[_\s-]?buyer/.test(sub)) return 'reprogramado';
   if (/rescheduled?[_\s-]?by[_\s-]?meli/.test(sub)) return 'demorado';
-  if (/resched/.test(sub)) return 'reprogramado';
+  // Solo reprogramado si fue explícitamente por el comprador
+  if (/(resched.*by[_\s-]?receiver|resched.*by[_\s-]?buyer)/.test(sub)) {
+    return 'reprogramado';
+  }
+  // NO mapear rescheduled_by_meli aquí - se maneja con contexto en ensureMeliHistory
 
   // Demoras
   if (/delay/.test(sub)) return 'demorado';
@@ -637,7 +641,13 @@ try {
     : [...currentArr, ...((update.$push?.historial?.$each) || [])]
   );
 
- // ¿Hay delivered en la línea de tiempo? (con su fecha real)
+  // Verificar si hubo ausencia del comprador en el historial
+  const huboAusente = all.some(h => {
+    const sub = (h?.estado_meli?.substatus || '').toLowerCase();
+    return /(receiver|buyer|client|addressee)[_\s-]?absent/.test(sub);
+  });
+
+  // ¿Hay delivered en la línea de tiempo? (con su fecha real)
   const deliveredEvt = (Array.isArray(all) ? all : [])
     .filter(h => (h?.estado_meli?.status || h?.estado || '').toString().toLowerCase() === 'delivered')
     .sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0))[0];
@@ -747,10 +757,15 @@ try {
     statusFinal = eventoRelevante.estado_meli?.status || eventoRelevante.estado || stFinal;
     substatusFinal = eventoRelevante.estado_meli?.substatus || subFinal;
     fechaFinal = eventoRelevante.at || dateFinal;
-    
+
     // Mapear a estado interno
     estadoFinal = mapToInterno(statusFinal, substatusFinal);
-    
+
+    if (huboAusente && /resched.*meli/.test((substatusFinal || '').toLowerCase())) {
+      console.log('[meliHistory] Preservando comprador_ausente (ML cambió post-11am)');
+      estadoFinal = 'comprador_ausente';
+    }
+
     logger.info('Evento MeLi relevante', {
       envio_id: envio._id?.toString?.(),
       fecha: fechaFinal,
@@ -763,6 +778,11 @@ try {
   } else {
     // Fallback al último evento conocido
     estadoFinal = mapToInterno(stFinal, subFinal);
+
+    if (huboAusente && /resched.*meli/.test((subFinal || '').toLowerCase())) {
+      console.log('[meliHistory] Preservando comprador_ausente (ML cambió post-11am)');
+      estadoFinal = 'comprador_ausente';
+    }
   }
 
   // Nunca revertir estados terminales
@@ -785,12 +805,21 @@ try {
 
   // ========== FIN LÓGICA DE PRIORIZACIÓN ==========
 
+  if (envio.comprador_ausente_confirmado && estadoFinal !== 'entregado' && estadoFinal !== 'cancelado') {
+    estadoFinal = 'comprador_ausente';
+  }
+
   update.$set.estado = estadoFinal;
   update.$set.estado_meli = {
     status: statusFinal,
     substatus: substatusFinal,
     updatedAt: fechaFinal
   };
+
+  // Marcar flag permanente si confirmamos ausencia
+  if (estadoFinal === 'comprador_ausente') {
+    update.$set.comprador_ausente_confirmado = true;
+  }
 
   // Guardar coordenadas de MeLi si existen y no están ya guardadas
   if (meliLat && meliLon) {
