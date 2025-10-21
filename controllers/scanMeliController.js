@@ -260,6 +260,8 @@ exports.scanAndUpsert = async (req, res) => {
           status: null,
           substatus: null,
         },
+        ml_status: null,
+        ml_substatus: null,
         latitud: null,
         longitud: null,
         geocode_source: null,
@@ -302,6 +304,8 @@ exports.scanAndUpsert = async (req, res) => {
           status: meliShipment?.status || null,
           substatus: meliShipment?.substatus || null,
         };
+        envioData.ml_status = meliShipment?.status || null;
+        envioData.ml_substatus = meliShipment?.substatus || null;
 
         const shipmentAddress = meliShipment?.receiver_address;
 

@@ -497,24 +497,50 @@ function getEstadoColorClass(estado){
 }
 window.getEstadoColorClass = getEstadoColorClass;
 
-const SUBSTATUS_LABELS = {
-  buyer_rescheduled: 'Buyer rescheduled',
-  rescheduled_by_meli: 'Rescheduled by MeLi',
-  delayed: 'Delayed',
-  in_transit: 'In transit',
-  out_for_delivery: 'Out for delivery',
-  at_hub: 'At hub',
-  rescheduled_by_buyer: 'Rescheduled by buyer',
-  rescheduled_by_receiver: 'Rescheduled by receiver'
-};
+function renderEstadoChip(envio) {
+  if (!envio) return '';
 
-function resolveSubstatusDisplay(envio){
-  if(!envio) return '';
-  if(envio.substatus_display) return envio.substatus_display;
-  const raw = envio.substatus || envio.ml_substatus || envio.estado_meli?.substatus || '';
-  if(!raw) return '';
-  const key = String(raw).toLowerCase();
-  return SUBSTATUS_LABELS[key] || String(raw).replace(/_/g,' ');
+  const estado = envio.estado || 'pendiente';
+  const mlSubstatus = envio.ml_substatus;
+
+  const estadosSinSubstatus = ['entregado', 'cancelado'];
+  const mostrarSubstatus = !estadosSinSubstatus.includes(estado) && mlSubstatus;
+
+  let html = '<div class="estado-chip flex flex-col items-start gap-1">';
+  html += estadoBadge(estado, getNombreEstado(estado));
+
+  if (mostrarSubstatus) {
+    html += substatusChip(String(mlSubstatus).replace(/_/g, ' '));
+  }
+
+  html += '</div>';
+
+  return html;
+}
+window.renderEstadoChip = renderEstadoChip;
+
+function getNombreEstado(estado) {
+  const nombres = {
+    'pendiente': 'Pendiente',
+    'en_camino': 'En camino',
+    'en_planta': 'En planta',
+    'listo_retiro': 'Listo retiro',
+    'a_retirar': 'A retirar',
+    'llega_pronto': 'Llega pronto',
+    'entregado': 'Entregado',
+    'reprogramado': 'Reprogramado',
+    'demorado': 'Demorado',
+    'comprador_ausente': 'Comprador ausente',
+    'inaccesible': 'Inaccesible',
+    'sucursal_cerrada': 'Sucursal cerrada',
+    'rechazado': 'Rechazado',
+    'devolucion': 'Devolución',
+    'no_entregado': 'No entregado',
+    'cancelado': 'Cancelado'
+  };
+
+  if (!estado) return 'Pendiente';
+  return nombres[estado] || String(estado).replace(/_/g, ' ');
 }
 
 function uiStatus(envio){
@@ -576,7 +602,8 @@ function uiStatus(envio){
     cardLabel = fallback.replace(/\b\w/g, c => c.toUpperCase());
   }
 
-  const substatusDisplay = resolveSubstatusDisplay(envio);
+  const mlSubstatus = envio.ml_substatus || envio.substatus || envio.estado_meli?.substatus || '';
+  const substatusDisplay = mlSubstatus ? String(mlSubstatus).replace(/_/g, ' ') : '';
 
   return { key:norm, label:cardLabel, substatus:substatusDisplay };
 }
@@ -708,7 +735,7 @@ function renderTabla(){
         </select>`
       ).trim();
     } else {
-      estadoHTML = iconoAlerta + estadoBadge(eKey,eLabel) + (substatus ? substatusChip(substatus) : '');
+      estadoHTML = iconoAlerta + renderEstadoChip(e);
     }
     const partidoUI=(e.partido && e.partido.trim())? e.partido : '-';
     const zonaFact=(e.zona && e.zona.trim())? cleanZona(e.zona) : '';
@@ -757,7 +784,7 @@ async function mostrarDetalle(envioId){
       <p><strong>Dirección:</strong> ${data.direccion || '-'}</p>
       <p><strong>Tracking (ML):</strong> ${data.meli_id || '-'}</p>
       <p><strong>ID de venta:</strong> ${data.id_venta || '-'}</p>
-      <p><strong>Estado:</strong> ${estadoBadge(s.key, s.label)}${s.key==='comprador_ausente' ? '' : ' ' + substatusChip(s.substatus)}</p>
+      <p><strong>Estado:</strong> ${renderEstadoChip(data)}</p>
       <p><strong>CP:</strong> ${data.codigo_postal || '-'}</p>
       <p><strong>Partido:</strong> ${partido}</p>
       <p><strong>Referencia:</strong> ${data.referencia || '-'}</p>`;

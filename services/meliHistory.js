@@ -139,98 +139,126 @@ function buildDescripcion(status, substatus, detail) {
 
 function formatSubstatus(substatus) {
   if (!substatus) return null;
-  const nombres = {
-    buyer_rescheduled: 'Buyer rescheduled',
-    rescheduled_by_meli: 'Rescheduled by MeLi',
-    delayed: 'Delayed',
-    in_transit: 'In transit',
-    out_for_delivery: 'Out for delivery',
-    at_hub: 'At hub',
-    rescheduled_by_buyer: 'Rescheduled by buyer',
-    rescheduled_by_receiver: 'Rescheduled by receiver'
-  };
+  return String(substatus).replace(/_/g, ' ');
+}
 
-  const key = String(substatus).toLowerCase();
-  return nombres[key] || String(substatus).replace(/_/g, ' ');
+function buildEstadoResult(estado, mlStatus, mlSubstatus) {
+  const mlSub = mlSubstatus ?? null;
+  return {
+    estado,
+    substatus_ml: mlSub,
+    ml_status: mlStatus ?? null,
+    ml_substatus: mlSub,
+    substatus: mlSub,
+    substatus_display: mlSub ? formatSubstatus(mlSub) : null
+  };
 }
 
 function mapearEstadoML(mlStatus, mlSubstatus = null) {
-  const status = String(mlStatus || '').toLowerCase();
-  const substatusRaw = mlSubstatus || null;
-  const substatusNorm = substatusRaw ? String(substatusRaw).toLowerCase() : null;
 
-  if (substatusNorm) {
-    if (substatusNorm === 'buyer_rescheduled') {
-      return {
-        estado: 'reprogramado',
-        substatus: 'buyer_rescheduled',
-        substatus_display: 'Buyer rescheduled'
-      };
+  // ==================== MAPEO DE SUBSTATUS ESPECÍFICOS ====================
+  // Estos mapeos son SOLO para estados internos (KPIs, filtros, etc)
+  // El substatus ORIGINAL de ML se guarda y muestra tal cual
+  
+  if (mlSubstatus) {
+    
+    // ========== INCIDENTES ESPECÍFICOS ==========
+    
+    if (mlSubstatus === 'receiver_absent') {
+      return buildEstadoResult('comprador_ausente', mlStatus, mlSubstatus);
     }
 
-    if (substatusNorm === 'rescheduled_by_meli') {
-      return {
-        estado: 'reprogramado',
-        substatus: 'rescheduled_by_meli',
-        substatus_display: 'Rescheduled by MeLi'
-      };
+    if (mlSubstatus === 'bad_address') {
+      return buildEstadoResult('inaccesible', mlStatus, mlSubstatus);
     }
 
-    if (substatusNorm === 'delayed') {
-      return {
-        estado: 'demorado',
-        substatus: 'delayed',
-        substatus_display: 'Delayed'
-      };
+    if (mlSubstatus === 'not_visited') {
+      return buildEstadoResult('inaccesible', mlStatus, mlSubstatus);
+    }
+
+    if (mlSubstatus === 'agency_closed') {
+      return buildEstadoResult('sucursal_cerrada', mlStatus, mlSubstatus);
+    }
+    
+    // ========== REPROGRAMACIONES ==========
+    
+    if (mlSubstatus === 'buyer_rescheduled') {
+      return buildEstadoResult('reprogramado', mlStatus, mlSubstatus);
+    }
+
+    if (mlSubstatus === 'rescheduled_by_meli') {
+      return buildEstadoResult('reprogramado', mlStatus, mlSubstatus);
+    }
+    
+    // ========== DEMORAS ==========
+    
+    if (mlSubstatus === 'delayed') {
+      return buildEstadoResult('demorado', mlStatus, mlSubstatus);
+    }
+    
+    // ========== RECHAZOS Y DEVOLUCIONES ==========
+    
+    if (mlSubstatus === 'refused_delivery') {
+      return buildEstadoResult('rechazado', mlStatus, mlSubstatus);
+    }
+
+    if (mlSubstatus === 'returning_to_sender') {
+      return buildEstadoResult('devolucion', mlStatus, mlSubstatus);
+    }
+    
+    // ========== PUNTO DE RETIRO ==========
+    
+    if (mlSubstatus === 'printed') {
+      return buildEstadoResult('a_retirar', mlStatus, mlSubstatus);
+    }
+    
+    // ========== PROXIMIDAD ==========
+    
+    if (mlSubstatus === 'soon_deliver') {
+      return buildEstadoResult('llega_pronto', mlStatus, mlSubstatus);
     }
   }
 
-  const mapaEstados = {
-    ready_to_ship: {
-      estado: 'pendiente',
-      substatus: null,
-      substatus_display: null
-    },
-    shipped: {
-      estado: 'en_camino',
-      substatus: substatusRaw,
-      substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
-    },
-    delivered: {
-      estado: 'entregado',
-      substatus: null,
-      substatus_display: null
-    },
-    cancelled: {
-      estado: 'cancelado',
-      substatus: substatusRaw,
-      substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
-    },
-    handling: {
-      estado: 'en_planta',
-      substatus: substatusRaw,
-      substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
-    },
-    ready_to_pick: {
-      estado: 'listo_retiro',
-      substatus: null,
-      substatus_display: null
-    },
-    not_delivered: {
-      estado: 'no_entregado',
-      substatus: substatusRaw,
-      substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
-    }
-  };
+  // ==================== MAPEO DE ESTADOS PRINCIPALES ====================
 
-  const mapped = mapaEstados[status];
-  if (mapped) return mapped;
+  // shipped → SIEMPRE en_camino (sin importar substatus)
+  if (mlStatus === 'shipped') {
+    return buildEstadoResult('en_camino', mlStatus, mlSubstatus);
+  }
 
-  return {
-    estado: 'pendiente',
-    substatus: substatusRaw || null,
-    substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
-  };
+  // delivered → entregado (sin substatus)
+  if (mlStatus === 'delivered') {
+    return buildEstadoResult('entregado', mlStatus, null);
+  }
+
+  // cancelled → cancelado (sin substatus)
+  if (mlStatus === 'cancelled') {
+    return buildEstadoResult('cancelado', mlStatus, null);
+  }
+
+  // handling → en_planta
+  if (mlStatus === 'handling') {
+    return buildEstadoResult('en_planta', mlStatus, mlSubstatus);
+  }
+
+  // ready_to_pick → listo_retiro (a menos que tenga printed)
+  if (mlStatus === 'ready_to_pick') {
+    // Si NO tiene substatus printed, es listo_retiro genérico
+    return buildEstadoResult('listo_retiro', mlStatus, mlSubstatus);
+  }
+
+  // ready_to_ship → pendiente
+  if (mlStatus === 'ready_to_ship') {
+    return buildEstadoResult('pendiente', mlStatus, mlSubstatus);
+  }
+
+  // not_delivered → no_entregado (si no matcheó ningún substatus específico)
+  if (mlStatus === 'not_delivered') {
+    return buildEstadoResult('no_entregado', mlStatus, mlSubstatus);
+  }
+
+  // Fallback
+  return buildEstadoResult('pendiente', mlStatus, mlSubstatus);
 }
 
 // ---------------------------- helpers ----------------------------
@@ -355,11 +383,9 @@ function procesarHistorialML(shipment) {
 
     historial.push({
       estado: mapped.estado,
-      substatus: mapped.substatus,
-      substatus_display: mapped.substatus_display,
-      fecha,
-      ml_status: event.status || null,
-      ml_substatus: event.substatus || null
+      ml_status: mapped.ml_status,
+      ml_substatus: mapped.ml_substatus,
+      fecha
     });
   }
 
@@ -1071,8 +1097,10 @@ try {
 
   const estadoMapeado = mapearEstadoML(statusFinal, substatusFinal);
   let estadoFinal = estadoMapeado.estado;
-  let substatusInterno = estadoMapeado.substatus;
-  let substatusDisplay = estadoMapeado.substatus_display;
+  const mlStatusFinal = estadoMapeado.ml_status || statusFinal || null;
+  const mlSubstatusFinal = estadoMapeado.ml_substatus !== undefined
+    ? estadoMapeado.ml_substatus
+    : substatusFinal;
 
   if (huboAusenteFinal && /resched.*meli/.test((substatusFinal || '').toLowerCase())) {
     logger.info('[meliHistory] Preservando comprador_ausente', {
@@ -1087,13 +1115,11 @@ try {
   }
 
   update.$set.estado = estadoFinal;
-  update.$set.substatus = substatusInterno || null;
-  update.$set.substatus_display = substatusDisplay || null;
-  update.$set.ml_status = statusFinal || null;
-  update.$set.ml_substatus = substatusFinal || null;
+  update.$set.ml_status = mlStatusFinal || null;
+  update.$set.ml_substatus = mlSubstatusFinal || null;
   update.$set.estado_meli = {
-    status: statusFinal,
-    substatus: substatusFinal,
+    status: mlStatusFinal,
+    substatus: mlSubstatusFinal,
     updatedAt: fechaFinal
   };
 

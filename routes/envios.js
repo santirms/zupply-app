@@ -304,7 +304,6 @@ router.get('/', async (req, res) => {
         $project: {
           id_venta: 1, tracking: 1, meli_id: 1,
           estado: 1, estado_meli: 1,
-          substatus: 1, substatus_display: 1,
           ml_status: 1, ml_substatus: 1,
           zona: 1, partido: 1,
           destinatario: 1, direccion: 1, codigo_postal: 1,
@@ -771,7 +770,7 @@ router.get('/:id', async (req, res) => {
     if (Array.isArray(plain?.historial_estados)) {
       plain.historial_estados = plain.historial_estados.map(h => ({
         ...h,
-        substatus_display: h.substatus_display || (h.substatus ? formatSubstatus(h.substatus) : null)
+        substatus_display: h.substatus_display || (h.ml_substatus ? formatSubstatus(h.ml_substatus) : null)
       }));
     }
 
