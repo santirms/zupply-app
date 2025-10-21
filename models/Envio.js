@@ -100,7 +100,7 @@ const envioSchema = new Schema({
   estado: {
   type: String,
   enum: [
-    'pendiente','asignado','en_preparacion','en_planta','en_camino','a_retirar','llega_pronto','demorado',
+    'pendiente','asignado','en_preparacion','en_planta','en_camino','demorado',
     'reprogramado','no_entregado','comprador_ausente','inaccesible','direccion_erronea',
     'agencia_cerrada','entregado','rechazado','cancelado'
   ],

@@ -160,22 +160,6 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
   const substatusNorm = substatusRaw ? String(substatusRaw).toLowerCase() : null;
 
   if (substatusNorm) {
-    if (substatusNorm === 'printed') {
-      return {
-        estado: 'a_retirar',
-        substatus: 'printed',
-        substatus_display: 'A retirar'
-      };
-    }
-
-    if (substatusNorm === 'soon_deliver') {
-      return {
-        estado: 'llega_pronto',
-        substatus: 'soon_deliver',
-        substatus_display: 'Llega pronto'
-      };
-    }
-
     if (substatusNorm === 'buyer_rescheduled') {
       return {
         estado: 'reprogramado',
