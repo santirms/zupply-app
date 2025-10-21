@@ -26,6 +26,21 @@ const HistItemSchema = new mongoose.Schema({
   meli_event_id:    { type: String, default: null }
 }, { _id: false });
 
+const HistorialEstadoSchema = new Schema({
+  estado: {
+    type: String,
+    required: true
+  },
+  fecha: {
+    type: Date,
+    required: true
+  },
+  substatus: { type: String, default: null },
+  substatus_display: { type: String, default: null },
+  ml_status: { type: String, default: null },
+  ml_substatus: { type: String, default: null }
+}, { _id: false });
+
 const envioSchema = new Schema({
   sender_id:      { type: String, required: true },
   cliente_id:     { type: Schema.Types.ObjectId, ref: 'Cliente', required: true },
@@ -91,11 +106,15 @@ const envioSchema = new Schema({
   ],
   default: 'pendiente'
   },
+  substatus:       { type: String, default: null },
+  substatus_display: { type: String, default: null },
   estado_meli: {
   status:    { type: String, default: null },   // p.ej. shipped, delivered, not_delivered...
   substatus: { type: String, default: null },   // p.ej. delayed, returning_to_sender...
   updatedAt: { type: Date,   default: null }
   },
+  ml_status:    { type: String, default: null },
+  ml_substatus: { type: String, default: null },
 
   latitud:        { type: Number, default: null },
   longitud:       { type: Number, default: null },
@@ -103,6 +122,8 @@ const envioSchema = new Schema({
   label_url:  { type: String }, // /labels/<id_venta>.pdf
   qr_png:     { type: String }, // DataURL para previsualizar QR
   meli_history_last_sync: { type: Date, default: null },     // <<< NUEVO
+
+  historial_estados: { type: [HistorialEstadoSchema], default: [] },
 
   // Flag para identificar si el envío se sincroniza con MeLi
   requiere_sync_meli: {

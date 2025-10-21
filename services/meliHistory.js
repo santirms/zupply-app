@@ -137,6 +137,102 @@ function buildDescripcion(status, substatus, detail) {
   return statusStr || subStr || null;
 }
 
+function formatSubstatus(substatus) {
+  if (!substatus) return null;
+  const nombres = {
+    buyer_rescheduled: 'Buyer rescheduled',
+    rescheduled_by_meli: 'Rescheduled by MeLi',
+    delayed: 'Delayed',
+    in_transit: 'In transit',
+    out_for_delivery: 'Out for delivery',
+    at_hub: 'At hub',
+    rescheduled_by_buyer: 'Rescheduled by buyer',
+    rescheduled_by_receiver: 'Rescheduled by receiver'
+  };
+
+  const key = String(substatus).toLowerCase();
+  return nombres[key] || String(substatus).replace(/_/g, ' ');
+}
+
+function mapearEstadoML(mlStatus, mlSubstatus = null) {
+  const status = String(mlStatus || '').toLowerCase();
+  const substatusRaw = mlSubstatus || null;
+  const substatusNorm = substatusRaw ? String(substatusRaw).toLowerCase() : null;
+
+  if (substatusNorm) {
+    if (substatusNorm === 'buyer_rescheduled') {
+      return {
+        estado: 'reprogramado',
+        substatus: 'buyer_rescheduled',
+        substatus_display: 'Buyer rescheduled'
+      };
+    }
+
+    if (substatusNorm === 'rescheduled_by_meli') {
+      return {
+        estado: 'reprogramado',
+        substatus: 'rescheduled_by_meli',
+        substatus_display: 'Rescheduled by MeLi'
+      };
+    }
+
+    if (substatusNorm === 'delayed') {
+      return {
+        estado: 'demorado',
+        substatus: 'delayed',
+        substatus_display: 'Delayed'
+      };
+    }
+  }
+
+  const mapaEstados = {
+    ready_to_ship: {
+      estado: 'pendiente',
+      substatus: null,
+      substatus_display: null
+    },
+    shipped: {
+      estado: 'en_camino',
+      substatus: substatusRaw,
+      substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
+    },
+    delivered: {
+      estado: 'entregado',
+      substatus: null,
+      substatus_display: null
+    },
+    cancelled: {
+      estado: 'cancelado',
+      substatus: substatusRaw,
+      substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
+    },
+    handling: {
+      estado: 'en_planta',
+      substatus: substatusRaw,
+      substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
+    },
+    ready_to_pick: {
+      estado: 'listo_retiro',
+      substatus: null,
+      substatus_display: null
+    },
+    not_delivered: {
+      estado: 'no_entregado',
+      substatus: substatusRaw,
+      substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
+    }
+  };
+
+  const mapped = mapaEstados[status];
+  if (mapped) return mapped;
+
+  return {
+    estado: 'pendiente',
+    substatus: substatusRaw || null,
+    substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
+  };
+}
+
 // ---------------------------- helpers ----------------------------
 // --- Tracking: mapea checkpoints a nuestro esquema ---
 function mapFromTracking(tk) {
@@ -240,6 +336,36 @@ function mapFromTracking(tk) {
     if (!seen.has(k)) { seen.add(k); res.push(h); }
   }
   return res;
+}
+
+
+function procesarHistorialML(shipment) {
+  const historial = [];
+
+  if (!shipment || !Array.isArray(shipment.status_history)) {
+    return historial;
+  }
+
+  for (const event of shipment.status_history) {
+    const mapped = mapearEstadoML(event.status, event.substatus);
+    const fechaRaw = event.date_shipped || event.date_created || event.date || event.date_updated;
+    const fecha = fechaRaw ? new Date(fechaRaw) : null;
+
+    if (!fecha || isNaN(+fecha)) continue;
+
+    historial.push({
+      estado: mapped.estado,
+      substatus: mapped.substatus,
+      substatus_display: mapped.substatus_display,
+      fecha,
+      ml_status: event.status || null,
+      ml_substatus: event.substatus || null
+    });
+  }
+
+  historial.sort((a, b) => b.fecha - a.fecha);
+
+  return historial;
 }
 
 
@@ -370,51 +496,6 @@ function mapHistory(items = []) {
     out.push(entry);
   }
   return out;
-}
-
-function mapToInterno(status, substatus) {
-  const s = (status || '').toLowerCase();
-  const sub = (substatus || '').toLowerCase();
-
-  // 1. Estados terminales (máxima prioridad)
-  if (s === 'delivered') return 'entregado';
-  if (s === 'cancelled' || s === 'canceled') return 'cancelado';
-
-  // 2. PRIMERO revisar substatuses específicos (ANTES de status genérico)
-
-  // Problemas de entrega específicos
-  if (/receiver[_\s-]?absent|ausente/.test(sub)) return 'comprador_ausente';
-  if (/not[_\s-]?visited|inaccesible/.test(sub)) return 'inaccesible';
-  if (/bad[_\s-]?address|direcci[oó]n/.test(sub)) return 'direccion_erronea';
-  if (/agency[_\s-]?closed/.test(sub)) return 'agencia_cerrada';
-
-  // Reprogramaciones
-  if (/rescheduled?[_\s-]?by[_\s-]?buyer/.test(sub)) return 'reprogramado';
-  if (/rescheduled?[_\s-]?by[_\s-]?meli/.test(sub)) return 'demorado';
-  // Solo reprogramado si fue explícitamente por el comprador
-  if (/(resched.*by[_\s-]?receiver|resched.*by[_\s-]?buyer)/.test(sub)) {
-    return 'reprogramado';
-  }
-  // NO mapear rescheduled_by_meli aquí - se maneja con contexto en ensureMeliHistory
-
-  // Demoras
-  if (/delay/.test(sub)) return 'demorado';
-
-  // Salió a reparto (CRÍTICO - prioridad alta)
-  if (/out[_\s-]?for[_\s-]?delivery/.test(sub)) return 'en_camino';
-  if (/arriving[_\s-]?soon/.test(sub)) return 'en_camino';
-
-  // 3. Si no hay substatus específico, usar status
-  if (s === 'not_delivered') return 'no_entregado';
-
- if (s === 'shipped' || s === 'in_transit' || s === 'out_for_delivery') return 'en_camino';
-
- if (s === 'ready_to_ship' || s === 'handling' || s === 'ready_to_print' || s === 'printed') {
-    return 'pendiente';
-  }
-
-  // 4. Fallback
-  return 'pendiente';
 }
 
 async function getShipment(access, idOrTracking) {
@@ -950,7 +1031,6 @@ try {
   // El primer evento de la lista es el más relevante
   const eventoRelevante = eventosConPrioridad[0]?.evento;
 
-  let estadoFinal = 'pendiente';
   let statusFinal = stFinal;
   let substatusFinal = subFinal;
   let fechaFinal = dateFinal;
@@ -960,37 +1040,14 @@ try {
     substatusFinal = eventoRelevante.estado_meli?.substatus || subFinal;
     fechaFinal = eventoRelevante.at || dateFinal;
 
-    // Mapear a estado interno
-    estadoFinal = mapToInterno(statusFinal, substatusFinal);
-
-    if (huboAusenteFinal && /resched.*meli/.test((substatusFinal || '').toLowerCase())) {
-      logger.info('[meliHistory] Preservando comprador_ausente', {
-        envio_id: envio.meli_id || envio._id,
-        razon: 'hubo receiver_absent previo'
-      });
-      estadoFinal = 'comprador_ausente';
-    }
-
     logger.info('Evento MeLi relevante', {
       envio_id: envio._id?.toString?.(),
       fecha: fechaFinal,
       status: statusFinal,
       substatus: substatusFinal,
       especificidad: eventosConPrioridad[0].especificidad,
-      prioridad: eventosConPrioridad[0].prioridad,
-      estado_interno: estadoFinal
+      prioridad: eventosConPrioridad[0].prioridad
     });
-  } else {
-    // Fallback al último evento conocido
-    estadoFinal = mapToInterno(stFinal, subFinal);
-
-    if (huboAusente && /resched.*meli/.test((subFinal || '').toLowerCase())) {
-      logger.info('[meliHistory] Preservando comprador_ausente', {
-        envio_id: envio.meli_id || envio._id,
-        razon: 'hubo receiver_absent previo'
-      });
-      estadoFinal = 'comprador_ausente';
-    }
   }
 
   // Nunca revertir estados terminales
@@ -1005,7 +1062,6 @@ try {
       envio_id: envio._id?.toString?.(),
       status: current.estado_meli.status
     });
-    estadoFinal = current.estado;
     statusFinal = current.estado_meli.status;
     substatusFinal = current.estado_meli.substatus;
     fechaFinal = current.estado_meli.updatedAt || fechaFinal;
@@ -1013,11 +1069,28 @@ try {
 
   // ========== FIN LÓGICA DE PRIORIZACIÓN ==========
 
+  const estadoMapeado = mapearEstadoML(statusFinal, substatusFinal);
+  let estadoFinal = estadoMapeado.estado;
+  let substatusInterno = estadoMapeado.substatus;
+  let substatusDisplay = estadoMapeado.substatus_display;
+
+  if (huboAusenteFinal && /resched.*meli/.test((substatusFinal || '').toLowerCase())) {
+    logger.info('[meliHistory] Preservando comprador_ausente', {
+      envio_id: envio.meli_id || envio._id,
+      razon: 'hubo receiver_absent previo'
+    });
+    estadoFinal = 'comprador_ausente';
+  }
+
   if (envio.comprador_ausente_confirmado && estadoFinal !== 'entregado' && estadoFinal !== 'cancelado') {
     estadoFinal = 'comprador_ausente';
   }
 
   update.$set.estado = estadoFinal;
+  update.$set.substatus = substatusInterno || null;
+  update.$set.substatus_display = substatusDisplay || null;
+  update.$set.ml_status = statusFinal || null;
+  update.$set.ml_substatus = substatusFinal || null;
   update.$set.estado_meli = {
     status: statusFinal,
     substatus: substatusFinal,
@@ -1044,10 +1117,16 @@ try {
     }
   }
 
+  const historialEstados = procesarHistorialML(sh);
+  update.$set.historial_estados = historialEstados;
+
   await Envio.updateOne({ _id: envio._id }, update);
 }
 
 module.exports = {
   ensureMeliHistory,
+  mapearEstadoML,
+  formatSubstatus,
+  procesarHistorialML,
   'meliHistory.v3-sintetiza-desde-shipment': true
 };

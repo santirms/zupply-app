@@ -9,7 +9,7 @@ const { geocodeDireccion } = require('../utils/geocode');
 const axios   = require('axios'); 
 const QRCode  = require('qrcode');
 const { buildLabelPDF } = require('../utils/labelService');
-const { ensureMeliHistory: ensureMeliHistorySrv } = require('../services/meliHistory');
+const { ensureMeliHistory: ensureMeliHistorySrv, formatSubstatus } = require('../services/meliHistory');
 
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
 const { getEnvioByTracking, labelByTracking } = require('../controllers/envioController');
@@ -110,17 +110,23 @@ function buildFiltroList(req) {
     if (e === 'reprogramado') {
       f.$or = [
         { estado: 'reprogramado' },
-        { 'estado_meli.substatus': /resched/i } // buyer_rescheduled / rescheduled
+        { 'estado_meli.substatus': /resched/i },
+        { substatus: /resched/i },
+        { ml_substatus: /resched/i }
       ];
     } else if (e === 'demorado') {
       f.$or = [
         { estado: 'demorado' },
-        { 'estado_meli.substatus': /delay/i }
+        { 'estado_meli.substatus': /delay/i },
+        { substatus: /delay/i },
+        { ml_substatus: /delay/i }
       ];
     } else if (e === 'comprador_ausente') {
       f.$or = [
         { estado: 'comprador_ausente' },
-        { 'estado_meli.substatus': /(recipient|buyer|client|addressee).*absent|not[_\s-]?at[_\s-]?home/i }
+        { 'estado_meli.substatus': /(recipient|buyer|client|addressee).*absent|not[_\s-]?at[_\s-]?home/i },
+        { ml_substatus: /(recipient|buyer|client|addressee).*absent|not[_\s-]?at[_\s-]?home/i },
+        { substatus: /(recipient|buyer|client|addressee).*absent|not[_\s-]?at[_\s-]?home/i }
       ];
     } else {
       f.estado = e; // resto: matchea directo
@@ -298,6 +304,8 @@ router.get('/', async (req, res) => {
         $project: {
           id_venta: 1, tracking: 1, meli_id: 1,
           estado: 1, estado_meli: 1,
+          substatus: 1, substatus_display: 1,
+          ml_status: 1, ml_substatus: 1,
           zona: 1, partido: 1,
           destinatario: 1, direccion: 1, codigo_postal: 1,
           fecha: 1, createdAt: 1, ts: 1,
@@ -759,6 +767,13 @@ router.get('/:id', async (req, res) => {
       .populate('cliente_id', 'nombre email razon_social sender_id')
       .populate('chofer', 'nombre telefono')
       .lean();
+
+    if (Array.isArray(plain?.historial_estados)) {
+      plain.historial_estados = plain.historial_estados.map(h => ({
+        ...h,
+        substatus_display: h.substatus_display || (h.substatus ? formatSubstatus(h.substatus) : null)
+      }));
+    }
 
     // timeline para el front (mergea historial+eventos)
     plain.timeline = buildTimeline(plain);
