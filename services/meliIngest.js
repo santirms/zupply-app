@@ -258,7 +258,9 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
       status:    sh.status || null,
       substatus: sh.substatus || null,
       updatedAt: new Date()   // luego se corrige con la hora real de MeLi
-    }
+    },
+    ml_status: sh.status || null,
+    ml_substatus: sh.substatus || null
   }
 };
 

@@ -115,7 +115,14 @@ async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
 
       await Envio.updateOne(
         { _id: e._id },
-        { $set: { estado_meli, estado: estado_interno } }
+        {
+          $set: {
+            estado_meli,
+            estado: estado_interno,
+            ml_status: sh?.status || null,
+            ml_substatus: sh?.substatus || null
+          }
+        }
       );
 
       ok++;
