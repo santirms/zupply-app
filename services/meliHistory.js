@@ -139,27 +139,86 @@ function buildDescripcion(status, substatus, detail) {
 
 function formatSubstatus(substatus) {
   if (!substatus) return null;
+
   const nombres = {
+    in_transit: 'En tránsito',
+    out_for_delivery: 'En reparto',
+    at_hub: 'En hub',
     buyer_rescheduled: 'Buyer rescheduled',
     rescheduled_by_meli: 'Rescheduled by MeLi',
-    delayed: 'Delayed',
-    in_transit: 'In transit',
-    out_for_delivery: 'Out for delivery',
-    at_hub: 'At hub',
     rescheduled_by_buyer: 'Rescheduled by buyer',
-    rescheduled_by_receiver: 'Rescheduled by receiver'
+    rescheduled_by_receiver: 'Rescheduled by receiver',
+    delayed: 'Delayed'
   };
 
   const key = String(substatus).toLowerCase();
-  return nombres[key] || String(substatus).replace(/_/g, ' ');
+  return nombres[key] || key.replace(/_/g, ' ');
 }
 
 function mapearEstadoML(mlStatus, mlSubstatus = null) {
   const status = String(mlStatus || '').toLowerCase();
-  const substatusRaw = mlSubstatus || null;
-  const substatusNorm = substatusRaw ? String(substatusRaw).toLowerCase() : null;
+  const substatusRaw = mlSubstatus != null ? String(mlSubstatus) : null;
+  const substatusNorm = substatusRaw ? substatusRaw.toLowerCase() : null;
 
+  // ========== ESTADOS FINALES (sin substatus) ==========
+  if (status === 'delivered') {
+    return {
+      estado: 'entregado',
+      substatus: null,
+      substatus_display: null
+    };
+  }
+
+  if (status === 'cancelled') {
+    return {
+      estado: 'cancelado',
+      substatus: null,
+      substatus_display: null
+    };
+  }
+
+  // ========== SUBSTATUS ESPECÍFICOS (solo para estados activos) ==========
   if (substatusNorm) {
+    if (substatusNorm === 'printed') {
+      return {
+        estado: 'a_retirar',
+        substatus: 'printed',
+        substatus_display: 'A retirar'
+      };
+    }
+
+    if (substatusNorm === 'soon_deliver') {
+      return {
+        estado: 'llega_pronto',
+        substatus: 'soon_deliver',
+        substatus_display: 'Llega pronto'
+      };
+    }
+
+    if (substatusNorm === 'receiver_absent') {
+      return {
+        estado: 'comprador_ausente',
+        substatus: 'receiver_absent',
+        substatus_display: 'Comprador ausente'
+      };
+    }
+
+    if (substatusNorm === 'bad_address' || substatusNorm === 'not_visited') {
+      return {
+        estado: 'inaccesible',
+        substatus: substatusNorm,
+        substatus_display: substatusNorm === 'bad_address' ? 'Dirección incorrecta' : 'No visitado'
+      };
+    }
+
+    if (substatusNorm === 'agency_closed') {
+      return {
+        estado: 'sucursal_cerrada',
+        substatus: 'agency_closed',
+        substatus_display: 'Sucursal cerrada'
+      };
+    }
+
     if (substatusNorm === 'buyer_rescheduled') {
       return {
         estado: 'reprogramado',
@@ -183,8 +242,25 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
         substatus_display: 'Delayed'
       };
     }
+
+    if (substatusNorm === 'refused_delivery') {
+      return {
+        estado: 'rechazado',
+        substatus: 'refused_delivery',
+        substatus_display: 'Rechazado por comprador'
+      };
+    }
+
+    if (substatusNorm === 'returning_to_sender') {
+      return {
+        estado: 'devolucion',
+        substatus: 'returning_to_sender',
+        substatus_display: 'Devolviendo al vendedor'
+      };
+    }
   }
 
+  // ========== ESTADOS ACTIVOS (pueden tener substatus de tránsito) ==========
   const mapaEstados = {
     ready_to_ship: {
       estado: 'pendiente',
@@ -193,23 +269,13 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
     },
     shipped: {
       estado: 'en_camino',
-      substatus: substatusRaw,
-      substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
-    },
-    delivered: {
-      estado: 'entregado',
-      substatus: null,
-      substatus_display: null
-    },
-    cancelled: {
-      estado: 'cancelado',
-      substatus: substatusRaw,
-      substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
+      substatus: substatusNorm,
+      substatus_display: substatusNorm ? formatSubstatus(substatusNorm) : null
     },
     handling: {
       estado: 'en_planta',
-      substatus: substatusRaw,
-      substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
+      substatus: null,
+      substatus_display: null
     },
     ready_to_pick: {
       estado: 'listo_retiro',
@@ -218,18 +284,19 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
     },
     not_delivered: {
       estado: 'no_entregado',
-      substatus: substatusRaw,
-      substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
+      substatus: substatusNorm,
+      substatus_display: substatusNorm ? formatSubstatus(substatusNorm) : null
     }
   };
 
-  const mapped = mapaEstados[status];
-  if (mapped) return mapped;
+  if (mapaEstados[status]) {
+    return mapaEstados[status];
+  }
 
   return {
     estado: 'pendiente',
-    substatus: substatusRaw || null,
-    substatus_display: substatusRaw ? formatSubstatus(substatusRaw) : null
+    substatus: null,
+    substatus_display: null
   };
 }
 
@@ -1086,16 +1153,21 @@ try {
     estadoFinal = 'comprador_ausente';
   }
 
+  const estadosFinales = new Set(['entregado', 'cancelado']);
+  if (estadosFinales.has(estadoFinal)) {
+    substatusInterno = null;
+    substatusDisplay = null;
+    if (TERMINALES.has(statusFinalNorm) || ['delivered', 'cancelled'].includes(statusFinalNorm)) {
+      substatusFinal = null;
+    }
+  }
+
   update.$set.estado = estadoFinal;
   update.$set.substatus = substatusInterno || null;
   update.$set.substatus_display = substatusDisplay || null;
   update.$set.ml_status = statusFinal || null;
   update.$set.ml_substatus = substatusFinal || null;
-  update.$set.estado_meli = {
-    status: statusFinal,
-    substatus: substatusFinal,
-    updatedAt: fechaFinal
-  };
+  update.$set.ml_status_updated_at = fechaFinal || null;
 
   // Marcar flag permanente si confirmamos ausencia
   if (estadoFinal === 'comprador_ausente') {
