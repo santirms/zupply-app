@@ -1,14 +1,31 @@
 function requireAuth(req, res, next) {
-  const u = req.session?.user;
-  if (u?.authenticated && u?.role) return next();
+  const user = req.session?.user;
+  if (user?.authenticated && user?.role) {
+    req.user = user;
+    return next();
+  }
   return res.status(401).json({ error: 'No autenticado' });
 }
 
-function requireRole(...roles) {
+function requireRole(...allowedRoles) {
   return (req, res, next) => {
-    const u = req.session?.user;
-    if (!u?.authenticated) return res.status(401).json({ error: 'No autenticado' });
-    if (!roles.includes(u.role)) return res.status(403).json({ error: 'Sin permisos' });
+    const user = req.session?.user;
+
+    if (!user?.authenticated) {
+      return res.status(401).json({ error: 'No autenticado' });
+    }
+
+    const userRole = user.role || user.tipo || null;
+
+    if (!allowedRoles.includes(userRole)) {
+      return res.status(403).json({
+        error: 'No tienes permisos para esta acción',
+        required: allowedRoles,
+        current: userRole
+      });
+    }
+
+    req.user = user;
     next();
   };
 }
