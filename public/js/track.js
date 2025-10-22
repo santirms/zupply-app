@@ -14,6 +14,7 @@ function escapeHtml(unsafe) {
 // Obtener tracking de la URL
 const urlParams = new URLSearchParams(window.location.search);
 const tracking = urlParams.get('t') || window.location.pathname.split('/').pop();
+const trackingParam = tracking ? encodeURIComponent(tracking) : '';
 
 console.log('Tracking:', tracking);
 
@@ -25,12 +26,12 @@ const successState = document.getElementById('successState');
 // Cargar datos del envío
 async function cargarEnvio() {
   try {
-    if (!tracking || tracking === 'track' || tracking === 'track.html') {
+    if (!trackingParam || tracking === 'track' || tracking === 'track.html') {
       mostrarError('No se especificó un número de tracking válido');
       return;
     }
 
-    const res = await fetch(`/api/tracking/${tracking}`);
+    const res = await fetch(`/api/tracking/${trackingParam}`);
     
     if (!res.ok) {
       const err = await res.json();

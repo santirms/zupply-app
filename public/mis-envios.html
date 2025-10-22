@@ -82,7 +82,7 @@
 
   function renderizarEnvio(envio) {
     const tracking = obtenerTracking(envio);
-    const trackingJson = JSON.stringify(tracking);
+    const trackingAttr = escapeHtml(tracking);
     const estado = formatEstado(envio.estado);
     const direccionPartes = [envio.direccion, envio.partido].filter(Boolean);
     const direccion = direccionPartes.length ? direccionPartes.join(', ') : envio.direccion || '';
@@ -96,12 +96,38 @@
     let accionesHtml = '';
 
     if (!esMercadoLibre) {
+      const envioIdAttr = escapeHtml(envio._id);
+
       accionesHtml = `
         <div class="flex flex-wrap gap-2 pt-3 mt-3 border-t border-slate-200">
-          <button type="button" class="px-3 py-2 rounded text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700" onclick="marcarEstado('${envio._id}', 'entregado', ${trackingJson})">Entregado</button>
-          <button type="button" class="px-3 py-2 rounded text-sm font-medium bg-amber-500 text-white hover:bg-amber-600" onclick="marcarEstado('${envio._id}', 'comprador_ausente', ${trackingJson})">Ausente</button>
-          <button type="button" class="px-3 py-2 rounded text-sm font-medium bg-rose-600 text-white hover:bg-rose-700" onclick="marcarEstado('${envio._id}', 'rechazado', ${trackingJson})">Rechazado</button>
-          <button type="button" class="px-3 py-2 rounded text-sm font-medium bg-slate-600 text-white hover:bg-slate-700" onclick="marcarEstado('${envio._id}', 'inaccesible', ${trackingJson})">Inaccesible</button>
+          <button
+            type="button"
+            class="px-3 py-2 rounded text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 btn-marcar-estado"
+            data-envio-id="${envioIdAttr}"
+            data-estado="entregado"
+            data-tracking="${trackingAttr}"
+          >Entregado</button>
+          <button
+            type="button"
+            class="px-3 py-2 rounded text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 btn-marcar-estado"
+            data-envio-id="${envioIdAttr}"
+            data-estado="comprador_ausente"
+            data-tracking="${trackingAttr}"
+          >Ausente</button>
+          <button
+            type="button"
+            class="px-3 py-2 rounded text-sm font-medium bg-rose-600 text-white hover:bg-rose-700 btn-marcar-estado"
+            data-envio-id="${envioIdAttr}"
+            data-estado="rechazado"
+            data-tracking="${trackingAttr}"
+          >Rechazado</button>
+          <button
+            type="button"
+            class="px-3 py-2 rounded text-sm font-medium bg-slate-600 text-white hover:bg-slate-700 btn-marcar-estado"
+            data-envio-id="${envioIdAttr}"
+            data-estado="inaccesible"
+            data-tracking="${trackingAttr}"
+          >Inaccesible</button>
         </div>
       `;
     } else {
@@ -136,6 +162,22 @@
     `;
   }
 
+  function registrarEventosMarcarEstado() {
+    const botones = document.querySelectorAll('.btn-marcar-estado');
+
+    botones.forEach((boton) => {
+      boton.addEventListener('click', () => {
+        const envioId = boton.getAttribute('data-envio-id');
+        const estado = boton.getAttribute('data-estado');
+        const tracking = boton.getAttribute('data-tracking');
+
+        if (envioId && estado) {
+          marcarEstado(envioId, estado, tracking || '');
+        }
+      });
+    });
+  }
+
   async function cargarEnvios() {
     const lista = document.getElementById('list');
     lista.innerHTML = '<div class="text-sm text-slate-500">Cargando envíos...</div>';
@@ -164,6 +206,7 @@
       }
 
       lista.innerHTML = envios.map(renderizarEnvio).join('');
+      registrarEventosMarcarEstado();
     } catch (error) {
       console.error('Error cargando envíos:', error);
       lista.innerHTML = `
