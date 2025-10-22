@@ -35,6 +35,8 @@ const HistorialEstadoSchema = new Schema({
     type: Date,
     required: true
   },
+  usuario: { type: String, default: null },
+  notas: { type: String, default: null },
   substatus: { type: String, default: null },
   substatus_display: { type: String, default: null },
   ml_status: { type: String, default: null },
