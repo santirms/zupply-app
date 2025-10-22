@@ -38,7 +38,8 @@ const HistorialEstadoSchema = new Schema({
   substatus: { type: String, default: null },
   substatus_display: { type: String, default: null },
   ml_status: { type: String, default: null },
-  ml_substatus: { type: String, default: null }
+  ml_substatus: { type: String, default: null },
+  es_barrido_generico: { type: Boolean, default: false }
 }, { _id: false });
 
 const envioSchema = new Schema({
