@@ -261,6 +261,45 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
   return buildEstadoResult('pendiente', mlStatus, mlSubstatus);
 }
 
+function esBarridoGenerico(envio, nuevoEstado, hora, minutos) {
+  if (!envio || !nuevoEstado) return false;
+
+  const esHoraBarrido = hora === 23 && minutos >= 0 && minutos <= 30;
+  if (!esHoraBarrido) return false;
+
+  const mlSubstatusNuevo = (nuevoEstado.ml_substatus || nuevoEstado.substatus || '').toLowerCase();
+  if (mlSubstatusNuevo !== 'rescheduled_by_meli') return false;
+
+  const estadosEspecificos = new Set([
+    'comprador_ausente',
+    'inaccesible',
+    'sucursal_cerrada',
+    'demorado'
+  ]);
+
+  const estadoActual = (envio.estado || '').toLowerCase();
+  if (!estadosEspecificos.has(estadoActual)) return false;
+
+  const ultimaActualizacionRaw =
+    envio.estado_meli?.updatedAt ||
+    envio.updated_at ||
+    envio.updatedAt ||
+    (Array.isArray(envio.historial_estados) && envio.historial_estados[0]?.fecha) ||
+    envio.created_at ||
+    envio.createdAt ||
+    envio.fecha;
+
+  if (!ultimaActualizacionRaw) return false;
+
+  const ultimaActualizacion = new Date(ultimaActualizacionRaw);
+  if (isNaN(+ultimaActualizacion)) return false;
+
+  const horasDesdeUltimaActualizacion =
+    (Date.now() - ultimaActualizacion.getTime()) / (1000 * 60 * 60);
+
+  return horasDesdeUltimaActualizacion < 4;
+}
+
 // ---------------------------- helpers ----------------------------
 // --- Tracking: mapea checkpoints a nuestro esquema ---
 function mapFromTracking(tk) {
@@ -368,30 +407,47 @@ function mapFromTracking(tk) {
 
 
 function procesarHistorialML(shipment) {
-  const historial = [];
-
   if (!shipment || !Array.isArray(shipment.status_history)) {
-    return historial;
+    return [];
   }
 
-  for (const event of shipment.status_history) {
+  const historialOrdenado = [...shipment.status_history]
+    .map(event => ({
+      event,
+      fecha: event.date_shipped || event.date_created || event.date || event.date_updated
+    }))
+    .filter(item => {
+      if (!item.fecha) return false;
+      const fecha = new Date(item.fecha);
+      if (isNaN(+fecha)) return false;
+      item.fecha = fecha;
+      return true;
+    })
+    .sort((a, b) => a.fecha - b.fecha);
+
+  const historialProcesado = [];
+  let estadoAnterior = null;
+
+  for (const { event, fecha } of historialOrdenado) {
     const mapped = mapearEstadoML(event.status, event.substatus);
-    const fechaRaw = event.date_shipped || event.date_created || event.date || event.date_updated;
-    const fecha = fechaRaw ? new Date(fechaRaw) : null;
+    if (!mapped || !mapped.estado) continue;
 
-    if (!fecha || isNaN(+fecha)) continue;
+    if (mapped.estado !== estadoAnterior) {
+      historialProcesado.push({
+        estado: mapped.estado,
+        substatus: mapped.ml_substatus ?? null,
+        substatus_display: mapped.substatus_display || (mapped.ml_substatus ? formatSubstatus(mapped.ml_substatus) : null),
+        ml_status: mapped.ml_status,
+        ml_substatus: mapped.ml_substatus,
+        fecha,
+        es_barrido_generico: false
+      });
 
-    historial.push({
-      estado: mapped.estado,
-      ml_status: mapped.ml_status,
-      ml_substatus: mapped.ml_substatus,
-      fecha
-    });
+      estadoAnterior = mapped.estado;
+    }
   }
 
-  historial.sort((a, b) => b.fecha - a.fecha);
-
-  return historial;
+  return historialProcesado.reverse();
 }
 
 
@@ -1102,6 +1158,23 @@ try {
     ? estadoMapeado.ml_substatus
     : substatusFinal;
 
+  const horaActual = ahora.getHours();
+  const minutosActuales = ahora.getMinutes();
+  const esBarrido = esBarridoGenerico(envio, estadoMapeado, horaActual, minutosActuales);
+
+  if (esBarrido) {
+    logger.warn('[meliHistory] Barrido genérico detectado', {
+      envio_id: envio._id?.toString?.(),
+      tracking: envio.tracking || envio.tracking_id || envio.trackingId || envio.meli_id || envio.id_venta || null,
+      estado_anterior: envio.estado,
+      ml_substatus_anterior: envio.ml_substatus,
+      ml_substatus_nuevo: estadoMapeado.ml_substatus,
+      hora: `${horaActual}:${String(minutosActuales).padStart(2, '0')}`
+    });
+
+    estadoFinal = envio.estado || estadoFinal;
+  }
+
   if (huboAusenteFinal && /resched.*meli/.test((substatusFinal || '').toLowerCase())) {
     logger.info('[meliHistory] Preservando comprador_ausente', {
       envio_id: envio.meli_id || envio._id,
@@ -1144,6 +1217,34 @@ try {
   }
 
   const historialEstados = procesarHistorialML(sh);
+
+  if (esBarrido) {
+    const substatusDisplayBarrido = estadoMapeado.substatus_display
+      || (estadoMapeado.ml_substatus ? formatSubstatus(estadoMapeado.ml_substatus) : null);
+
+    const entradaBarrido = {
+      estado: estadoFinal || envio.estado || 'pendiente',
+      substatus: estadoMapeado.ml_substatus ?? null,
+      substatus_display: substatusDisplayBarrido,
+      ml_status: mlStatusFinal,
+      ml_substatus: estadoMapeado.ml_substatus ?? null,
+      fecha: ahora,
+      es_barrido_generico: true
+    };
+
+    const yaRegistrado = Array.isArray(envio.historial_estados)
+      ? envio.historial_estados.some(h =>
+          h?.es_barrido_generico &&
+          h.estado === entradaBarrido.estado &&
+          h.ml_substatus === entradaBarrido.ml_substatus &&
+          h.ml_status === entradaBarrido.ml_status)
+      : false;
+
+    if (!yaRegistrado) {
+      historialEstados.unshift(entradaBarrido);
+    }
+  }
+
   update.$set.historial_estados = historialEstados;
 
   await Envio.updateOne({ _id: envio._id }, update);
@@ -1152,6 +1253,7 @@ try {
 module.exports = {
   ensureMeliHistory,
   mapearEstadoML,
+  esBarridoGenerico,
   formatSubstatus,
   procesarHistorialML,
   'meliHistory.v3-sintetiza-desde-shipment': true
