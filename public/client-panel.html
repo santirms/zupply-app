@@ -275,7 +275,7 @@
     document.getElementById('btnFiltrar').addEventListener('click',()=>{ page=1; loadTabla(); loadMapData(); });
 
   // Tabla
-  let page=1, limit=50;
+  let page=1, limit=50, totalPages=0;
   function escapeHtml(value){
     if (value == null) return '';
     return String(value)
@@ -313,8 +313,29 @@
       }
 
       const data = await r.json();
-      const items = Array.isArray(data.items) ? data.items : [];
-      const total = typeof data.total === 'number' ? data.total : items.length;
+      const obtenerEnviosHelper = typeof window.obtenerEnviosDesdeRespuesta === 'function'
+        ? window.obtenerEnviosDesdeRespuesta
+        : ((res) => {
+            if (!res) return [];
+            if (Array.isArray(res.envios)) return res.envios;
+            if (Array.isArray(res.items)) return res.items;
+            return Array.isArray(res) ? res : [];
+          });
+      const obtenerPaginacionHelper = typeof window.obtenerPaginacionDesdeRespuesta === 'function'
+        ? window.obtenerPaginacionDesdeRespuesta
+        : null;
+
+      const items = obtenerEnviosHelper(data);
+      const pagination = obtenerPaginacionHelper ? obtenerPaginacionHelper(data) : null;
+      const total = pagination ? pagination.total : (typeof data.total === 'number' ? data.total : items.length);
+
+      if (pagination) {
+        page = pagination.page || page;
+        limit = pagination.limit || limit;
+        totalPages = pagination.pages || Math.ceil(total / (limit || 1));
+      } else {
+        totalPages = Math.ceil(total / (limit || 1));
+      }
 
       if (typeof window.registrarEnvioCompleto === 'function') {
         for (const item of items) window.registrarEnvioCompleto(item);
@@ -355,8 +376,19 @@
         tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-sm text-slate-500 dark:text-slate-400">No se encontraron envíos para los filtros seleccionados.</td></tr>`;
       }
 
-      document.getElementById('pageInfo').textContent =
-        `Página ${page} – ${items.length} / ${total}`;
+      const pageInfo = document.getElementById('pageInfo');
+      if (pageInfo) {
+        pageInfo.textContent = `Página ${page} – ${items.length} / ${total}`;
+      }
+
+      const prevBtn = document.getElementById('prevPage');
+      if (prevBtn) {
+        prevBtn.disabled = page <= 1;
+      }
+      const nextBtn = document.getElementById('nextPage');
+      if (nextBtn) {
+        nextBtn.disabled = totalPages > 0 ? page >= totalPages : items.length < limit;
+      }
 
     } catch (e) {
       console.error('Error en loadTabla:', e);
@@ -364,7 +396,12 @@
     }
   }
   document.getElementById('prevPage').addEventListener('click',()=>{ if(page>1){ page--; loadTabla(); }});
-  document.getElementById('nextPage').addEventListener('click',()=>{ page++; loadTabla(); });
+  document.getElementById('nextPage').addEventListener('click',()=>{
+    if (totalPages === 0 || page < totalPages) {
+      page++;
+      loadTabla();
+    }
+  });
   loadTabla();
 
  

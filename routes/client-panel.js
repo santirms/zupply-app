@@ -3,7 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const Envio   = require('../models/Envio');
 const logger  = require('../utils/logger');
-const { requireRole } = require('../middlewares/auth');
+const { requireAuth, requireRole } = require('../middlewares/auth');
 
 function buildSenderFilter(senderIds) {
   // aceptá strings y numbers en la DB
@@ -106,123 +106,74 @@ function buildFechaRange(query = {}) {
 
 // === dentro de routes/client-panel.js ===
 
-router.get('/shipments', requireRole('cliente','admin','coordinador'), async (req, res) => {
+router.get('/shipments', requireAuth, requireRole('cliente','admin','coordinador'), async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit||'50',10), 200);
-    const page  = Math.max(parseInt(req.query.page||'1',10), 1);
-    const skip  = (page - 1) * limit;
+    const { page = 1, limit = 50 } = req.query;
 
-    const estado = (req.query.estado || '').toString().trim();
-    const base = {};
-    if (estado) base.estado = estado;
+    const senderIdsRaw = req.user?.sender_ids;
+    const senderIds = Array.isArray(senderIdsRaw)
+      ? senderIdsRaw.filter(Boolean).map((id) => String(id))
+      : (typeof senderIdsRaw === 'string' ? [senderIdsRaw] : []);
 
-    const { filter, reason, clienteId } = getScopedFilter(req, base);
-
-    if (!clienteId) {
-      if (reason === 'admin-sin-cliente') {
-        return res.status(400).json({ error: 'missing_cliente_id' });
-      }
-      return res.json({ items: [], page, limit, total: 0 });
+    if (!senderIds.length) {
+      logger.warn('[Panel Cliente] Usuario sin sender_ids', {
+        user_id: req.user?._id || null
+      });
+      return res.json({
+        envios: [],
+        pagination: { page: 1, limit: 50, total: 0, pages: 0 }
+      });
     }
 
-    const condiciones = [];
-    if (filter && Array.isArray(filter.$and)) {
-      condiciones.push(...filter.$and);
-    } else if (filter && Object.keys(filter).length) {
-      condiciones.push(filter);
-    }
+    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNumber = Math.max(parseInt(limit, 10) || 50, 1);
+    const skip = (pageNumber - 1) * limitNumber;
 
-    const rangoFechas = buildFechaRange(req.query);
-    const fechaCond = {};
-    if (rangoFechas.$gte) fechaCond.$gte = rangoFechas.$gte;
-    if (rangoFechas.$lte) fechaCond.$lte = rangoFechas.$lte;
+    const hace2Semanas = new Date();
+    hace2Semanas.setDate(hace2Semanas.getDate() - 14);
+    hace2Semanas.setHours(0, 0, 0, 0);
 
-    const createdCond = {};
-    if (rangoFechas.$gte) createdCond.$gte = rangoFechas.$gte;
-    if (rangoFechas.$lte) createdCond.$lte = rangoFechas.$lte;
-
-    condiciones.push({
-      $or: [
-        { fecha: fechaCond },
-        {
-          $and: [
-            { $or: [ { fecha: { $exists: false } }, { fecha: null } ] },
-            { createdAt: createdCond }
-          ]
-        }
-      ]
-    });
-
-    const finalFilter = condiciones.length === 1 ? condiciones[0] : { $and: condiciones };
-
-    const projection = {
-      tracking: 1,
-      tracking_id: 1,
-      trackingId: 1,
-      numero_seguimiento: 1,
-      tracking_code: 1,
-      tracking_meli: 1,
-      shipment_id: 1,
-      id_venta: 1,
-      order_id: 1,
-      venta_id: 1,
-      meli_id: 1,
-      destinatario: 1,
-      nombre_destinatario: 1,
-      direccion: 1,
-      partido: 1,
-      codigo_postal: 1,
-      estado: 1,
-      estado_meli: 1,
-      fecha: 1,
-      createdAt: 1,
-      created_at: 1,
-      updatedAt: 1,
-      telefono: 1,
-      telefono_destinatario: 1,
-      referencia: 1,
-      historial: 1,
-      historial_estados: 1,
-      timeline: 1,
-      destino: 1,
-      chofer: 1,
-      cliente_id: 1,
-      sender_id: 1
+    const query = {
+      sender_id: { $in: senderIds },
+      fecha: { $gte: hace2Semanas }
     };
 
-    const [docs, total] = await Promise.all([
-      Envio.find(finalFilter, projection)
-        .populate('chofer', 'nombre email telefono')
-        .sort({ fecha: -1, createdAt: -1, _id: -1 })
+    const [envios, total] = await Promise.all([
+      Envio.find(query)
+        .populate('chofer', 'nombre email')
+        .select('id_venta tracking destinatario direccion partido codigo_postal estado estado_meli fecha meli_id sender_id')
+        .sort({ fecha: -1 })
         .skip(skip)
-        .limit(limit)
+        .limit(limitNumber)
         .lean(),
-      Envio.countDocuments(finalFilter)
+      Envio.countDocuments(query)
     ]);
 
-    const items = (docs || []).map((doc) => {
-      if (!doc.partido) {
-        doc.partido = doc?.destino?.partido || doc?.destino?.localidad || null;
-      }
-      if (!doc.destinatario) {
-        doc.destinatario = doc.nombre_destinatario || doc?.destino?.nombre || null;
-      }
-      if (!doc.telefono && doc.telefono_destinatario) {
-        doc.telefono = doc.telefono_destinatario;
-      }
-      return doc;
-    });
+    const pages = limitNumber > 0 ? Math.ceil(total / limitNumber) : 0;
 
     logger.info('[Panel Cliente] Envíos obtenidos', {
-      cliente_id: clienteId ? String(clienteId) : null,
-      page,
-      limit,
-      count: items.length,
-      total,
-      reason
+      sender_ids: senderIds,
+      page: pageNumber,
+      limit: limitNumber,
+      count: envios.length,
+      total
     });
 
-    res.json({ items, page, limit, total });
+    res.json({
+      envios,
+      pagination: {
+        page: pageNumber,
+        limit: limitNumber,
+        total,
+        pages
+      },
+      // Campos extra para retrocompatibilidad con el front antiguo
+      items: envios,
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      pages
+    });
   } catch (e) {
     logger.error('client-panel /shipments error:', e);
     res.status(500).json({ error: 'server_error', message: e.message });

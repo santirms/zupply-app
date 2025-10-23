@@ -351,6 +351,44 @@ function crearBadgeEstado(estado) {
   return `<span class="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full border ${badgeClass}">${contenido}</span>`;
 }
 
+function obtenerEnviosDesdeRespuesta(data) {
+  if (!data) return [];
+  if (Array.isArray(data.envios)) return data.envios;
+  if (Array.isArray(data.items)) return data.items;
+  if (Array.isArray(data)) return data;
+  return [];
+}
+
+function normalizarNumero(value, fallback) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function obtenerPaginacionDesdeRespuesta(data) {
+  if (!data || typeof data !== 'object') {
+    return {
+      page: 1,
+      limit: 50,
+      total: 0,
+      pages: 0
+    };
+  }
+
+  const envios = obtenerEnviosDesdeRespuesta(data);
+  const baseLimit = normalizarNumero(data.limit, 50);
+  const total = normalizarNumero(data.total, envios.length);
+  const limit = normalizarNumero(data?.pagination?.limit, baseLimit);
+  const page = normalizarNumero(data?.pagination?.page, normalizarNumero(data.page, 1));
+  const pages = normalizarNumero(data?.pagination?.pages, normalizarNumero(data.pages, limit > 0 ? Math.ceil(total / limit) : 0));
+
+  return {
+    page: page || 1,
+    limit: limit || 50,
+    total: total || envios.length,
+    pages: pages || (limit > 0 ? Math.ceil((total || envios.length) / limit) : 0)
+  };
+}
+
 // Cerrar modal con tecla ESC
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -378,3 +416,5 @@ window.obtenerEstadoActual = obtenerEstadoActual;
 window.registrarEnviosParciales = registrarEnviosParciales;
 window.registrarEnvioCompleto = registrarEnvioCompleto;
 window.obtenerEnvioDeCache = obtenerEnvioDeCache;
+window.obtenerEnviosDesdeRespuesta = obtenerEnviosDesdeRespuesta;
+window.obtenerPaginacionDesdeRespuesta = obtenerPaginacionDesdeRespuesta;
