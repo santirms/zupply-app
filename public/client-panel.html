@@ -75,7 +75,7 @@
           <input id="fDesde" type="date" class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm">
           <input id="fHasta" type="date" class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm">
           <select id="fEstado" class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm">
-            <option value="">Todos</option>
+            <option value="todos">Todos</option>
             <option value="pendiente">Pendiente</option>
             <option value="en_camino">En camino</option>
             <option value="entregado">Entregado</option>
@@ -234,211 +234,319 @@
   <script src="/js/panel-clientes.js"></script>
 
   <script>
-    document.getElementById('anio').textContent=new Date().getFullYear();
+    document.getElementById('anio').textContent = new Date().getFullYear();
+
     // user/tema/menu
-    (function(){
-      const btn=document.getElementById('userBtn'),menu=document.getElementById('userMenu'),wrap=document.getElementById('userMenuWrap');
-      btn.addEventListener('click',()=>menu.classList.toggle('hidden'));
-      document.addEventListener('click',(e)=>{if(!wrap.contains(e.target))menu.classList.add('hidden');});
-      document.getElementById('logoutBtn').addEventListener('click',async()=>{try{await fetch('/auth/logout',{method:'POST'})}catch{};localStorage.removeItem('zpl_auth');location.href='/auth/login'});
-      fetch('/me',{cache:'no-store'}).then(r=>r.json()).then(me=>{document.getElementById('username').textContent=(me.name||me.username||me.email||'Usuario')}).catch(()=>location.href='/auth/login');
+    (function initUserMenu() {
+      const btn = document.getElementById('userBtn');
+      const menu = document.getElementById('userMenu');
+      const wrap = document.getElementById('userMenuWrap');
+      if (btn && menu && wrap) {
+        btn.addEventListener('click', () => menu.classList.toggle('hidden'));
+        document.addEventListener('click', (e) => {
+          if (!wrap.contains(e.target)) menu.classList.add('hidden');
+        });
+      }
+
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+          try {
+            await fetch('/auth/logout', { method: 'POST' });
+          } catch (_) {}
+          localStorage.removeItem('zpl_auth');
+          location.href = '/auth/login';
+        });
+      }
+
+      fetch('/me', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((me) => {
+          document.getElementById('username').textContent =
+            me.name || me.username || me.email || 'Usuario';
+        })
+        .catch(() => {
+          location.href = '/auth/login';
+        });
     })();
-    (function(){
-      const order=['light','dark','system']; const btn=document.getElementById('themeBtn');
-      const apply=m=>{const prefers=matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',m==='dark'||(m==='system'&&prefers));localStorage.setItem('zpl_theme',m);btn.textContent='Tema: '+(m==='system'?'auto':m);};
-      apply(localStorage.getItem('zpl_theme')||'system');
-      btn.addEventListener('click',()=>{const c=localStorage.getItem('zpl_theme')||'system';apply(order[(order.indexOf(c)+1)%order.length]);});
-    })();
 
-    // Tabs
-    const tabTabla = document.getElementById('tabTabla');
-    const tabMapa  = document.getElementById('tabMapa');
-    const vistaTabla = document.getElementById('vistaTabla');
-    const vistaMapa  = document.getElementById('vistaMapa');
-    function setTab(which){
-      const onTabla = which==='tabla';
-      tabTabla.classList.toggle('bg-[var(--z-primary)]', onTabla);
-      tabTabla.classList.toggle('text-[var(--z-primary-fg)]', onTabla);
-      tabMapa.classList.toggle('bg-[var(--z-primary)]', !onTabla);
-      tabMapa.classList.toggle('text-[var(--z-primary-fg)]', !onTabla);
-      vistaTabla.classList.toggle('hidden', !onTabla);
-      vistaMapa.classList.toggle('hidden', onTabla);
-      if (!onTabla) initMapOnce();
-    }
-    tabTabla.addEventListener('click',()=>setTab('tabla'));
-    tabMapa.addEventListener('click',()=>setTab('mapa'));
+    (function initThemeToggle() {
+      const order = ['light', 'dark', 'system'];
+      const btn = document.getElementById('themeBtn');
+      if (!btn) return;
 
-    // Filtros
-    const fDesde   = document.getElementById('fDesde');
-    const fHasta   = document.getElementById('fHasta');
-    const fEstado  = document.getElementById('fEstado');
-    document.getElementById('btnFiltrar').addEventListener('click',()=>{ page=1; loadTabla(); loadMapData(); });
+      const apply = (mode) => {
+        const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantsDark = mode === 'dark' || (mode === 'system' && prefersDark);
+        document.documentElement.classList.toggle('dark', wantsDark);
+        localStorage.setItem('zpl_theme', mode);
+        btn.textContent = 'Tema: ' + (mode === 'system' ? 'auto' : mode);
+      };
 
-  // Tabla
-  let page=1, limit=50, totalPages=0;
-  function escapeHtml(value){
-    if (value == null) return '';
-    return String(value)
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;')
-      .replace(/'/g,'&#39;');
-  }
+      apply(localStorage.getItem('zpl_theme') || 'system');
 
-  function formatearFecha(valor){
-    if (!valor) return '-';
-    const fecha = new Date(valor);
-    if (Number.isNaN(fecha.getTime())) return '-';
-    return fecha.toLocaleString('es-AR');
-  }
-
-  async function loadTabla(){
-    const params = new URLSearchParams({ page, limit });
-    if (fEstado.value) params.set('estado', fEstado.value);
-    if (fDesde.value)  params.set('desde',  fDesde.value);
-    if (fHasta.value)  params.set('hasta',  fHasta.value);
-
-    const tbody = document.getElementById('tbodyCliente');
-    try {
-      const r = await fetch('/api/client-panel/shipments?'+params.toString(), { cache:'no-store' });
-
-      // Defender: si no es JSON, mostrar el HTML/404 y abortar
-      const ct = r.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) {
-        const text = await r.text();
-        console.error('Respuesta no JSON:', r.status, text.slice(0,200));
-        tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="5">Error ${r.status}: respuesta no JSON</td></tr>`;
-        return;
-      }
-
-      const data = await r.json();
-      const obtenerEnviosHelper = typeof window.obtenerEnviosDesdeRespuesta === 'function'
-        ? window.obtenerEnviosDesdeRespuesta
-        : ((res) => {
-            if (!res) return [];
-            if (Array.isArray(res.envios)) return res.envios;
-            if (Array.isArray(res.items)) return res.items;
-            return Array.isArray(res) ? res : [];
-          });
-      const obtenerPaginacionHelper = typeof window.obtenerPaginacionDesdeRespuesta === 'function'
-        ? window.obtenerPaginacionDesdeRespuesta
-        : null;
-
-      const items = obtenerEnviosHelper(data);
-      const pagination = obtenerPaginacionHelper ? obtenerPaginacionHelper(data) : null;
-      const total = pagination ? pagination.total : (typeof data.total === 'number' ? data.total : items.length);
-
-      if (pagination) {
-        page = pagination.page || page;
-        limit = pagination.limit || limit;
-        totalPages = pagination.pages || Math.ceil(total / (limit || 1));
-      } else {
-        totalPages = Math.ceil(total / (limit || 1));
-      }
-
-      if (typeof window.registrarEnvioCompleto === 'function') {
-        for (const item of items) window.registrarEnvioCompleto(item);
-      } else if (typeof window.registrarEnviosParciales === 'function') {
-        window.registrarEnviosParciales(items);
-      }
-
-      tbody.innerHTML = items.map(it => {
-        const envioId = it._id ?? it.id ?? it.envio_id ?? it.tracking ?? it.id_venta ?? '';
-        const identificador = it.tracking ?? it.tracking_id ?? it.trackingId ?? it.shipment_id ?? it.id_venta ?? '-';
-        const idVenta = it.id_venta ?? it.order_id ?? it.venta_id ?? null;
-        const mostrarAmbos = identificador && idVenta && identificador !== idVenta;
-        const identificadorHtml = mostrarAmbos
-          ? `<div class="font-mono text-slate-900 dark:text-slate-100">${escapeHtml(identificador)}</div><div class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(idVenta)}</div>`
-          : `<div class="font-mono text-slate-900 dark:text-slate-100">${escapeHtml(identificador || idVenta || '-')}</div>`;
-        const fechaReferencia = it.fecha || it.createdAt || it.created_at || null;
-        const fecha = formatearFecha(fechaReferencia);
-        const partido = it.partido ?? it?.destino?.partido ?? it?.destino?.localidad ?? '-';
-        const destinatario = escapeHtml(it.destinatario ?? it.nombre_destinatario ?? '-');
-        const estadoActual = obtenerEstadoActual(it);
-        const estadoBadge = crearBadgeEstado(estadoActual);
-        const rowClick = envioId
-          ? ` onclick="abrirModalDetalle(${JSON.stringify(String(envioId))})" class="cursor-pointer border-t border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5"`
-          : ' class="border-t border-slate-200 dark:border-white/10"';
-
-        return `
-        <tr${rowClick}>
-          <td class="p-2">${identificadorHtml}</td>
-          <td class="p-2 text-slate-900 dark:text-slate-100">${fecha}</td>
-          <td class="p-2 text-slate-900 dark:text-slate-100">${destinatario}</td>
-          <td class="p-2 text-slate-900 dark:text-slate-100">${escapeHtml(partido || '-')}</td>
-          <td class="p-2">${estadoBadge}</td>
-        </tr>
-        `;
-      }).join('');
-
-      if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-sm text-slate-500 dark:text-slate-400">No se encontraron envíos para los filtros seleccionados.</td></tr>`;
-      }
-
-      const pageInfo = document.getElementById('pageInfo');
-      if (pageInfo) {
-        pageInfo.textContent = `Página ${page} – ${items.length} / ${total}`;
-      }
-
-      const prevBtn = document.getElementById('prevPage');
-      if (prevBtn) {
-        prevBtn.disabled = page <= 1;
-      }
-      const nextBtn = document.getElementById('nextPage');
-      if (nextBtn) {
-        nextBtn.disabled = totalPages > 0 ? page >= totalPages : items.length < limit;
-      }
-
-    } catch (e) {
-      console.error('Error en loadTabla:', e);
-      tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="5">${e.message}</td></tr>`;
-    }
-  }
-  document.getElementById('prevPage').addEventListener('click',()=>{ if(page>1){ page--; loadTabla(); }});
-  document.getElementById('nextPage').addEventListener('click',()=>{
-    if (totalPages === 0 || page < totalPages) {
-      page++;
-      loadTabla();
-    }
-  });
-  loadTabla();
-
- 
-    // Mapa (Leaflet + bounds + debounce)
-    let map, markersLayer, mapInited=false, fetchTimer;
-    function initMapOnce(){
-      if (mapInited) return;
-      mapInited = true;
-      map = L.map('mapCliente').setView([-34.6,-58.4], 10);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(map);
-      markersLayer = L.layerGroup().addTo(map);
-      const onMoveEnd = ()=>{ clearTimeout(fetchTimer); fetchTimer = setTimeout(loadMapData, 350); };
-      map.on('moveend', onMoveEnd);
-      loadMapData();
-    }
-    async function loadMapData(){
-      if (!mapInited) return;
-      const b = map.getBounds();
-      const params = new URLSearchParams({
-        swLat: b.getSouth(), swLng: b.getWest(),
-        neLat: b.getNorth(), neLng: b.getEast(),
-        limit: '500'
+      btn.addEventListener('click', () => {
+        const current = localStorage.getItem('zpl_theme') || 'system';
+        const nextIndex = (order.indexOf(current) + 1) % order.length;
+        apply(order[nextIndex]);
       });
-      if (fEstado.value) params.set('estado', fEstado.value);
+    })();
 
-      const r = await fetch('/api/client-panel/shipments/map?'+params.toString(), { cache:'no-store' });
-      if (!r.ok) return;
-      const { items } = await r.json();
-      markersLayer.clearLayers();
-      for (const it of items) {
-        const coords = it?.destino?.loc?.coordinates;
-        if (!coords) continue;
-        const [lng, lat] = coords;
-        L.marker([lat, lng]).addTo(markersLayer)
-         .bindPopup(`<b>${it.tracking||''}</b><br>${it.estado||''}<br>${it?.destino?.partido||''}`);
+    (function initTabsAndTable() {
+      const tabTabla = document.getElementById('tabTabla');
+      const tabMapa = document.getElementById('tabMapa');
+      const vistaTabla = document.getElementById('vistaTabla');
+      const vistaMapa = document.getElementById('vistaMapa');
+
+      function setTab(which) {
+        const onTabla = which === 'tabla';
+        tabTabla.classList.toggle('bg-[var(--z-primary)]', onTabla);
+        tabTabla.classList.toggle('text-[var(--z-primary-fg)]', onTabla);
+        tabMapa.classList.toggle('bg-[var(--z-primary)]', !onTabla);
+        tabMapa.classList.toggle('text-[var(--z-primary-fg)]', !onTabla);
+        vistaTabla.classList.toggle('hidden', !onTabla);
+        vistaMapa.classList.toggle('hidden', onTabla);
+        if (!onTabla) initMapOnce();
       }
-    }
+
+      tabTabla.addEventListener('click', () => setTab('tabla'));
+      tabMapa.addEventListener('click', () => setTab('mapa'));
+
+      const fDesde = document.getElementById('fDesde');
+      const fHasta = document.getElementById('fHasta');
+      const fEstado = document.getElementById('fEstado');
+      const btnFiltrar = document.getElementById('btnFiltrar');
+
+      const triggerReload = () => {
+        page = 1;
+        loadTabla();
+        loadMapData();
+      };
+
+      if (fEstado) {
+        fEstado.addEventListener('change', triggerReload);
+      }
+      if (btnFiltrar) {
+        btnFiltrar.addEventListener('click', triggerReload);
+      }
+
+      let page = 1;
+      let limit = 50;
+      let totalPages = 0;
+
+      function escapeHtml(value) {
+        if (value == null) return '';
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function escapeAttribute(value) {
+        return escapeHtml(value).replace(/`/g, '&#96;');
+      }
+
+      function formatearFecha(valor) {
+        if (!valor) return '-';
+        const fecha = new Date(valor);
+        if (Number.isNaN(fecha.getTime())) return '-';
+        return fecha.toLocaleString('es-AR');
+      }
+
+      function construirURL(pagina) {
+        const searchParams = new URLSearchParams({ page: pagina, limit });
+
+        const estadoValue = fEstado?.value;
+        if (estadoValue && estadoValue !== 'todos') {
+          searchParams.set('estado', estadoValue);
+        }
+
+        const desdeValue = fDesde?.value;
+        const hastaValue = fHasta?.value;
+        if (desdeValue) searchParams.set('desde', desdeValue);
+        if (hastaValue) searchParams.set('hasta', hastaValue);
+
+        return `/api/client-panel/shipments?${searchParams.toString()}`;
+      }
+
+      async function loadTabla() {
+        const tbody = document.getElementById('tbodyCliente');
+        const url = construirURL(page);
+
+        try {
+          const r = await fetch(url, { cache: 'no-store' });
+          const ct = r.headers.get('content-type') || '';
+          if (!ct.includes('application/json')) {
+            const text = await r.text();
+            console.error('Respuesta no JSON:', r.status, text.slice(0, 200));
+            tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="5">Error ${r.status}: respuesta no JSON</td></tr>`;
+            return;
+          }
+
+          const data = await r.json();
+          const items = Array.isArray(data.envios)
+            ? data.envios
+            : Array.isArray(data.items)
+              ? data.items
+              : Array.isArray(data)
+                ? data
+                : [];
+
+          const pagination = data.pagination || null;
+          const total = pagination
+            ? pagination.total
+            : typeof data.total === 'number'
+              ? data.total
+              : items.length;
+
+          if (pagination) {
+            page = pagination.page || page;
+            limit = pagination.limit || limit;
+            totalPages = pagination.pages || Math.ceil(total / (limit || 1));
+          } else {
+            totalPages = Math.ceil(total / (limit || 1));
+          }
+
+          if (Array.isArray(items) && items.length) {
+            if (typeof window.registrarEnviosParciales === 'function') {
+              window.registrarEnviosParciales(items);
+            } else if (typeof window.registrarEnvioCompleto === 'function') {
+              for (const item of items) window.registrarEnvioCompleto(item);
+            }
+          }
+
+          tbody.innerHTML = items.map((it) => {
+            const envioId = it._id ?? it.id ?? it.envio_id ?? it.tracking ?? it.id_venta ?? '';
+            const identificador = it.tracking ?? it.tracking_id ?? it.trackingId ?? it.shipment_id ?? it.id_venta ?? '-';
+            const idVenta = it.id_venta ?? it.order_id ?? it.venta_id ?? null;
+            const mostrarAmbos = identificador && idVenta && identificador !== idVenta;
+            const identificadorHtml = mostrarAmbos
+              ? `<strong class="font-mono text-slate-900 dark:text-slate-100">${escapeHtml(identificador)}</strong><div class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(idVenta)}</div>`
+              : `<strong class="font-mono text-slate-900 dark:text-slate-100">${escapeHtml(identificador || idVenta || '-')}</strong>`;
+            const fechaReferencia = it.fecha || it.createdAt || it.created_at || null;
+            const fecha = formatearFecha(fechaReferencia);
+            const partido = it.partido ?? it?.destino?.partido ?? it?.destino?.localidad ?? '-';
+            const destinatario = escapeHtml(it.destinatario ?? it.nombre_destinatario ?? '-');
+            const estadoActual = obtenerEstadoActual(it);
+            const estadoBadge = crearBadgeEstado(estadoActual);
+
+            const linkDetalle = envioId
+              ? `<a href="#" data-action="abrir-detalle" data-envio-id="${escapeAttribute(String(envioId))}" class="text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-1 cursor-pointer">${identificadorHtml}<i class="bi bi-box-arrow-up-right"></i></a>`
+              : identificadorHtml;
+
+            return `
+              <tr class="border-t border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
+                <td class="p-2">${linkDetalle}</td>
+                <td class="p-2 text-slate-900 dark:text-slate-100">${fecha}</td>
+                <td class="p-2 text-slate-900 dark:text-slate-100">${destinatario}</td>
+                <td class="p-2 text-slate-900 dark:text-slate-100">${escapeHtml(partido || '-')}</td>
+                <td class="p-2">${estadoBadge}</td>
+              </tr>
+            `;
+          }).join('');
+
+          if (!items.length) {
+            tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-sm text-slate-500 dark:text-slate-400">No se encontraron envíos para los filtros seleccionados.</td></tr>`;
+          }
+
+          const pageInfo = document.getElementById('pageInfo');
+          if (pageInfo) {
+            pageInfo.textContent = `Página ${page} – ${items.length} / ${total}`;
+          }
+
+          const prevBtn = document.getElementById('prevPage');
+          if (prevBtn) prevBtn.disabled = page <= 1;
+          const nextBtn = document.getElementById('nextPage');
+          if (nextBtn) nextBtn.disabled = totalPages > 0 ? page >= totalPages : items.length < limit;
+        } catch (e) {
+          console.error('Error en loadTabla:', e);
+          tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="5">${e.message}</td></tr>`;
+        }
+      }
+
+      const tbodyCliente = document.getElementById('tbodyCliente');
+      if (tbodyCliente) {
+        tbodyCliente.addEventListener('click', (event) => {
+          const link = event.target.closest('[data-action="abrir-detalle"]');
+          if (link) {
+            event.preventDefault();
+            abrirModalDetalle(link.getAttribute('data-envio-id'));
+          }
+        });
+      }
+
+      document.getElementById('prevPage').addEventListener('click', () => {
+        if (page > 1) {
+          page -= 1;
+          loadTabla();
+        }
+      });
+      document.getElementById('nextPage').addEventListener('click', () => {
+        if (totalPages === 0 || page < totalPages) {
+          page += 1;
+          loadTabla();
+        }
+      });
+
+      loadTabla();
+
+      // Mapa (Leaflet + bounds + debounce)
+      let map;
+      let markersLayer;
+      let mapInited = false;
+      let fetchTimer;
+
+      function initMapOnce() {
+        if (mapInited) return;
+        mapInited = true;
+        map = L.map('mapCliente').setView([-34.6, -58.4], 10);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+        markersLayer = L.layerGroup().addTo(map);
+        const onMoveEnd = () => {
+          clearTimeout(fetchTimer);
+          fetchTimer = setTimeout(loadMapData, 350);
+        };
+        map.on('moveend', onMoveEnd);
+        loadMapData();
+      }
+
+      async function loadMapData() {
+        if (!mapInited) return;
+        const bounds = map.getBounds();
+        const params = new URLSearchParams({
+          swLat: bounds.getSouth(),
+          swLng: bounds.getWest(),
+          neLat: bounds.getNorth(),
+          neLng: bounds.getEast(),
+          limit: '500'
+        });
+        const estadoValue = fEstado?.value;
+        if (estadoValue && estadoValue !== 'todos') {
+          params.set('estado', estadoValue);
+        }
+
+        const r = await fetch(`/api/client-panel/shipments/map?${params.toString()}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const { items = [] } = await r.json();
+        markersLayer.clearLayers();
+        for (const it of items) {
+          const coords = it?.destino?.loc?.coordinates;
+          if (!coords) continue;
+          const [lng, lat] = coords;
+          L.marker([lat, lng])
+            .addTo(markersLayer)
+            .bindPopup(`<b>${it.tracking || ''}</b><br>${it.estado || ''}<br>${it?.destino?.partido || ''}`);
+        }
+      }
+
+      window.initMapOnce = initMapOnce;
+      window.loadMapData = loadMapData;
+    })();
   </script>
 </body>
 </html>

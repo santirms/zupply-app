@@ -3,6 +3,7 @@ const express = require('express');
 const router  = express.Router();
 const Envio   = require('../models/Envio');
 const logger  = require('../utils/logger');
+const { obtenerShipmentsPanelCliente } = require('../controllers/envioController');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 
 function buildSenderFilter(senderIds) {
@@ -108,72 +109,7 @@ function buildFechaRange(query = {}) {
 
 router.get('/shipments', requireAuth, requireRole('cliente','admin','coordinador'), async (req, res) => {
   try {
-    const { page = 1, limit = 50 } = req.query;
-
-    const senderIdsRaw = req.user?.sender_ids;
-    const senderIds = Array.isArray(senderIdsRaw)
-      ? senderIdsRaw.filter(Boolean).map((id) => String(id))
-      : (typeof senderIdsRaw === 'string' ? [senderIdsRaw] : []);
-
-    if (!senderIds.length) {
-      logger.warn('[Panel Cliente] Usuario sin sender_ids', {
-        user_id: req.user?._id || null
-      });
-      return res.json({
-        envios: [],
-        pagination: { page: 1, limit: 50, total: 0, pages: 0 }
-      });
-    }
-
-    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
-    const limitNumber = Math.max(parseInt(limit, 10) || 50, 1);
-    const skip = (pageNumber - 1) * limitNumber;
-
-    const hace2Semanas = new Date();
-    hace2Semanas.setDate(hace2Semanas.getDate() - 14);
-    hace2Semanas.setHours(0, 0, 0, 0);
-
-    const query = {
-      sender_id: { $in: senderIds },
-      fecha: { $gte: hace2Semanas }
-    };
-
-    const [envios, total] = await Promise.all([
-      Envio.find(query)
-        .populate('chofer', 'nombre email')
-        .select('id_venta tracking destinatario direccion partido codigo_postal estado estado_meli fecha meli_id sender_id')
-        .sort({ fecha: -1 })
-        .skip(skip)
-        .limit(limitNumber)
-        .lean(),
-      Envio.countDocuments(query)
-    ]);
-
-    const pages = limitNumber > 0 ? Math.ceil(total / limitNumber) : 0;
-
-    logger.info('[Panel Cliente] Envíos obtenidos', {
-      sender_ids: senderIds,
-      page: pageNumber,
-      limit: limitNumber,
-      count: envios.length,
-      total
-    });
-
-    res.json({
-      envios,
-      pagination: {
-        page: pageNumber,
-        limit: limitNumber,
-        total,
-        pages
-      },
-      // Campos extra para retrocompatibilidad con el front antiguo
-      items: envios,
-      page: pageNumber,
-      limit: limitNumber,
-      total,
-      pages
-    });
+    await obtenerShipmentsPanelCliente(req, res);
   } catch (e) {
     logger.error('client-panel /shipments error:', e);
     res.status(500).json({ error: 'server_error', message: e.message });
