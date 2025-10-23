@@ -307,7 +307,8 @@
           : `<span class="font-mono text-slate-900 dark:text-slate-100">${tracking}</span>`;
         const fecha = it.createdAt ? new Date(it.createdAt).toLocaleString('es-AR') : '-';
         const partido = it?.destino?.partido ?? '-';
-        const estadoBadge = crearBadgeEstado(it.estado);
+        const estadoActual = obtenerEstadoActual(it);
+        const estadoBadge = crearBadgeEstado(estadoActual);
 
         return `
         <tr class="border-t border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">

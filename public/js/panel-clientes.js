@@ -1,3 +1,106 @@
+const CLASES_BADGE_ESTADO = {
+  secondary: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/30 dark:text-slate-300',
+  info: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300',
+  primary: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300',
+  success: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300',
+  warning: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300',
+  danger: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300',
+  dark: 'bg-slate-600 text-white border-slate-700 dark:bg-slate-700 dark:text-slate-200'
+};
+
+function obtenerInfoEstado(estado) {
+  const estadoKey = (estado ?? '').toString().trim().toLowerCase();
+
+  const estadosZupply = {
+    en_preparacion: { nombre: 'En preparación', color: 'info', icono: 'box-seam' },
+    en_planta: { nombre: 'En planta', color: 'secondary', icono: 'box-seam' },
+    asignado: { nombre: 'Asignado', color: 'info', icono: 'person-check' },
+    en_camino: { nombre: 'En camino', color: 'primary', icono: 'truck' },
+    entregado: { nombre: 'Entregado', color: 'success', icono: 'check-circle-fill' },
+    comprador_ausente: { nombre: 'Comprador ausente', color: 'warning', icono: 'exclamation-triangle' },
+    rechazado: { nombre: 'Rechazado', color: 'danger', icono: 'x-circle' },
+    inaccesible: { nombre: 'Inaccesible', color: 'secondary', icono: 'slash-circle' },
+    cancelado: { nombre: 'Cancelado', color: 'dark', icono: 'x-circle' },
+    devolucion: { nombre: 'En devolución', color: 'danger', icono: 'arrow-return-left' },
+    incidencia: { nombre: 'Incidencia', color: 'danger', icono: 'exclamation-octagon' },
+    reprogramado: { nombre: 'Reprogramado', color: 'info', icono: 'arrow-repeat' },
+    demorado: { nombre: 'Demorado', color: 'warning', icono: 'hourglass-split' },
+    pendiente: { nombre: 'Pendiente', color: 'secondary', icono: 'clock' }
+  };
+
+  const estadosMeli = {
+    pending: { nombre: 'Pendiente', color: 'secondary', icono: 'clock' },
+    handling: { nombre: 'En preparación', color: 'info', icono: 'box-seam' },
+    ready_to_ship: { nombre: 'Listo para enviar', color: 'primary', icono: 'box-arrow-right' },
+    shipped: { nombre: 'En camino', color: 'primary', icono: 'truck' },
+    delivered: { nombre: 'Entregado', color: 'success', icono: 'check-circle-fill' },
+    not_delivered: { nombre: 'No entregado', color: 'warning', icono: 'exclamation-triangle' },
+    cancelled: { nombre: 'Cancelado', color: 'dark', icono: 'x-circle' },
+    returning: { nombre: 'En devolución', color: 'danger', icono: 'arrow-return-left' },
+    returned: { nombre: 'Devuelto', color: 'danger', icono: 'arrow-return-left' }
+  };
+
+  const info = estadosZupply[estadoKey] || estadosMeli[estadoKey] || null;
+  const color = info?.color || 'secondary';
+  const nombre = info?.nombre || (estadoKey ? estadoKey.replace(/_/g, ' ').replace(/\b\w/g, letra => letra.toUpperCase()) : 'Desconocido');
+  const icono = info?.icono || 'question-circle';
+
+  return {
+    nombre,
+    color,
+    icono,
+    clase: info?.clase || CLASES_BADGE_ESTADO[color] || CLASES_BADGE_ESTADO.secondary
+  };
+}
+
+function obtenerEstadoDesdeValor(valor) {
+  if (!valor) return '';
+  if (typeof valor === 'string') return valor.trim();
+  if (typeof valor === 'object') {
+    return (
+      (typeof valor.estado === 'string' && valor.estado.trim()) ||
+      (typeof valor.status === 'string' && valor.status.trim()) ||
+      (typeof valor.state === 'string' && valor.state.trim()) ||
+      (typeof valor.nombre === 'string' && valor.nombre.trim()) ||
+      ''
+    );
+  }
+  return '';
+}
+
+function obtenerEstadoActual(envio) {
+  if (!envio || typeof envio !== 'object') {
+    return 'pendiente';
+  }
+
+  if (envio.meli_id) {
+    const estadoMeli = envio.estado_meli;
+    if (estadoMeli) {
+      const valor = obtenerEstadoDesdeValor(estadoMeli);
+      if (valor) {
+        return valor;
+      }
+    }
+  }
+
+  const estadoDirecto = obtenerEstadoDesdeValor(envio.estado);
+  if (estadoDirecto) {
+    return estadoDirecto;
+  }
+
+  const estadoAlternativo = obtenerEstadoDesdeValor(envio.estado_meli);
+  if (estadoAlternativo) {
+    return estadoAlternativo;
+  }
+
+  const estadoGenerico = obtenerEstadoDesdeValor(envio.status) || obtenerEstadoDesdeValor(envio.state);
+  if (estadoGenerico) {
+    return estadoGenerico;
+  }
+
+  return 'pendiente';
+}
+
 // ========== MODAL DE DETALLE ==========
 
 async function abrirModalDetalle(envioId) {
@@ -116,7 +219,8 @@ async function abrirModalDetalle(envioId) {
     document.getElementById('modalFecha').textContent =
       fecha ? new Date(fecha).toLocaleString('es-AR') : '-';
 
-    document.getElementById('modalEstado').innerHTML = crearBadgeEstado(envio.estado);
+    const estadoActual = obtenerEstadoActual(envio);
+    document.getElementById('modalEstado').innerHTML = crearBadgeEstado(estadoActual);
 
     // Ocultar sección de chofer (el schema no incluye driver_id)
     document.getElementById('modalChoferContainer').classList.add('hidden');
@@ -180,7 +284,7 @@ function renderizarHistorial(historial) {
   tbody.innerHTML = sorted.map(item => {
     const fecha = item.fecha || item.at;
     const fechaStr = fecha ? new Date(fecha).toLocaleString('es-AR') : '-';
-    const badge = crearBadgeEstado(item.estado);
+    const badge = crearBadgeEstado(item.estado || item.status || item.state);
     const nota = item.nota || item.note || item.observaciones || item.descripcion || '-';
 
     return `
@@ -194,27 +298,14 @@ function renderizarHistorial(historial) {
 }
 
 function crearBadgeEstado(estado) {
-  const COLORES = {
-    en_preparacion: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300',
-    en_planta: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300',
-    en_camino: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300',
-    entregado: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300',
-    comprador_ausente: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300',
-    rechazado: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300',
-    pendiente: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300',
-    incidencia: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300',
-    reprogramado: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300',
-    demorado: 'bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300',
-    cancelado: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/30 dark:text-slate-300'
-  };
+  const estadoKey = obtenerEstadoDesdeValor(estado) || 'pendiente';
+  const info = obtenerInfoEstado(estadoKey);
+  const badgeClass = info.clase || CLASES_BADGE_ESTADO.secondary;
+  const icon = info.icono ? `<i class="bi bi-${info.icono} text-sm" aria-hidden="true"></i>` : '';
 
-  const estadoKey = (estado || 'pendiente').toString().toLowerCase();
-  const color = COLORES[estadoKey] || COLORES.pendiente;
-  const label = estadoKey
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, letra => letra.toUpperCase());
+  const contenido = icon ? `${icon}<span>${info.nombre}</span>` : `<span>${info.nombre}</span>`;
 
-  return `<span class="inline-flex items-center text-xs px-2.5 py-0.5 rounded-full border ${color}">${label}</span>`;
+  return `<span class="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full border ${badgeClass}">${contenido}</span>`;
 }
 
 // Cerrar modal con tecla ESC
@@ -239,3 +330,5 @@ window.abrirModalDetalle = abrirModalDetalle;
 window.cerrarModalDetalle = cerrarModalDetalle;
 window.cambiarTab = cambiarTab;
 window.crearBadgeEstado = crearBadgeEstado;
+window.obtenerInfoEstado = obtenerInfoEstado;
+window.obtenerEstadoActual = obtenerEstadoActual;
