@@ -212,7 +212,7 @@ exports.getEnviosActivos = async (req, res) => {
       estado: { 
         $nin: ['entregado', 'cancelado', 'devolucion'] 
       }
-    };
+    //};
     
     logger.debug('[Mis Envios] Query', {
       choferId,
