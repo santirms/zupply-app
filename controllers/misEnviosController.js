@@ -206,7 +206,7 @@ exports.getEnviosActivos = async (req, res) => {
             { meli_id: '' }
           ]
         }
-      ],
+      //],
       
       // Estados activos (no finalizados)
       estado: { 
