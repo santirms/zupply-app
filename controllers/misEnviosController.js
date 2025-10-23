@@ -58,6 +58,7 @@ exports.marcarEstado = async (req, res) => {
   try {
     const { id } = req.params;
     const { estado, notas } = req.body || {};
+    const notasNormalizadas = notas != null ? String(notas).trim() : '';
 
     if (!ESTADOS_CHOFER.includes(estado)) {
       return res.status(400).json({
@@ -72,7 +73,7 @@ exports.marcarEstado = async (req, res) => {
     }
 
     const envio = await Envio.findById(id).select(
-      'estado historial_estados historial tracking id_venta meli_id chofer chofer_id requiere_sync_meli'
+      'estado historial_estados historial tracking id_venta meli_id chofer chofer_id requiere_sync_meli notas'
     );
 
     if (!envio) {
@@ -99,7 +100,7 @@ exports.marcarEstado = async (req, res) => {
       estado,
       fecha: new Date(),
       usuario: obtenerNombreUsuario(req.user),
-      notas: notas ? String(notas).trim() || null : null
+      notas: notasNormalizadas || null
     });
 
     if (Array.isArray(envio.historial)) {
@@ -108,8 +109,29 @@ exports.marcarEstado = async (req, res) => {
         estado,
         source: 'chofer',
         actor_name: obtenerNombreUsuario(req.user),
-        note: notas ? String(notas).trim() : ''
+        note: notasNormalizadas
       });
+    }
+
+    if (notasNormalizadas) {
+      const timestamp = new Date().toLocaleString('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      const estadoFormateado = estado.replace(/_/g, ' ').toUpperCase();
+      const choferNombre = obtenerNombreUsuario(req.user);
+
+      const nuevaNota = `[${timestamp}] ${choferNombre} - ${estadoFormateado}:\n${notasNormalizadas}`;
+
+      if (envio.notas && String(envio.notas).trim()) {
+        envio.notas += `\n\n---\n\n${nuevaNota}`;
+      } else {
+        envio.notas = nuevaNota;
+      }
     }
 
     await envio.save();
@@ -120,7 +142,8 @@ exports.marcarEstado = async (req, res) => {
       tracking,
       chofer: obtenerNombreUsuario(req.user),
       estado_anterior: estadoAnterior,
-      estado_nuevo: estado
+      estado_nuevo: estado,
+      tiene_notas: Boolean(notasNormalizadas)
     });
 
     res.json({
