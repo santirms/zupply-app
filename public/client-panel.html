@@ -92,9 +92,9 @@
           <table class="min-w-full text-sm">
             <thead class="text-left text-slate-500">
               <tr>
-                <th class="p-2">Tracking</th>
-                <th class="p-2">ID de venta</th>
+                <th class="p-2">Identificador</th>
                 <th class="p-2">Fecha</th>
+                <th class="p-2">Destinatario</th>
                 <th class="p-2">Partido</th>
                 <th class="p-2">Estado</th>
               </tr>
@@ -276,6 +276,23 @@
 
   // Tabla
   let page=1, limit=50;
+  function escapeHtml(value){
+    if (value == null) return '';
+    return String(value)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+
+  function formatearFecha(valor){
+    if (!valor) return '-';
+    const fecha = new Date(valor);
+    if (Number.isNaN(fecha.getTime())) return '-';
+    return fecha.toLocaleString('es-AR');
+  }
+
   async function loadTabla(){
     const params = new URLSearchParams({ page, limit });
     if (fEstado.value) params.set('estado', fEstado.value);
@@ -299,27 +316,44 @@
       const items = Array.isArray(data.items) ? data.items : [];
       const total = typeof data.total === 'number' ? data.total : items.length;
 
+      if (typeof window.registrarEnvioCompleto === 'function') {
+        for (const item of items) window.registrarEnvioCompleto(item);
+      } else if (typeof window.registrarEnviosParciales === 'function') {
+        window.registrarEnviosParciales(items);
+      }
+
       tbody.innerHTML = items.map(it => {
-        const tracking = it.tracking ?? it.id_venta ?? '-';
         const envioId = it._id ?? it.id ?? it.envio_id ?? it.tracking ?? it.id_venta ?? '';
-        const trackingCell = envioId
-          ? `<button onclick='abrirModalDetalle(${JSON.stringify(String(envioId))})' class="text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline font-mono text-left">${tracking}</button>`
-          : `<span class="font-mono text-slate-900 dark:text-slate-100">${tracking}</span>`;
-        const fecha = it.createdAt ? new Date(it.createdAt).toLocaleString('es-AR') : '-';
-        const partido = it?.destino?.partido ?? '-';
+        const identificador = it.tracking ?? it.tracking_id ?? it.trackingId ?? it.shipment_id ?? it.id_venta ?? '-';
+        const idVenta = it.id_venta ?? it.order_id ?? it.venta_id ?? null;
+        const mostrarAmbos = identificador && idVenta && identificador !== idVenta;
+        const identificadorHtml = mostrarAmbos
+          ? `<div class="font-mono text-slate-900 dark:text-slate-100">${escapeHtml(identificador)}</div><div class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(idVenta)}</div>`
+          : `<div class="font-mono text-slate-900 dark:text-slate-100">${escapeHtml(identificador || idVenta || '-')}</div>`;
+        const fechaReferencia = it.fecha || it.createdAt || it.created_at || null;
+        const fecha = formatearFecha(fechaReferencia);
+        const partido = it.partido ?? it?.destino?.partido ?? it?.destino?.localidad ?? '-';
+        const destinatario = escapeHtml(it.destinatario ?? it.nombre_destinatario ?? '-');
         const estadoActual = obtenerEstadoActual(it);
         const estadoBadge = crearBadgeEstado(estadoActual);
+        const rowClick = envioId
+          ? ` onclick="abrirModalDetalle(${JSON.stringify(String(envioId))})" class="cursor-pointer border-t border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5"`
+          : ' class="border-t border-slate-200 dark:border-white/10"';
 
         return `
-        <tr class="border-t border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
-          <td class="p-2">${trackingCell}</td>
-          <td class="p-2 text-slate-900 dark:text-slate-100">${it.id_venta ?? '-'}</td>
+        <tr${rowClick}>
+          <td class="p-2">${identificadorHtml}</td>
           <td class="p-2 text-slate-900 dark:text-slate-100">${fecha}</td>
-          <td class="p-2 text-slate-900 dark:text-slate-100">${partido}</td>
+          <td class="p-2 text-slate-900 dark:text-slate-100">${destinatario}</td>
+          <td class="p-2 text-slate-900 dark:text-slate-100">${escapeHtml(partido || '-')}</td>
           <td class="p-2">${estadoBadge}</td>
         </tr>
         `;
       }).join('');
+
+      if (!items.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-sm text-slate-500 dark:text-slate-400">No se encontraron envíos para los filtros seleccionados.</td></tr>`;
+      }
 
       document.getElementById('pageInfo').textContent =
         `Página ${page} – ${items.length} / ${total}`;
