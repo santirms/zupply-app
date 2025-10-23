@@ -190,14 +190,14 @@ exports.getEnviosActivos = async (req, res) => {
       ],
       
       // Fecha puede estar en varios campos (del día)
-      $and: [
-        {
-          $or: [
-            { fecha: { $gte: hoy } },
-            { createdAt: { $gte: hoy } },
-            { created_at: { $gte: hoy } }
-          ]
-        },
+      //$and: [
+       // {
+         // $or: [
+           // { fecha: { $gte: hoy } },
+            //{ createdAt: { $gte: hoy } },
+           // { created_at: { $gte: hoy } }
+          //]
+       // },
         // Solo envíos manuales (sin MercadoLibre)
         {
           $or: [
