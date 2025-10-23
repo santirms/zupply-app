@@ -199,7 +199,7 @@ exports.getEnviosActivos = async (req, res) => {
           //]
        // },
         // Solo envíos manuales (sin MercadoLibre)
-        {
+        //{
           $or: [
             { meli_id: { $exists: false } },
             { meli_id: null },
