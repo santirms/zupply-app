@@ -4,8 +4,20 @@ const logger = require('../utils/logger');
 const ESTADOS_CHOFER = ['entregado', 'comprador_ausente', 'rechazado', 'inaccesible'];
 
 function obtenerChoferId(req) {
-  const fromReq = req.user?.driver_id || req.session?.user?.driver_id || null;
-  if (!fromReq) return null;
+  // Intentar múltiples campos posibles
+  const fromReq = req.user?.driver_id ||
+                  req.user?._id ||
+                  req.user?.id ||
+                  req.session?.user?.driver_id ||
+                  req.session?.user?._id ||
+                  req.session?.user?.id ||
+                  null;
+
+  if (!fromReq) {
+    console.log('[obtenerChoferId] No se encontró ID. req.user:', req.user);
+    return null;
+  }
+
   return String(fromReq);
 }
 
@@ -15,7 +27,10 @@ function esEnvioManual(envio) {
 }
 
 function obtenerIdChoferDelEnvio(envio) {
-  let chofer = envio?.chofer_id ?? envio?.chofer ?? null;
+  let chofer = envio?.chofer_id ??
+               envio?.chofer ??
+               envio?.driver_id ??
+               null;
 
   if (chofer && typeof chofer === 'object' && chofer._id) {
     chofer = chofer._id;
@@ -138,47 +153,94 @@ exports.marcarEstado = async (req, res) => {
 exports.getEnviosActivos = async (req, res) => {
   try {
     const choferId = obtenerChoferId(req);
+    
+    // Debug: mostrar info del usuario
+    logger.info('[Mis Envios] Request de chofer', {
+      choferId,
+      userName: req.user?.nombre || req.user?.email,
+      userId: req.user?._id
+    });
+    
     if (!choferId) {
-      return res.status(403).json({ error: 'Perfil chofer no vinculado' });
+      logger.error('[Mis Envios] No se pudo identificar chofer', {
+        user: req.user,
+        session: req.session?.user
+      });
+      
+      return res.status(400).json({ 
+        error: 'No se pudo identificar al chofer',
+        debug: {
+          user_id: req.user?._id,
+          driver_id: req.user?.driver_id
+        }
+      });
     }
-
+    
+    // Fecha de hoy (inicio del día)
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
-    const mañana = new Date(hoy);
-    mañana.setDate(hoy.getDate() + 1);
-
-    const rangoFecha = {
+    
+    // Query flexible con múltiples campos posibles
+    const query = {
+      // Chofer puede estar en varios campos
       $or: [
-        { fecha: { $gte: hoy, $lt: mañana } },
-        { createdAt: { $gte: hoy, $lt: mañana } },
-        { created_at: { $gte: hoy, $lt: mañana } }
-      ]
-    };
-
-    const envios = await Envio.find({
+        { chofer_id: choferId },
+        { chofer: choferId },
+        { driver_id: choferId }
+      ],
+      
+      // Fecha puede estar en varios campos (del día)
       $and: [
-        { $or: [{ chofer_id: choferId }, { chofer: choferId }] },
-        rangoFecha,
+        {
+          $or: [
+            { fecha: { $gte: hoy } },
+            { createdAt: { $gte: hoy } },
+            { created_at: { $gte: hoy } }
+          ]
+        },
+        // Solo envíos manuales (sin MercadoLibre)
         {
           $or: [
             { meli_id: { $exists: false } },
             { meli_id: null },
             { meli_id: '' }
           ]
-        },
-        { estado: { $nin: ['entregado', 'cancelado', 'devolucion'] } }
-      ]
-    })
+        }
+      ],
+      
+      // Estados activos (no finalizados)
+      estado: { 
+        $nin: ['entregado', 'cancelado', 'devolucion'] 
+      }
+    };
+    
+    logger.debug('[Mis Envios] Query', {
+      choferId,
+      fecha_desde: hoy.toISOString()
+    });
+    
+    const envios = await Envio.find(query)
       .populate('cliente_id', 'nombre razon_social telefono')
-      .select(
-        'tracking id_venta destinatario direccion partido codigo_postal cp estado fecha createdAt created_at referencia telefono meli_id historial_estados'
-      )
-      .sort({ fecha: -1, createdAt: -1 })
+      .select('tracking destinatario direccion partido cp estado fecha createdAt created_at referencia meli_id')
+      .sort({ fecha: -1, createdAt: -1, created_at: -1 })
       .lean();
-
+    
+    logger.info('[Mis Envios] Resultado', {
+      choferId,
+      cantidad: envios.length
+    });
+    
     res.json(envios);
+    
   } catch (err) {
-    logger.error('[Chofer] Error obteniendo envíos:', err);
-    res.status(500).json({ error: 'Error obteniendo envíos' });
+    logger.error('[Mis Envios] Error obteniendo envíos', {
+      error: err.message,
+      stack: err.stack
+    });
+    
+    res.status(500).json({ 
+      error: 'Error obteniendo envíos',
+      mensaje: err.message
+    });
   }
 };
