@@ -4,8 +4,18 @@ const logger = require('../utils/logger');
 const ESTADOS_CHOFER = ['entregado', 'comprador_ausente', 'rechazado', 'inaccesible'];
 
 function obtenerChoferId(req) {
-  const fromReq = req.user?.driver_id || req.session?.user?.driver_id || null;
-  if (!fromReq) return null;
+  // Intentar múltiples campos posibles
+  const fromReq = req.user?.driver_id ||
+                  req.user?._id ||
+                  req.session?.user?.driver_id ||
+                  req.session?.user?._id ||
+                  null;
+
+  if (!fromReq) {
+    console.log('[obtenerChoferId] No se encontró ID de chofer en req.user:', req.user);
+    return null;
+  }
+
   return String(fromReq);
 }
 
@@ -15,7 +25,10 @@ function esEnvioManual(envio) {
 }
 
 function obtenerIdChoferDelEnvio(envio) {
-  let chofer = envio?.chofer_id ?? envio?.chofer ?? null;
+  let chofer = envio?.chofer_id ??
+               envio?.chofer ??
+               envio?.driver_id ??
+               null;
 
   if (chofer && typeof chofer === 'object' && chofer._id) {
     chofer = chofer._id;
@@ -136,45 +149,57 @@ exports.marcarEstado = async (req, res) => {
 };
 
 exports.getEnviosActivos = async (req, res) => {
-  try {
-    const choferId = obtenerChoferId(req);
-    if (!choferId) {
-      return res.status(403).json({ error: 'Perfil chofer no vinculado' });
-    }
+  const choferId = obtenerChoferId(req);
 
+  // LOG DE DEBUG
+  console.log('[getEnviosActivos] Chofer ID:', choferId);
+  console.log('[getEnviosActivos] req.user:', req.user);
+
+  if (!choferId) {
+    return res.status(400).json({
+      error: 'No se pudo identificar al chofer',
+      debug: {
+        user: req.user,
+        session: req.session?.user
+      }
+    });
+  }
+
+  try {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
-    const mañana = new Date(hoy);
-    mañana.setDate(hoy.getDate() + 1);
 
-    const rangoFecha = {
+    const query = {
+      // Múltiples posibles campos de chofer
       $or: [
-        { fecha: { $gte: hoy, $lt: mañana } },
-        { createdAt: { $gte: hoy, $lt: mañana } },
-        { created_at: { $gte: hoy, $lt: mañana } }
-      ]
-    };
-
-    const envios = await Envio.find({
+        { chofer_id: choferId },
+        { chofer: choferId },
+        { driver_id: choferId }
+      ],
+      created_at: { $gte: hoy },
+      // Solo envíos manuales
       $and: [
-        { $or: [{ chofer_id: choferId }, { chofer: choferId }] },
-        rangoFecha,
         {
           $or: [
             { meli_id: { $exists: false } },
             { meli_id: null },
             { meli_id: '' }
           ]
-        },
-        { estado: { $nin: ['entregado', 'cancelado', 'devolucion'] } }
-      ]
-    })
-      .populate('cliente_id', 'nombre razon_social telefono')
-      .select(
-        'tracking id_venta destinatario direccion partido codigo_postal cp estado fecha createdAt created_at referencia telefono meli_id historial_estados'
-      )
-      .sort({ fecha: -1, createdAt: -1 })
+        }
+      ],
+      // Estados activos
+      estado: {
+        $nin: ['entregado', 'cancelado', 'devolucion']
+      }
+    };
+
+    console.log('[getEnviosActivos] Query:', JSON.stringify(query));
+
+    const envios = await Envio.find(query)
+      .populate('cliente_id', 'nombre razon_social')
       .lean();
+
+    console.log('[getEnviosActivos] Envíos encontrados:', envios.length);
 
     res.json(envios);
   } catch (err) {
