@@ -373,10 +373,19 @@ exports.agregarNota = async (req, res) => {
     const envio = await Envio.findById(req.params.id);
     if (!envio) return res.status(404).json({ error: 'not found' });
 
-    const actor_name = (req.user?.name || req.user?.email || '—');
+    const actor_name = (req.user?.name || req.user?.nombre || req.user?.email || '—');
     const actor_role = (req.user?.role || null);
+    const tipo = actor_role === 'chofer' ? 'chofer' : (actor_role === 'sistema' ? 'sistema' : 'admin');
 
-    const nota = { texto: texto.trim(), actor_name, actor_role };
+    const nota = {
+      texto: texto.trim(),
+      usuario: actor_name,
+      fecha: new Date(),
+      tipo,
+      actor_name,
+      actor_role
+    };
+
     if (!Array.isArray(envio.notas)) envio.notas = [];
     envio.notas.push(nota);
 

@@ -150,18 +150,56 @@ const envioSchema = new Schema({
   }, { timestamps: false });
 
 const NotaSchema = new Schema({
-  at:         { type: Date, default: Date.now },
-  texto:      { type: String, required: true },
+  texto: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  usuario: {
+    type: String,
+    default: null
+  },
+  fecha: {
+    type: Date,
+    default: Date.now
+  },
+  tipo: {
+    type: String,
+    enum: ['admin', 'chofer', 'sistema'],
+    default: 'admin'
+  },
+  at: {
+    type: Date,
+    default() {
+      return this.fecha || Date.now();
+    }
+  },
   actor_name: { type: String, default: null },
-  actor_role: { type: String, default: null },
+  actor_role: { type: String, default: null }
 }, { _id: true }); // importante: _id para poder borrar
+
+NotaSchema.pre('validate', function syncLegacyFields(next) {
+  if (!this.fecha && this.at) {
+    this.fecha = this.at;
+  } else if (!this.at && this.fecha) {
+    this.at = this.fecha;
+  }
+
+  if (!this.usuario && this.actor_name) {
+    this.usuario = this.actor_name;
+  } else if (!this.actor_name && this.usuario) {
+    this.actor_name = this.usuario;
+  }
+
+  next();
+});
 
 /**
  * Índice de idempotencia:
  * Único sólo cuando meli_id existe y no es vacío.
  */
 envioSchema.add({
-historial: { type: [HistItemSchema], default: [] },
+  historial: { type: [HistItemSchema], default: [] },
   notas: [NotaSchema]
 });
 

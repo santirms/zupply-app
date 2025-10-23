@@ -115,11 +115,13 @@ exports.marcarEstado = async (req, res) => {
       envio.historial_estados = [];
     }
 
+    const notasTrimmed = notas ? String(notas).trim() : '';
+
     envio.historial_estados.unshift({
       estado,
       fecha: new Date(),
       usuario: obtenerNombreUsuario(req.user),
-      notas: notas ? String(notas).trim() || null : null
+      notas: notasTrimmed || null
     });
 
     if (Array.isArray(envio.historial)) {
@@ -128,7 +130,33 @@ exports.marcarEstado = async (req, res) => {
         estado,
         source: 'chofer',
         actor_name: obtenerNombreUsuario(req.user),
-        note: notas ? String(notas).trim() : ''
+        note: notasTrimmed
+      });
+    }
+
+    if (notasTrimmed) {
+      const usuarioNota = obtenerNombreUsuario(req.user);
+      const estadoFormateado = estado.replace(/_/g, ' ').toUpperCase();
+      const textoNota = `[${estadoFormateado}] ${notasTrimmed}`;
+
+      if (!Array.isArray(envio.notas)) {
+        envio.notas = [];
+      }
+
+      envio.notas.push({
+        texto: textoNota,
+        usuario: usuarioNota,
+        fecha: new Date(),
+        tipo: 'chofer',
+        actor_name: usuarioNota,
+        actor_role: 'chofer'
+      });
+
+      logger.info('[Chofer] Nota agregada', {
+        id_venta: envio.id_venta,
+        chofer: usuarioNota,
+        estado,
+        nota_length: notasTrimmed.length
       });
     }
 
