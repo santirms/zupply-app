@@ -8,7 +8,6 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const logger = require('./backend/utils/logger');
 const trackingRoutes = require('./routes/tracking');
-const misEnviosRoutes = require('./routes/misEnvios');
 const requestLogger = require('./backend/middleware/requestLogger');
 
 
@@ -209,7 +208,7 @@ app.use('/api/etiquetas',        require('./routes/etiquetas'));   // /cargar-ma
 app.use('/api/choferes',         require('./routes/choferes'));    // asignación por qr/mapa
 
 // Chofer: sus envíos del día + marcar entregado
-app.use('/api/mis-envios', misEnviosRoutes);
+app.use('/api/mis-envios',       require('./routes/mis-envios'));
 
 // Otros módulos que ya tenías (si deben estar protegidos, dejalos después del guard)
 app.use('/api/asignaciones',     require('./routes/asignaciones'));
