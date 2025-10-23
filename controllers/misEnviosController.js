@@ -114,21 +114,24 @@ exports.marcarEstado = async (req, res) => {
     }
 
     if (notasNormalizadas) {
-      const estadoFormateado = estado.replace(/_/g, ' ').toUpperCase();
-      const actorName = obtenerNombreUsuario(req.user);
-      const actorRole = req.user?.role || 'chofer';
-
-      const textoNota = `[${estadoFormateado}] ${notasNormalizadas}`;
-
-      if (!Array.isArray(envio.notas)) {
-        envio.notas = [];
-      }
-
-      envio.notas.push({
-        texto: textoNota,
-        actor_name: actorName,
-        actor_role: actorRole
+      const timestamp = new Date().toLocaleString('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
+
+      const estadoFormateado = estado.replace(/_/g, ' ').toUpperCase();
+      const choferNombre = obtenerNombreUsuario(req.user);
+
+      const nuevaNota = `[${timestamp}] ${choferNombre} - ${estadoFormateado}:\n${notasNormalizadas}`;
+
+      if (envio.notas && String(envio.notas).trim()) {
+        envio.notas += `\n\n---\n\n${nuevaNota}`;
+      } else {
+        envio.notas = nuevaNota;
+      }
     }
 
     await envio.save();
