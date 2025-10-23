@@ -68,60 +68,103 @@ function obtenerEstadoDesdeValor(valor) {
   return '';
 }
 
+const enviosCache = new Map();
+
+function normalizarIdEnvio(envio) {
+  if (!envio) return null;
+  const posibles = [
+    envio._id,
+    envio.id,
+    envio.envio_id,
+    envio.tracking,
+    envio.tracking_id,
+    envio.trackingId,
+    envio.numero_seguimiento,
+    envio.tracking_code,
+    envio.tracking_meli,
+    envio.shipment_id,
+    envio.id_venta,
+    envio.order_id,
+    envio.venta_id,
+    envio.meli_id
+  ];
+
+  const valor = posibles.find((val) => typeof val === 'string' && val.trim()) || posibles.find(Boolean);
+  return valor ? String(valor) : null;
+}
+
+function guardarEnvioEnCache(envio, { completo = false } = {}) {
+  const id = normalizarIdEnvio(envio);
+  if (!id) return null;
+
+  const previo = enviosCache.get(id) || {};
+  const combinado = { ...previo, ...envio };
+
+  if (completo || previo.__full) {
+    combinado.__full = true;
+  }
+
+  enviosCache.set(id, combinado);
+  return combinado;
+}
+
+function registrarEnviosParciales(envios) {
+  if (!Array.isArray(envios)) return;
+  for (const envio of envios) {
+    guardarEnvioEnCache(envio, { completo: false });
+  }
+}
+
+function registrarEnvioCompleto(envio) {
+  if (!envio) return null;
+  return guardarEnvioEnCache(envio, { completo: true });
+}
+
+function obtenerEnvioDeCache(envioId) {
+  if (!envioId) return null;
+  const clave = String(envioId);
+  return enviosCache.get(clave) || null;
+}
+
 function obtenerEstadoActual(envio) {
   if (!envio || typeof envio !== 'object') {
-    return 'pendiente';
+    return '';
   }
 
-  if (envio.meli_id) {
-    const estadoMeli = envio.estado_meli;
-    if (estadoMeli) {
-      const valor = obtenerEstadoDesdeValor(estadoMeli);
-      if (valor) {
-        return valor;
-      }
-    }
+  if (envio.meli_id && envio.estado_meli?.status) {
+    return envio.estado_meli.status;
   }
 
-  const estadoDirecto = obtenerEstadoDesdeValor(envio.estado);
-  if (estadoDirecto) {
-    return estadoDirecto;
-  }
-
-  const estadoAlternativo = obtenerEstadoDesdeValor(envio.estado_meli);
-  if (estadoAlternativo) {
-    return estadoAlternativo;
-  }
-
-  const estadoGenerico = obtenerEstadoDesdeValor(envio.status) || obtenerEstadoDesdeValor(envio.state);
-  if (estadoGenerico) {
-    return estadoGenerico;
-  }
-
-  return 'pendiente';
+  return obtenerEstadoDesdeValor(envio.estado);
 }
 
 // ========== MODAL DE DETALLE ==========
 
 async function abrirModalDetalle(envioId) {
-  if (!envioId) {
+  const idNormalizado = typeof envioId === 'string' ? envioId.trim() : String(envioId || '').trim();
+  if (!idNormalizado) {
     alert('No se encontró el envío');
     return;
   }
 
   try {
-    const res = await fetch(`/api/envios/${encodeURIComponent(envioId)}`, { credentials: 'include' });
+    let envio = obtenerEnvioDeCache(idNormalizado);
 
-    if (!res.ok) {
-      let message = 'Error al cargar envío';
-      try {
-        const err = await res.json();
-        message = err.error || message;
-      } catch (_) {}
-      throw new Error(message);
+    if (!envio || !envio.__full) {
+      const res = await fetch(`/api/envios/${encodeURIComponent(idNormalizado)}`, { credentials: 'include' });
+
+      if (!res.ok) {
+        let message = 'Error al cargar envío';
+        try {
+          const err = await res.json();
+          message = err.error || message;
+        } catch (_) {}
+        throw new Error(message);
+      }
+
+      const data = await res.json();
+      envio = registrarEnvioCompleto(data) || data;
     }
-
-    const envio = await res.json();
 
     const tracking =
       envio.tracking ||
@@ -332,3 +375,6 @@ window.cambiarTab = cambiarTab;
 window.crearBadgeEstado = crearBadgeEstado;
 window.obtenerInfoEstado = obtenerInfoEstado;
 window.obtenerEstadoActual = obtenerEstadoActual;
+window.registrarEnviosParciales = registrarEnviosParciales;
+window.registrarEnvioCompleto = registrarEnvioCompleto;
+window.obtenerEnvioDeCache = obtenerEnvioDeCache;

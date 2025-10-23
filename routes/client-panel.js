@@ -2,7 +2,8 @@
 const express = require('express');
 const router  = express.Router();
 const Envio   = require('../models/Envio');
-const { requireRole, applyClientScope } = require('../middlewares/auth');
+const logger  = require('../utils/logger');
+const { requireRole } = require('../middlewares/auth');
 
 function buildSenderFilter(senderIds) {
   // aceptá strings y numbers en la DB
@@ -28,100 +29,82 @@ function buildSenderFilter(senderIds) {
 }
 
 // Scope helper estricto
+function combineConditions(conditions = []) {
+  const valid = conditions.filter((cond) => cond && Object.keys(cond).length);
+  if (!valid.length) return {};
+  if (valid.length === 1) return valid[0];
+  return { $and: valid };
+}
+
 function getScopedFilter(req, base = {}) {
   const u = req.session?.user;
+  const conditions = [];
+  if (base && Object.keys(base).length) {
+    conditions.push(base);
+  }
+
   if (u?.role === 'cliente') {
-    const sids = Array.isArray(u.sender_ids) ? u.sender_ids.filter(Boolean) : [];
-    if (!sids.length) return { filter: { _id: { $in: [] } }, reason: 'cliente-sin-senders' };
-    return { filter: { ...base, ...buildSenderFilter(sids) }, reason: 'cliente' };
+    const clienteId = u.cliente_id || u._id || null;
+    if (!clienteId) {
+      return { filter: { _id: { $in: [] } }, reason: 'cliente-sin-cliente', clienteId: null };
+    }
+    conditions.push({ cliente_id: clienteId });
+    return { filter: combineConditions(conditions), reason: 'cliente', clienteId };
   }
+
   if (u?.role === 'admin' || u?.role === 'coordinador') {
+    const clienteParam = (req.query.cliente_id || req.query.clienteId || req.query.cliente || '').trim();
+    if (!clienteParam) {
+      return { filter: { _id: { $in: [] } }, reason: 'admin-sin-cliente', clienteId: null };
+    }
+    conditions.push({ cliente_id: clienteParam });
+
     const senderParam = (req.query.sender || req.query.sender_id || '').trim();
-    if (!senderParam) return { filter: { _id: { $in: [] } }, reason: 'admin-sin-sender-param' };
-    const sids = senderParam.split(',').map(s => s.trim()).filter(Boolean);
-    return { filter: { ...base, ...buildSenderFilter(sids) }, reason: 'admin/coordinador' };
+    if (senderParam) {
+      const sids = senderParam.split(',').map((s) => s.trim()).filter(Boolean);
+      if (sids.length) {
+        conditions.push(buildSenderFilter(sids));
+      }
+    }
+
+    return { filter: combineConditions(conditions), reason: 'admin/coordinador', clienteId: clienteParam };
   }
-  return { filter: { _id: { $in: [] } }, reason: 'otro-rol' };
+
+  return { filter: { _id: { $in: [] } }, reason: 'otro-rol', clienteId: null };
+}
+
+function parseDateStart(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function parseDateEnd(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function buildFechaRange(query = {}) {
+  const start = parseDateStart(query.desde);
+  const end = parseDateEnd(query.hasta);
+  if (start || end) {
+    const range = {};
+    if (start) range.$gte = start;
+    if (end) range.$lte = end;
+    return range;
+  }
+  const hace2Semanas = new Date();
+  hace2Semanas.setDate(hace2Semanas.getDate() - 14);
+  hace2Semanas.setHours(0, 0, 0, 0);
+  return { $gte: hace2Semanas };
 }
 
 // === dentro de routes/client-panel.js ===
-
-// Proyección mínima probando alias para tracking/fecha/estado/partido
-const projection = {
-  // tracking (varios alias)
-  tracking: 1, tracking_id: 1, trackingId: 1,
-  numero_seguimiento: 1, tracking_code: 1, tracking_meli: 1, shipment_id: 1,
-
-  // id de venta
-  id_venta: 1, order_id: 1, venta_id: 1,
-
-  // fechas
-  createdAt: 1, fecha: 1, created_at: 1,
-
-  // destino/partido (sin geocodificar)
-  'destino.partido': 1, 'destino.localidad': 1, 'zona.partido': 1,
-
-  // estado
-  estado: 1, status: 1
-};
-
-// Normalizador para la tabla (sin columna "Cliente")
-function normalizeRow(doc) {
-  const tracking =
-    doc.tracking ??
-    doc.tracking_id ??
-    doc.trackingId ??
-    doc.numero_seguimiento ??
-    doc.tracking_code ??
-    doc.tracking_meli ??
-    doc.shipment_id ??
-    null;
-
-  const id_venta = doc.id_venta ?? doc.order_id ?? doc.venta_id ?? null;
-  const createdAt = doc.createdAt ?? doc.fecha ?? doc.created_at ?? null;
-
-  const partido =
-    doc?.destino?.partido ??
-    doc?.destino?.localidad ??
-    doc?.zona?.partido ??
-    null;
-
-  // Normalizar estado y generar estilos de badge iguales al panel admin/coordinador
-  const rawEstado = (doc.estado ?? doc.status ?? '').toString().toLowerCase();
-  const estadoMap = {
-    pendiente:   ['pendiente','nuevo','created','to_dispatch','ready'],
-    en_camino:   ['en_camino','en camino','out_for_delivery','en_ruta','shipped'],
-    entregado:   ['entregado','delivered','finalizado','closed','complete'],
-    incidencia:  ['incidencia','failed','no_entregado','issue','problema'],
-    reprogramado:['reprogramado','reprogrammed','rescheduled','postergado']
-  };
-  let estado = 'pendiente';
-  for (const k of Object.keys(estadoMap)) {
-    if (estadoMap[k].includes(rawEstado)) { estado = k; break; }
-  }
-
-  const estadoStyle = {
-    pendiente:   'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
-    en_camino:   'bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300',
-    entregado:   'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300',
-    incidencia:  'bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-300',
-    reprogramado:'bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300'
-  };
-
-  return {
-    tracking,
-    id_venta,
-    createdAt,
-    destino: { partido },
-    estado,
-    estado_ui: {
-      text: estado.replace('_',' '),
-      class: 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ' + (estadoStyle[estado] || estadoStyle.pendiente)
-    }
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 router.get('/shipments', requireRole('cliente','admin','coordinador'), async (req, res) => {
   try {
@@ -129,25 +112,119 @@ router.get('/shipments', requireRole('cliente','admin','coordinador'), async (re
     const page  = Math.max(parseInt(req.query.page||'1',10), 1);
     const skip  = (page - 1) * limit;
 
-    let base = {};
-    if (req.query.estado) base.estado = String(req.query.estado);
-    if (req.query.desde || req.query.hasta) {
-      base.createdAt = {};
-      if (req.query.desde) base.createdAt.$gte = new Date(req.query.desde);
-      if (req.query.hasta) base.createdAt.$lte = new Date(req.query.hasta);
+    const estado = (req.query.estado || '').toString().trim();
+    const base = {};
+    if (estado) base.estado = estado;
+
+    const { filter, reason, clienteId } = getScopedFilter(req, base);
+
+    if (!clienteId) {
+      if (reason === 'admin-sin-cliente') {
+        return res.status(400).json({ error: 'missing_cliente_id' });
+      }
+      return res.json({ items: [], page, limit, total: 0 });
     }
 
-    const { filter, reason } = getScopedFilter(req, base);
-    console.log('[CLIENT-PANEL] filter:', filter, 'reason:', reason);
+    const condiciones = [];
+    if (filter && Array.isArray(filter.$and)) {
+      condiciones.push(...filter.$and);
+    } else if (filter && Object.keys(filter).length) {
+      condiciones.push(filter);
+    }
+
+    const rangoFechas = buildFechaRange(req.query);
+    const fechaCond = {};
+    if (rangoFechas.$gte) fechaCond.$gte = rangoFechas.$gte;
+    if (rangoFechas.$lte) fechaCond.$lte = rangoFechas.$lte;
+
+    const createdCond = {};
+    if (rangoFechas.$gte) createdCond.$gte = rangoFechas.$gte;
+    if (rangoFechas.$lte) createdCond.$lte = rangoFechas.$lte;
+
+    condiciones.push({
+      $or: [
+        { fecha: fechaCond },
+        {
+          $and: [
+            { $or: [ { fecha: { $exists: false } }, { fecha: null } ] },
+            { createdAt: createdCond }
+          ]
+        }
+      ]
+    });
+
+    const finalFilter = condiciones.length === 1 ? condiciones[0] : { $and: condiciones };
+
+    const projection = {
+      tracking: 1,
+      tracking_id: 1,
+      trackingId: 1,
+      numero_seguimiento: 1,
+      tracking_code: 1,
+      tracking_meli: 1,
+      shipment_id: 1,
+      id_venta: 1,
+      order_id: 1,
+      venta_id: 1,
+      meli_id: 1,
+      destinatario: 1,
+      nombre_destinatario: 1,
+      direccion: 1,
+      partido: 1,
+      codigo_postal: 1,
+      estado: 1,
+      estado_meli: 1,
+      fecha: 1,
+      createdAt: 1,
+      created_at: 1,
+      updatedAt: 1,
+      telefono: 1,
+      telefono_destinatario: 1,
+      referencia: 1,
+      historial: 1,
+      historial_estados: 1,
+      timeline: 1,
+      destino: 1,
+      chofer: 1,
+      cliente_id: 1,
+      sender_id: 1
+    };
 
     const [docs, total] = await Promise.all([
-      Envio.find(filter, projection).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
-      Envio.countDocuments(filter)
+      Envio.find(finalFilter, projection)
+        .populate('chofer', 'nombre email telefono')
+        .sort({ fecha: -1, createdAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Envio.countDocuments(finalFilter)
     ]);
-    const items = (docs || []).map(normalizeRow);
+
+    const items = (docs || []).map((doc) => {
+      if (!doc.partido) {
+        doc.partido = doc?.destino?.partido || doc?.destino?.localidad || null;
+      }
+      if (!doc.destinatario) {
+        doc.destinatario = doc.nombre_destinatario || doc?.destino?.nombre || null;
+      }
+      if (!doc.telefono && doc.telefono_destinatario) {
+        doc.telefono = doc.telefono_destinatario;
+      }
+      return doc;
+    });
+
+    logger.info('[Panel Cliente] Envíos obtenidos', {
+      cliente_id: clienteId ? String(clienteId) : null,
+      page,
+      limit,
+      count: items.length,
+      total,
+      reason
+    });
+
     res.json({ items, page, limit, total });
   } catch (e) {
-    console.error('client-panel /shipments error:', e);
+    logger.error('client-panel /shipments error:', e);
     res.status(500).json({ error: 'server_error', message: e.message });
   }
 });
@@ -164,7 +241,7 @@ router.get('/shipments/map', requireRole('cliente','admin','coordinador'), async
     if (estado) base.estado = String(estado);
 
     const { filter, reason } = getScopedFilter(req, base);
-    console.log('[CLIENT-PANEL MAP] filter:', filter, 'reason:', reason);
+    logger.debug('[CLIENT-PANEL MAP] filtro aplicado', { reason, filter });
 
     const projection = {
       _id: 1,
@@ -186,7 +263,7 @@ router.get('/shipments/map', requireRole('cliente','admin','coordinador'), async
 
     res.json({ items, limit });
   } catch (e) {
-    console.error('client-panel /shipments/map error:', e);
+    logger.error('client-panel /shipments/map error:', e);
     res.status(500).json({ error: 'server_error', message: e.message });
   }
 });
