@@ -27,15 +27,19 @@ function esEnvioManual(envio) {
 }
 
 function obtenerIdChoferDelEnvio(envio) {
-  const chofer = envio?.chofer;
-
+  // Intentar múltiples campos (compatibilidad con legacy)
+  const chofer = envio?.chofer ?? 
+                 envio?.chofer_id ?? 
+                 envio?.driver_id ?? 
+                 null;
+  
   if (!chofer) return null;
-
+  
   // Si es ObjectId poblado
   if (typeof chofer === 'object' && chofer._id) {
     return String(chofer._id);
   }
-
+  
   // Si es string o ObjectId directo
   return String(chofer);
 }
@@ -168,14 +172,19 @@ exports.getEnviosActivos = async (req, res) => {
     hoy.setHours(0, 0, 0, 0);
     
     // Query con campos REALES del modelo
-    const query = {
-      chofer: choferId,  // Campo ObjectId
-      fecha: { $gte: hoy },  // Solo de hoy
-      meli_id: { $in: [null, ''] },  // Sin MercadoLibre
-      estado: { 
-        $nin: ['entregado', 'cancelado', 'devolucion'] 
-      }
-    };
+const query = {
+  // Compatibilidad con múltiples campos de chofer
+  $or: [
+    { chofer: choferId },
+    { chofer_id: choferId },
+    { driver_id: choferId }
+  ],
+  fecha: { $gte: hoy },
+  meli_id: { $in: [null, ''] },
+  estado: { 
+    $nin: ['entregado', 'cancelado', 'devolucion'] 
+  }
+};
     
     logger.debug('[Mis Envios] Query', { 
       chofer: choferId, 
