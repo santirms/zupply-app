@@ -4,6 +4,7 @@ const QRCode = require('qrcode');
 const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
 const axios = require('axios');
 const { formatSubstatus } = require('../services/meliHistory');
+const logger = require('../utils/logger');
 
 // ——— CONFIG ———
 const HYDRATE_TTL_MIN = 15; // re-hidratar si pasaron > 15 min
@@ -83,6 +84,113 @@ function toNumberOrNull(value) {
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
 }
+
+function parseDateOnly(value, { endOfDay = false } = {}) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (endOfDay) {
+    parsed.setHours(23, 59, 59, 999);
+  } else {
+    parsed.setHours(0, 0, 0, 0);
+  }
+  return parsed;
+}
+
+function buildPanelClienteFechaFilter(desde, hasta) {
+  const start = parseDateOnly(desde);
+  const end = parseDateOnly(hasta, { endOfDay: true });
+
+  if (!start && !end) {
+    const hace2Semanas = new Date();
+    hace2Semanas.setDate(hace2Semanas.getDate() - 14);
+    hace2Semanas.setHours(0, 0, 0, 0);
+    return { $gte: hace2Semanas };
+  }
+
+  const range = {};
+  if (start) range.$gte = start;
+  if (end) range.$lte = end;
+  return range;
+}
+
+exports.obtenerShipmentsPanelCliente = async (req, res) => {
+  try {
+    const { page = 1, limit = 50, estado, desde, hasta } = req.query;
+
+    const senderIdsRaw = req.user?.sender_ids || [];
+    const senderIds = Array.isArray(senderIdsRaw)
+      ? senderIdsRaw.filter(Boolean).map((id) => String(id))
+      : typeof senderIdsRaw === 'string'
+        ? [senderIdsRaw]
+        : [];
+
+    if (!senderIds.length) {
+      logger.warn('[Panel Cliente] Usuario sin sender_ids', {
+        user_id: req.user?._id || null
+      });
+      return res.json({
+        envios: [],
+        pagination: { page: 1, limit: Number(limit) || 50, total: 0, pages: 0 }
+      });
+    }
+
+    const pageNumber = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNumber = Math.max(parseInt(limit, 10) || 50, 1);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const query = {
+      sender_id: { $in: senderIds },
+      fecha: buildPanelClienteFechaFilter(desde, hasta)
+    };
+
+    if (estado && estado !== 'todos') {
+      query.estado = estado;
+    }
+
+    const [envios, total] = await Promise.all([
+      Envio.find(query)
+        .populate('chofer', 'nombre email')
+        .select('id_venta tracking destinatario direccion partido codigo_postal estado estado_meli fecha meli_id sender_id')
+        .sort({ fecha: -1 })
+        .skip(skip)
+        .limit(limitNumber)
+        .lean(),
+      Envio.countDocuments(query)
+    ]);
+
+    const pages = limitNumber > 0 ? Math.ceil(total / limitNumber) : 0;
+
+    logger.info('[Panel Cliente] Envíos obtenidos', {
+      sender_ids: senderIds,
+      estado,
+      desde,
+      hasta,
+      page: pageNumber,
+      limit: limitNumber,
+      count: envios.length,
+      total
+    });
+
+    res.json({
+      envios,
+      pagination: {
+        page: pageNumber,
+        limit: limitNumber,
+        total,
+        pages
+      },
+      items: envios,
+      page: pageNumber,
+      limit: limitNumber,
+      total,
+      pages
+    });
+  } catch (err) {
+    logger.error('[Panel Cliente] Error obteniendo envíos', err);
+    res.status(500).json({ error: 'Error obteniendo envíos' });
+  }
+};
 
 // Crear un envío manual (y geolocalizarlo opcionalmente)
 exports.crearEnvio = async (req, res) => {
