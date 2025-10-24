@@ -1,5 +1,6 @@
 // backend/controllers/envioController.js
 const Envio = require('../models/Envio');
+const Cliente = require('../models/Cliente');
 const QRCode = require('qrcode');
 const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
 const axios = require('axios');
@@ -114,6 +115,32 @@ function buildPanelClienteFechaFilter(desde, hasta) {
   return range;
 }
 
+function getSenderIdsFromUser(user) {
+  const senderIdsRaw = user?.sender_ids || [];
+  if (Array.isArray(senderIdsRaw)) {
+    return senderIdsRaw.filter(Boolean).map((id) => String(id));
+  }
+  if (typeof senderIdsRaw === 'string' && senderIdsRaw.trim()) {
+    return [senderIdsRaw.trim()];
+  }
+  return [];
+}
+
+function normalizarTelefonoCliente(valor) {
+  if (!valor) return '';
+  let telefono = String(valor).replace(/\D/g, '');
+  if (telefono.startsWith('0')) telefono = telefono.substring(1);
+  if (telefono.startsWith('15')) telefono = telefono.substring(2);
+  return telefono;
+}
+
+function formatearTelefonoCliente(valor) {
+  const normalizado = normalizarTelefonoCliente(valor);
+  if (!normalizado) return null;
+  if (!/^\d{10}$/.test(normalizado)) return null;
+  return `549${normalizado}`;
+}
+
 exports.obtenerShipmentsPanelCliente = async (req, res) => {
   try {
     const { page = 1, limit = 50, estado, desde, hasta } = req.query;
@@ -191,6 +218,266 @@ exports.obtenerShipmentsPanelCliente = async (req, res) => {
     res.status(500).json({ error: 'Error obteniendo envíos' });
   }
 };
+
+exports.crearEnvioCliente = async (req, res) => {
+  try {
+    const senderIds = getSenderIdsFromUser(req.user);
+    if (!senderIds.length) {
+      return res.status(400).json({ error: 'Usuario sin códigos asignados' });
+    }
+
+    const senderId = senderIds[0];
+    const cliente = await Cliente.findOne({ sender_id: senderId }).lean();
+    if (!cliente) {
+      return res.status(400).json({ error: 'Cliente no encontrado' });
+    }
+
+    const {
+      destinatario,
+      direccion,
+      partido,
+      codigo_postal: codigoPostal,
+      telefono,
+      referencia,
+      peso
+    } = req.body || {};
+
+    const nombreDestinatario = (destinatario || '').trim();
+    const direccionEnvio = (direccion || '').trim();
+    const partidoEnvio = (partido || '').trim();
+    const cpEnvio = (codigoPostal || '').toString().trim();
+
+    if (nombreDestinatario.length < 3) {
+      return res.status(400).json({ error: 'Destinatario inválido' });
+    }
+    if (direccionEnvio.length < 5) {
+      return res.status(400).json({ error: 'Dirección inválida' });
+    }
+    if (partidoEnvio.length < 3) {
+      return res.status(400).json({ error: 'Partido inválido' });
+    }
+    if (!/^\d{4}$/.test(cpEnvio)) {
+      return res.status(400).json({ error: 'Código postal inválido (debe tener 4 dígitos)' });
+    }
+
+    const telefonoFormateado = formatearTelefonoCliente(telefono);
+    const fechaActual = new Date();
+    const idVenta = await generarIdVenta();
+    const actor = req.user?.email || req.user?.username || req.user?.name || 'cliente';
+
+    const historialInicial = {
+      at: fechaActual,
+      estado: 'pendiente',
+      source: 'cliente-web',
+      actor_name: actor,
+      note: 'Creado desde panel de cliente'
+    };
+
+    if (peso) {
+      const pesoNumerico = Number(peso);
+      if (Number.isFinite(pesoNumerico) && pesoNumerico > 0) {
+        historialInicial.metadata = { peso: pesoNumerico };
+      }
+    }
+
+    const nuevoEnvio = new Envio({
+      sender_id: senderId,
+      cliente_id: cliente._id,
+      id_venta: idVenta,
+      destinatario: nombreDestinatario,
+      direccion: direccionEnvio,
+      partido: partidoEnvio,
+      codigo_postal: cpEnvio,
+      telefono: telefonoFormateado,
+      referencia: referencia ? String(referencia).trim() : null,
+      fecha: fechaActual,
+      estado: 'pendiente',
+      historial: [historialInicial],
+      historial_estados: [{ estado: 'pendiente', fecha: fechaActual, usuario: actor }],
+      origen: 'ingreso_manual',
+      requiere_sync_meli: false,
+      zona: partidoEnvio
+    });
+
+    await nuevoEnvio.save();
+
+    try {
+      const { url } = await buildLabelPDF(nuevoEnvio.toObject());
+      const tracking = resolveTracking(nuevoEnvio);
+      const qr_png = await QRCode.toDataURL(tracking, { width: 256, margin: 0 });
+      await Envio.updateOne({ _id: nuevoEnvio._id }, { $set: { label_url: url, qr_png } });
+    } catch (errEtiqueta) {
+      logger.warn('[Envio Cliente] No se pudo generar etiqueta automáticamente', {
+        envio_id: nuevoEnvio._id,
+        error: errEtiqueta?.message || errEtiqueta
+      });
+    }
+
+    const envioFinal = await Envio.findById(nuevoEnvio._id).lean();
+    res.status(201).json({ envio: envioFinal });
+  } catch (err) {
+    logger.error('[Envio Cliente] Error creando envío individual', err);
+    res.status(500).json({ error: 'Error creando envío' });
+  }
+};
+
+exports.crearEnviosMasivos = async (req, res) => {
+  try {
+    const { envios } = req.body || {};
+    if (!Array.isArray(envios) || !envios.length) {
+      return res.status(400).json({ error: 'Datos inválidos' });
+    }
+
+    const senderIds = getSenderIdsFromUser(req.user);
+    if (!senderIds.length) {
+      return res.status(400).json({ error: 'Usuario sin códigos asignados' });
+    }
+
+    const senderId = senderIds[0];
+    const cliente = await Cliente.findOne({ sender_id: senderId });
+    if (!cliente) {
+      return res.status(400).json({ error: 'Cliente no encontrado' });
+    }
+
+    const resultados = { exitosos: 0, errores: [] };
+    const actor = req.user?.email || req.user?.username || req.user?.name || 'cliente';
+
+    for (let i = 0; i < envios.length; i += 1) {
+      const fila = i + 2; // considerando encabezado en fila 1
+      const data = envios[i] || {};
+
+      try {
+        const nombreDestinatario = (data.destinatario || '').trim();
+        const direccionEnvio = (data.direccion || '').trim();
+        const partidoEnvio = (data.partido || '').trim();
+        const cpEnvio = (data.codigo_postal || '').toString().trim();
+
+        if (nombreDestinatario.length < 3) throw new Error('Destinatario inválido');
+        if (direccionEnvio.length < 5) throw new Error('Dirección inválida');
+        if (partidoEnvio.length < 3) throw new Error('Partido inválido');
+        if (!/^\d{4}$/.test(cpEnvio)) throw new Error('Código postal inválido (debe tener 4 dígitos)');
+
+        const telefonoFormateado = formatearTelefonoCliente(data.telefono);
+        const fechaActual = new Date();
+        const idVenta = await generarIdVenta();
+
+        const historialItem = {
+          at: fechaActual,
+          estado: 'pendiente',
+          source: 'cliente-web-masivo',
+          actor_name: actor,
+          note: 'Creado mediante carga masiva'
+        };
+
+        if (data.peso) {
+          const pesoNumerico = Number(data.peso);
+          if (Number.isFinite(pesoNumerico) && pesoNumerico > 0) {
+            historialItem.metadata = { peso: pesoNumerico };
+          }
+        }
+
+        const nuevoEnvio = new Envio({
+          sender_id: senderId,
+          cliente_id: cliente._id,
+          id_venta: idVenta,
+          destinatario: nombreDestinatario,
+          direccion: direccionEnvio,
+          partido: partidoEnvio,
+          codigo_postal: cpEnvio,
+          telefono: telefonoFormateado,
+          referencia: data.referencia ? String(data.referencia).trim() : null,
+          fecha: fechaActual,
+          estado: 'pendiente',
+          historial: [historialItem],
+          historial_estados: [{ estado: 'pendiente', fecha: fechaActual, usuario: actor }],
+          origen: 'ingreso_manual',
+          requiere_sync_meli: false,
+          zona: partidoEnvio
+        });
+
+        await nuevoEnvio.save();
+
+        try {
+          const { url } = await buildLabelPDF(nuevoEnvio.toObject());
+          const tracking = resolveTracking(nuevoEnvio);
+          const qr_png = await QRCode.toDataURL(tracking, { width: 256, margin: 0 });
+          await Envio.updateOne({ _id: nuevoEnvio._id }, { $set: { label_url: url, qr_png } });
+        } catch (errEtiqueta) {
+          logger.warn('[Envio Cliente Masivo] Error generando etiqueta', {
+            envio_id: nuevoEnvio._id,
+            error: errEtiqueta?.message || errEtiqueta
+          });
+        }
+
+        resultados.exitosos += 1;
+      } catch (error) {
+        resultados.errores.push({
+          fila,
+          destinatario: data.destinatario || '',
+          error: error.message || 'Error desconocido'
+        });
+      }
+    }
+
+    logger.info('[Envio Cliente Masivo] Procesados', {
+      sender_id: senderId,
+      total: envios.length,
+      exitosos: resultados.exitosos,
+      errores: resultados.errores.length
+    });
+
+    res.json(resultados);
+  } catch (err) {
+    logger.error('[Envio Cliente Masivo] Error:', err);
+    res.status(500).json({ error: 'Error en carga masiva' });
+  }
+};
+
+exports.descargarPlantilla = async (req, res) => {
+  try {
+    const XLSX = require('xlsx');
+    const data = [
+      {
+        destinatario: 'Juan Pérez',
+        direccion: 'Av. Libertador 1234',
+        partido: 'Lomas de Zamora',
+        codigo_postal: '1832',
+        telefono: '1112345678',
+        referencia: 'Casa azul'
+      }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Envíos');
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=plantilla-envios.xlsx');
+    res.send(buffer);
+  } catch (err) {
+    logger.error('[Plantilla Envios Cliente] Error generando plantilla', err);
+    res.status(500).json({ error: 'Error generando plantilla' });
+  }
+};
+
+async function generarIdVenta() {
+  const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let id = '';
+  let existe = true;
+
+  while (existe) {
+    id = '';
+    for (let i = 0; i < 8; i += 1) {
+      id += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
+    }
+
+    existe = await Envio.exists({ id_venta: id });
+  }
+
+  return id;
+}
 
 // Crear un envío manual (y geolocalizarlo opcionalmente)
 exports.crearEnvio = async (req, res) => {
