@@ -4,7 +4,13 @@ const User = require('../models/User');
 const Chofer = require('../models/Chofer');
 const Cliente = require('../models/Cliente');
 
-const uniq = arr => Array.from(new Set(arr.filter(Boolean).map(String)));
+const uniq = (arr) => Array.from(
+  new Set(
+    (Array.isArray(arr) ? arr : [])
+      .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+      .map((value) => String(value).trim().toUpperCase())
+  )
+);
 
 const parseBool = (value, defaultValue) => {
   if (typeof value === 'boolean') return value;
@@ -34,6 +40,9 @@ const toPublicUser = (user = {}) => ({
   username: user.username || null,
   email: user.email || null,
   role: user.role,
+  sender_ids: Array.isArray(user.sender_ids)
+    ? user.sender_ids.map((sid) => String(sid).trim().toUpperCase())
+    : [],
   activo: user.is_active !== false,
   driver_id: toPublicDriver(user.driver_id),
   createdAt: user.createdAt,

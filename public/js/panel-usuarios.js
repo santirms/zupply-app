@@ -66,6 +66,8 @@ function toggleChoferFields() {
   const choferFields = document.getElementById('choferFields');
   const choferNombre = document.getElementById('inputChoferNombre');
   const choferTelefono = document.getElementById('inputChoferTelefono');
+  const senderIdsField = document.getElementById('campoSenderIds');
+  const senderIdsInput = document.getElementById('inputSenderIds');
 
   if (role === 'chofer') {
     choferFields.classList.remove('hidden');
@@ -77,6 +79,15 @@ function toggleChoferFields() {
     choferTelefono.required = false;
     choferNombre.value = '';
     choferTelefono.value = '';
+  }
+
+  if (senderIdsField) {
+    if (role === 'cliente') {
+      senderIdsField.classList.remove('hidden');
+    } else {
+      senderIdsField.classList.add('hidden');
+      if (senderIdsInput) senderIdsInput.value = '';
+    }
   }
 }
 
@@ -108,7 +119,7 @@ function renderTabla() {
   if (!tbody) return;
 
   if (!usuarios.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 opacity-70">No hay usuarios</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-6 opacity-70">No hay usuarios</td></tr>';
     return;
   }
 
@@ -135,6 +146,11 @@ function renderTabla() {
       telefonoDisplay = tel || '-';
     }
 
+    const senderIds = Array.isArray(u.sender_ids) ? u.sender_ids.filter((sid) => typeof sid === 'string' && sid.trim()) : [];
+    const senderIdsLabel = senderIds.length
+      ? senderIds.map((sid) => String(sid).trim().toUpperCase()).join(', ')
+      : '-';
+
     return `
       <tr class="border-b border-slate-200 dark:border-white/10">
         <td class="px-4 py-3">${u.username || '-'}</td>
@@ -144,6 +160,7 @@ function renderTabla() {
             ${u.role}
           </span>
         </td>
+        <td class="px-4 py-3 text-sm">${u.role === 'cliente' ? `<span class="font-mono text-xs sm:text-sm">${senderIdsLabel}</span>` : '-'}</td>
         <td class="px-4 py-3 text-sm font-mono">${telefonoDisplay}</td>
         <td class="px-4 py-3 text-center">${activoIcon}</td>
         <td class="px-4 py-3 text-sm opacity-70">${createdLabel}</td>
@@ -179,6 +196,8 @@ function abrirModalCrear() {
   document.getElementById('passwordHint').classList.add('hidden');
   document.getElementById('inputRole').value = 'cliente';
   document.getElementById('inputActivo').checked = true;
+  const senderInput = document.getElementById('inputSenderIds');
+  if (senderInput) senderInput.value = '';
 
   // Limpiar campos de chofer
   document.getElementById('inputChoferNombre').value = '';
@@ -203,6 +222,11 @@ function abrirModalEditar(id) {
   document.getElementById('passwordHint').classList.remove('hidden');
   document.getElementById('inputRole').value = usuario.role;
   document.getElementById('inputActivo').checked = usuario.activo !== false;
+  const senderInput = document.getElementById('inputSenderIds');
+  if (senderInput) {
+    const senderIds = Array.isArray(usuario.sender_ids) ? usuario.sender_ids.filter((sid) => typeof sid === 'string' && sid.trim()) : [];
+    senderInput.value = senderIds.length ? senderIds.join(', ') : '';
+  }
 
   // Cargar datos de chofer si aplica
   if (usuario.role === 'chofer' && usuario.driver_id) {
@@ -238,6 +262,19 @@ document.getElementById('formUsuario').addEventListener('submit', async (e) => {
     role,
     activo: document.getElementById('inputActivo').checked
   };
+
+  const senderInput = document.getElementById('inputSenderIds');
+  if (senderInput) {
+    if (role === 'cliente') {
+      const senderIds = senderInput.value
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter((s) => s.length > 0);
+      data.sender_ids = senderIds;
+    } else {
+      data.sender_ids = [];
+    }
+  }
 
   const password = document.getElementById('inputPassword').value.trim();
   if (password) {
