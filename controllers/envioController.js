@@ -533,8 +533,15 @@ exports.crearEnviosLote = async (req, res) => {
         await nuevoEnvio.save();
         creados.push(idVenta);
       } catch (err) {
+        // Log del error completo
+        logger.error('[Envio Cliente Lote] Error en envío', {
+          destinatario: data.destinatario,
+          error: err.message,
+          stack: err.stack
+        });
+
         errores.push({
-          destinatario: data.destinatario || null,
+          destinatario: data.destinatario,
           error: err.message
         });
       }
@@ -542,8 +549,10 @@ exports.crearEnviosLote = async (req, res) => {
 
     logger.info('[Envio Cliente Lote] Procesados', {
       sender_id: senderId,
+      usuario: usuario.email,
       exitosos: creados.length,
-      errores: errores.length
+      errores: errores.length,
+      detalles_errores: errores
     });
 
     res.json({
