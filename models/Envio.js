@@ -46,7 +46,7 @@ const HistorialEstadoSchema = new Schema({
 
 const envioSchema = new Schema({
   sender_id:      { type: String, required: true },
-  cliente_id:     { type: Schema.Types.ObjectId, ref: 'Cliente', required: true },
+  cliente_id:     { type: Schema.Types.ObjectId, ref: 'Cliente', required: false },
   id_venta:       { type: String, required: true },
 
   // Sólo para envíos MeLi; no guardes "" ni null
