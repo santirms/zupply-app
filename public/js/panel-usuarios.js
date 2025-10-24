@@ -1,6 +1,13 @@
 let usuarios = [];
 let usuarioAEliminar = null;
 
+// Helper para escapar HTML y prevenir XSS
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 // Normalizar teléfono antes de enviar
 function normalizarTelefono(telefono) {
   if (!telefono) return '';
@@ -148,7 +155,7 @@ function renderTabla() {
 
     const senderIds = Array.isArray(u.sender_ids) ? u.sender_ids.filter((sid) => typeof sid === 'string' && sid.trim()) : [];
     const senderIdsLabel = senderIds.length
-      ? senderIds.map((sid) => String(sid).trim().toUpperCase()).join(', ')
+      ? senderIds.map((sid) => escapeHtml(String(sid).trim().toUpperCase())).join(', ')
       : '-';
 
     return `
