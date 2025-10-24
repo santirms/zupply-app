@@ -32,6 +32,63 @@
   <style>
     :root{ --z-primary:#F59E0B; --z-primary-dark:#D97706; --z-primary-fg:#111827; }
   </style>
+  <style>
+    /* Dark mode - Pestaña Crear envío */
+    @media (prefers-color-scheme: dark) {
+      #crear .card {
+        background-color: #1a1d29;
+        border-color: #2d3142;
+      }
+
+      #crear .card-header.bg-primary {
+        background-color: #0d6efd !important;
+      }
+
+      #crear .form-label {
+        color: #e0e0e0;
+      }
+
+      #crear .form-control {
+        background-color: #2d3142;
+        border-color: #404456;
+        color: #e0e0e0;
+      }
+
+      #crear .form-control:focus {
+        background-color: #363a4f;
+        border-color: #667eea;
+        color: #e0e0e0;
+      }
+
+      #crear .form-control::placeholder {
+        color: #808495;
+      }
+
+      #crear .form-control[readonly] {
+        background-color: #1a1d29;
+        color: #808495;
+      }
+
+      #crear .form-text,
+      #crear small.text-muted {
+        color: #808495 !important;
+      }
+
+      #paquetes-container .card {
+        background-color: #2d3142;
+        border-color: #404456;
+      }
+
+      #paquetes-container h5,
+      #paquetes-container h6 {
+        color: #e0e0e0;
+      }
+
+      #paquetes-container .text-muted {
+        color: #808495 !important;
+      }
+    }
+  </style>
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
   <div class="max-w-7xl mx-auto p-4 md:p-6">
