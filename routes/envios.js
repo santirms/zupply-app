@@ -41,6 +41,24 @@ router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE'
   ]
 }));
 
+router.post(
+  '/cliente',
+  requireRole('cliente'),
+  ctrl.crearEnvioCliente
+);
+
+router.post(
+  '/cliente/masivo',
+  requireRole('cliente'),
+  ctrl.crearEnviosMasivos
+);
+
+router.get(
+  '/plantilla',
+  requireRole('cliente'),
+  ctrl.descargarPlantilla
+);
+
 // ——— Meli history on-demand con hora real ———
 const HYDRATE_TTL_MIN = 15;  // re-hidratar si pasaron >15'
 
