@@ -1,5 +1,6 @@
 // backend/controllers/envioController.js
 const Envio = require('../models/Envio');
+const Cliente = require('../models/Cliente');
 const QRCode = require('qrcode');
 const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
 const axios = require('axios');
@@ -460,6 +461,125 @@ exports.asignados = async (req, res) => {
     res.status(500).json({ error: 'Error al obtener asignados' });
   }
 };
+
+exports.crearEnviosLote = async (req, res) => {
+  try {
+    const { envios } = req.body || {};
+
+    if (!Array.isArray(envios) || envios.length === 0) {
+      return res.status(400).json({ error: 'Datos inválidos' });
+    }
+
+    const usuario = req.user || {};
+    const senderIds = Array.isArray(usuario.sender_ids)
+      ? usuario.sender_ids.filter(Boolean)
+      : [];
+
+    if (senderIds.length === 0) {
+      return res.status(400).json({ error: 'Usuario sin códigos asignados' });
+    }
+
+    const senderId = senderIds[0];
+    const cliente = await Cliente.findOne({ sender_id: senderId });
+
+    if (!cliente) {
+      return res.status(400).json({ error: 'Cliente no encontrado' });
+    }
+
+    const creados = [];
+    const errores = [];
+
+    for (let i = 0; i < envios.length; i++) {
+      const data = envios[i] || {};
+
+      try {
+        if (!data.destinatario || data.destinatario.length < 3) {
+          throw new Error('Destinatario inválido');
+        }
+
+        if (!data.direccion || data.direccion.length < 5) {
+          throw new Error('Dirección inválida');
+        }
+
+        if (!data.codigo_postal || !/^\d{4}$/.test(data.codigo_postal)) {
+          throw new Error('Código postal inválido');
+        }
+
+        const idVenta = data.id_venta || await generarIdVenta();
+
+        const existe = await Envio.findOne({ id_venta: idVenta });
+        if (existe) {
+          throw new Error(`ID de venta ${idVenta} ya existe`);
+        }
+
+        const nuevoEnvio = new Envio({
+          sender_id: senderId,
+          cliente_id: cliente._id,
+          id_venta: idVenta,
+          destinatario: data.destinatario,
+          direccion: data.direccion,
+          partido: data.partido,
+          codigo_postal: data.codigo_postal,
+          telefono: data.telefono || null,
+          referencia: data.referencia || null,
+          fecha: new Date(),
+          estado: 'pendiente',
+          origen: 'cliente_web',
+          chofer: null,
+          zona: data.partido,
+          historial: [{
+            at: new Date(),
+            estado: 'pendiente',
+            source: 'cliente-web',
+            actor_name: usuario.email || usuario.username || 'cliente',
+            note: 'Creado desde panel de cliente'
+          }]
+        });
+
+        await nuevoEnvio.save();
+        creados.push(idVenta);
+      } catch (err) {
+        errores.push({
+          destinatario: data.destinatario || null,
+          error: err.message
+        });
+      }
+    }
+
+    logger.info('[Envio Cliente Lote] Procesados', {
+      sender_id: senderId,
+      exitosos: creados.length,
+      errores: errores.length
+    });
+
+    res.json({
+      exitosos: creados.length,
+      ids: creados,
+      errores
+    });
+  } catch (err) {
+    logger.error('[Envio Cliente Lote] Error:', err);
+    res.status(500).json({ error: 'Error guardando envíos' });
+  }
+};
+
+async function generarIdVenta() {
+  const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let id;
+  let existe = true;
+
+  while (existe) {
+    id = '';
+    for (let i = 0; i < 8; i++) {
+      id += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
+    }
+
+    const envio = await Envio.findOne({ id_venta: id });
+    existe = Boolean(envio);
+  }
+
+  return id;
+}
 
 // GET /api/envios/:id/notas
 exports.listarNotas = async (req, res) => {

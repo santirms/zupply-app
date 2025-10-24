@@ -1,3 +1,27 @@
+// Array de paquetes temporales
+let paquetesTemp = [];
+
+// Validación CP → Partido (simplificado)
+const partidosPorCP = {
+  '1832': 'Lomas de Zamora',
+  '1414': 'CABA',
+  '1828': 'Banfield',
+  // ... agregar más según necesites
+};
+
+document.getElementById('paq-cp')?.addEventListener('input', (e) => {
+  const cp = e.target.value;
+  const partido = document.getElementById('paq-partido');
+
+  if (partidosPorCP[cp]) {
+    partido.value = partidosPorCP[cp];
+  } else if (cp.length === 4) {
+    partido.value = 'Verificar manualmente';
+  } else {
+    partido.value = '';
+  }
+});
+
 const CLASES_BADGE_ESTADO = {
   secondary: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/30 dark:text-slate-300',
   info: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300',
@@ -7,6 +31,194 @@ const CLASES_BADGE_ESTADO = {
   danger: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300',
   dark: 'bg-slate-600 text-white border-slate-700 dark:bg-slate-700 dark:text-slate-200'
 };
+
+function agregarPaquete() {
+  const form = document.getElementById('form-paquete');
+
+  if (!form) return;
+
+  if (!form.checkValidity()) {
+    form.reportValidity();
+    return;
+  }
+
+  let telefono = document.getElementById('paq-telefono')?.value.trim() || '';
+  if (telefono) {
+    telefono = telefono.replace(/\s+/g, '');
+  }
+
+  const paquete = {
+    id: Date.now(),
+    referencia: document.getElementById('paq-referencia')?.value.trim() || '',
+    destinatario: document.getElementById('paq-destinatario')?.value.trim() || '',
+    telefono: telefono || null,
+    direccion: document.getElementById('paq-direccion')?.value.trim() || '',
+    codigo_postal: document.getElementById('paq-cp')?.value.trim() || '',
+    partido: document.getElementById('paq-partido')?.value.trim() || '',
+    id_venta: document.getElementById('paq-id-venta')?.value.trim() || null
+  };
+
+  if (paquete.destinatario.length < 3) {
+    alert('El destinatario debe tener al menos 3 caracteres');
+    return;
+  }
+
+  if (paquete.direccion.length < 5) {
+    alert('La dirección debe tener al menos 5 caracteres');
+    return;
+  }
+
+  if (!/^\d{4}$/.test(paquete.codigo_postal)) {
+    alert('El código postal debe tener 4 dígitos');
+    return;
+  }
+
+  if (!paquete.partido || paquete.partido === 'Verificar manualmente') {
+    const confirmar = confirm(
+      'El partido no se validó automáticamente.\n\n¿Confirmar que el código postal es correcto?'
+    );
+    if (!confirmar) return;
+  }
+
+  paquetesTemp.push(paquete);
+
+  form.reset();
+  const partidoInput = document.getElementById('paq-partido');
+  if (partidoInput) partidoInput.value = '';
+
+  renderizarPaquetes();
+
+  const toast = document.createElement('div');
+  toast.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 end-0 m-3';
+  toast.style.zIndex = '9999';
+  toast.innerHTML = `
+    <i class="bi bi-check-circle me-2"></i>
+    Paquete agregado
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  `;
+  document.body.appendChild(toast);
+
+  setTimeout(() => toast.remove(), 3000);
+}
+
+function renderizarPaquetes() {
+  const container = document.getElementById('paquetes-container');
+  const lista = document.getElementById('lista-paquetes');
+  const count = document.getElementById('count-paquetes');
+
+  if (!container || !lista || !count) return;
+
+  if (paquetesTemp.length === 0) {
+    lista.style.display = 'none';
+    container.innerHTML = '';
+    count.textContent = '0';
+    return;
+  }
+
+  lista.style.display = 'block';
+  count.textContent = paquetesTemp.length;
+
+  container.innerHTML = paquetesTemp.map((paq) => `
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="flex-grow-1">
+            <h6 class="mb-2">
+              <i class="bi bi-box me-2"></i>
+              ${paq.destinatario}
+            </h6>
+            <div class="row small text-muted">
+              <div class="col-md-6">
+                <strong>Dirección:</strong> ${paq.direccion}
+              </div>
+              <div class="col-md-3">
+                <strong>Partido:</strong> ${paq.partido}
+              </div>
+              <div class="col-md-3">
+                <strong>CP:</strong> ${paq.codigo_postal}
+              </div>
+            </div>
+            ${paq.referencia ? `
+              <div class="small text-muted mt-1">
+                <strong>Ref:</strong> ${paq.referencia}
+              </div>
+            ` : ''}
+            ${paq.telefono ? `
+              <div class="small text-muted mt-1">
+                <strong>Tel:</strong> ${paq.telefono}
+                <a href="https://wa.me/${paq.telefono}" target="_blank" class="ms-2 text-success">
+                  <i class="bi bi-whatsapp"></i>
+                </a>
+              </div>
+            ` : ''}
+          </div>
+          <button type="button" class="btn btn-sm btn-danger" onclick="eliminarPaquete(${paq.id})">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function eliminarPaquete(id) {
+  paquetesTemp = paquetesTemp.filter((p) => p.id !== id);
+  renderizarPaquetes();
+}
+
+async function guardarTodos(event) {
+  if (paquetesTemp.length === 0) {
+    alert('No hay paquetes para guardar');
+    return;
+  }
+
+  const confirmar = confirm(`¿Confirmar la creación de ${paquetesTemp.length} envío(s)?`);
+  if (!confirmar) return;
+
+  const btn = event?.target || document.querySelector('#lista-paquetes button.btn-primary');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
+  }
+
+  try {
+    const response = await fetch('/api/envios/cliente/lote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ envios: paquetesTemp })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || 'Error guardando envíos');
+    }
+
+    const result = await response.json();
+
+    paquetesTemp = [];
+    renderizarPaquetes();
+
+    alert(`✅ ${result.exitosos} envío(s) creado(s) correctamente`);
+
+    const tablaTabEl = document.getElementById('tabla-tab');
+    if (tablaTabEl && window.bootstrap?.Tab) {
+      const tablaTab = new bootstrap.Tab(tablaTabEl);
+      tablaTab.show();
+    }
+
+    if (typeof window.cargarEnvios === 'function') {
+      window.cargarEnvios();
+    }
+  } catch (err) {
+    console.error('Error:', err);
+    alert('❌ Error: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-save me-1"></i>Guardar todos';
+    }
+  }
+}
 
 function obtenerInfoEstado(estado) {
   const estadoKey = (estado ?? '').toString().trim().toLowerCase();
@@ -418,3 +630,7 @@ window.registrarEnvioCompleto = registrarEnvioCompleto;
 window.obtenerEnvioDeCache = obtenerEnvioDeCache;
 window.obtenerEnviosDesdeRespuesta = obtenerEnviosDesdeRespuesta;
 window.obtenerPaginacionDesdeRespuesta = obtenerPaginacionDesdeRespuesta;
+window.agregarPaquete = agregarPaquete;
+window.eliminarPaquete = eliminarPaquete;
+window.renderizarPaquetes = renderizarPaquetes;
+window.guardarTodos = guardarTodos;
