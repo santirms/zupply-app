@@ -975,4 +975,12 @@ router.patch('/:id/cambiar-estado', requireAuth, requireRole('admin','coordinado
   }
 });
 
+// Crear envíos en lote (cliente)
+router.post(
+  '/cliente/lote',
+  requireAuth,
+  requireRole('cliente'),
+  ctrl.crearEnviosLote
+);
+
 module.exports = router;
