@@ -1,6 +1,5 @@
 // backend/controllers/envioController.js
 const Envio = require('../models/Envio');
-const Cliente = require('../models/Cliente');
 const QRCode = require('qrcode');
 const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
 const axios = require('axios');
@@ -480,11 +479,6 @@ exports.crearEnviosLote = async (req, res) => {
     }
 
     const senderId = senderIds[0];
-    const cliente = await Cliente.findOne({ sender_id: senderId });
-
-    if (!cliente) {
-      return res.status(400).json({ error: 'Cliente no encontrado' });
-    }
 
     const creados = [];
     const errores = [];
@@ -514,7 +508,7 @@ exports.crearEnviosLote = async (req, res) => {
 
         const nuevoEnvio = new Envio({
           sender_id: senderId,
-          cliente_id: cliente._id,
+          cliente_id: null,
           id_venta: idVenta,
           destinatario: data.destinatario,
           direccion: data.direccion,
