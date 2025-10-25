@@ -488,22 +488,24 @@ exports.crearEnviosLote = async (req, res) => {
         const cliente = await Cliente.findOne({ sender_id: senderId });
 
         if (!cliente) {
-          logger.warn('[Envio Cliente Lote] Usuario sin cliente asociado', {
-            sender_id: senderId,
-            usuario: usuario.email || usuario.username || usuario._id
-          });
-
           return res.status(400).json({
-            error: 'No se encontró el cliente asociado al usuario. Contacte al administrador.'
+            error: `No se encontró un cliente con código ${senderId}. ` +
+                   'Contacte al administrador para que lo cree en el sistema.'
           });
         }
 
         clienteId = cliente._id;
 
-        logger.warn('[Envio Cliente Lote] Usuario sin cliente_id directo, usando sender_id', {
-          sender_id: senderId,
-          usuario: usuario.email || usuario.username || usuario._id,
-          cliente_id: clienteId
+        const Usuario = require('../models/Usuario');
+        await Usuario.findByIdAndUpdate(usuario._id, {
+          $set: { cliente_id: clienteId }
+        });
+
+        logger.info('[Envio Cliente] Usuario vinculado automáticamente', {
+          usuario_id: usuario._id,
+          email: usuario.email,
+          cliente_id: clienteId,
+          sender_id: senderId
         });
       } catch (clienteErr) {
         logger.error('[Envio Cliente Lote] Error resolviendo cliente', {
