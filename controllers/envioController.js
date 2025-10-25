@@ -1,5 +1,7 @@
 // backend/controllers/envioController.js
 const Envio = require('../models/Envio');
+const Cliente = require('../models/Cliente');
+const ListaDePrecios = require('../models/listaDePrecios');
 const QRCode = require('qrcode');
 const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
 const axios = require('axios');
@@ -480,6 +482,42 @@ exports.crearEnviosLote = async (req, res) => {
 
     const senderId = senderIds[0];
 
+    let cliente = null;
+    try {
+      cliente = await Cliente.findOne({ sender_id: senderId });
+
+      if (!cliente) {
+        const listaDefault = await ListaDePrecios.findOne().sort({ fechaCreacion: 1 }).lean();
+
+        if (!listaDefault) {
+          logger.warn('[Envio Cliente Lote] No se encontró lista de precios para crear cliente automático', {
+            sender_id: senderId
+          });
+        } else {
+          cliente = await Cliente.create({
+            nombre: senderId,
+            razon_social: `${senderId} S.A.`,
+            sender_id: [senderId],
+            email: usuario.email || undefined,
+            condicion_iva: 'Responsable Inscripto',
+            horario_de_corte: '18:00',
+            lista_precios: listaDefault._id,
+            auto_ingesta: true
+          });
+
+          logger.info('[Cliente] Creado automáticamente', {
+            sender_id: senderId,
+            cliente_id: cliente._id
+          });
+        }
+      }
+    } catch (clienteErr) {
+      logger.error('[Envio Cliente Lote] Error resolviendo cliente', {
+        sender_id: senderId,
+        error: clienteErr.message
+      });
+    }
+
     const creados = [];
     const errores = [];
 
@@ -508,7 +546,7 @@ exports.crearEnviosLote = async (req, res) => {
 
         const nuevoEnvio = new Envio({
           sender_id: senderId,
-          cliente_id: null,
+          cliente_id: cliente?._id || null,
           id_venta: idVenta,
           destinatario: data.destinatario,
           direccion: data.direccion,
@@ -519,6 +557,7 @@ exports.crearEnviosLote = async (req, res) => {
           fecha: new Date(),
           estado: 'pendiente',
           origen: 'ingreso_manual',
+          requiere_sync_meli: false,
           chofer: null,
           zona: data.partido,
           historial: [{

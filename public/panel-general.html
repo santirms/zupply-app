@@ -384,6 +384,24 @@ window.USER_ROLE = window.USER_ROLE || 'admin';
 let enviosCargados = []; let nextCursor = null; let filtrosActivos = {}; let mapaInstancia = null;
 const normalize = s => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 const cleanZona = z => (z || '').replace(/\s+(N|S|E|O|NE|NO|SE|SO)$/i, '').trim();
+const nombreClienteEnvio = (envio = {}) => {
+  const cliente = envio.cliente_id || {};
+  const pick = (value) => (typeof value === 'string' ? value.trim() : '');
+
+  const senderCliente = Array.isArray(cliente.sender_id)
+    ? pick(cliente.sender_id[0])
+    : pick(cliente.sender_id);
+
+  return (
+    pick(cliente.nombre) ||
+    pick(cliente.razon_social) ||
+    pick(cliente.codigo_cliente) ||
+    senderCliente ||
+    pick(envio.sender_id) ||
+    '—'
+  );
+};
+window.nombreClienteEnvio = nombreClienteEnvio;
 
 function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, partidos, chofer, cursor, limit=100 }) {
   const p = new URLSearchParams();
@@ -749,7 +767,7 @@ function renderTabla(){
         ${ e.meli_id ? `<button class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-slate-50 dark:hover:bg-white/10" onclick="forceSyncMeli('${e.meli_id}')" title="Actualizar estado desde MeLi">↻</button>` : '' }
       </td>
       <td class="px-4 py-2 font-mono">${e.id_venta || '-'}</td>
-      <td class="px-4 py-2">${e.cliente_id?.nombre || e.sender_id || '—'}</td>
+      <td class="px-4 py-2">${nombreClienteEnvio(e)}</td>
       <td class="px-4 py-2">${fecha}</td>
       <td class="px-4 py-2" title="${zonaFact}">${partidoUI}</td>
       <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
@@ -774,7 +792,8 @@ async function mostrarDetalle(envioId){
   try{
     const res=await fetch(`/api/envios/${envioId}`,{cache:'no-store'}); if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data=await res.json();
-    const clienteNombre=data.cliente_id?.nombre || '— sin nombre —';
+    const clienteNombreRaw = nombreClienteEnvio(data);
+    const clienteNombre = clienteNombreRaw === '—' ? '— sin nombre —' : clienteNombreRaw;
     const partido=data.partido?.trim?.()||'-'; const zonaFact=data.zona?.trim?.()||'-';
     const s=uiStatus(data); const hist=data.timeline||data.historial||data.eventos||[];
     renderHistorial(hist); switchTab('detalle');

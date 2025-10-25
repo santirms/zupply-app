@@ -319,7 +319,10 @@ router.get('/', async (req, res) => {
     let rows = await Envio.aggregate(pipeline);
 
     // populate liviano
-    rows = await Cliente.populate(rows, { path: 'cliente_id', select: 'nombre' });
+    rows = await Cliente.populate(rows, {
+      path: 'cliente_id',
+      select: 'nombre razon_social codigo_cliente sender_id'
+    });
     try {
       const Chofer = require('../models/Chofer');
       rows = await Chofer.populate(rows, { path: 'chofer', select: 'nombre' });
@@ -918,9 +921,20 @@ router.patch('/:id/cambiar-estado', requireAuth, requireRole('admin','coordinado
     }
 
     // Validar que sea un envío manual (NO MeLi)
-    if (envio.requiere_sync_meli !== false) {
+    if (envio.requiere_sync_meli === true) {
       return res.status(400).json({
         error: 'Este envío se sincroniza con MercadoLibre. No se puede editar manualmente.'
+      });
+    }
+
+    const nuevoEstado = String(nuevo_estado || '').trim();
+
+    const estadosQueRequierenChofer = new Set(['en_camino', 'entregado', 'comprador_ausente']);
+    const tieneChoferAsignado = Boolean(envio.chofer || envio.chofer_id);
+
+    if (estadosQueRequierenChofer.has(nuevoEstado) && !tieneChoferAsignado) {
+      return res.status(400).json({
+        error: `El estado "${nuevoEstado}" requiere que el envío tenga un chofer asignado`
       });
     }
 
@@ -934,7 +948,7 @@ router.patch('/:id/cambiar-estado', requireAuth, requireRole('admin','coordinado
       'rechazado'
     ];
 
-    if (!ESTADOS_VALIDOS.includes(nuevo_estado)) {
+    if (!ESTADOS_VALIDOS.includes(nuevoEstado)) {
       return res.status(400).json({
         error: `Estado no válido. Permitidos: ${ESTADOS_VALIDOS.join(', ')}`
       });
@@ -944,7 +958,7 @@ router.patch('/:id/cambiar-estado', requireAuth, requireRole('admin','coordinado
     const estadoAnterior = envio.estado;
 
     // Actualizar estado
-    envio.estado = nuevo_estado;
+    envio.estado = nuevoEstado;
 
     const actor = req.user?.username || req.user?.email || 'Sistema';
 
@@ -952,22 +966,22 @@ router.patch('/:id/cambiar-estado', requireAuth, requireRole('admin','coordinado
     if (!envio.historial) envio.historial = [];
     envio.historial.push({
       at: new Date(),
-      estado: nuevo_estado,
+      estado: nuevoEstado,
       source: 'panel-manual',
       actor_name: actor,
-      note: nota || `Cambio manual: ${estadoAnterior} → ${nuevo_estado}`
+      note: nota || `Cambio manual: ${estadoAnterior} → ${nuevoEstado}`
     });
 
     await envio.save();
 
-    console.log(`✓ Estado de envío ${id} cambiado de "${estadoAnterior}" a "${nuevo_estado}" por ${actor}`);
+    console.log(`✓ Estado de envío ${id} cambiado de "${estadoAnterior}" a "${nuevoEstado}" por ${actor}`);
 
     res.json({
       ok: true,
       envio,
       estado_anterior: estadoAnterior,
-      estado_nuevo: nuevo_estado,
-      message: `Estado actualizado a: ${nuevo_estado}`
+      estado_nuevo: nuevoEstado,
+      message: `Estado actualizado a: ${nuevoEstado}`
     });
   } catch (err) {
     console.error('Error cambiando estado de envío:', err);
