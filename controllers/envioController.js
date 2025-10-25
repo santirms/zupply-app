@@ -485,7 +485,12 @@ exports.crearEnviosLote = async (req, res) => {
 
     if (!clienteId) {
       try {
-        const cliente = await Cliente.findOne({ codigo_cliente: codigoCliente });
+        const cliente = await Cliente.findOne({
+          $or: [
+            { codigo_cliente: codigoCliente },
+            { sender_id: codigoCliente }
+          ]
+        });
 
         if (!cliente) {
           return res.status(400).json({
@@ -496,8 +501,8 @@ exports.crearEnviosLote = async (req, res) => {
 
         clienteId = cliente._id;
 
-        const Usuario = require('../models/Usuario');
-        await Usuario.findByIdAndUpdate(usuario._id, {
+        const User = require('../models/User');
+        await User.findByIdAndUpdate(usuario._id, {
           $set: { cliente_id: clienteId }
         });
 
