@@ -518,7 +518,7 @@ exports.crearEnviosLote = async (req, res) => {
           referencia: data.referencia || null,
           fecha: new Date(),
           estado: 'pendiente',
-          origen: 'cliente_web',
+          origen: 'ingreso_manual',
           chofer: null,
           zona: data.partido,
           historial: [{
