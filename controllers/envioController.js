@@ -508,7 +508,7 @@ exports.crearEnviosLote = async (req, res) => {
 
         const nuevoEnvio = new Envio({
           sender_id: senderId,
-          cliente_id: senderIds,
+          cliente_id: null,
           id_venta: idVenta,
           destinatario: data.destinatario,
           direccion: data.direccion,
