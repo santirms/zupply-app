@@ -479,17 +479,17 @@ exports.crearEnviosLote = async (req, res) => {
       return res.status(400).json({ error: 'Usuario sin códigos asignados' });
     }
 
-    const senderId = senderIds[0];
+    const codigoCliente = senderIds[0];
 
     let clienteId = usuario?.cliente_id || null;
 
     if (!clienteId) {
       try {
-        const cliente = await Cliente.findOne({ sender_id: senderId });
+        const cliente = await Cliente.findOne({ codigo_cliente: codigoCliente });
 
         if (!cliente) {
           return res.status(400).json({
-            error: `No se encontró un cliente con código ${senderId}. ` +
+            error: `No se encontró un cliente con código ${codigoCliente}. ` +
                    'Contacte al administrador para que lo cree en el sistema.'
           });
         }
@@ -505,11 +505,11 @@ exports.crearEnviosLote = async (req, res) => {
           usuario_id: usuario._id,
           email: usuario.email,
           cliente_id: clienteId,
-          sender_id: senderId
+          sender_id: codigoCliente
         });
       } catch (clienteErr) {
         logger.error('[Envio Cliente Lote] Error resolviendo cliente', {
-          sender_id: senderId,
+          sender_id: codigoCliente,
           error: clienteErr.message
         });
 
@@ -544,7 +544,7 @@ exports.crearEnviosLote = async (req, res) => {
         }
 
         const nuevoEnvio = new Envio({
-          sender_id: senderId,
+          sender_id: codigoCliente,
           cliente_id: clienteId,
           id_venta: idVenta,
           destinatario: data.destinatario,
@@ -586,7 +586,7 @@ exports.crearEnviosLote = async (req, res) => {
     }
 
     logger.info('[Envio Cliente Lote] Procesados', {
-      sender_id: senderId,
+      sender_id: codigoCliente,
       usuario: usuario.email,
       exitosos: creados.length,
       errores: errores.length,
