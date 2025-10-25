@@ -751,6 +751,128 @@ async function eliminarAsignacion(req, res) {
   }
 }
 
+async function scan(req, res) {
+  try {
+    const { tracking } = req.body;
+    const trackingUpper = String(tracking || '').trim().toUpperCase();
+
+    if (!trackingUpper) {
+      return res.status(400).json({ error: 'Tracking requerido' });
+    }
+
+    const envio = await Envio.findOne({
+      $or: [
+        { tracking: trackingUpper },
+        { id_venta: trackingUpper }
+      ]
+    });
+
+    if (!envio) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
+
+    const esManual = !envio.meli_id || envio.meli_id.trim() === '';
+
+    if (esManual && envio.estado === 'pendiente') {
+      envio.estado = 'en_planta';
+
+      if (!envio.historial) {
+        envio.historial = [];
+      }
+
+      const actor =
+        req.user?.nombre || req.user?.email ||
+        req.session?.user?.nombre || req.session?.user?.email ||
+        'Sistema';
+
+      envio.historial.unshift({
+        at: new Date(),
+        estado: 'en_planta',
+        source: 'scanner',
+        actor_name: actor,
+        note: 'Escaneado en planta'
+      });
+
+      await envio.save();
+
+      logger.info('[Scanner] Estado actualizado a en_planta', {
+        tracking: envio.id_venta || envio.tracking,
+        usuario: req.user?.email || req.session?.user?.email
+      });
+    }
+
+    const envioPopulated = await Envio.findById(envio._id)
+      .populate('cliente_id', 'nombre razon_social')
+      .populate('chofer', 'nombre')
+      .lean();
+
+    res.json(envioPopulated);
+  } catch (err) {
+    logger.error('[Scanner] Error:', err);
+    res.status(500).json({ error: 'Error procesando escaneo' });
+  }
+}
+
+async function asignarChofer(req, res) {
+  try {
+    const { envio_id, chofer_id } = req.body;
+
+    const envio = await Envio.findById(envio_id);
+
+    if (!envio) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
+
+    const chofer = await Chofer.findById(chofer_id);
+
+    if (!chofer) {
+      return res.status(404).json({ error: 'Chofer no encontrado' });
+    }
+
+    const esManual = !envio.meli_id || envio.meli_id.trim() === '';
+
+    envio.chofer = chofer_id;
+
+    envio.estado = esManual ? 'en_camino' : 'asignado';
+
+    if (!envio.historial) {
+      envio.historial = [];
+    }
+
+    const actor =
+      req.user?.nombre || req.user?.email ||
+      req.session?.user?.nombre || req.session?.user?.email ||
+      'Sistema';
+
+    envio.historial.unshift({
+      at: new Date(),
+      estado: envio.estado,
+      source: 'scanner',
+      actor_name: actor,
+      note: `Asignado a ${chofer.nombre}`
+    });
+
+    await envio.save();
+
+    logger.info('[Asignacion] Chofer asignado', {
+      envio_id,
+      chofer: chofer.nombre,
+      tracking: envio.id_venta || envio.tracking,
+      estado: envio.estado,
+      es_manual: esManual
+    });
+
+    const mensaje = esManual
+      ? `Envío asignado a ${chofer.nombre} y puesto en camino`
+      : `Envío de ML asignado a ${chofer.nombre}`;
+
+    res.json({ success: true, mensaje });
+  } catch (err) {
+    logger.error('[Asignacion] Error:', err);
+    res.status(500).json({ error: 'Error asignando chofer' });
+  }
+}
+
 /* ========================================================================== */
 
 module.exports = {
@@ -763,4 +885,6 @@ module.exports = {
   agregarEnvios,
   whatsappLink,
   eliminarAsignacion,
+  scan,
+  asignarChofer,
 };
