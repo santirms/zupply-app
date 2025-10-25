@@ -1,7 +1,6 @@
 // backend/controllers/envioController.js
 const Envio = require('../models/Envio');
 const Cliente = require('../models/Cliente');
-const ListaDePrecios = require('../models/listaDePrecios');
 const QRCode = require('qrcode');
 const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
 const axios = require('axios');
@@ -482,40 +481,38 @@ exports.crearEnviosLote = async (req, res) => {
 
     const senderId = senderIds[0];
 
-    let cliente = null;
-    try {
-      cliente = await Cliente.findOne({ sender_id: senderId });
+    let clienteId = usuario?.cliente_id || null;
 
-      if (!cliente) {
-        const listaDefault = await ListaDePrecios.findOne().sort({ fechaCreacion: 1 }).lean();
+    if (!clienteId) {
+      try {
+        const cliente = await Cliente.findOne({ sender_id: senderId });
 
-        if (!listaDefault) {
-          logger.warn('[Envio Cliente Lote] No se encontró lista de precios para crear cliente automático', {
-            sender_id: senderId
-          });
-        } else {
-          cliente = await Cliente.create({
-            nombre: senderId,
-            razon_social: `${senderId} S.A.`,
-            sender_id: [senderId],
-            email: usuario.email || undefined,
-            condicion_iva: 'Responsable Inscripto',
-            horario_de_corte: '18:00',
-            lista_precios: listaDefault._id,
-            auto_ingesta: true
-          });
-
-          logger.info('[Cliente] Creado automáticamente', {
+        if (!cliente) {
+          logger.warn('[Envio Cliente Lote] Usuario sin cliente asociado', {
             sender_id: senderId,
-            cliente_id: cliente._id
+            usuario: usuario.email || usuario.username || usuario._id
+          });
+
+          return res.status(400).json({
+            error: 'No se encontró el cliente asociado al usuario. Contacte al administrador.'
           });
         }
+
+        clienteId = cliente._id;
+
+        logger.warn('[Envio Cliente Lote] Usuario sin cliente_id directo, usando sender_id', {
+          sender_id: senderId,
+          usuario: usuario.email || usuario.username || usuario._id,
+          cliente_id: clienteId
+        });
+      } catch (clienteErr) {
+        logger.error('[Envio Cliente Lote] Error resolviendo cliente', {
+          sender_id: senderId,
+          error: clienteErr.message
+        });
+
+        return res.status(500).json({ error: 'Error resolviendo cliente asociado' });
       }
-    } catch (clienteErr) {
-      logger.error('[Envio Cliente Lote] Error resolviendo cliente', {
-        sender_id: senderId,
-        error: clienteErr.message
-      });
     }
 
     const creados = [];
@@ -546,7 +543,7 @@ exports.crearEnviosLote = async (req, res) => {
 
         const nuevoEnvio = new Envio({
           sender_id: senderId,
-          cliente_id: cliente?._id || null,
+          cliente_id: clienteId,
           id_venta: idVenta,
           destinatario: data.destinatario,
           direccion: data.direccion,
