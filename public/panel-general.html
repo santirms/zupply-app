@@ -456,7 +456,7 @@ function initMapa(lat,lng){ const cont=document.getElementById('mapa'); if(!cont
 function estadoBadge(key,label){
   const BADGE_CLASSES = {
     // Estados manuales
-    en_preparacion: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800',
+    pendiente: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800',
     en_planta: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
     comprador_ausente: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
     rechazado: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
@@ -578,7 +578,7 @@ function uiStatus(envio){
 
   const STATUS_LABELS = {
     // Estados manuales
-    en_preparacion: 'En preparación',
+    pendiente: 'Pendiente',
     en_planta: 'En planta',
     comprador_ausente: 'Comprador ausente',
     rechazado: 'Rechazado',
