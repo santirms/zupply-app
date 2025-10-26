@@ -541,9 +541,19 @@ exports.crearEnviosLote = async (req, res) => {
           throw new Error('Código postal inválido');
         }
 
-        const idVenta = data.id_venta || await generarIdVenta();
+        const idVentaRaw = data.id_venta ? String(data.id_venta).trim() : null;
+        const idVenta = (idVentaRaw ? idVentaRaw.toUpperCase() : await generarIdVenta());
+        const tracking = idVenta;
 
-        const existe = await Envio.findOne({ id_venta: idVenta });
+        const posiblesIdVenta = [{ id_venta: idVenta }];
+        if (idVentaRaw && idVentaRaw !== idVenta) {
+          posiblesIdVenta.push({ id_venta: idVentaRaw });
+        }
+        if (idVentaRaw && /^\d+$/.test(idVentaRaw)) {
+          posiblesIdVenta.push({ id_venta: Number(idVentaRaw) });
+        }
+
+        const existe = await Envio.findOne({ $or: posiblesIdVenta });
         if (existe) {
           throw new Error(`ID de venta ${idVenta} ya existe`);
         }
@@ -552,6 +562,7 @@ exports.crearEnviosLote = async (req, res) => {
           sender_id: codigoCliente,
           cliente_id: clienteId,
           id_venta: idVenta,
+          tracking,
           destinatario: data.destinatario,
           direccion: data.direccion,
           partido: data.partido,
