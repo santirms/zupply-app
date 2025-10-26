@@ -89,6 +89,30 @@
       }
     }
   </style>
+  <style>
+    #envios-creados-lista code {
+      font-size: 1.1rem;
+      padding: 0.2rem 0.5rem;
+      background: #e7f1ff;
+      border-radius: 4px;
+    }
+
+    #modalEnvioCreado .modal-footer {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    #modalEnvioCreado .modal-footer button {
+      flex: 1 1 auto;
+      min-width: 150px;
+    }
+
+    @media (max-width: 768px) {
+      #modalEnvioCreado .modal-footer button {
+        width: 100%;
+      }
+    }
+  </style>
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
   <div class="max-w-7xl mx-auto p-4 md:p-6">
@@ -724,5 +748,49 @@
       window.loadMapData = loadMapData;
     })();
   </script>
+
+  <!-- Modal Éxito - Envío Creado -->
+  <div class="modal fade" id="modalEnvioCreado" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            Envío Creado Correctamente
+          </h5>
+        </div>
+        <div class="modal-body text-center">
+          <div class="mb-4">
+            <i class="bi bi-box-seam text-success" style="font-size: 4rem;"></i>
+          </div>
+
+          <div id="envios-creados-lista">
+            <!-- Se llena dinámicamente -->
+          </div>
+
+          <p class="text-muted mt-3">
+            El envío será procesado por nuestro equipo.
+          </p>
+        </div>
+        <div class="modal-footer justify-content-center">
+          <button type="button" class="btn btn-outline-primary" 
+                  id="btn-imprimir-etiquetas">
+            <i class="bi bi-printer me-1"></i>
+            Imprimir Etiqueta(s)
+          </button>
+          <button type="button" class="btn btn-success" 
+                  onclick="crearOtroEnvio()">
+            <i class="bi bi-plus-circle me-1"></i>
+            Crear Otro Envío
+          </button>
+          <button type="button" class="btn btn-primary" 
+                  onclick="verMisEnvios()">
+            <i class="bi bi-list me-1"></i>
+            Ver Mis Envíos
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

@@ -195,20 +195,15 @@ async function guardarTodos(event) {
 
     const result = await response.json();
 
+    // ==================== MOSTRAR MODAL ====================
+
+    mostrarModalExito(result);
+
+    // Limpiar paquetes
     paquetesTemp = [];
     renderizarPaquetes();
 
-    alert(`✅ ${result.exitosos} envío(s) creado(s) correctamente`);
-
-    const tablaTabEl = document.getElementById('tabla-tab');
-    if (tablaTabEl && window.bootstrap?.Tab) {
-      const tablaTab = new bootstrap.Tab(tablaTabEl);
-      tablaTab.show();
-    }
-
-    if (typeof window.cargarEnvios === 'function') {
-      window.cargarEnvios();
-    }
+    // ==================== FIN ====================
   } catch (err) {
     console.error('Error:', err);
     alert('❌ Error: ' + err.message);
@@ -601,6 +596,112 @@ function obtenerPaginacionDesdeRespuesta(data) {
   };
 }
 
+// Variable global para guardar IDs creados
+let enviosCreados = [];
+
+function mostrarModalExito(result) {
+  const { exitosos, ids, errores } = result;
+
+  if (exitosos === 0) {
+    alert('No se pudo crear ningún envío');
+    return;
+  }
+
+  enviosCreados = ids || [];
+
+  const listaHTML = enviosCreados
+    .map(
+      (id, index) => `
+    <div class="mb-2">
+      <span class="badge bg-success me-2">${index + 1}</span>
+      <strong>ID:</strong> <code class="text-primary">${id}</code>
+    </div>
+  `
+    )
+    .join('');
+
+  const listaEl = document.getElementById('envios-creados-lista');
+  if (!listaEl) return;
+
+  listaEl.innerHTML = `
+    <h5 class="mb-3">
+      ${exitosos === 1 ? 'Envío creado' : `${exitosos} envíos creados`}
+    </h5>
+    ${listaHTML}
+  `;
+
+  if (errores && errores.length > 0) {
+    const erroresHTML = errores
+      .map((e) => `<li><strong>${e.destinatario}:</strong> ${e.error}</li>`)
+      .join('');
+
+    listaEl.innerHTML += `
+      <div class="alert alert-warning mt-3 text-start">
+        <strong>${errores.length} error(es):</strong>
+        <ul class="mb-0">${erroresHTML}</ul>
+      </div>
+    `;
+  }
+
+  const btnImprimir = document.getElementById('btn-imprimir-etiquetas');
+
+  if (btnImprimir) {
+    if (enviosCreados.length === 0) {
+      btnImprimir.textContent = 'Imprimir Etiqueta(s)';
+      btnImprimir.onclick = null;
+      btnImprimir.disabled = true;
+    } else if (enviosCreados.length === 1) {
+      btnImprimir.textContent = 'Imprimir Etiqueta';
+      btnImprimir.onclick = () => imprimirEtiqueta(enviosCreados[0]);
+      btnImprimir.disabled = false;
+    } else {
+      btnImprimir.textContent = `Imprimir ${enviosCreados.length} Etiquetas`;
+      btnImprimir.onclick = imprimirTodasLasEtiquetas;
+      btnImprimir.disabled = false;
+    }
+  }
+
+  const modal = new bootstrap.Modal(document.getElementById('modalEnvioCreado'));
+  modal.show();
+}
+
+function imprimirEtiqueta(idVenta) {
+  window.open(`/labels/${idVenta}.pdf`, '_blank');
+}
+
+function imprimirTodasLasEtiquetas() {
+  enviosCreados.forEach((id) => {
+    setTimeout(() => {
+      window.open(`/labels/${id}.pdf`, '_blank');
+    }, 200);
+  });
+}
+
+function crearOtroEnvio() {
+  const modal = bootstrap.Modal.getInstance(document.getElementById('modalEnvioCreado'));
+  modal?.hide();
+
+  document.getElementById('form-paquete')?.reset();
+  const partidoInput = document.getElementById('paq-partido');
+  if (partidoInput) partidoInput.value = '';
+
+  enviosCreados = [];
+}
+
+function verMisEnvios() {
+  const modal = bootstrap.Modal.getInstance(document.getElementById('modalEnvioCreado'));
+  modal?.hide();
+
+  const tablaTab = new bootstrap.Tab(document.getElementById('tabla-tab'));
+  tablaTab.show();
+
+  if (typeof window.cargarEnvios === 'function') {
+    window.cargarEnvios();
+  }
+
+  enviosCreados = [];
+}
+
 // Cerrar modal con tecla ESC
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -634,3 +735,5 @@ window.agregarPaquete = agregarPaquete;
 window.eliminarPaquete = eliminarPaquete;
 window.renderizarPaquetes = renderizarPaquetes;
 window.guardarTodos = guardarTodos;
+window.crearOtroEnvio = crearOtroEnvio;
+window.verMisEnvios = verMisEnvios;
