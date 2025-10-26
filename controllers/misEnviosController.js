@@ -109,7 +109,21 @@ exports.marcarEstado = async (req, res) => {
     }
 
     const estadoAnterior = envio.estado;
-    envio.estado = estado;
+
+    const vuelveAPlanta = estado === 'comprador_ausente' || estado === 'rechazado';
+
+    if (vuelveAPlanta) {
+      envio.estado = 'en_planta';
+      envio.chofer = null;
+
+      logger.info('[Chofer] Envío vuelve a planta', {
+        tracking: envio.tracking || envio.id_venta,
+        motivo: estado,
+        chofer_anterior: obtenerNombreUsuario(req.user)
+      });
+    } else {
+      envio.estado = estado;
+    }
 
     if (!Array.isArray(envio.historial_estados)) {
       envio.historial_estados = [];
@@ -125,13 +139,24 @@ exports.marcarEstado = async (req, res) => {
     });
 
     if (Array.isArray(envio.historial)) {
+      const actor = obtenerNombreUsuario(req.user);
       envio.historial.unshift({
         at: new Date(),
         estado,
-        source: 'chofer',
-        actor_name: obtenerNombreUsuario(req.user),
-        note: notasTrimmed
+        source: 'chofer-app',
+        actor_name: actor,
+        note: notasTrimmed || `Marcado como ${estado.replace(/_/g, ' ')}`
       });
+
+      if (vuelveAPlanta) {
+        envio.historial.unshift({
+          at: new Date(),
+          estado: 'en_planta',
+          source: 'auto',
+          actor_name: 'Sistema',
+          note: `Vuelve a planta por: ${estado.replace(/_/g, ' ')}`
+        });
+      }
     }
 
     if (notasTrimmed) {
@@ -163,17 +188,22 @@ exports.marcarEstado = async (req, res) => {
     await envio.save();
 
     logger.info('[Chofer] Estado marcado', {
-      id_venta: envio.id_venta,
+      tracking: envio.tracking || envio.id_venta,
       chofer: obtenerNombreUsuario(req.user),
+      estado_marcado: estado,
       estado_anterior: estadoAnterior,
-      estado_nuevo: estado
+      estado_final: envio.estado
     });
+
+    const mensaje = vuelveAPlanta
+      ? `Envío marcado como ${estado.replace(/_/g, ' ')}. Vuelve a planta para reasignación.`
+      : `Envío marcado como ${estado.replace(/_/g, ' ')}`;
 
     res.json({
       success: true,
-      id_venta: envio.id_venta,
-      estado: envio.estado,
-      mensaje: `Envío marcado como ${estado.replace(/_/g, ' ')}`
+      estado_marcado: estado,
+      estado_actual: envio.estado,
+      mensaje
     });
   } catch (err) {
     logger.error('[Chofer] Error marcando estado:', err);

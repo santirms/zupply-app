@@ -754,11 +754,12 @@ async function eliminarAsignacion(req, res) {
 async function scan(req, res) {
   try {
     const { tracking } = req.body;
-    const trackingUpper = String(tracking || '').trim().toUpperCase();
 
-    if (!trackingUpper) {
+    if (!tracking || !String(tracking).trim()) {
       return res.status(400).json({ error: 'Tracking requerido' });
     }
+
+    const trackingUpper = String(tracking).trim().toUpperCase();
 
     const envio = await Envio.findOne({
       $or: [
@@ -768,15 +769,19 @@ async function scan(req, res) {
     });
 
     if (!envio) {
-      return res.status(404).json({ error: 'Envío no encontrado' });
+      return res.status(404).json({
+        error: 'Envío no encontrado',
+        tracking: trackingUpper
+      });
     }
 
-    const esManual = !envio.meli_id || envio.meli_id.trim() === '';
+    const meliId = envio.meli_id;
+    const esManual = !meliId || (typeof meliId === 'string' && meliId.trim() === '');
 
     if (esManual && envio.estado === 'pendiente') {
       envio.estado = 'en_planta';
 
-      if (!envio.historial) {
+      if (!Array.isArray(envio.historial)) {
         envio.historial = [];
       }
 
@@ -796,7 +801,7 @@ async function scan(req, res) {
       await envio.save();
 
       logger.info('[Scanner] Estado actualizado a en_planta', {
-        tracking: envio.id_venta || envio.tracking,
+        tracking: envio.tracking || envio.id_venta,
         usuario: req.user?.email || req.session?.user?.email
       });
     }
@@ -829,11 +834,20 @@ async function asignarChofer(req, res) {
       return res.status(404).json({ error: 'Chofer no encontrado' });
     }
 
-    const esManual = !envio.meli_id || envio.meli_id.trim() === '';
+    const meliId = envio.meli_id;
+    const esManual = !meliId || (typeof meliId === 'string' && meliId.trim() === '');
 
     envio.chofer = chofer_id;
 
-    envio.estado = esManual ? 'en_camino' : 'asignado';
+    const estadoAnterior = envio.estado;
+
+    if (esManual) {
+      if (envio.estado === 'pendiente' || envio.estado === 'en_planta') {
+        envio.estado = 'en_camino';
+      }
+    } else {
+      envio.estado = 'asignado';
+    }
 
     if (!envio.historial) {
       envio.historial = [];
@@ -857,13 +871,16 @@ async function asignarChofer(req, res) {
     logger.info('[Asignacion] Chofer asignado', {
       envio_id,
       chofer: chofer.nombre,
-      tracking: envio.id_venta || envio.tracking,
+      tracking: envio.tracking || envio.id_venta,
       estado: envio.estado,
+      estado_anterior: estadoAnterior,
       es_manual: esManual
     });
 
     const mensaje = esManual
-      ? `Envío asignado a ${chofer.nombre} y puesto en camino`
+      ? (envio.estado === 'en_camino'
+          ? `Envío asignado a ${chofer.nombre} y puesto en camino`
+          : `Envío asignado a ${chofer.nombre}`)
       : `Envío de ML asignado a ${chofer.nombre}`;
 
     res.json({ success: true, mensaje });
