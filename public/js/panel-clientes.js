@@ -599,6 +599,13 @@ function obtenerPaginacionDesdeRespuesta(data) {
 // Variable global para guardar IDs creados
 let enviosCreados = [];
 
+// Helper para escapar HTML (prevenir XSS)
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 function mostrarModalExito(result) {
   const { exitosos, ids, errores } = result;
 
@@ -609,16 +616,16 @@ function mostrarModalExito(result) {
 
   enviosCreados = ids || [];
 
-  const listaHTML = enviosCreados
-    .map(
-      (id, index) => `
-    <div class="mb-2">
-      <span class="badge bg-success me-2">${index + 1}</span>
-      <strong>ID:</strong> <code class="text-primary">${id}</code>
-    </div>
-  `
-    )
-    .join('');
+  // Renderizar lista de envíos creados (con escape HTML)
+  const listaHTML = enviosCreados.map((id, index) => {
+    const idEscaped = escapeHtml(id);
+    return `
+      <div class="mb-2">
+        <span class="badge bg-success me-2">${index + 1}</span>
+        <strong>ID:</strong> <code class="text-primary">${idEscaped}</code>
+      </div>
+    `;
+  }).join('');
 
   const listaEl = document.getElementById('envios-creados-lista');
   if (!listaEl) return;
@@ -630,10 +637,13 @@ function mostrarModalExito(result) {
     ${listaHTML}
   `;
 
+  // Si hubo errores, mostrarlos (con escape HTML)
   if (errores && errores.length > 0) {
-    const erroresHTML = errores
-      .map((e) => `<li><strong>${e.destinatario}:</strong> ${e.error}</li>`)
-      .join('');
+    const erroresHTML = errores.map(e => {
+      const destinatarioEscaped = escapeHtml(e.destinatario || 'N/A');
+      const errorEscaped = escapeHtml(e.error || 'Error desconocido');
+      return `<li><strong>${destinatarioEscaped}:</strong> ${errorEscaped}</li>`;
+    }).join('');
 
     listaEl.innerHTML += `
       <div class="alert alert-warning mt-3 text-start">
@@ -643,22 +653,15 @@ function mostrarModalExito(result) {
     `;
   }
 
+  // Configurar botón de imprimir
   const btnImprimir = document.getElementById('btn-imprimir-etiquetas');
 
-  if (btnImprimir) {
-    if (enviosCreados.length === 0) {
-      btnImprimir.textContent = 'Imprimir Etiqueta(s)';
-      btnImprimir.onclick = null;
-      btnImprimir.disabled = true;
-    } else if (enviosCreados.length === 1) {
-      btnImprimir.textContent = 'Imprimir Etiqueta';
-      btnImprimir.onclick = () => imprimirEtiqueta(enviosCreados[0]);
-      btnImprimir.disabled = false;
-    } else {
-      btnImprimir.textContent = `Imprimir ${enviosCreados.length} Etiquetas`;
-      btnImprimir.onclick = imprimirTodasLasEtiquetas;
-      btnImprimir.disabled = false;
-    }
+  if (enviosCreados.length === 1) {
+    btnImprimir.textContent = 'Imprimir Etiqueta';
+    btnImprimir.onclick = () => imprimirEtiqueta(enviosCreados[0]);
+  } else {
+    btnImprimir.textContent = `Imprimir ${enviosCreados.length} Etiquetas`;
+    btnImprimir.onclick = imprimirTodasLasEtiquetas;
   }
 
   const modal = new bootstrap.Modal(document.getElementById('modalEnvioCreado'));
@@ -666,14 +669,15 @@ function mostrarModalExito(result) {
 }
 
 function imprimirEtiqueta(idVenta) {
-  window.open(`/labels/${idVenta}.pdf`, '_blank');
+  // Ruta correcta: /api/envios/tracking/:id_venta/label
+  window.open(`/api/envios/tracking/${idVenta}/label`, '_blank');
 }
 
 function imprimirTodasLasEtiquetas() {
-  enviosCreados.forEach((id) => {
+  enviosCreados.forEach((id, index) => {
     setTimeout(() => {
-      window.open(`/labels/${id}.pdf`, '_blank');
-    }, 200);
+      window.open(`/api/envios/tracking/${id}/label`, '_blank');
+    }, index * 300);  // Espaciado de 300ms entre cada ventana
   });
 }
 
