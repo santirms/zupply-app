@@ -755,11 +755,15 @@ async function scan(req, res) {
   try {
     const { tracking } = req.body;
 
+    logger.info('[Scanner] Request recibido', { tracking });
+
     if (!tracking || !String(tracking).trim()) {
       return res.status(400).json({ error: 'Tracking requerido' });
     }
 
     const trackingUpper = String(tracking).trim().toUpperCase();
+
+    logger.info('[Scanner] Buscando envío', { trackingUpper });
 
     const envio = await Envio.findOne({
       $or: [
@@ -769,40 +773,47 @@ async function scan(req, res) {
     });
 
     if (!envio) {
+      logger.warn('[Scanner] Envío no encontrado', { trackingUpper });
       return res.status(404).json({
         error: 'Envío no encontrado',
         tracking: trackingUpper
       });
     }
 
-    const meliId = envio.meli_id;
-    const esManual = !meliId || (typeof meliId === 'string' && meliId.trim() === '');
+    logger.info('[Scanner] Envío encontrado', {
+      id: envio._id,
+      tracking: envio.tracking,
+      id_venta: envio.id_venta,
+      estado: envio.estado,
+      meli_id: envio.meli_id
+    });
+
+    const esManual = !envio.meli_id || (typeof envio.meli_id === 'string' && envio.meli_id.trim() === '');
 
     if (esManual && envio.estado === 'pendiente') {
+      logger.info('[Scanner] Cambiando estado a en_planta');
+
       envio.estado = 'en_planta';
 
-      if (!Array.isArray(envio.historial)) {
+      if (!envio.historial) {
         envio.historial = [];
       }
-
-      const actor =
-        req.user?.nombre || req.user?.email ||
-        req.session?.user?.nombre || req.session?.user?.email ||
-        'Sistema';
 
       envio.historial.unshift({
         at: new Date(),
         estado: 'en_planta',
         source: 'scanner',
-        actor_name: actor,
+        actor_name: req.user?.nombre || req.user?.email || 'Sistema',
         note: 'Escaneado en planta'
       });
 
       await envio.save();
 
-      logger.info('[Scanner] Estado actualizado a en_planta', {
-        tracking: envio.tracking || envio.id_venta,
-        usuario: req.user?.email || req.session?.user?.email
+      logger.info('[Scanner] Estado actualizado exitosamente');
+    } else {
+      logger.info('[Scanner] No se cambió estado', {
+        esManual,
+        estadoActual: envio.estado
       });
     }
 
@@ -812,6 +823,7 @@ async function scan(req, res) {
       .lean();
 
     res.json(envioPopulated);
+
   } catch (err) {
     logger.error('[Scanner] Error:', err);
     res.status(500).json({ error: 'Error procesando escaneo' });

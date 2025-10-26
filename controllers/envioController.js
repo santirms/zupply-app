@@ -543,6 +543,7 @@ exports.crearEnviosLote = async (req, res) => {
 
         const idVentaRaw = data.id_venta ? String(data.id_venta).trim() : null;
         const idVenta = (idVentaRaw ? idVentaRaw.toUpperCase() : await generarIdVenta());
+
         const tracking = idVenta;
 
         const posiblesIdVenta = [{ id_venta: idVenta }];
@@ -553,7 +554,20 @@ exports.crearEnviosLote = async (req, res) => {
           posiblesIdVenta.push({ id_venta: Number(idVentaRaw) });
         }
 
-        const existe = await Envio.findOne({ $or: posiblesIdVenta });
+        const posiblesDuplicados = [
+          ...posiblesIdVenta,
+          { tracking }
+        ];
+
+        if (idVentaRaw && idVentaRaw !== idVenta) {
+          posiblesDuplicados.push({ tracking: idVentaRaw });
+        }
+
+        if (idVentaRaw && /^\d+$/.test(idVentaRaw)) {
+          posiblesDuplicados.push({ tracking: Number(idVentaRaw) });
+        }
+
+        const existe = await Envio.findOne({ $or: posiblesDuplicados });
         if (existe) {
           throw new Error(`ID de venta ${idVenta} ya existe`);
         }
@@ -585,7 +599,10 @@ exports.crearEnviosLote = async (req, res) => {
         });
 
         await nuevoEnvio.save();
-        creados.push(idVenta);
+        creados.push({
+          id_venta: idVenta,
+          tracking
+        });
       } catch (err) {
         // Log del error completo
         logger.error('[Envio Cliente Lote] Error en envío', {

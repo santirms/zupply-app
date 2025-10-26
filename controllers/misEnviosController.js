@@ -203,7 +203,10 @@ exports.marcarEstado = async (req, res) => {
       success: true,
       estado_marcado: estado,
       estado_actual: envio.estado,
-      mensaje
+      mensaje,
+      tracking: envio.tracking || envio.id_venta,
+      id_venta: envio.id_venta,
+      estado: envio.estado
     });
   } catch (err) {
     logger.error('[Chofer] Error marcando estado:', err);
