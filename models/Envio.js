@@ -47,19 +47,7 @@ const HistorialEstadoSchema = new Schema({
 const envioSchema = new Schema({
   sender_id:      { type: String, required: true },
   cliente_id:     { type: Schema.Types.ObjectId, ref: 'Cliente', required: false },
-  id_venta: {
-    type: String,
-    required: true,
-    unique: true,
-    uppercase: true
-  },
-
-  tracking: {
-    type: String,
-    unique: true,
-    sparse: true,
-    uppercase: true
-  },
+  id_venta:       { type: String, required: true },
 
   // Sólo para envíos MeLi; no guardes "" ni null
   meli_id:        { type: String },
