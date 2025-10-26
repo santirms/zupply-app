@@ -541,17 +541,31 @@ exports.crearEnviosLote = async (req, res) => {
           throw new Error('Código postal inválido');
         }
 
-        const idVenta = data.id_venta || await generarIdVenta();
+        const idVenta = data.id_venta
+          ? String(data.id_venta).trim().toUpperCase()
+          : await generarIdVenta();
 
-        const existe = await Envio.findOne({ id_venta: idVenta });
+        if (!idVenta) {
+          throw new Error('ID de venta inválido');
+        }
+
+        const tracking = await generarTracking();
+
+        const existe = await Envio.findOne({
+          $or: [
+            { id_venta: idVenta },
+            { tracking }
+          ]
+        });
         if (existe) {
-          throw new Error(`ID de venta ${idVenta} ya existe`);
+          throw new Error(`ID de venta o tracking ya existe (${idVenta})`);
         }
 
         const nuevoEnvio = new Envio({
           sender_id: codigoCliente,
           cliente_id: clienteId,
           id_venta: idVenta,
+          tracking,
           destinatario: data.destinatario,
           direccion: data.direccion,
           partido: data.partido,
@@ -574,7 +588,10 @@ exports.crearEnviosLote = async (req, res) => {
         });
 
         await nuevoEnvio.save();
-        creados.push(idVenta);
+        creados.push({
+          id_venta: idVenta,
+          tracking
+        });
       } catch (err) {
         // Log del error completo
         logger.error('[Envio Cliente Lote] Error en envío', {
@@ -595,12 +612,15 @@ exports.crearEnviosLote = async (req, res) => {
       usuario: usuario.email,
       exitosos: creados.length,
       errores: errores.length,
-      detalles_errores: errores
+      detalles_errores: errores,
+      ids: creados.map((c) => c.id_venta),
+      trackings: creados.map((c) => c.tracking)
     });
 
     res.json({
       exitosos: creados.length,
-      ids: creados,
+      ids: creados.map((c) => c.id_venta),
+      trackings: creados.map((c) => c.tracking),
       errores
     });
   } catch (err) {
@@ -625,6 +645,24 @@ async function generarIdVenta() {
   }
 
   return id;
+}
+
+async function generarTracking() {
+  const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let tracking;
+  let existe = true;
+
+  while (existe) {
+    tracking = '';
+    for (let i = 0; i < 8; i++) {
+      tracking += caracteres.charAt(Math.floor(Math.random() * caracteres.length));
+    }
+
+    const envio = await Envio.findOne({ tracking });
+    existe = Boolean(envio);
+  }
+
+  return tracking;
 }
 
 // GET /api/envios/:id/notas

@@ -1,5 +1,6 @@
 // Array de paquetes temporales
 let paquetesTemp = [];
+let ultimoEnvioCreado = null;
 
 // Validación CP → Partido (simplificado)
 const partidosPorCP = {
@@ -195,20 +196,31 @@ async function guardarTodos(event) {
 
     const result = await response.json();
 
+    ultimoEnvioCreado = null;
+
+    const primerPaquete = paquetesTemp.length === 1 ? { ...paquetesTemp[0] } : null;
+
+    if (result.exitosos === 1 && Array.isArray(result.ids) && result.ids.length === 1) {
+      const idVenta = result.ids[0];
+      const tracking = Array.isArray(result.trackings) && result.trackings[0]
+        ? result.trackings[0]
+        : idVenta;
+
+      ultimoEnvioCreado = {
+        idVenta,
+        tracking,
+        telefono: primerPaquete?.telefono || null
+      };
+
+      mostrarModalExito(idVenta, tracking);
+    } else {
+      alert(`✅ ${result.exitosos} envío(s) creado(s) correctamente`);
+
+      volverATabla();
+    }
+
     paquetesTemp = [];
     renderizarPaquetes();
-
-    alert(`✅ ${result.exitosos} envío(s) creado(s) correctamente`);
-
-    const tablaTabEl = document.getElementById('tabla-tab');
-    if (tablaTabEl && window.bootstrap?.Tab) {
-      const tablaTab = new bootstrap.Tab(tablaTabEl);
-      tablaTab.show();
-    }
-
-    if (typeof window.cargarEnvios === 'function') {
-      window.cargarEnvios();
-    }
   } catch (err) {
     console.error('Error:', err);
     alert('❌ Error: ' + err.message);
@@ -217,6 +229,116 @@ async function guardarTodos(event) {
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-save me-1"></i>Guardar todos';
     }
+  }
+}
+
+function mostrarModalExito(idVenta, tracking) {
+  const trackingValue = tracking || idVenta;
+  const modalHTML = `
+    <div class="modal fade" id="modalEnvioCreado" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header bg-success text-white">
+            <h5 class="modal-title">
+              <i class="bi bi-check-circle me-2"></i>
+              Envío Creado
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body text-center">
+            <div class="mb-3">
+              <i class="bi bi-box-seam text-success" style="font-size: 3rem;"></i>
+            </div>
+            <h5>¡Envío creado correctamente!</h5>
+            <p class="mb-1"><strong>ID:</strong> <span data-role="envio-id">${idVenta}</span></p>
+            <p class="mb-0"><strong>Tracking:</strong> <span data-role="envio-tracking">${trackingValue}</span></p>
+          </div>
+          <div class="modal-footer justify-content-center">
+            <button type="button" class="btn btn-primary" data-action="imprimir">
+              <i class="bi bi-printer me-1"></i>
+              Imprimir Etiqueta
+            </button>
+            <button type="button" class="btn btn-success" data-action="whatsapp">
+              <i class="bi bi-whatsapp me-1"></i>
+              Enviar WhatsApp
+            </button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" data-action="ver-envios">
+              Ver Mis Envíos
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  if (!document.getElementById('modalEnvioCreado')) {
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+  }
+
+  const modalEl = document.getElementById('modalEnvioCreado');
+  if (!modalEl) return;
+
+  const idEl = modalEl.querySelector('[data-role="envio-id"]');
+  if (idEl) idEl.textContent = idVenta;
+
+  const trackingEl = modalEl.querySelector('[data-role="envio-tracking"]');
+  if (trackingEl) trackingEl.textContent = trackingValue;
+
+  const printBtn = modalEl.querySelector('[data-action="imprimir"]');
+  if (printBtn) {
+    printBtn.onclick = () => imprimirEtiqueta(trackingValue);
+  }
+
+  const whatsappBtn = modalEl.querySelector('[data-action="whatsapp"]');
+  if (whatsappBtn) {
+    whatsappBtn.onclick = () => enviarWhatsApp(trackingValue);
+  }
+
+  const verEnviosBtn = modalEl.querySelector('[data-action="ver-envios"]');
+  if (verEnviosBtn) {
+    verEnviosBtn.onclick = () => {
+      const modalInstance = window.bootstrap?.Modal?.getInstance
+        ? window.bootstrap.Modal.getInstance(modalEl)
+        : null;
+      modalInstance?.hide();
+    };
+  }
+
+  const modalInstance = window.bootstrap?.Modal
+    ? new window.bootstrap.Modal(modalEl)
+    : null;
+
+  if (modalInstance) {
+    modalEl.addEventListener('hidden.bs.modal', volverATabla, { once: true });
+    modalInstance.show();
+  }
+}
+
+function imprimirEtiqueta(tracking) {
+  if (!tracking) return;
+  window.open(`/labels/${encodeURIComponent(tracking)}.pdf`, '_blank');
+}
+
+function enviarWhatsApp(tracking) {
+  const telefono = ultimoEnvioCreado?.telefono;
+  if (!telefono) {
+    alert('No hay teléfono asociado al envío');
+    return;
+  }
+
+  const mensaje = `Hola! Tu envío ${tracking} está en proceso. Podés seguirlo acá: https://app.zupply.tech/track/${encodeURIComponent(tracking)}`;
+  window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank');
+}
+
+function volverATabla() {
+  const tablaTabEl = document.getElementById('tabla-tab');
+  if (tablaTabEl && window.bootstrap?.Tab) {
+    const tablaTab = new window.bootstrap.Tab(tablaTabEl);
+    tablaTab.show();
+  }
+
+  if (typeof window.cargarEnvios === 'function') {
+    window.cargarEnvios();
   }
 }
 

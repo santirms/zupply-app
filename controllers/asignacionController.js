@@ -833,7 +833,14 @@ async function asignarChofer(req, res) {
 
     envio.chofer = chofer_id;
 
-    envio.estado = esManual ? 'en_camino' : 'asignado';
+    if (esManual) {
+      const estadoActual = (envio.estado || '').toLowerCase();
+      if (!estadoActual || ['pendiente', 'en_planta', 'asignado', 'en_preparacion'].includes(estadoActual)) {
+        envio.estado = 'en_camino';
+      }
+    } else {
+      envio.estado = 'asignado';
+    }
 
     if (!envio.historial) {
       envio.historial = [];
