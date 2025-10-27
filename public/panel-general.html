@@ -732,8 +732,8 @@ function renderTabla(){
       estadoHTML = (
         `${iconoAlerta}<select onchange="cambiarEstadoEnvio('${e._id}', this.value)"
           class="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100 ${colorClass} cursor-pointer hover:border-slate-400 dark:hover:border-white/20 transition-colors">
-          <option value="en_preparacion" ${actual === 'en_preparacion' ? 'selected' : ''}>
-            En preparación
+          <option value="en_preparacion" ${actual === 'pendiente' ? 'selected' : ''}>
+            Pendiente
           </option>
           <option value="en_planta" ${actual === 'en_planta' ? 'selected' : ''}>
             En planta
