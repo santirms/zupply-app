@@ -2,6 +2,7 @@
 const QRCode = require('qrcode');
 const Envio  = require('../models/Envio');
 const QrScan = require('../models/QrScan');
+const logger = require('../utils/logger');
 const {
   parseQrPayload, extractKeys,
   getTokenByClienteId, getTokenBySenderId, fetchShipmentFromMeli
@@ -55,6 +56,127 @@ function withTimeout(promise, ms, timeoutMessage = 'timeout') {
     );
   });
 }
+
+exports.scanMeli = async (req, res) => {
+  try {
+    const { raw_text } = req.body;
+
+    logger.info('[Scan] Request recibido', { raw_text });
+
+    if (!raw_text || typeof raw_text !== 'string') {
+      return res.status(400).json({ error: 'raw_text requerido' });
+    }
+
+    const trimmed = raw_text.trim();
+
+    // 1) Intentar parsear como QR de MercadoLibre
+    let parsedQR = null;
+    try {
+      parsedQR = JSON.parse(trimmed);
+      logger.info('[Scan] QR de ML parseado', { parsedQR });
+    } catch (e) {
+      // No es JSON, puede ser un tracking simple
+      logger.info('[Scan] No es QR de ML, buscando como tracking');
+    }
+
+    let envio = null;
+
+    // 2) Si es QR de ML, buscar por pack_id
+    if (parsedQR && parsedQR.pack_id) {
+      const packId = String(parsedQR.pack_id);
+
+      envio = await Envio.findOne({
+        meli_pack_id: packId
+      }).populate('cliente_id', 'nombre razon_social')
+        .populate('chofer', 'nombre');
+
+      if (envio) {
+        logger.info('[Scan] Envío ML encontrado por pack_id', {
+          pack_id: packId,
+          tracking: envio.tracking
+        });
+      }
+    }
+
+    // 3) Si no se encontró, buscar como tracking/id_venta (envíos manuales)
+    if (!envio) {
+      const trackingUpper = trimmed.toUpperCase();
+
+      envio = await Envio.findOne({
+        $or: [
+          { tracking: trackingUpper },
+          { id_venta: trackingUpper }
+        ]
+      }).populate('cliente_id', 'nombre razon_social')
+        .populate('chofer', 'nombre');
+
+      if (envio) {
+        logger.info('[Scan] Envío manual encontrado', {
+          tracking: envio.tracking,
+          id_venta: envio.id_venta
+        });
+      }
+    }
+
+    // 4) Si no existe, error
+    if (!envio) {
+      logger.warn('[Scan] Envío no encontrado', { raw_text: trimmed });
+      return res.status(404).json({
+        error: 'Envío no encontrado',
+        hint: 'Verificar que el código sea correcto'
+      });
+    }
+
+    // 5) Actualizar estado si es envío manual en pendiente
+    const esManual = !envio.meli_id || envio.meli_id.trim() === '';
+
+    if (esManual && envio.estado === 'pendiente') {
+      logger.info('[Scan] Cambiando estado a en_planta', {
+        tracking: envio.tracking || envio.id_venta
+      });
+
+      envio.estado = 'en_planta';
+
+      if (!envio.historial) {
+        envio.historial = [];
+      }
+
+      envio.historial.unshift({
+        at: new Date(),
+        estado: 'en_planta',
+        source: 'scanner',
+        actor_name: req.user?.nombre || req.user?.email || 'Sistema',
+        note: 'Escaneado en planta'
+      });
+
+      await envio.save();
+
+      logger.info('[Scan] Estado actualizado a en_planta');
+    }
+
+    // 6) Guardar registro de escaneo (solo para ML)
+    if (parsedQR && parsedQR.pack_id) {
+      await QrScan.create({
+        raw_text: trimmed,
+        pack_id: String(parsedQR.pack_id),
+        envio_id: envio._id,
+        scanned_by: req.user?._id,
+        scanned_at: new Date()
+      });
+    }
+
+    // 7) Devolver envío
+    res.json({
+      success: true,
+      envio: envio.toObject(),
+      estado_actualizado: esManual && envio.estado === 'en_planta'
+    });
+
+  } catch (err) {
+    logger.error('[Scan] Error:', err);
+    res.status(500).json({ error: 'Error procesando escaneo' });
+  }
+};
 
 exports.scanAndUpsert = async (req, res) => {
   try {
