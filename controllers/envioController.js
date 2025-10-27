@@ -599,10 +599,7 @@ exports.crearEnviosLote = async (req, res) => {
         });
 
         await nuevoEnvio.save();
-        creados.push({
-          id_venta: idVenta,
-          tracking
-        });
+        creados.push(idVenta);
       } catch (err) {
         // Log del error completo
         logger.error('[Envio Cliente Lote] Error en envío', {
