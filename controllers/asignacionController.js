@@ -849,27 +849,29 @@ async function asignarChofer(req, res) {
     // Asignar chofer
     envio.chofer = chofer_id;
 
-    const esManual = !envio.meli_id || envio.meli_id.trim() === '';
-
-    // Solo cambiar estado si está en un estado válido para asignar
+    // Determinar nuevo estado
+    const esManual = !envio.meli_id || (typeof envio.meli_id === 'string' && envio.meli_id.trim() === '');
     const estadosValidosParaAsignar = ['pendiente', 'en_planta'];
 
     if (esManual && estadosValidosParaAsignar.includes(envio.estado)) {
       const estadoAnterior = envio.estado;
       envio.estado = 'en_camino';
-      logger.info('[Asignacion] 🔄 Estado actualizado', {
-        anterior: estadoAnterior,
-        nuevo: 'en_camino'
+      logger.info('[Asignacion] Estado actualizado a en_camino', {
+        tracking: envio.tracking || envio.id_venta,
+        estado_anterior: estadoAnterior,
+        estado_nuevo: 'en_camino'
       });
     } else if (!esManual) {
       envio.estado = 'asignado';
     } else {
-      logger.warn('[Asignacion] ⚠️ No se cambió estado', {
+      logger.info('[Asignacion] Estado no cambio', {
+        tracking: envio.tracking || envio.id_venta,
         estado_actual: envio.estado,
-        motivo: 'Estado no válido para asignar'
+        motivo: 'Ya no esta en estado valido para asignar'
       });
     }
 
+    // Historial
     if (!envio.historial) {
       envio.historial = [];
     }
@@ -878,13 +880,13 @@ async function asignarChofer(req, res) {
       at: new Date(),
       estado: envio.estado,
       source: 'scanner',
-      actor_name: req.user?.nombre || req.user?.email,
+      actor_name: req.user?.nombre || req.user?.email || 'Sistema',
       note: `Asignado a ${chofer.nombre}`
     });
 
     await envio.save();
 
-    logger.info('[Asignacion] ✅ Chofer asignado', {
+    logger.info('[Asignacion] Chofer asignado', {
       tracking: envio.tracking || envio.id_venta,
       chofer: chofer.nombre,
       estado_final: envio.estado
