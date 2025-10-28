@@ -234,31 +234,6 @@ exports.scanAndUpsert = async (req, res) => {
         const estadoAnterior = manualEnvio.estado;
         let updated = false;
 
-        if (estadoAnterior === 'en_preparacion') {
-          manualEnvio.estado = 'en_planta';
-
-          if (!Array.isArray(manualEnvio.historial)) manualEnvio.historial = [];
-          manualEnvio.historial.push({
-            at: scanAt,
-            estado: 'en_planta',
-            source: 'scan',
-            actor_name: actorName,
-            note: 'Escaneado QR - Ingresó a planta'
-          });
-
-          updated = true;
-        }
-
-        await manualEnvio.save();
-
-        if (updated) {
-          console.log(`✓ Envío manual ${manualEnvio._id} actualizado a "en_planta" por QR (${manualTrackingId})`);
-        } else {
-          console.log(
-            `ℹ️ Envío manual ${manualEnvio._id} escaneado sin cambio de estado (actual: ${manualEnvio.estado})`
-          );
-        }
-
         const message = updated
           ? 'Envío manual escaneado y marcado como "en planta"'
           : `Envío manual ya procesado (estado: ${manualEnvio.estado})`;
