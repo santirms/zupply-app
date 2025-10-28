@@ -543,7 +543,6 @@ exports.crearEnviosLote = async (req, res) => {
 
         const idVentaRaw = data.id_venta ? String(data.id_venta).trim() : null;
         const idVenta = (idVentaRaw ? idVentaRaw.toUpperCase() : await generarIdVenta());
-
         const tracking = idVenta;
 
         const posiblesIdVenta = [{ id_venta: idVenta }];
