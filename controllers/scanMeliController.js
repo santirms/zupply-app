@@ -178,23 +178,28 @@ exports.scanMeli = async (req, res) => {
     }
 
 // 7) Devolver envío
-  if (envio) {
-    // Si encontramos el envío (manual o ML), devolverlo y terminar
-    return res.json({
-      success: true,
-      ok: true,
-      envio: envio.toObject ? envio.toObject() : envio,
-      estado_actualizado: esManual && envio.estado === 'en_planta'
-    });
-  }
-  
-  // Si llegó acá, no encontró el envío
-  return res.status(404).json({
-    error: 'Envío no encontrado',
-    hint: 'Verificar que el código sea correcto'
+if (envio) {
+  // Si encontramos el envío (manual o ML), devolverlo y terminar
+  return res.json({
+    success: true,
+    ok: true,
+    envio: envio.toObject ? envio.toObject() : envio,
+    estado_actualizado: esManual && envio.estado === 'en_planta'
   });
-  
-} catch (err) {  // ← Ahora sí cierra el try
+}
+
+// Si llegó acá y NO es QR de ML, no hacer nada más
+if (!parsedQR || !meli_id) {
+  return res.status(404).json({
+    ok: false,
+    error: 'Envío no encontrado'
+  });
+}
+
+// De acá en adelante, solo código para QR de MercadoLibre
+// ... continúa con scanAndUpsert, etc.
+
+} catch (err) {
   logger.error('[Scan] Error:', err);
   res.status(500).json({ error: 'Error procesando escaneo' });
 }
