@@ -221,15 +221,27 @@ function onScanSuccess(decodedText, readerEl, statusEl){
 const TIPS=['acercá hasta ~70%','alejalo 5–10 cm si borroso','incliná 10–15° para evitar reflejos','alisá la etiqueta (sin pliegues)'];
 function onScanFail(statusEl){ if(++failCount%60===0){ statusEl.textContent='Tip: '+TIPS[(failCount/60)%TIPS.length|0]+'.'; } }
 
-async function procesarEnvioManual(tracking, cardElement){
+async function procesarEnvioManual(tracking, cardElement) {
   const btn = cardElement.querySelector('button');
   const originalText = btn.textContent;
 
   btn.disabled = true;
   btn.textContent = 'Procesando...';
 
-  try{
-    const res = await fetch('/api/scan-meli', {
+  try {
+    // Detectar si es JSON (QR de ML) o tracking simple
+    let esQrML = false;
+    try {
+      JSON.parse(tracking);
+      esQrML = true;
+    } catch {}
+
+    // Usar ruta correspondiente
+    const endpoint = esQrML ? '/api/scan-meli' : '/api/scan-manual';
+
+    console.log('[Scanner] Enviando a:', endpoint);
+
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ raw_text: tracking })
@@ -237,30 +249,29 @@ async function procesarEnvioManual(tracking, cardElement){
 
     const data = await res.json();
 
-    if(!res.ok){
+    if (!res.ok) {
       throw new Error(data.error || 'Error desconocido');
     }
 
-    console.log('[Scanner] Envío procesado:', data);
+    console.log('[Scanner] Respuesta:', data);
 
-    // Actualizar card con info del envío
-    if(data.envio){
+    // Actualizar card
+    if (data.envio) {
       cardElement.innerHTML = `
         <div class="grid gap-y-2 text-sm">
-          <p><span class="opacity-60">Tracking:</span> <span class="font-medium">${escapeHtml(tracking)}</span></p>
+          <p><span class="opacity-60">Tracking:</span> <span class="font-medium">${escapeHtml(data.envio.tracking || data.envio.id_venta || 'N/A')}</span></p>
           <p><span class="opacity-60">Destinatario:</span> ${escapeHtml(data.envio.destinatario || 'N/A')}</p>
-          <p><span class="opacity-60">Dirección:</span> ${escapeHtml(data.envio.direccion || 'N/A')}</p>
           <p><span class="opacity-60">Estado:</span> <span class="font-semibold text-green-600">${escapeHtml(data.envio.estado || 'N/A')}</span></p>
-          ${data.estado_actualizado ? '<p class="text-xs text-green-600 mt-1">✓ Estado actualizado a "en planta"</p>' : ''}
+          ${data.estado_actualizado ? '<p class="text-xs text-green-600 mt-1">✓ Estado actualizado</p>' : ''}
         </div>
       `;
-    }else{
+    } else {
       btn.textContent = '✓ Procesado';
       btn.classList.remove('bg-violet-600', 'hover:bg-violet-700');
       btn.classList.add('bg-green-600');
     }
 
-  }catch(err){
+  } catch (err) {
     console.error('[Scanner] Error:', err);
     alert('Error: ' + err.message);
     btn.disabled = false;
