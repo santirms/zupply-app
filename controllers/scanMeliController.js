@@ -189,13 +189,19 @@ if (envio) {
 }
 
 // Si llegó acá y NO es QR de ML, no hacer nada más
+logger.info('[DEBUG] Verificando si continuar', {
+  parsedQR: !!parsedQR,
+  meli_id: meli_id,
+  raw_text: trimmed
+});    
+    
 if (!parsedQR || !meli_id) {
   return res.status(404).json({
     ok: false,
     error: 'Envío no encontrado'
   });
 }
-
+logger.info('[DEBUG] Es QR de ML, continuando con scanAndUpsert');
 // De acá en adelante, solo código para QR de MercadoLibre
 // ... continúa con scanAndUpsert, etc.
 
