@@ -168,30 +168,53 @@ if (allowExternal) {
       fecha: new Date()
     });
 
-    // -------- marcar SOLO internos (externos ya nacen “asignado”) --------
+    // -------- marcar SOLO internos (externos ya nacen "asignado") --------
     if (subdocsInternos.length) {
       const actor = req.session?.user?.email || req.session?.user?.role || 'operador';
-      await Envio.updateMany(
-        { _id: { $in: subdocsInternos.map(x => x.envio) } },
-        {
-          $set: {
-            estado: 'asignado',
-            chofer: chDoc._id,
-            chofer_id: chDoc._id,
-            chofer_nombre: chDoc.nombre
-          },
-          $push: {
-            historial: {
-              at: new Date(),
-              estado: 'asignado',
-              estado_meli: null,
-              source: 'zupply:qr',
-              actor_name: actor
-            }
-          },
-          $currentDate: { updatedAt: true }
-        }
-      );
+
+      // Actualizar cada envío individualmente para manejar estado correcto
+      for (const sub of subdocsInternos) {
+        const envio = internos.find(e => e._id.toString() === sub.envio.toString());
+        if (!envio) continue;
+
+        const esManual = !envio.meli_id ||
+                         envio.meli_id === '' ||
+                         (typeof envio.meli_id === 'string' && envio.meli_id.trim() === '');
+
+        const estadosValidosParaAsignar = ['pendiente', 'en_planta'];
+        const nuevoEstado = (esManual && estadosValidosParaAsignar.includes(envio.estado))
+          ? 'en_camino'
+          : 'asignado';
+
+        await Envio.updateOne(
+          { _id: sub.envio },
+          {
+            $set: {
+              estado: nuevoEstado,
+              chofer: chDoc._id,
+              chofer_id: chDoc._id,
+              chofer_nombre: chDoc.nombre
+            },
+            $push: {
+              historial: {
+                at: new Date(),
+                estado: nuevoEstado,
+                estado_meli: null,
+                source: 'zupply:qr',
+                actor_name: actor
+              }
+            },
+            $currentDate: { updatedAt: true }
+          }
+        );
+
+        logger.info('[Asignacion QR]', {
+          tracking: envio.tracking || envio.id_venta,
+          esManual,
+          estado_anterior: envio.estado,
+          estado_nuevo: nuevoEstado
+        });
+      }
     }
 
     // -------- nombre de lista si vino solo el id --------
