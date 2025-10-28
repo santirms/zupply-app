@@ -202,8 +202,13 @@ exports.scanAndUpsert = async (req, res) => {
     const idVentaFromQr = cleanString(rawIdVenta);
     const senderIdFromQr = cleanString(senderIdRaw);
    
-    if (!meli_id && !idVentaFromQr)
-      return res.status(400).json({ ok:false, error:'El QR no trae meli_id/tracking ni id_venta' });
+    // Si no es QR de ML y tampoco hay texto simple, error
+    if (!meli_id && !raw_text.trim()) {
+    return res.status(400).json({
+    ok: false,
+    error: 'Código vacío o inválido'
+   });
+}   
 
     // --- auth MeLi por cliente_id o por sender_id del QR ---
     let auth;
