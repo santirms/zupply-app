@@ -211,20 +211,25 @@ exports.scanAndUpsert = async (req, res) => {
 }   
 
     // --- auth MeLi por cliente_id o por sender_id del QR ---
-    let auth;
-    try {
-      if (cliente_id) {
-        const t = await getTokenByClienteId(cliente_id);
-        auth = { user_id: t.user_id, cliente: t.cliente };
-      } else if (senderIdFromQr) {
-        const t = await getTokenBySenderId(String(senderIdFromQr));
-        auth = { user_id: t.cliente.user_id, cliente: t.cliente };
-      } else {
-        return res.status(400).json({ ok:false, error:'Falta cliente_id o sender_id en el QR' });
+    let auth = null;
+    // Solo buscar token si es QR de MercadoLibre
+    if (parsed && meli_id) {
+      try {
+        if (cliente_id) {
+          const t = await getTokenByClienteId(cliente_id);
+          auth = { user_id: t.user_id, cliente: t.cliente };
+        } else if (senderIdFromQr) {
+          const t = await getTokenBySenderId(String(senderIdFromQr));
+          auth = { user_id: t.cliente.user_id, cliente: t.cliente };
+        } else {
+          return res.status(400).json({ ok:false, error:'Falta cliente_id o sender_id en el QR' });
+        }
+      } catch {
+        return res.status(400).json({ ok:false, error:'No hay token MeLi para este cliente/sender' });
       }
-    } catch {
-      return res.status(400).json({ ok:false, error:'No hay token MeLi para este cliente/sender' });
     }
+
+    // Si no hay auth (envío manual), continuar sin token
 
     const now = new Date();
     const text_hash = (QrScan.hashText ? QrScan.hashText(raw_text) : require('crypto').createHash('sha256').update(raw_text).digest('hex'));
@@ -263,7 +268,7 @@ exports.scanAndUpsert = async (req, res) => {
     // --- si NO existe el envío, lo creamos (enriqueciendo con MeLi si se puede) ---
     let created = false;
     if (!envio) {
-      const clienteDoc = auth.cliente || {};
+      const clienteDoc = auth?.cliente || {};
       const clienteSender = Array.isArray(clienteDoc?.sender_id)
         ? clienteDoc.sender_id[0]
         : clienteDoc?.sender_id;
@@ -350,7 +355,7 @@ exports.scanAndUpsert = async (req, res) => {
       let enrichedViaMeli = false;
       let partidoFromMeli = null;
 
-      if (auth.user_id && (meli_id || idVentaFromQr)) {
+      if (auth?.user_id && (meli_id || idVentaFromQr)) {
         try {
           meliShipment = await withTimeout(
             fetchShipmentFromMeli({
@@ -499,7 +504,7 @@ exports.scanAndUpsert = async (req, res) => {
     } else {
       // --- si ya existía el envío, solo actualizamos meta QR ---
       const needsCoords = (!envio.latitud || !envio.longitud || envio.geocode_source !== 'mercadolibre');
-      if (needsCoords && (meli_id || idVentaFromQr)) {
+      if (needsCoords && (meli_id || idVentaFromQr) && auth?.user_id) {
         try {
           const meliShipment = await withTimeout(
             fetchShipmentFromMeli({ tracking: meli_id, id_venta: idVentaFromQr, user_id: auth.user_id }),
