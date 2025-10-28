@@ -788,7 +788,16 @@ async function scan(req, res) {
       meli_id: envio.meli_id
     });
 
-    const esManual = !envio.meli_id || (typeof envio.meli_id === 'string' && envio.meli_id.trim() === '');
+    const esManual = !envio.meli_id || 
+                     envio.meli_id === '' || 
+                     (typeof envio.meli_id === 'string' && envio.meli_id.trim() === '');
+
+    logger.info('[Asignacion Debug]', {
+      meli_id: envio.meli_id,
+      tipo_meli_id: typeof envio.meli_id,
+      esManual: esManual,
+      estado_actual: envio.estado
+    });
 
     if (esManual && envio.estado === 'pendiente') {
       logger.info('[Scanner] Cambiando estado a en_planta');
@@ -850,7 +859,16 @@ async function asignarChofer(req, res) {
     envio.chofer = chofer_id;
 
     // Determinar nuevo estado
-    const esManual = !envio.meli_id || (typeof envio.meli_id === 'string' && envio.meli_id.trim() === '');
+    const esManual = !envio.meli_id || 
+                     envio.meli_id === '' || 
+                     (typeof envio.meli_id === 'string' && envio.meli_id.trim() === '');
+
+    logger.info('[Asignacion Debug]', {
+      meli_id: envio.meli_id,
+      tipo_meli_id: typeof envio.meli_id,
+      esManual: esManual,
+      estado_actual: envio.estado
+    });
     const estadosValidosParaAsignar = ['pendiente', 'en_planta'];
 
     if (esManual && estadosValidosParaAsignar.includes(envio.estado)) {
