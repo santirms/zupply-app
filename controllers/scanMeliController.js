@@ -127,31 +127,40 @@ exports.scanMeli = async (req, res) => {
       });
     }
 
-    // 5) Actualizar estado si es envío manual en pendiente
+    // 5) Actualizar estado si es envío manual
     const esManual = !envio.meli_id || envio.meli_id.trim() === '';
 
-    if (esManual && envio.estado === 'pendiente') {
-      logger.info('[Scan] Cambiando estado a en_planta', {
-        tracking: envio.tracking || envio.id_venta
-      });
+    if (esManual) {
+      // Si está en pendiente O en_planta, permitir procesamiento
+      if (envio.estado === 'pendiente') {
+        logger.info('[Scan] Cambiando estado a en_planta', {
+          tracking: envio.tracking || envio.id_venta,
+          estado_anterior: envio.estado
+        });
 
-      envio.estado = 'en_planta';
+        envio.estado = 'en_planta';
 
-      if (!envio.historial) {
-        envio.historial = [];
+        if (!envio.historial) {
+          envio.historial = [];
+        }
+
+        envio.historial.unshift({
+          at: new Date(),
+          estado: 'en_planta',
+          source: 'scanner',
+          actor_name: req.user?.nombre || req.user?.email || 'Sistema',
+          note: 'Escaneado en planta'
+        });
+
+        await envio.save();
+
+        logger.info('[Scan] ✅ Estado actualizado a en_planta exitosamente');
+      } else {
+        logger.info('[Scan] Envío ya procesado', {
+          tracking: envio.tracking || envio.id_venta,
+          estado_actual: envio.estado
+        });
       }
-
-      envio.historial.unshift({
-        at: new Date(),
-        estado: 'en_planta',
-        source: 'scanner',
-        actor_name: req.user?.nombre || req.user?.email || 'Sistema',
-        note: 'Escaneado en planta'
-      });
-
-      await envio.save();
-
-      logger.info('[Scan] Estado actualizado a en_planta');
     }
 
     // 6) Guardar registro de escaneo (solo para ML)
