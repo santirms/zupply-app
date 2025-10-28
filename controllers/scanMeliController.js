@@ -81,22 +81,18 @@ exports.scanMeli = async (req, res) => {
 
     let envio = null;
 
-    // 2) Si es QR de ML, buscar por meli_id o pack_id
-    if (parsedQR && (parsedQR.id || parsedQR.pack_id)) {
-      const meliId = String(parsedQR.id || parsedQR.pack_id);
+    // 2) Si es QR de ML, buscar por pack_id
+    if (parsedQR && parsedQR.pack_id) {
+      const packId = String(parsedQR.pack_id);
 
       envio = await Envio.findOne({
-        $or: [
-          { meli_id: meliId },
-          { meli_pack_id: meliId },
-          { tracking: meliId }
-        ]
+        meli_pack_id: packId
       }).populate('cliente_id', 'nombre razon_social')
         .populate('chofer', 'nombre');
 
       if (envio) {
-        logger.info('[Scan] Envío ML encontrado', {
-          meli_id: meliId,
+        logger.info('[Scan] Envío ML encontrado por pack_id', {
+          pack_id: packId,
           tracking: envio.tracking
         });
       }
@@ -171,10 +167,10 @@ exports.scanMeli = async (req, res) => {
     }
 
     // 6) Guardar registro de escaneo (solo para ML)
-    if (parsedQR && (parsedQR.id || parsedQR.pack_id)) {
+    if (parsedQR && parsedQR.pack_id) {
       await QrScan.create({
         raw_text: trimmed,
-        pack_id: String(parsedQR.id || parsedQR.pack_id),
+        pack_id: String(parsedQR.pack_id),
         envio_id: envio._id,
         scanned_by: req.user?._id,
         scanned_at: new Date()
