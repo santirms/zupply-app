@@ -3,6 +3,6 @@ const router = express.Router();
 const ctrl = require('../controllers/scanMeliController');
 const { optionalAuth } = require('../middlewares/auth');
 
-router.post('/', optionalAuth, ctrl.scanMeli);
+router.post('/', ctrl.scanMeli);
 
 module.exports = router;
