@@ -86,6 +86,29 @@ function renderScanCard(payload, rawStr){
   });
 }
 
+function renderSimpleTrackingCard(tracking){
+  const list = qs('#scanList');
+  const card = document.createElement('div');
+  card.className = 'rounded-2xl p-4 border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5';
+  card.dataset.rawText = tracking;
+
+  card.innerHTML = `
+    <div class="grid gap-y-2 text-sm">
+      <p><span class="opacity-60">Tracking:</span> <span class="font-medium">${escapeHtml(tracking)}</span></p>
+      <p class="opacity-60 text-xs">Envío manual</p>
+      <div class="flex gap-2 mt-2">
+        <button 
+          class="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-medium transition-colors"
+          onclick="procesarEnvioManual('${escapeHtml(tracking)}', this.closest('div').closest('div').closest('div'))">
+          Procesar
+        </button>
+      </div>
+    </div>
+  `;
+
+  list.insertBefore(card, list.firstChild);
+}
+
 // ------- Cámara / teclado -------
 document.addEventListener('DOMContentLoaded', ()=>{
   const modoRadios=qsa('input[name="modoScan"]');
@@ -182,8 +205,65 @@ function onScanSuccess(decodedText, readerEl, statusEl){
   if(seen.has(decodedText)) return; seen.add(decodedText);
   hit(readerEl); beep(); haptic();
   statusEl.textContent='¡Código leído! Podés seguir escaneando.';
-  const payload=parseQrPayload(decodedText); if(!payload) return;
-  renderScanCard(payload, decodedText);
+
+  // Intentar parsear como QR de ML
+  const payload = parseQrPayload(decodedText);
+
+  if(payload){
+    // Es QR de ML válido
+    renderScanCard(payload, decodedText);
+  }else{
+    // No es JSON, tratarlo como tracking simple
+    console.log('[Scanner] Tracking simple detectado:', decodedText);
+    renderSimpleTrackingCard(decodedText);
+  }
 }
 const TIPS=['acercá hasta ~70%','alejalo 5–10 cm si borroso','incliná 10–15° para evitar reflejos','alisá la etiqueta (sin pliegues)'];
 function onScanFail(statusEl){ if(++failCount%60===0){ statusEl.textContent='Tip: '+TIPS[(failCount/60)%TIPS.length|0]+'.'; } }
+
+async function procesarEnvioManual(tracking, cardElement){
+  const btn = cardElement.querySelector('button');
+  const originalText = btn.textContent;
+
+  btn.disabled = true;
+  btn.textContent = 'Procesando...';
+
+  try{
+    const res = await fetch('/api/scan-meli', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ raw_text: tracking })
+    });
+
+    const data = await res.json();
+
+    if(!res.ok){
+      throw new Error(data.error || 'Error desconocido');
+    }
+
+    console.log('[Scanner] Envío procesado:', data);
+
+    // Actualizar card con info del envío
+    if(data.envio){
+      cardElement.innerHTML = `
+        <div class="grid gap-y-2 text-sm">
+          <p><span class="opacity-60">Tracking:</span> <span class="font-medium">${escapeHtml(tracking)}</span></p>
+          <p><span class="opacity-60">Destinatario:</span> ${escapeHtml(data.envio.destinatario || 'N/A')}</p>
+          <p><span class="opacity-60">Dirección:</span> ${escapeHtml(data.envio.direccion || 'N/A')}</p>
+          <p><span class="opacity-60">Estado:</span> <span class="font-semibold text-green-600">${escapeHtml(data.envio.estado || 'N/A')}</span></p>
+          ${data.estado_actualizado ? '<p class="text-xs text-green-600 mt-1">✓ Estado actualizado a "en planta"</p>' : ''}
+        </div>
+      `;
+    }else{
+      btn.textContent = '✓ Procesado';
+      btn.classList.remove('bg-violet-600', 'hover:bg-violet-700');
+      btn.classList.add('bg-green-600');
+    }
+
+  }catch(err){
+    console.error('[Scanner] Error:', err);
+    alert('Error: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
