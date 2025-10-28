@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Mis envíos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen">
+  <div class="max-w-4xl mx-auto py-6 px-4">
+    <div class="bg-white shadow rounded-lg p-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <div>
+          <h1 class="text-2xl font-semibold text-slate-800">Mis envíos del día</h1>
+          <p class="text-sm text-slate-600">Solo verás los envíos manuales que tengas asignados para hoy.</p>
+        </div>
+        <button
+          id="btnRecargar"
+          class="self-start sm:self-center inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700"
+          type="button"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v6h6M20 20v-6h-6M5 19a9 9 0 0014-7V9m0 0l3 3m-3-3l-3 3" />
+          </svg>
+          Actualizar
+        </button>
+      </div>
+
+      <div id="list" class="space-y-4">
+        <div class="text-sm text-slate-500">Cargando envíos...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  const mensajesEstado = {
+    entregado: '¿Confirmar que fue entregado?',
+    comprador_ausente: '¿Marcar como comprador ausente?',
+    rechazado: '¿Marcar como rechazado?',
+    inaccesible: '¿Marcar como inaccesible?'
+  };
+
+  const ESTADOS = Object.keys(mensajesEstado);
+
+  function escapeHtml(value) {
+    if (value == null) return '';
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function formatEstado(estado) {
+    if (!estado) return 'pendiente';
+    return estado.replace(/_/g, ' ');
+  }
+
+  function formatFecha(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return new Intl.DateTimeFormat('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  }
+
+  function obtenerIdVenta(envio) {
+    return envio.id_venta || 'Sin ID';
+  }
+
+  function renderizarEnvio(envio) {
+    const idVenta = obtenerIdVenta(envio);
+    const idVentaAttr = escapeHtml(idVenta);
+    const estado = formatEstado(envio.estado);
+    const direccionPartes = [envio.direccion, envio.partido].filter(Boolean);
+    const direccion = direccionPartes.length ? direccionPartes.join(', ') : envio.direccion || '';
+    const codigoPostal = envio.codigo_postal || envio.cp || '';
+    const fecha = formatFecha(envio.fecha || envio.createdAt || envio.created_at);
+    const notas = envio.referencia ? `<p class="text-sm text-slate-500"><span class="font-medium">Referencia:</span> ${escapeHtml(envio.referencia)}</p>` : '';
+    const telefono = envio.telefono ? `<p class="text-sm text-slate-600"><span class="font-medium">Teléfono:</span> ${escapeHtml(envio.telefono)}</p>` : '';
+
+    const esMercadoLibre = envio.meli_id != null && envio.meli_id !== '';
+
+    let accionesHtml = '';
+
+    if (!esMercadoLibre) {
+      const envioIdAttr = escapeHtml(envio._id);
+
+      accionesHtml = `
+        <div class="flex flex-wrap gap-2 pt-3 mt-3 border-t border-slate-200">
+          <button
+            type="button"
+            class="px-3 py-2 rounded text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 btn-marcar-estado"
+            data-envio-id="${envioIdAttr}"
+            data-estado="entregado"
+            data-id-venta="${idVentaAttr}"
+          >Entregado</button>
+          <button
+            type="button"
+            class="px-3 py-2 rounded text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 btn-marcar-estado"
+            data-envio-id="${envioIdAttr}"
+            data-estado="comprador_ausente"
+            data-id-venta="${idVentaAttr}"
+          >Ausente</button>
+          <button
+            type="button"
+            class="px-3 py-2 rounded text-sm font-medium bg-rose-600 text-white hover:bg-rose-700 btn-marcar-estado"
+            data-envio-id="${envioIdAttr}"
+            data-estado="rechazado"
+            data-id-venta="${idVentaAttr}"
+          >Rechazado</button>
+          <button
+            type="button"
+            class="px-3 py-2 rounded text-sm font-medium bg-slate-600 text-white hover:bg-slate-700 btn-marcar-estado"
+            data-envio-id="${envioIdAttr}"
+            data-estado="inaccesible"
+            data-id-venta="${idVentaAttr}"
+          >Inaccesible</button>
+        </div>
+      `;
+    } else {
+      accionesHtml = `
+        <div class="mt-3 rounded border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+          Envío de MercadoLibre (solo lectura)
+        </div>
+      `;
+    }
+
+    return `
+      <article class="rounded-lg border border-slate-200 p-4 shadow-sm">
+        <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <p class="text-sm text-slate-500">ID de venta</p>
+            <p class="text-lg font-semibold text-slate-800">${escapeHtml(idVenta)}</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm text-slate-500">Estado</p>
+            <p class="text-base font-medium text-slate-700">${escapeHtml(estado)}</p>
+          </div>
+        </header>
+        <div class="mt-3 space-y-1 text-sm text-slate-600">
+          <p><span class="font-medium text-slate-700">Destinatario:</span> ${escapeHtml(envio.destinatario || '')}</p>
+          <p><span class="font-medium text-slate-700">Dirección:</span> ${escapeHtml(direccion)} ${codigoPostal ? `<span class="text-slate-500">(CP ${escapeHtml(codigoPostal)})</span>` : ''}</p>
+          ${fecha ? `<p><span class="font-medium text-slate-700">Creado:</span> ${escapeHtml(fecha)}</p>` : ''}
+          ${telefono}
+          ${notas}
+        </div>
+        ${accionesHtml}
+      </article>
+    `;
+  }
+
+  function registrarEventosMarcarEstado() {
+    const botones = document.querySelectorAll('.btn-marcar-estado');
+
+    botones.forEach((boton) => {
+      boton.addEventListener('click', () => {
+        const envioId = boton.getAttribute('data-envio-id');
+        const estado = boton.getAttribute('data-estado');
+        const idVenta = boton.getAttribute('data-id-venta');
+
+        if (envioId && estado) {
+          marcarEstado(envioId, estado, idVenta || '');
+        }
+      });
+    });
+  }
+
+  async function cargarEnvios() {
+    const lista = document.getElementById('list');
+    lista.innerHTML = '<div class="text-sm text-slate-500">Cargando envíos...</div>';
+
+    try {
+      const response = await fetch('/api/mis-envios/activos', {
+        credentials: 'same-origin'
+      });
+
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const mensaje = payload?.error || 'No se pudieron obtener los envíos';
+        throw new Error(mensaje);
+      }
+
+      const envios = Array.isArray(payload) ? payload : payload?.envios || [];
+
+      if (!envios.length) {
+        lista.innerHTML = `
+          <div class="rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            No tenés envíos manuales asignados para hoy.
+          </div>
+        `;
+        return;
+      }
+
+      lista.innerHTML = envios.map(renderizarEnvio).join('');
+      registrarEventosMarcarEstado();
+    } catch (error) {
+      console.error('Error cargando envíos:', error);
+      lista.innerHTML = `
+        <div class="rounded border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          Error cargando envíos: ${escapeHtml(error.message || 'Intentalo nuevamente')}
+        </div>
+      `;
+    }
+  }
+
+  async function marcarEstado(envioId, estado, idVenta) {
+    if (!ESTADOS.includes(estado)) return;
+
+    const mensaje = mensajesEstado[estado] || '¿Confirmar acción?';
+    const confirmar = confirm(`ID: ${idVenta}\n\n${mensaje}`);
+    if (!confirmar) return;
+
+    const notasIngresadas = prompt('Notas adicionales (opcional):');
+    const notas = notasIngresadas != null && notasIngresadas.trim() !== ''
+      ? notasIngresadas.trim()
+      : undefined;
+
+    try {
+      const response = await fetch(`/api/mis-envios/${encodeURIComponent(envioId)}/marcar-estado`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado, notas })
+      });
+
+      const resultado = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const mensajeError = resultado?.error || 'Error actualizando estado';
+        throw new Error(mensajeError);
+      }
+
+      alert(`✅ ${(resultado?.mensaje) || 'Estado actualizado correctamente'}`);
+      cargarEnvios();
+    } catch (error) {
+      console.error('Error al marcar estado:', error);
+      alert('❌ Error: ' + (error.message || 'No se pudo actualizar el estado'));
+    }
+  }
+
+  window.marcarEstado = marcarEstado;
+
+  document.getElementById('btnRecargar').addEventListener('click', () => {
+    cargarEnvios();
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    cargarEnvios();
+  });
+  </script>
+</body>
+</html>
