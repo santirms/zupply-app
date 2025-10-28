@@ -851,48 +851,33 @@ async function asignarChofer(req, res) {
 
     envio.chofer = chofer_id;
 
-    const estadoAnterior = envio.estado;
-
-    if (esManual) {
-      if (envio.estado === 'pendiente' || envio.estado === 'en_planta') {
-        envio.estado = 'en_camino';
-      }
-    } else {
-      envio.estado = 'asignado';
-    }
+    // Para manuales: en_camino
+    // Para ML: asignado
+    envio.estado = esManual ? 'en_camino' : 'asignado';
 
     if (!envio.historial) {
       envio.historial = [];
     }
 
-    const actor =
-      req.user?.nombre || req.user?.email ||
-      req.session?.user?.nombre || req.session?.user?.email ||
-      'Sistema';
-
     envio.historial.unshift({
       at: new Date(),
       estado: envio.estado,
       source: 'scanner',
-      actor_name: actor,
+      actor_name: req.user?.nombre || req.user?.email || 'Sistema',
       note: `Asignado a ${chofer.nombre}`
     });
 
     await envio.save();
 
-    logger.info('[Asignacion] Chofer asignado', {
-      envio_id,
-      chofer: chofer.nombre,
+    logger.info('[Asignacion] ✅ Chofer asignado', {
       tracking: envio.tracking || envio.id_venta,
+      chofer: chofer.nombre,
       estado: envio.estado,
-      estado_anterior: estadoAnterior,
       es_manual: esManual
     });
 
     const mensaje = esManual
-      ? (envio.estado === 'en_camino'
-          ? `Envío asignado a ${chofer.nombre} y puesto en camino`
-          : `Envío asignado a ${chofer.nombre}`)
+      ? `Envío asignado a ${chofer.nombre} y puesto en camino`
       : `Envío de ML asignado a ${chofer.nombre}`;
 
     res.json({ success: true, mensaje });
