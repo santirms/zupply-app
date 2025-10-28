@@ -201,53 +201,7 @@ exports.scanAndUpsert = async (req, res) => {
     const meli_id = cleanString(tracking) || null;               // en tu UI usás meli_id
     const idVentaFromQr = cleanString(rawIdVenta);
     const senderIdFromQr = cleanString(senderIdRaw);
-
-    // --- detección de envíos manuales / etiquetas (sin MeLi) ---
-    const manualTrackingId = cleanString(idVentaFromQr) || cleanString(meli_id) || cleanString(raw_text);
-    if (manualTrackingId) {
-      const manualEnvio = await Envio.findOne({
-        requiere_sync_meli: false,
-        $or: [
-          { id_venta: manualTrackingId },
-          { tracking: manualTrackingId }
-        ]
-      });
-
-      if (manualEnvio) {
-        const scanAt = new Date();
-        const actorName =
-          req.user?.username ||
-          req.user?.name ||
-          req.user?.email ||
-          req.session?.user?.username ||
-          req.session?.user?.name ||
-          req.session?.user?.email ||
-          'Escaneo QR';
-
-        manualEnvio.qr_meta = manualEnvio.qr_meta || {};
-        manualEnvio.qr_meta.last_scan_at = scanAt;
-        manualEnvio.qr_meta.valid_until = new Date(scanAt.getTime() + 7 * 24 * 60 * 60 * 1000);
-        manualEnvio.qr_meta.last_hash = manualTrackingId;
-        manualEnvio.qr_meta.scans = (manualEnvio.qr_meta.scans || 0) + 1;
-        manualEnvio.markModified('qr_meta');
-
-        const estadoAnterior = manualEnvio.estado;
-        let updated = false;
-
-        const message = updated
-          ? 'Envío manual escaneado y marcado como "en planta"'
-          : `Envío manual ya procesado (estado: ${manualEnvio.estado})`;
-
-        return res.json({
-          ok: true,
-          tipo: 'manual',
-          updated,
-          envio: manualEnvio,
-          message
-        });
-      }
-    }
-
+   
     if (!meli_id && !idVentaFromQr)
       return res.status(400).json({ ok:false, error:'El QR no trae meli_id/tracking ni id_venta' });
 
