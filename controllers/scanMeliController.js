@@ -186,7 +186,7 @@ exports.scanMeli = async (req, res) => {
     envio: envio.toObject ? envio.toObject() : envio,
     estado_actualizado: esManual && envio.estado === 'en_planta'
   });
-  } catch (err) {
+   catch (err) {
     logger.error('[Scan] Error:', err);
     res.status(500).json({ error: 'Error procesando escaneo' });
   }
