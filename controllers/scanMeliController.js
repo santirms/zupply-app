@@ -177,13 +177,15 @@ exports.scanMeli = async (req, res) => {
       });
     }
 
-    // 7) Devolver envío
-    res.json({
-      success: true,
-      envio: envio.toObject(),
-      estado_actualizado: esManual && envio.estado === 'en_planta'
-    });
-
+  // 7) Devolver envío
+  if (envio) {
+  // Si encontramos el envío (manual o ML), devolverlo y terminar
+  return res.json({
+    success: true,
+    ok: true,
+    envio: envio.toObject ? envio.toObject() : envio,
+    estado_actualizado: esManual && envio.estado === 'en_planta'
+  });
   } catch (err) {
     logger.error('[Scan] Error:', err);
     res.status(500).json({ error: 'Error procesando escaneo' });
