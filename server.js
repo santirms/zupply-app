@@ -201,6 +201,7 @@ app.use('/api/client-panel',     require('./routes/client-panel'));
 // PANEL GENERAL DE ENVÍOS (coordinador solo lectura; ver routes/envios.js)
 app.use('/api/envios',           require('./routes/envios'));
 app.use('/api/scan-meli',        require('./routes/scan-meli'));   // POST /  y  GET /latest-render/:id
+app.use('/api/scan-manual',      require('./routes/scan-manual'));
 
 // Módulos permitidos a admin + coordinador (crear/ingresar/subir)
 app.use('/api/ingreso',          require('./routes/ingreso'));     // /manual, /guardar-masivo
