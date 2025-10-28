@@ -177,19 +177,27 @@ exports.scanMeli = async (req, res) => {
       });
     }
 
-  // 7) Devolver envío
+// 7) Devolver envío
   if (envio) {
-  // Si encontramos el envío (manual o ML), devolverlo y terminar
-  return res.json({
-    success: true,
-    ok: true,
-    envio: envio.toObject ? envio.toObject() : envio,
-    estado_actualizado: esManual && envio.estado === 'en_planta'
-  });
-  } catch (err) {
-    logger.error('[Scan] Error:', err);
-    res.status(500).json({ error: 'Error procesando escaneo' });
+    // Si encontramos el envío (manual o ML), devolverlo y terminar
+    return res.json({
+      success: true,
+      ok: true,
+      envio: envio.toObject ? envio.toObject() : envio,
+      estado_actualizado: esManual && envio.estado === 'en_planta'
+    });
   }
+  
+  // Si llegó acá, no encontró el envío
+  return res.status(404).json({
+    error: 'Envío no encontrado',
+    hint: 'Verificar que el código sea correcto'
+  });
+  
+} catch (err) {  // ← Ahora sí cierra el try
+  logger.error('[Scan] Error:', err);
+  res.status(500).json({ error: 'Error procesando escaneo' });
+}
 };
 
 exports.scanAndUpsert = async (req, res) => {
