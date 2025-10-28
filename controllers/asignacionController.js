@@ -846,14 +846,29 @@ async function asignarChofer(req, res) {
       return res.status(404).json({ error: 'Chofer no encontrado' });
     }
 
-    const meliId = envio.meli_id;
-    const esManual = !meliId || (typeof meliId === 'string' && meliId.trim() === '');
-
+    // Asignar chofer
     envio.chofer = chofer_id;
 
-    // Para manuales: en_camino
-    // Para ML: asignado
-    envio.estado = esManual ? 'en_camino' : 'asignado';
+    const esManual = !envio.meli_id || envio.meli_id.trim() === '';
+
+    // Solo cambiar estado si está en un estado válido para asignar
+    const estadosValidosParaAsignar = ['pendiente', 'en_planta'];
+
+    if (esManual && estadosValidosParaAsignar.includes(envio.estado)) {
+      const estadoAnterior = envio.estado;
+      envio.estado = 'en_camino';
+      logger.info('[Asignacion] 🔄 Estado actualizado', {
+        anterior: estadoAnterior,
+        nuevo: 'en_camino'
+      });
+    } else if (!esManual) {
+      envio.estado = 'asignado';
+    } else {
+      logger.warn('[Asignacion] ⚠️ No se cambió estado', {
+        estado_actual: envio.estado,
+        motivo: 'Estado no válido para asignar'
+      });
+    }
 
     if (!envio.historial) {
       envio.historial = [];
@@ -863,7 +878,7 @@ async function asignarChofer(req, res) {
       at: new Date(),
       estado: envio.estado,
       source: 'scanner',
-      actor_name: req.user?.nombre || req.user?.email || 'Sistema',
+      actor_name: req.user?.nombre || req.user?.email,
       note: `Asignado a ${chofer.nombre}`
     });
 
@@ -872,8 +887,7 @@ async function asignarChofer(req, res) {
     logger.info('[Asignacion] ✅ Chofer asignado', {
       tracking: envio.tracking || envio.id_venta,
       chofer: chofer.nombre,
-      estado: envio.estado,
-      es_manual: esManual
+      estado_final: envio.estado
     });
 
     const mensaje = esManual
