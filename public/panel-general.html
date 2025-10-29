@@ -183,7 +183,6 @@
           <option value="comprador_ausente">Comprador ausente</option>
           <option value="inaccesible">Inaccesible/Avería</option>
           <option value="direccion_erronea">Dirección errónea</option>
-          <option value="agencia_cerrada">Agencia cerrada</option>
           <option value="demorado">Demorado</option>
           <option value="reprogramado">Reprogramado</option>
           <option value="no_entregado">No entregado</option>
@@ -477,8 +476,7 @@ function estadoBadge(key,label){
     // Estados de error de dirección
     direccion_erronea: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
     inaccesible: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
-    agencia_cerrada: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/30 dark:text-slate-300 dark:border-slate-800',
-
+    
     // Estados de tránsito
     en_transito: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800',
     shipped: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
@@ -596,8 +594,7 @@ function uiStatus(envio){
     // Estados de error
     direccion_erronea: 'Dirección errónea',
     inaccesible: 'Inaccesible',
-    agencia_cerrada: 'Agencia cerrada',
-
+    
     // Estados de tránsito
     en_transito: 'En tránsito',
     shipped: 'Enviado',
@@ -712,7 +709,7 @@ function renderTabla(){
     // Agregar icono de alerta para estados que necesitan atención
     const needsAttention = [
       'comprador_ausente', 'inaccesible', 'direccion_erronea',
-      'agencia_cerrada', 'demorado', 'reprogramado', 'no_entregado', 'rechazado'
+       'demorado', 'reprogramado', 'no_entregado', 'rechazado'
     ];
 
     let iconoAlerta = '';
