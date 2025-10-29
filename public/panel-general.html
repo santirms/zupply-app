@@ -542,15 +542,12 @@ function getNombreEstado(estado) {
     'pendiente': 'Pendiente',
     'en_camino': 'En camino',
     'en_planta': 'En planta',
-    'listo_retiro': 'Listo retiro',
-    'a_retirar': 'A retirar',
     'llega_pronto': 'Llega pronto',
     'entregado': 'Entregado',
     'reprogramado': 'Reprogramado',
     'demorado': 'Demorado',
     'comprador_ausente': 'Comprador ausente',
     'inaccesible': 'Inaccesible',
-    'sucursal_cerrada': 'Sucursal cerrada',
     'rechazado': 'Rechazado',
     'devolucion': 'Devolución',
     'no_entregado': 'No entregado',
@@ -973,9 +970,8 @@ function renderHistorial(histArray=[]) {
           'rescheduled_by_meli': '🔄 reprog. MeLi',
           'receiver_absent': '🚫 ausente',
           'not_visited': '⚠️ inaccesible',
-          'bad_address': '📍 dir. errónea',
-          'agency_closed': '🏢 agencia cerrada'
-        };
+          'bad_address': '📍 dir. errónea'
+          };
         
         const subDetalle = MAP_SUBSTATUS[subRaw];
         
