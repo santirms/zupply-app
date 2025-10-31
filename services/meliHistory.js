@@ -205,13 +205,7 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
     if (mlSubstatus === 'returning_to_sender') {
       return buildEstadoResult('devolucion', mlStatus, mlSubstatus);
     }
-    
-    // ========== PUNTO DE RETIRO ==========
-    
-    if (mlSubstatus === 'printed') {
-      return buildEstadoResult('a_retirar', mlStatus, mlSubstatus);
-    }
-    
+           
     // ========== PROXIMIDAD ==========
     
     if (mlSubstatus === 'soon_deliver') {
@@ -273,7 +267,6 @@ function esBarridoGenerico(envio, nuevoEstado, hora, minutos) {
   const estadosEspecificos = new Set([
     'comprador_ausente',
     'inaccesible',
-    'sucursal_cerrada',
     'demorado'
   ]);
 
