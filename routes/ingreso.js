@@ -148,7 +148,7 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
         referencia:    p.referencia         || '',
         fecha:         new Date(),
         precio:        p.manual_precio      ? Number(p.precio) || 0 : 0,
-        estado:        'en_preparacion',
+        estado:        'pendiente',
         requiere_sync_meli: false,
         origen:        'ingreso_manual',
         source:        'panel'
