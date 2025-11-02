@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Zupply - Panel Principal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Tailwind CDN (dark por clase) -->
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: "class" };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Set inicial de tema: por defecto “system” (no forzamos dark/light) -->
+  <script>
+    (function () {
+      try {
+        const saved = localStorage.getItem('zpl_theme'); // 'light' | 'dark' | 'system'
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark = (saved === 'dark') || (!saved || saved === 'system') && prefersDark;
+        document.documentElement.classList.toggle('dark', wantDark);
+        if (!saved) localStorage.setItem('zpl_theme','system');
+      } catch {}
+    })();
+  </script>
+
+  <style>
+    :root{
+      --z-primary: #F59E0B;       /* ámbar suave */
+      --z-primary-dark: #D97706;  /* hover */
+      --z-primary-fg: #111827;    /* texto sobre ámbar */
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+  <div class="max-w-7xl mx-auto p-6">
+
+    <!-- TOPBAR -->
+    <header class="sticky top-0 z-40 mb-6">
+      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
+        <!-- Logo / Home -->
+        <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+          <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)">
+            <span class="text-white font-black">Z</span>
+          </div>
+          <img src="/assets/logo-zupply.svg" alt="Zupply" class="h-5 hidden sm:block" onerror="this.remove()">
+          <span class="sm:hidden font-semibold tracking-wide text-amber-500">zupply</span>
+        </a>
+
+        <!-- Fecha/Hora (suave) -->
+        <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
+        <div class="flex items-center gap-3 text-sm opacity-80">
+          <span id="fecha" class="hidden sm:inline">—</span>
+          <span id="hora">—</span>
+        </div>
+
+        <!-- Menú usuario + Tema -->
+        <div class="ml-auto flex items-center gap-2">
+          <div class="relative" id="userMenuWrap">
+            <button id="userBtn"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
+              <span id="username" class="max-w-[160px] truncate">Usuario</span>
+              <span class="opacity-70">▾</span>
+            </button>
+            <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
+              <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
+              <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
+            </div>
+          </div>
+
+          <button id="themeBtn"
+            class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 text-slate-700 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100">
+            Tema: auto
+          </button>
+        </div>
+      </div>
+    </header>
+
+     <!-- HOME -->
+<main>
+  <!-- Mini-KPIs -->
+  <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+      <div class="text-xs opacity-70">Pendientes</div>
+      <div id="kpi-pend" class="text-3xl font-semibold mt-1 tracking-tight text-amber-600">—</div>
+    </div>
+
+    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+      <div class="text-xs opacity-70">En ruta</div>
+      <div id="kpi-ruta" class="text-3xl font-semibold mt-1 tracking-tight text-sky-600 dark:text-sky-300">—</div>
+    </div>
+
+    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+      <div class="text-xs opacity-70">Entregados</div>
+      <div id="kpi-ent" class="text-3xl font-semibold mt-1 tracking-tight text-emerald-600 dark:text-emerald-300">—</div>
+    </div>
+
+    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+      <div class="text-xs opacity-70">Incidencias</div>
+      <div id="kpi-inc" class="text-3xl font-semibold mt-1 tracking-tight text-rose-600 dark:text-rose-300">—</div>
+    </div>
+  </section>
+
+  <section class="mb-6">
+    <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-4">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-4">
+          <h3 class="text-lg font-semibold">Zonas de Rack</h3>
+
+          <!-- Switch de vista -->
+          <div class="flex items-center gap-2 bg-slate-100 dark:bg-white/5 rounded-xl p-1">
+            <button id="btnVistaPendientes"
+              onclick="cambiarVistaRack('pendiente')"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-white/10 shadow">
+              Pendientes
+            </button>
+            <button id="btnVistaEnCamino"
+              onclick="cambiarVistaRack('en_camino')"
+              class="px-3 py-1.5 rounded-lg text-sm font-medium">
+              En Camino
+            </button>
+          </div>
+        </div>
+        <button onclick="abrirConfigZonas()"
+          class="px-3 py-1.5 text-sm rounded-xl border border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/10">
+          ⚙️ Configurar zonas
+        </button>
+      </div>
+
+      <div id="kpis-rack" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+        <!-- Se llena dinámicamente -->
+      </div>
+    </div>
+  </section>
+</main>
+
+
+      <!-- Grid de módulos (visibilidad por rol con data-allow) -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Coordinación / Admin -->
+        <a data-allow="admin,coordinador" href="/panel-general.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">📊</div>
+            <div class="text-lg font-medium">Panel General de Envíos</div>
+            <div class="ml-auto text-xs opacity-70">1</div>
+          </div>
+        </a>
+
+        <a data-allow="admin,coordinador" href="/scanner.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">📷</div>
+            <div class="text-lg font-medium">Escanear Paquetes</div>
+            <div class="ml-auto text-xs opacity-70">2</div>
+          </div>
+        </a>
+
+        <a data-allow="admin,coordinador" href="/subir-etiquetas.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">🏷️</div>
+            <div class="text-lg font-medium">Subir Etiquetas</div>
+            <div class="ml-auto text-xs opacity-70">3</div>
+          </div>
+        </a>
+
+        <a data-allow="admin,coordinador" href="/ingreso-manual.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">✍️</div>
+            <div class="text-lg font-medium">Ingreso Manual</div>
+            <div class="ml-auto text-xs opacity-70">4</div>
+          </div>
+        </a>
+
+        <a data-allow="admin,coordinador" href="/choferes.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">🚚</div>
+            <div class="text-lg font-medium">Panel Choferes</div>
+            <div class="ml-auto text-xs opacity-70">5</div>
+          </div>
+        </a>
+
+        <!-- Solo admin -->
+        <a data-allow="admin" href="/clientes.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">👥</div>
+            <div class="text-lg font-medium">Clientes</div>
+            <div class="ml-auto text-xs opacity-70">6</div>
+          </div>
+        </a>
+
+        <a data-allow="admin" href="/facturacion-general.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">💳</div>
+            <div class="text-lg font-medium">Facturación</div>
+            <div class="ml-auto text-xs opacity-70">7</div>
+          </div>
+        </a>
+
+        <a data-allow="admin" href="/panel-zonas-listas.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">🗺️</div>
+            <div class="text-lg font-medium">Zonas y Listas de Precios</div>
+            <div class="ml-auto text-xs opacity-70">8</div>
+          </div>
+        </a>
+
+        <a data-allow="admin" href="/panel-usuarios.html"
+           class="w-full px-5 py-4 rounded-2xl border border-transparent hover:translate-y-[-1px] transition text-left"
+           style="background:linear-gradient(180deg,#F6B64A,#F59E0B); color:var(--z-primary-fg)">
+          <div class="flex items-center gap-3">
+            <div class="shrink-0 p-2 rounded-lg bg-white/85">👤</div>
+            <div class="text-lg font-medium">Usuarios</div>
+            <div class="ml-auto text-xs opacity-70">9</div>
+          </div>
+        </a>
+      </section>
+
+      <!-- Si querés desactivar por completo los KPIs en build:
+      <section class="hidden">
+        … (KPIs)
+      </section>
+      -->
+    </main>
+
+    <footer class="py-6 text-center text-xs opacity-60">© <span id="anio"></span> Zupply</footer>
+  </div>
+
+  <div id="modalConfigZonas" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+    <div class="bg-white dark:bg-[#0B1020] rounded-2xl w-11/12 md:w-2/3 lg:w-1/2 max-h-[80vh] overflow-auto p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Configurar Zonas de Rack</h2>
+        <button onclick="cerrarConfigZonas()" class="text-slate-500 hover:text-slate-700">✕</button>
+      </div>
+
+      <div id="lista-zonas-config" class="space-y-3 mb-4">
+        <!-- Zonas existentes -->
+      </div>
+
+      <button onclick="agregarZonaVacia()"
+        class="w-full px-4 py-2 rounded-xl border-2 border-dashed border-slate-300 hover:border-amber-500 hover:bg-amber-50 dark:border-white/10 dark:hover:bg-white/5">
+        + Agregar nueva zona
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // ====== Fecha / hora en topbar ======
+    (function tick(){
+      try {
+        const now = new Date();
+        const fmtFecha = new Intl.DateTimeFormat('es-AR', { weekday:'short', day:'2-digit', month:'short', year:'numeric' }).format(now);
+        const fmtHora  = new Intl.DateTimeFormat('es-AR', { hour:'2-digit', minute:'2-digit', second:'2-digit' }).format(now);
+        document.getElementById('fecha').textContent = fmtFecha;
+        document.getElementById('hora').textContent  = fmtHora;
+        document.getElementById('anio').textContent  = now.getFullYear();
+      } catch {}
+      setTimeout(tick, 1000);
+    })();
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadKPIs();
+    setInterval(loadKPIs, 60_000);
+    cargarZonasRack();
+  });
+
+  async function loadKPIs() {
+    const el = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
+
+    try {
+      const r = await fetch('/api/kpis/home', { cache: 'no-store' });
+    if (!r.ok) {
+      // si es auth, mandamos a login
+      if (r.status === 401 || r.status === 403) {
+        location.href = '/auth/login';
+        return;
+      }
+      const text = await r.text();
+      console.error('KPIs HTTP error', r.status, text);
+      throw new Error('kpis_fail'); // mantiene tu mensaje
+    }
+    const j = await r.json();
+    el('kpi-pend', j.pendientes ?? '0');
+    el('kpi-ruta', j.en_ruta ?? '0');
+    el('kpi-ent',  j.entregados ?? '0');
+    el('kpi-inc',  j.incidencias ?? '0');
+  } catch (e) {
+    console.error('No se pudieron cargar los KPIs', e);
+    el('kpi-pend', '—'); el('kpi-ruta', '—'); el('kpi-ent', '—'); el('kpi-inc', '—');
+  }
+}
+
+  let zonasRack = [];
+  let partidosDisponibles = [];
+  let partidosAsignados = new Set();
+  let kpiRackIntervalId = null;
+  let vistaRackActual = 'pendiente'; // 'pendiente' o 'en_camino'
+
+  function cambiarVistaRack(vista) {
+    vistaRackActual = vista;
+
+    // Actualizar estilos de botones
+    const btnPend = document.getElementById('btnVistaPendientes');
+    const btnRuta = document.getElementById('btnVistaEnCamino');
+
+    if (!btnPend || !btnRuta) return;
+
+    if (vista === 'pendiente') {
+      btnPend.classList.add('bg-white', 'dark:bg-white/10', 'shadow');
+      btnRuta.classList.remove('bg-white', 'dark:bg-white/10', 'shadow');
+    } else {
+      btnRuta.classList.add('bg-white', 'dark:bg-white/10', 'shadow');
+      btnPend.classList.remove('bg-white', 'dark:bg-white/10', 'shadow');
+    }
+
+    actualizarColoresKPIs();
+    // Refrescar todas las cajas con el nuevo estado
+    actualizarKPIsRack();
+  }
+
+  function recalcularPartidosAsignados() {
+    partidosAsignados = new Set(zonasRack.flatMap(z => z.partidos || []));
+    console.log('Partidos asignados actuales:', Array.from(partidosAsignados));
+  }
+
+  async function cargarZonasRack() {
+    try {
+      const [zonasResp, partidosResp] = await Promise.all([
+        fetch('/api/zonas-rack', { cache: 'no-store' }),
+        fetch('/api/partidos', { cache: 'no-store' })
+      ]);
+
+      if (!zonasResp.ok) throw new Error(`HTTP ${zonasResp.status}`);
+      if (!partidosResp.ok) throw new Error(`HTTP ${partidosResp.status}`);
+
+      const [zonas, partidos] = await Promise.all([zonasResp.json(), partidosResp.json()]);
+
+      zonasRack = Array.isArray(zonas) ? zonas : [];
+      partidosDisponibles = Array.isArray(partidos)
+        ? partidos.map(p => p && p.nombre).filter(Boolean)
+        : [];
+      recalcularPartidosAsignados();
+      renderKPIsRack();
+
+      if (!kpiRackIntervalId) {
+        kpiRackIntervalId = setInterval(actualizarKPIsRack, 60_000);
+      }
+    } catch (e) {
+      console.error('Error cargando zonas rack:', e);
+      const container = document.getElementById('kpis-rack');
+      if (container) {
+        container.innerHTML = '<p class="text-sm opacity-70 col-span-full text-center py-4">Error al cargar las zonas</p>';
+      }
+    }
+  }
+
+  function renderKPIsRack() {
+    const container = document.getElementById('kpis-rack');
+    if (!container) return;
+
+    if (!zonasRack.length) {
+      container.innerHTML = '<p class="text-sm opacity-70 col-span-full text-center py-4">No hay zonas configuradas</p>';
+      return;
+    }
+
+    const tarjetas = zonasRack.map(zona => {
+      const zonaId = zona && (zona._id || zona.id);
+      if (!zonaId) return '';
+      const nombre = escapeHtml(zona.nombre || 'Zona sin nombre');
+      return `
+        <div class="rounded-xl p-3 border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5">
+          <div class="text-xs font-medium opacity-70 truncate" title="${nombre}">${nombre}</div>
+          <div id="kpi-rack-${zonaId}" class="text-2xl font-semibold mt-1">—</div>
+          <div id="kpi-rack-detalle-${zonaId}" class="text-[10px] opacity-60 mt-1">Cargando...</div>
+        </div>
+      `;
+    }).filter(Boolean);
+
+    if (!tarjetas.length) {
+      container.innerHTML = '<p class="text-sm opacity-70 col-span-full text-center py-4">No hay zonas configuradas</p>';
+      return;
+    }
+
+    container.innerHTML = tarjetas.join('');
+
+    zonasRack.forEach(zona => {
+      const zonaId = zona && (zona._id || zona.id);
+      if (zonaId) cargarKPIZona(zonaId);
+    });
+    actualizarColoresKPIs();
+  }
+
+  function actualizarColoresKPIs() {
+    const colorClass = vistaRackActual === 'pendiente'
+      ? 'text-amber-600 dark:text-amber-400'
+      : 'text-sky-600 dark:text-sky-400';
+
+    zonasRack.forEach(zona => {
+      const zonaId = zona && (zona._id || zona.id);
+      if (!zonaId) return;
+      const el = document.getElementById(`kpi-rack-${zonaId}`);
+      if (el) {
+        el.className = `text-2xl font-semibold mt-1 ${colorClass}`;
+      }
+    });
+  }
+
+  async function cargarKPIZona(zonaId) {
+    try {
+      const r = await fetch(`/api/zonas-rack/${zonaId}/kpi?estado=${vistaRackActual}`, {
+        cache: 'no-store'
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+
+      const totalEl = document.getElementById(`kpi-rack-${zonaId}`);
+      const detalleEl = document.getElementById(`kpi-rack-detalle-${zonaId}`);
+      if (totalEl) totalEl.textContent = data.total ?? '0';
+      if (detalleEl) {
+        const label = vistaRackActual === 'pendiente' ? 'Pendientes' : 'En ruta';
+        detalleEl.textContent = `${label}: ${data.total ?? 0}`;
+      }
+    } catch (e) {
+      console.error('Error KPI zona:', zonaId, e);
+    }
+  }
+
+  function actualizarKPIsRack() {
+    zonasRack.forEach(zona => {
+      const zonaId = zona && (zona._id || zona.id);
+      if (zonaId) cargarKPIZona(zonaId);
+    });
+  }
+
+  function abrirConfigZonas() {
+    renderConfigZonas();
+    const modal = document.getElementById('modalConfigZonas');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  async function cerrarConfigZonas() {
+    const modal = document.getElementById('modalConfigZonas');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    await cargarZonasRack();
+  }
+
+  function renderConfigZonas() {
+    const container = document.getElementById('lista-zonas-config');
+    if (!container) return;
+
+    recalcularPartidosAsignados();
+
+    if (!zonasRack.length) {
+      container.innerHTML = '<p class="text-sm opacity-70 text-center py-4">No hay zonas configuradas</p>';
+      return;
+    }
+
+    container.innerHTML = zonasRack.map(zona => {
+      const zonaId = zona && (zona._id || zona.id);
+      if (!zonaId) return '';
+      const nombre = escapeHtml(zona.nombre || '');
+      const zonaIdAttr = escapeHtml(zonaId);
+      const zonaIdJs = escapeHtml(JSON.stringify(zonaId));
+      return `
+        <div class="border border-slate-200 dark:border-white/10 rounded-xl p-4">
+          <div class="flex gap-3 mb-3">
+            <input type="text" value="${nombre}"
+              data-zona-id="${zonaIdAttr}"
+              class="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 dark:bg-white/10"
+              placeholder="Nombre de la zona (ej: Rack A1 - Sur)">
+            <button onclick="eliminarZona(${zonaIdJs})"
+              class="px-3 py-2 rounded-xl bg-rose-100 text-rose-700 hover:bg-rose-200">
+              🗑️
+            </button>
+          </div>
+
+          <select multiple size="8" data-zona-partidos="${zonaIdAttr}"
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 dark:bg-white/10 text-sm">
+            ${renderOpcionesPartidos(zona.partidos)}
+          </select>
+
+          <button onclick="guardarZona(${zonaIdJs})"
+            class="w-full mt-2 px-4 py-2 rounded-xl bg-amber-500 text-white hover:bg-amber-600">
+            Guardar cambios
+          </button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderOpcionesPartidos(partidosZona = []) {
+    const partidosZonaSet = new Set(partidosZona);
+    return partidosDisponibles.map(p => {
+      const asignado = partidosAsignados.has(p) && !partidosZonaSet.has(p);
+      const selected = partidosZonaSet.has(p) ? 'selected' : '';
+      const disabled = asignado ? 'disabled' : '';
+      const label = asignado ? `${p} (asignado)` : p;
+      const value = escapeHtml(p);
+      const labelHtml = escapeHtml(label);
+      return `<option value="${value}" ${selected} ${disabled}>${labelHtml}</option>`;
+    }).join('');
+  }
+
+  function agregarZonaVacia() {
+    const nuevaZona = {
+      _id: `temp_${Date.now()}`,
+      nombre: `Zona ${zonasRack.length + 1}`,
+      partidos: [],
+      orden: zonasRack.length
+    };
+    zonasRack.push(nuevaZona);
+    recalcularPartidosAsignados();
+    renderConfigZonas();
+  }
+
+  async function guardarZona(zonaId) {
+    const selectorValue = escapeSelector(zonaId);
+    const nombreInput = document.querySelector(`input[data-zona-id="${selectorValue}"]`);
+    const partidosSelect = document.querySelector(`select[data-zona-partidos="${selectorValue}"]`);
+    if (!nombreInput || !partidosSelect) return;
+
+    const nombre = nombreInput.value.trim();
+    const partidos = Array.from(partidosSelect.selectedOptions).map(o => o.value);
+
+    if (!nombre) {
+      alert('Ingresá un nombre para la zona');
+      return;
+    }
+    if (!partidos.length) {
+      alert('Seleccioná al menos un partido');
+      return;
+    }
+
+    try {
+      const orden = zonasRack.findIndex(z => (z._id || z.id) === zonaId);
+      const body = {
+        id: zonaId.startsWith('temp_') ? null : zonaId,
+        nombre,
+        partidos,
+        orden: orden >= 0 ? orden : zonasRack.length
+      };
+
+      const r = await fetch('/api/zonas-rack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || 'Error al guardar');
+      }
+
+      alert('Zona guardada correctamente');
+      cerrarConfigZonas();
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  async function eliminarZona(zonaId) {
+    if (!confirm('¿Eliminar esta zona?')) return;
+
+    try {
+      // Si no es temporal, eliminar del backend primero
+      if (!zonaId.startsWith('temp_')) {
+        const resp = await fetch(`/api/zonas-rack/${zonaId}`, { method: 'DELETE' });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.error || 'Error al eliminar');
+        }
+      }
+
+      // Eliminar la zona del array local
+      zonasRack = zonasRack.filter(z => (z._id || z.id) !== zonaId);
+
+      // CRÍTICO: Recalcular los partidos asignados después de eliminar
+      recalcularPartidosAsignados();
+
+      // CRÍTICO: Forzar re-render completo del modal
+      renderConfigZonas();
+
+      // Mensaje de confirmación
+      alert('Zona eliminada correctamente. Los partidos están ahora disponibles.');
+
+    } catch (e) {
+      console.error('Error al eliminar zona:', e);
+      alert('Error al eliminar: ' + e.message);
+    }
+  }
+
+  function escapeSelector(value) {
+    const str = String(value ?? '');
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return CSS.escape(str);
+    }
+    return str.replace(/([\s!"#$%&'()*+,./:;<=>?@\[\\\]^`{|}~])/g, '\\$1');
+  }
+
+  function escapeHtml(str = '') {
+    const map = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;"
+    };
+    return String(str).replace(/[&<>"']/g, ch => map[ch] || ch);
+  }
+
+    // ====== Menú usuario ======
+    (function userMenu(){
+      const btn = document.getElementById('userBtn');
+      const menu = document.getElementById('userMenu');
+      const wrap = document.getElementById('userMenuWrap');
+      btn.addEventListener('click', ()=> menu.classList.toggle('hidden'));
+      document.addEventListener('click', (e)=>{
+        if (!wrap.contains(e.target)) menu.classList.add('hidden');
+      });
+      document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+        try { await fetch('/auth/logout', { method:'POST' }); } catch {}
+        try { localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username'); } catch {}
+        location.href = '/auth/login';
+      });
+    })();
+
+    // ====== Tema: cycle light/dark/system (default system) ======
+    (function themeToggle(){
+      const order = ['light','dark','system'];
+      const btn = document.getElementById('themeBtn');
+      const apply = (mode) => {
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark = mode === 'dark' || (mode === 'system' && prefersDark);
+        document.documentElement.classList.toggle('dark', wantDark);
+        localStorage.setItem('zpl_theme', mode);
+        btn.textContent = 'Tema: ' + (mode === 'system' ? 'auto' : mode);
+      };
+      // init label
+      apply(localStorage.getItem('zpl_theme') || 'system');
+      btn.addEventListener('click', ()=>{
+        const current = localStorage.getItem('zpl_theme') || 'system';
+        const next = order[(order.indexOf(current)+1)%order.length];
+        apply(next);
+      });
+    })();
+
+    // ====== Visibilidad por rol + nombre de usuario ======
+    fetch('/me', { cache:'no-store' })
+      .then(r => {
+        if (!r.ok) throw new Error('unauth');
+        return r.json();
+      })
+      .then(me => {
+        // Nombre en topbar
+        const name = me.name || me.username || me.email || 'Usuario';
+        document.getElementById('username').textContent = name;
+        try { localStorage.setItem('zpl_username', name); } catch {}
+
+        // Mostrar/ocultar módulos por rol
+        document.querySelectorAll('[data-allow]').forEach(el=>{
+          const allow = el.getAttribute('data-allow').split(',').map(s=>s.trim());
+          if (!allow.includes(me.role)) el.style.display='none';
+        });
+      })
+      .catch(()=> location.href='/auth/login');
+  </script>
+</body>
+</html>
+

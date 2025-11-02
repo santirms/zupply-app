@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Zupply | Panel General</title>
+
+<!-- Tailwind en modo dark por clase -->
+<script>window.tailwind=window.tailwind||{};window.tailwind.config={darkMode:"class"};</script>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<!-- Tema inicial: system por defecto -->
+<script>
+(function(){
+  try{
+    const saved=localStorage.getItem('zpl_theme'); // 'light'|'dark'|'system'
+    const prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const wantDark=(saved==='dark')||((!saved||saved==='system')&&prefersDark);
+    document.documentElement.classList.toggle('dark', wantDark);
+    if(!saved) localStorage.setItem('zpl_theme','system');
+  }catch{}
+})();
+</script>
+
+<style>
+  :root{
+    --z-primary:#F59E0B;       /* ámbar suave */
+    --z-primary-dark:#D97706;  /* hover */
+    --z-primary-fg:#111827;    /* texto sobre ámbar */
+  }
+
+  /* Fix para dropdowns en dark mode */
+  html.dark select,
+  html.dark select option {
+    background-color:#0B1020;
+    color:#e5e7eb;
+    border-color:rgba(255,255,255,0.1);
+  }
+
+  html.dark select option:hover,
+  html.dark select option:focus,
+  html.dark select option:checked {
+    background-color:#1e293b;
+    color:#fff;
+  }
+
+  /* Fondo del dropdown cuando está abierto */
+  html.dark select:focus {
+    background-color:#0B1020;
+    outline-color:#F59E0B;
+  }
+
+  /* Inputs de fecha también */
+  html.dark input[type="date"] {
+    background-color:#0B1020;
+    color:#e5e7eb;
+    border-color:rgba(255,255,255,0.1);
+  }
+
+  html.dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter:invert(1) opacity(0.7);
+  }
+
+  /* Dropdown de Partidos en dark */
+  #panelPartidos{ backdrop-filter:saturate(120%) blur(6px); }
+</style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+<div class="max-w-7xl mx-auto p-4 md:p-6">
+
+  <!-- TOPBAR (sticky/translúcida) -->
+  <header class="sticky top-0 z-40 mb-4">
+    <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
+      <!-- Logo/Home -->
+      <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+        <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)"><span class="text-white font-black">Z</span></div>
+        <img src="/assets/logo-zupply.svg" alt="Zupply" class="h-5 hidden sm:block" onerror="this.remove()">
+        <span class="sm:hidden font-semibold tracking-wide text-amber-500">zupply</span>
+      </a>
+
+      <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
+      <span class="text-sm opacity-80">Panel general de envíos</span>
+
+      <!-- Usuario + Tema -->
+      <div class="ml-auto flex items-center gap-2">
+        <div class="relative" id="userMenuWrap">
+          <button id="userBtn"
+            class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
+            <span id="username" class="max-w-[160px] truncate">Usuario</span>
+            <span class="opacity-70">▾</span>
+          </button>
+          <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
+            <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
+            <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+            <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
+          </div>
+        </div>
+
+        <button id="themeBtn"
+          class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 text-slate-700 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100">
+          Tema: auto
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mini-KPIs -->
+  <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+      <div class="text-xs opacity-70">Pendientes</div>
+      <div id="kpi-pend" class="text-3xl font-semibold mt-1 tracking-tight text-amber-600">—</div>
+    </div>
+
+    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+      <div class="text-xs opacity-70">En ruta</div>
+      <div id="kpi-ruta" class="text-3xl font-semibold mt-1 tracking-tight text-sky-600 dark:text-sky-300">—</div>
+    </div>
+
+    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+      <div class="text-xs opacity-70">Entregados</div>
+      <div id="kpi-ent" class="text-3xl font-semibold mt-1 tracking-tight text-emerald-600 dark:text-emerald-300">—</div>
+    </div>
+
+    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+      <div class="text-xs opacity-70">Incidencias</div>
+      <div id="kpi-inc" class="text-3xl font-semibold mt-1 tracking-tight text-rose-600 dark:text-rose-300">—</div>
+    </div>
+  </section>
+
+  <h1 class="text-2xl font-bold mb-4 text-center">📦 Panel de Envíos</h1>
+
+  <!-- Filtros -->
+  <div class="rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4 mb-4">
+    <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-3">
+      <input id="filtroCliente" type="text" placeholder="Cliente, código o sender"
+        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300
+               dark:bg-white/10 dark:border-white/10" />
+
+      <input id="filtroTracking" type="text" placeholder="Buscar por tracking (ML o id_venta)"
+        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300
+               dark:bg-white/10 dark:border-white/10" />
+
+      <input id="filtroIdVenta" type="text" placeholder="Buscar por ID de venta"
+        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300
+               dark:bg-white/10 dark:border-white/10" />
+
+      <input type="date" id="filtroDesde"
+        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300
+               dark:bg-white/10 dark:border-white/10" />
+
+      <input type="date" id="filtroHasta"
+        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300
+               dark:bg-white/10 dark:border-white/10" />
+
+      <!-- Partidos (dropdown) -->
+      <div class="relative">
+        <button id="btnPartidos" type="button"
+          class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300
+                 dark:bg-white/10 dark:border-white/10 flex justify-between items-center">
+          <span>Partidos (múltiple)</span>
+          <span class="text-slate-400 text-xs" id="countPartidos"></span>
+        </button>
+        <div id="panelPartidos"
+          class="absolute z-20 mt-1 w-64 p-2 max-h-64 overflow-auto rounded-2xl border
+                 border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/95 hidden shadow-lg">
+          <!-- se llena por JS -->
+        </div>
+      </div>
+
+      <select id="filtroEstado"
+        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 dark:bg-[#0B1020] dark:border-white/10 dark:text-slate-100">
+        <option value="">— Todos los estados —</option>
+        <option value="pendiente">Pendiente</option>
+        <option value="asignado">Asignado</option>
+        <option value="en_camino">En camino</option>
+
+        <optgroup label="Problemas de entrega" class="dark:bg-[#1e293b]">
+          <option value="comprador_ausente">Comprador ausente</option>
+          <option value="inaccesible">Inaccesible/Avería</option>
+          <option value="direccion_erronea">Dirección errónea</option>
+          <option value="demorado">Demorado</option>
+          <option value="reprogramado">Reprogramado</option>
+          <option value="no_entregado">No entregado</option>
+        </optgroup>
+
+        <option value="entregado">Entregado</option>
+        <option value="cancelado">Cancelado</option>
+      </select>
+
+      <select id="filtroChofer"
+        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 dark:bg-[#0B1020] dark:border-white/10 dark:text-slate-100">
+        <option value="">— Todos los choferes —</option>
+      </select>
+
+      <button onclick="aplicarFiltro()"
+        class="px-4 py-2 rounded-xl font-medium shadow-sm bg-[var(--z-primary)] text-[var(--z-primary-fg)] hover:bg-[var(--z-primary-dark)]">
+        🔍 Filtrar
+      </button>
+      <button onclick="limpiarFiltros()"
+        class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50
+               dark:border-white/10 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/15">
+        Limpiar
+      </button>
+    </div>
+  </div>
+
+  <!-- Tabla -->
+  <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50 dark:bg-white/5">
+        <tr>
+          <th class="px-4 py-2 text-left font-semibold">Tracking</th>
+          <th class="px-4 py-2 text-left font-semibold">ID de venta</th>
+          <th class="px-4 py-2 text-left font-semibold">Cliente</th>
+          <th class="px-4 py-2 text-left font-semibold">Fecha</th>
+          <th class="px-4 py-2 text-left font-semibold">Partido</th>
+          <th class="px-4 py-2 text-left font-semibold">Chofer</th>
+          <th class="px-4 py-2 text-left font-semibold">Estado</th>
+          <th class="px-4 py-2 text-left font-semibold">Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tablaEnvios" class="divide-y divide-slate-200/70 dark:divide-white/10"></tbody>
+    </table>
+  </div>
+
+  <div class="mt-4 flex justify-between items-center">
+    <span class="text-sm opacity-80" id="infoPagina"></span>
+    <button id="btnMas" onclick="cargarMas()"
+      class="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50
+             dark:border-white/10 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/15">
+      Cargar más
+    </button>
+  </div>
+</div>
+
+<!-- Modal Detalle -->
+<div id="modalDetalle" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-40">
+  <div class="bg-white dark:bg-[#0B1020] rounded-2xl shadow-xl w-11/12 md:w-2/3 lg:w-1/2 p-6 relative border border-slate-200 dark:border-white/10">
+    <button onclick="cerrarModalDetalle()" class="absolute top-4 right-4 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200">✕</button>
+    <h2 class="text-xl font-semibold mb-4">Seguimiento del envío</h2>
+
+    <!-- Tabs -->
+    <div class="mb-4 border-b border-slate-200 dark:border-white/10">
+      <nav class="flex gap-2" role="tablist">
+        <button id="tabBtnDetalle"
+          class="px-3 py-2 rounded-t border-b-2 border-amber-500/80 text-amber-600 dark:text-amber-400 font-medium"
+          onclick="switchTab('detalle')">Detalle del envío</button>
+        <button id="tabBtnHist"
+          class="px-3 py-2 rounded-t border-b-2 border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100"
+          onclick="switchTab('historial')">Historial</button>
+      </nav>
+    </div>
+
+    <!-- Detalle -->
+    <div id="tabDetalle">
+      <div id="contenidoDetalle" class="space-y-1 text-sm"></div>
+      <div id="mapa" class="h-64 mt-4 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10"></div>
+    </div>
+
+    <!-- Historial -->
+    <div id="tabHistorial" class="hidden">
+      <div id="contenidoHistorial" class="space-y-2">
+        <div class="text-sm text-slate-500">Cargando historial…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Eliminar -->
+<div id="modalEliminar" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+  <div class="bg-white dark:bg-[#0B1020] rounded-2xl shadow-xl w-11/12 md:w-1/3 p-6 relative border border-slate-200 dark:border-white/10">
+    <button onclick="cerrarModalEliminar()" class="absolute top-4 right-4 text-slate-500 hover:text-slate-700 dark:hover:text-slate-200">✕</button>
+    <h2 class="text-lg font-semibold mb-2">Eliminar envío</h2>
+    <p class="text-sm opacity-80">¿Seguro que querés eliminar este envío? Esta acción no se puede deshacer.</p>
+    <div class="mt-4 flex justify-end gap-2">
+      <button onclick="cerrarModalEliminar()" class="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50
+             dark:border-white/10 dark:bg-white/10">Cancelar</button>
+      <button id="btnConfirmEliminar" class="px-4 py-2 rounded-xl bg-rose-600 text-white hover:bg-rose-700">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Notas -->
+<div id="modalNotas" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+  <div class="bg-white dark:bg-[#0B1020] w-11/12 md:w-[640px] rounded-2xl shadow-xl border border-slate-200 dark:border-white/10">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-white/10">
+      <h3 class="text-lg font-semibold">Notas del envío</h3>
+      <button class="text-slate-500 hover:text-slate-700 dark:hover:text-slate-200" onclick="cerrarModalNotas()">✕</button>
+    </div>
+
+    <div class="p-5 space-y-4">
+      <div id="listaNotas" class="space-y-3 max-h-72 overflow-auto">
+        <div class="text-sm text-slate-500">Cargando notas…</div>
+      </div>
+
+      <div>
+        <label for="notaTexto" class="block text-sm font-medium mb-1">Agregar nota</label>
+        <textarea id="notaTexto" rows="3"
+          class="w-full border rounded-xl px-3 py-2 text-sm bg-white border-slate-300
+                 dark:bg-white/10 dark:border-white/10"
+          placeholder="Describe la incidencia, reprogramado por cliente, etc."></textarea>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-white/10">
+      <button class="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50
+             dark:border-white/10 dark:bg-white/10" onclick="cerrarModalNotas()">Cancelar</button>
+      <button id="btnGuardarNota" class="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Guardar nota</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mini-modal QR -->
+<div id="qrViewModal" class="fixed inset-0 hidden bg-black/60 z-50 grid place-items-center p-4">
+  <div class="bg-white dark:bg-[#0B1020] p-4 rounded-2xl w-full max-w-sm border border-slate-200 dark:border-white/10">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="font-semibold">QR de respaldo</h3>
+      <button id="qrViewClose" class="px-2 py-1 border rounded text-sm border-slate-300 dark:border-white/10">Cerrar</button>
+    </div>
+    <img id="qrViewImg" alt="QR" class="w-full h-auto rounded border border-slate-200 dark:border-white/10" />
+    <p id="qrViewHint" class="text-xs text-slate-500 mt-2">Disponible 7 días desde el último escaneo.</p>
+  </div>
+</div>
+
+<script>
+/* ======== Header: usuario + tema ======== */
+document.getElementById('anio')?.remove(); // no se usa acá
+(function userMenu(){
+  const btn  = document.getElementById('userBtn');
+  const menu = document.getElementById('userMenu');
+  const wrap = document.getElementById('userMenuWrap');
+  btn.addEventListener('click', ()=> menu.classList.toggle('hidden'));
+  document.addEventListener('click', (e)=>{ if (!wrap.contains(e.target)) menu.classList.add('hidden'); });
+
+  document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+    try { await fetch('/auth/logout', { method:'POST' }); } catch {}
+    try { localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username'); } catch {}
+    location.href = '/auth/login';
+  });
+
+  fetch('/me', { cache:'no-store' })
+    .then(r => { if (!r.ok) throw new Error('unauth'); return r.json(); })
+    .then(me => {
+      const name = me.name || me.username || me.email || 'Usuario';
+      document.getElementById('username').textContent = name;
+      try { localStorage.setItem('zpl_username', name); } catch {}
+    })
+    .catch(()=> location.href='/auth/login');
+})();
+(function themeToggle(){
+  const order = ['light','dark','system'];
+  const btn = document.getElementById('themeBtn');
+  const apply = (mode) => {
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const wantDark = mode === 'dark' || (mode === 'system' && prefersDark);
+    document.documentElement.classList.toggle('dark', wantDark);
+    localStorage.setItem('zpl_theme', mode);
+    btn.textContent = 'Tema: ' + (mode === 'system' ? 'auto' : mode);
+  };
+  apply(localStorage.getItem('zpl_theme') || 'system');
+  btn.addEventListener('click', ()=> {
+    const current = localStorage.getItem('zpl_theme') || 'system';
+    const next = order[(order.indexOf(current)+1)%order.length];
+    apply(next);
+  });
+})();
+</script>
+
+<!-- ==================== TU SCRIPT ORIGINAL (LOGICA) ==================== -->
+<script>
+window.USER_ROLE = window.USER_ROLE || 'admin';
+/* === (aquí va exactamente el mismo JS que me pasaste; no toqué endpoints) ===
+   He respetado todas las funciones: cargarResumenDiario, cargarPartidos, aplicarFiltro,
+   limpiarFiltros, renderTabla, mostrarDetalle, notas, QR, etc.  */
+
+<!-- PEGADO ÍNTEGRO DE TU SCRIPT: -->
+// =================== Estado ===================
+let enviosCargados = []; let nextCursor = null; let filtrosActivos = {}; let mapaInstancia = null;
+const normalize = s => (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+const cleanZona = z => (z || '').replace(/\s+(N|S|E|O|NE|NO|SE|SO)$/i, '').trim();
+const nombreClienteEnvio = (envio = {}) => {
+  const cliente = envio.cliente_id || {};
+  const pick = (value) => (typeof value === 'string' ? value.trim() : '');
+
+  const senderCliente = Array.isArray(cliente.sender_id)
+    ? pick(cliente.sender_id[0])
+    : pick(cliente.sender_id);
+
+  return (
+    pick(cliente.nombre) ||
+    pick(cliente.razon_social) ||
+    pick(cliente.codigo_cliente) ||
+    senderCliente ||
+    pick(envio.sender_id) ||
+    '—'
+  );
+};
+window.nombreClienteEnvio = nombreClienteEnvio;
+
+function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, partidos, chofer, cursor, limit=100 }) {
+  const p = new URLSearchParams();
+  if (tracking) p.set('tracking', tracking);
+  if (id_venta) p.set('id_venta', id_venta);
+  if (cliente)  p.set('cliente', cliente);
+  if (!tracking) { if (desde) p.set('desde', desde); if (hasta) p.set('hasta', hasta); }
+  if (estado) p.set('estado', estado);
+  if (chofer) p.set('chofer', chofer);
+  if (Array.isArray(partidos) && partidos.length) p.set('partidos', partidos.join(','));
+  if (cursor && !tracking) p.set('cursor', cursor);
+  p.set('limit', String(limit)); p.set('ts', String(Date.now()));
+  return p;
+}
+
+async function cargarPrimerPagina() {
+  try {
+    filtrosActivos = { limit: 100 };
+    const q = buildQueryParams(filtrosActivos);
+    const res = await fetch(`/api/envios?${q.toString()}`, { cache: 'no-store' });
+    const data = await res.json();
+    enviosCargados = data.rows || data || [];
+    nextCursor = data.nextCursor || null;
+    renderTabla(); renderPaginacionLikeCursor();
+  } catch (e) { console.error('cargarPrimerPagina error', e); }
+}
+
+async function cargarMas() {
+  try {
+    if (!nextCursor) return;
+    const q = buildQueryParams({ ...filtrosActivos, cursor: nextCursor });
+    const res = await fetch(`/api/envios?${q.toString()}`, { cache: 'no-store' });
+    const data = await res.json();
+    const nuevos = data.rows || data || [];
+    const seen = new Set(enviosCargados.map(e => e._id));
+    const unique = nuevos.filter(e => !seen.has(e._id));
+    enviosCargados = enviosCargados.concat(unique);
+    nextCursor = data.nextCursor || null;
+    renderTabla(); renderPaginacionLikeCursor();
+  } catch (e) { console.error('cargarMas error', e); }
+}
+
+const seleccionPartidos = new Set();
+function updateCountPartidos(){ const el = document.getElementById('countPartidos'); if (el) el.textContent = !seleccionPartidos.size ? '(Todos)' : `(${seleccionPartidos.size})`; }
+function hasNotesFlag(e){ return (e.notas_count>0) || (Array.isArray(e.notas)&&e.notas.length>0) || !!e.has_notes; }
+function hasQr(envio){ const vu = envio?.qr_meta?.valid_until || envio?.qr_valid_until || envio?.qrValidUntil; if (vu) return new Date(vu) > new Date(); return !!(envio?.qr_meta?.last_hash || envio?.qr_last_hash || envio?.has_qr); }
+function qrIconButtonHtml(envioId){ return `<button class="ml-2 inline-flex items-center gap-1 text-emerald-700 bg-emerald-100 border border-emerald-200 rounded px-1.5 py-0.5 text-[11px]" title="QR de respaldo disponible — abrir" onclick="cargarQrRespaldo('${envioId}')"><svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><path d="M14 14h3v3h-3zM18 14h3v3h-3zM18 18h3v3h-3zM14 18h3v3h-3z"></path></svg></button>`; }
+async function probeQrButtons(){ const slots = Array.from(document.querySelectorAll('[data-qr-probe]')); await Promise.all(slots.map(async slot => { const id = slot.getAttribute('data-qr-probe'); try { const r = await fetch(`/api/scan-meli/latest-render/${id}`, { cache: 'no-store' }); const j = await r.json().catch(()=>null); if (r.ok && j && j.ok && j.url) { slot.outerHTML = qrIconButtonHtml(id); } else { slot.remove(); } } catch { slot.remove(); } })); }
+
+function initMapa(lat,lng){ const cont=document.getElementById('mapa'); if(!cont) return; cont.innerHTML=''; if(!Number.isFinite(lat)||!Number.isFinite(lng)){ cont.innerHTML='<div class="flex items-center justify-center h-full text-slate-500">Sin coordenadas</div>'; return; } if(mapaInstancia){ mapaInstancia.remove(); mapaInstancia=null; } mapaInstancia=L.map('mapa').setView([lat,lng],13); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution:'&copy; OpenStreetMap contributors' }).addTo(mapaInstancia); L.marker([lat,lng]).addTo(mapaInstancia); setTimeout(()=>mapaInstancia.invalidateSize(),0); }
+
+function estadoBadge(key,label){
+  const BADGE_CLASSES = {
+    // Estados manuales
+    pendiente: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800',
+    en_planta: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+    comprador_ausente: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+    rechazado: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
+
+    // Estados comunes
+    pendiente: 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300 dark:border-gray-800',
+    en_camino: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800',
+    asignado: 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800',
+    entregado: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
+    no_entregado: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+
+    // Estados de demora/problema
+    demorado: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+    reprogramado: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800',
+    cancelado: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
+    cancelled: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
+
+    // Estados de error de dirección
+    direccion_erronea: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
+    inaccesible: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+    
+    // Estados de tránsito
+    en_transito: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800',
+    shipped: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+    handling: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800',
+
+    // Estados de recepción
+    ready_for_pickup: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800',
+    picking: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800',
+    listo_retiro: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800'
+  };
+
+  const classes = BADGE_CLASSES[key] || 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300';
+
+  return `<span class="inline-flex items-center text-xs px-2.5 py-0.5 rounded-full border ${classes}">${label}</span>`;
+}
+window.estadoBadge = estadoBadge;
+
+function substatusChip(sub){
+  if(!sub) return '';
+  return `<small class="text-xs text-slate-500 dark:text-slate-300 whitespace-nowrap">${sub}</small>`;
+}
+window.substatusChip = substatusChip;
+
+function getEstadoColorClass(estado){
+  const COLORES = {
+    en_planta: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+    en_camino: 'bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800',
+    comprador_ausente: 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800',
+    entregado: 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
+    rechazado: 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+  };
+  return COLORES[estado] || 'bg-gray-50 dark:bg-gray-900/20 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-white/10';
+}
+window.getEstadoColorClass = getEstadoColorClass;
+
+function renderEstadoChip(envio) {
+  if (!envio) return '';
+
+  const estado = envio.estado || 'pendiente';
+  const mlSubstatus = envio.ml_substatus;
+
+  const estadosSinSubstatus = ['entregado', 'cancelado'];
+  const mostrarSubstatus = !estadosSinSubstatus.includes(estado) && mlSubstatus;
+
+  let html = '<div class="estado-chip flex items-center gap-2 flex-wrap">';
+  html += estadoBadge(estado, getNombreEstado(estado));
+
+  if (mostrarSubstatus) {
+    html += substatusChip(String(mlSubstatus).replace(/_/g, ' '));
+  }
+
+  html += '</div>';
+
+  return html;
+}
+window.renderEstadoChip = renderEstadoChip;
+
+function getNombreEstado(estado) {
+  const nombres = {
+    'pendiente': 'Pendiente',
+    'en_camino': 'En camino',
+    'en_planta': 'En planta',
+    'llega_pronto': 'Llega pronto',
+    'entregado': 'Entregado',
+    'reprogramado': 'Reprogramado',
+    'demorado': 'Demorado',
+    'comprador_ausente': 'Comprador ausente',
+    'inaccesible': 'Inaccesible',
+    'rechazado': 'Rechazado',
+    'devolucion': 'Devolución',
+    'no_entregado': 'No entregado',
+    'cancelado': 'Cancelado'
+  };
+
+  if (!estado) return 'Pendiente';
+  return nombres[estado] || String(estado).replace(/_/g, ' ');
+}
+
+function uiStatus(envio){
+  const raw=(envio.estado||envio.status||envio.estado_meli?.status||'').toLowerCase();
+
+  const STATUS_ALIAS = {
+    pending: 'pendiente',
+    ready_to_ship: 'pendiente',
+    handling: 'en_planta',
+    shipped: 'en_camino',
+    delivered: 'entregado',
+    not_delivered: 'no_entregado',
+    cancelled: 'cancelado'
+  };
+
+  const norm = STATUS_ALIAS[raw] || raw || 'pendiente';
+
+  const STATUS_LABELS = {
+    // Estados manuales
+    pendiente: 'Pendiente',
+    en_planta: 'En planta',
+    comprador_ausente: 'Comprador ausente',
+    rechazado: 'Rechazado',
+
+    // Estados comunes
+    pendiente: 'Pendiente',
+    en_camino: 'En camino',
+    asignado: 'Asignado',
+    entregado: 'Entregado',
+    no_entregado: 'No entregado',
+
+    // Estados de demora
+    demorado: 'Demorado',
+    reprogramado: 'Reprogramado',
+    cancelado: 'Cancelado',
+    cancelled: 'Cancelado',
+
+    // Estados de error
+    direccion_erronea: 'Dirección errónea',
+    inaccesible: 'Inaccesible',
+    
+    // Estados de tránsito
+    en_transito: 'En tránsito',
+    shipped: 'Enviado',
+    handling: 'En proceso',
+
+    // Estados de recepción
+    ready_for_pickup: 'Listo para retirar',
+    picking: 'Preparando',
+
+    // Estados especiales
+    listo_retiro: 'Listo para retirar'
+  };
+
+  let cardLabel = STATUS_LABELS[norm];
+  if (!cardLabel) {
+    const fallback = norm ? norm.replace(/_/g,' ') : 'Pendiente';
+    cardLabel = fallback.replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  const mlSubstatus = envio.ml_substatus || envio.substatus || envio.estado_meli?.substatus || '';
+  const substatusDisplay = mlSubstatus ? String(mlSubstatus).replace(/_/g, ' ') : '';
+
+  return { key:norm, label:cardLabel, substatus:substatusDisplay };
+}
+
+async function cargarChoferes(){
+  try{
+    const res = await fetch('/api/choferes', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const choferes = await res.json();
+    const sel = document.getElementById('filtroChofer');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Todos los choferes —</option>';
+    choferes
+      .slice()
+      .sort((a,b)=> (a?.nombre||'').localeCompare(b?.nombre||''))
+      .forEach(c=>{
+        const opt = document.createElement('option');
+        opt.value = c._id;
+        opt.textContent = c.nombre || c.username || c._id;
+        sel.appendChild(opt);
+      });
+  }catch(e){ console.error('Error cargando choferes:', e); }
+}
+
+async function cargarPartidos(){
+  try{
+    const res=await fetch('/api/partidos',{cache:'no-store'}); const lista=await res.json();
+    const panel=document.getElementById('panelPartidos'); panel.innerHTML='';
+    const rowAll=document.createElement('label'); rowAll.className='flex items-center gap-2 p-1 cursor-pointer font-medium'; rowAll.innerHTML=`<input type="checkbox" id="chk_all_partidos" class="accent-amber-600" checked><span>Todos</span>`; panel.appendChild(rowAll);
+    const hr=document.createElement('hr'); hr.className='my-1 border-slate-200 dark:border-white/10'; panel.appendChild(hr);
+    lista.forEach(p=>{ const nombre=p.nombre; const nombreNorm=normalize(nombre); const row=document.createElement('label'); row.className='flex items-center gap-2 p-1 cursor-pointer'; row.innerHTML=`<input type="checkbox" data-nombre="${nombre}" data-nombre-norm="${nombreNorm}" class="accent-amber-600"><span>${nombre}</span>`; panel.appendChild(row); });
+    const btn=document.getElementById('btnPartidos');
+    btn.addEventListener('click',()=> panel.classList.toggle('hidden'));
+    document.addEventListener('click',(e)=>{ if(!panel.contains(e.target) && e.target!==btn) panel.classList.add('hidden'); });
+    panel.addEventListener('change',(e)=>{
+      const target=e.target;
+      if(target.id==='chk_all_partidos'){ if(target.checked){ seleccionPartidos.clear(); panel.querySelectorAll('input[type="checkbox"][data-nombre-norm]').forEach(cb=>cb.checked=false);} updateCountPartidos(); aplicarFiltro(); return; }
+      if(target.matches('input[type="checkbox"][data-nombre-norm]')){ const all=document.getElementById('chk_all_partidos'); all.checked=false; const nomNorm=target.dataset.nombreNorm; if(target.checked) seleccionPartidos.add(nomNorm); else seleccionPartidos.delete(nomNorm); updateCountPartidos(); aplicarFiltro(); }
+    });
+    updateCountPartidos();
+  }catch(e){ console.error('No se pudo cargar partidos:', e); }
+}
+
+async function aplicarFiltro(){
+  const cliRaw=(document.getElementById('filtroCliente')?.value||'');
+  const trackingRaw=(document.getElementById('filtroTracking')?.value||'');
+  const idVentaRaw=(document.getElementById('filtroIdVenta')?.value||'');
+  const desde=(document.getElementById('filtroDesde')?.value||'');
+  const hasta=(document.getElementById('filtroHasta')?.value||'');
+  const estadoSel=(document.getElementById('filtroEstado')?.value||'').toLowerCase();
+  const choferSel=(document.getElementById('filtroChofer')?.value||'');
+  const tracking=trackingRaw.trim(); const id_venta=idVentaRaw.trim(); const estado=estadoSel||'';
+  const partidos=[]; document.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]:checked').forEach(cb=>partidos.push(cb.getAttribute('data-nombre')));
+  const all=document.getElementById('chk_all_partidos'); if(all && all.checked) partidos.length=0;
+
+  try{
+    filtrosActivos={ cliente:cliRaw.trim()||undefined, tracking:tracking||undefined, id_venta:id_venta||undefined, desde:desde||undefined, hasta:hasta||undefined, estado:estado||undefined, chofer:choferSel||undefined, partidos:partidos, limit:100 };
+    const q=buildQueryParams(filtrosActivos);
+    console.log('Query partidos:', q.toString());
+    const res=await fetch(`/api/envios?${q.toString()}`,{cache:'no-store'}); const data=await res.json();
+    enviosCargados=data.rows||data||[]; nextCursor=data.nextCursor||null;
+    renderTabla(); renderPaginacionLikeCursor();
+  }catch(err){ console.error('Error aplicando filtro:', err); }
+}
+
+async function limpiarFiltros(){
+  document.getElementById('filtroCliente').value='';
+  document.getElementById('filtroTracking').value='';
+  document.getElementById('filtroIdVenta').value='';
+  document.getElementById('filtroDesde').value='';
+  document.getElementById('filtroHasta').value='';
+  document.getElementById('filtroEstado').value='';
+  const choferSel=document.getElementById('filtroChofer'); if(choferSel) choferSel.value='';
+  seleccionPartidos.clear(); const all=document.getElementById('chk_all_partidos'); if(all) all.checked=true;
+  document.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]').forEach(cb=>cb.checked=false);
+  updateCountPartidos(); await cargarPrimerPagina();
+}
+
+function renderTabla(){
+  const tbody=document.getElementById('tablaEnvios'); tbody.innerHTML='';
+  const lista=enviosCargados||[];
+  if(!lista.length){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="px-4 py-6 text-center opacity-70" colspan="8">No hay envíos para los filtros seleccionados</td>`;
+    tbody.appendChild(tr); return;
+  }
+  lista.forEach(e=>{
+    const fecha=new Date(e.updatedAt||e.fecha||e.createdAt||Date.now()).toLocaleString();
+    const { key:eKey, label:eLabel, substatus }=uiStatus(e);
+
+    // Agregar icono de alerta para estados que necesitan atención
+    const needsAttention = [
+      'comprador_ausente', 'inaccesible', 'direccion_erronea',
+       'demorado', 'reprogramado', 'no_entregado', 'rechazado'
+    ];
+
+    let iconoAlerta = '';
+    if (needsAttention.includes(eKey)) {
+      iconoAlerta = '<span class="mr-1" title="Requiere atención">⚠️</span>';
+    }
+
+    let estadoHTML;
+    const estadoActual = (e.estado || '').toLowerCase();
+
+    if (e.requiere_sync_meli === false) {
+      const actual = estadoActual || 'pendiente';
+      const colorClass = getEstadoColorClass(actual);
+      estadoHTML = (
+        `${iconoAlerta}<select onchange="cambiarEstadoEnvio('${e._id}', this.value)"
+          class="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100 ${colorClass} cursor-pointer hover:border-slate-400 dark:hover:border-white/20 transition-colors">
+          <option value="en_planta" ${actual === 'en_planta' ? 'selected' : ''}>
+            En planta
+          </option>
+          <option value="en_camino" ${actual === 'en_camino' ? 'selected' : ''}>
+            En camino
+          </option>
+          <option value="comprador_ausente" ${actual === 'comprador_ausente' ? 'selected' : ''}>
+            Comprador ausente
+          </option>
+          <option value="entregado" ${actual === 'entregado' ? 'selected' : ''}>
+            Entregado
+          </option>
+          <option value="rechazado" ${actual === 'rechazado' ? 'selected' : ''}>
+            Rechazado
+          </option>
+        </select>`
+      ).trim();
+    } else {
+      estadoHTML = iconoAlerta + renderEstadoChip(e);
+    }
+    const partidoUI=(e.partido && e.partido.trim())? e.partido : '-';
+    const zonaFact=(e.zona && e.zona.trim())? cleanZona(e.zona) : '';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td class="px-4 py-2">
+        <button class="text-indigo-600 dark:text-indigo-400 hover:underline" data-id="${e._id}" onclick="mostrarDetalle(this.dataset.id)" title="Ver detalle">
+          ${e.meli_id || e.id_venta || '(sin id)'}
+        </button>
+        ${ hasQr(e) ? qrIconButtonHtml(e._id) : `<span class="inline-block align-middle" data-qr-probe="${e._id}"></span>` }
+        ${ e.meli_id ? `<button class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-slate-50 dark:hover:bg-white/10" onclick="forceSyncMeli('${e.meli_id}')" title="Actualizar estado desde MeLi">↻</button>` : '' }
+      </td>
+      <td class="px-4 py-2 font-mono">${e.id_venta || '-'}</td>
+      <td class="px-4 py-2">${nombreClienteEnvio(e)}</td>
+      <td class="px-4 py-2">${fecha}</td>
+      <td class="px-4 py-2" title="${zonaFact}">${partidoUI}</td>
+      <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
+      <td class="px-4 py-2">${estadoHTML}</td>
+      <td class="px-4 py-2">
+        <button class="text-rose-600 hover:text-rose-700" title="Eliminar" onclick="abrirModalEliminar('${e._id}')">🗑</button>
+        <button class="text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100 mr-2" title="Notas" onclick="abrirModalNotas('${e._id}')">📝</button>
+        ${ hasNotesFlag(e) ? `<span title="Tiene notas" class="mr-1">🚩</span>` : '' }
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  probeQrButtons();
+}
+
+function renderPaginacionLikeCursor(){
+  const info=document.getElementById('infoPagina'); const btnMas=document.getElementById('btnMas');
+  if(info) info.textContent = `${enviosCargados.length} items` + (nextCursor ? ' (hay más…)' : '');
+  if(btnMas) btnMas.disabled=!nextCursor;
+}
+
+async function mostrarDetalle(envioId){
+  try{
+    const res=await fetch(`/api/envios/${envioId}`,{cache:'no-store'}); if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    const clienteNombreRaw = nombreClienteEnvio(data);
+    const clienteNombre = clienteNombreRaw === '—' ? '— sin nombre —' : clienteNombreRaw;
+    const partido=data.partido?.trim?.()||'-'; const zonaFact=data.zona?.trim?.()||'-';
+    const s=uiStatus(data); const hist=data.timeline||data.historial||data.eventos||[];
+    renderHistorial(hist); switchTab('detalle');
+    const cd=document.getElementById('contenidoDetalle');
+    cd.innerHTML=`
+      <p><strong>Cliente:</strong> ${clienteNombre}</p>
+      <p><strong>Dirección:</strong> ${data.direccion || '-'}</p>
+      <p><strong>Tracking (ML):</strong> ${data.meli_id || '-'}</p>
+      <p><strong>ID de venta:</strong> ${data.id_venta || '-'}</p>
+      <p><strong>Estado:</strong> ${renderEstadoChip(data)}</p>
+      <p><strong>CP:</strong> ${data.codigo_postal || '-'}</p>
+      <p><strong>Partido:</strong> ${partido}</p>
+      <p><strong>Referencia:</strong> ${data.referencia || '-'}</p>`;
+
+    // Mostrar intentos si existen
+    const ultimoEvento = (data.historial || [])
+      .filter(h => h.estado_meli?.substatus === 'receiver_absent')
+      .sort((a,b) => new Date(b.at) - new Date(a.at))[0];
+
+    if (ultimoEvento?.metadata?.intentos) {
+      cd.innerHTML += `<p><strong>Intentos de entrega:</strong> ${ultimoEvento.metadata.intentos}</p>`;
+    }
+
+    // Botón “Ver QR de respaldo”
+    (() => {
+      const cd=document.getElementById('contenidoDetalle');
+      let btn=document.getElementById('btnVerQrRespaldo');
+      if(!btn){
+        btn=document.createElement('button'); btn.id='btnVerQrRespaldo'; btn.type='button';
+        btn.className='mt-3 px-3 py-2 border rounded text-sm hover:bg-slate-50 dark:hover:bg-white/10';
+        btn.textContent='Ver QR de respaldo (7 días)'; cd.appendChild(btn);
+      }
+      btn.disabled=false; btn.onclick=()=>cargarQrRespaldo(data._id);
+    })();
+
+    const modal=document.getElementById('modalDetalle');
+    modal.classList.remove('hidden'); modal.classList.add('flex'); document.body.classList.add('overflow-hidden');
+    if(Number.isFinite(data.latitud) && Number.isFinite(data.longitud)) initMapa(data.latitud,data.longitud); else initMapa(NaN,NaN);
+  }catch(e){ console.error('Error mostrando detalle:', e); alert('No se pudo cargar el detalle del envío.'); }
+}
+function cerrarModalDetalle(){ const m=document.getElementById('modalDetalle'); m.classList.add('hidden'); m.classList.remove('flex'); document.body.classList.remove('overflow-hidden'); if(mapaInstancia){ mapaInstancia.remove(); mapaInstancia=null; } }
+
+function openQrModal(url){ const m=document.getElementById('qrViewModal'); const img=document.getElementById('qrViewImg'); img.src=url; m.classList.remove('hidden'); }
+function closeQrModal(){ const m=document.getElementById('qrViewModal'); const img=document.getElementById('qrViewImg'); img.src=''; m.classList.add('hidden'); }
+document.getElementById('qrViewClose')?.addEventListener('click', closeQrModal);
+document.getElementById('qrViewModal')?.addEventListener('click', (e)=>{ if (e.target===e.currentTarget) closeQrModal(); });
+async function cargarQrRespaldo(envioId){
+  try{
+    const r=await fetch(`/api/scan-meli/latest-render/${envioId}`); const j=await r.json();
+    if(!r.ok || !j.ok || !j.url){ return alert('Sin QR vinculado o vencido'); }
+    openQrModal(j.url);
+  }catch(e){ console.error(e); alert('No se pudo obtener el QR'); }
+}
+
+let envioAEliminar=null;
+function abrirModalEliminar(id){ envioAEliminar=id; const m=document.getElementById('modalEliminar'); m.classList.remove('hidden'); m.classList.add('flex'); document.body.classList.add('overflow-hidden'); }
+function cerrarModalEliminar(){ envioAEliminar=null; const m=document.getElementById('modalEliminar'); m.classList.add('hidden'); m.classList.remove('flex'); document.body.classList.remove('overflow-hidden'); }
+document.getElementById('btnConfirmEliminar').addEventListener('click', async ()=>{
+  if(!envioAEliminar) return;
+  try{
+    const res=await fetch(`/api/envios/${envioAEliminar}`,{method:'DELETE',cache:'no-store'});
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    enviosCargados=enviosCargados.filter(e=>e._id!==envioAEliminar);
+    cerrarModalEliminar(); renderTabla(); renderPaginacionLikeCursor();
+  }catch(e){ console.error('Error eliminando envío:', e); alert('No se pudo eliminar el envío.'); }
+});
+
+// Notas
+let envioNotasId=null; const IS_ADMIN=(window.USER_ROLE==='admin');
+function abrirModalNotas(id){ envioNotasId=id; const m=document.getElementById('modalNotas'); m.classList.remove('hidden'); m.classList.add('flex'); document.body.classList.add('overflow-hidden'); document.getElementById('notaTexto').value=''; cargarNotas(); }
+function cerrarModalNotas(){ envioNotasId=null; const m=document.getElementById('modalNotas'); m.classList.add('hidden'); m.classList.remove('flex'); document.body.classList.remove('overflow-hidden'); }
+document.getElementById('modalNotas').addEventListener('click',(e)=>{ if(e.target===e.currentTarget) cerrarModalNotas(); });
+document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') cerrarModalNotas(); });
+
+function renderListaNotas(notas=[]){
+  const box=document.getElementById('listaNotas');
+  if(!Array.isArray(notas)||!notas.length){ box.innerHTML=`<div class="text-sm text-slate-500">Aún no hay notas para este envío.</div>`; return; }
+  box.innerHTML=notas.map(n=>{
+    const fecha=n.at ? new Date(n.at).toLocaleString() : '';
+    const autor=n.actor_name || '—';
+    const texto=(n.texto||n.note||'').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const acciones=IS_ADMIN ? `<button class="text-rose-600 hover:text-rose-700 text-xs" title="Eliminar nota" onclick="eliminarNota('${n._id}')">🗑</button>` : '';
+    return `<div class="border border-slate-200 dark:border-white/10 rounded-xl p-3">
+      <div class="flex items-center justify-between text-xs opacity-70">
+        <div class="flex items-center gap-2"><span>${fecha}</span><span class="opacity-50">•</span><span>${autor}</span></div>
+        <div>${acciones}</div>
+      </div>
+      <div class="mt-1 text-sm whitespace-pre-wrap">${texto}</div>
+    </div>`;
+  }).join('');
+}
+async function cargarNotas(){
+  const box=document.getElementById('listaNotas');
+  try{
+    const r=await fetch(`/api/envios/${envioNotasId}/notas`,{cache:'no-store'}); if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data=await r.json(); renderListaNotas(data);
+  }catch(e){ console.error('Notas GET error', e); box.innerHTML=`<div class="text-sm text-rose-600">No se pudieron cargar las notas.</div>`; }
+}
+document.getElementById('btnGuardarNota').addEventListener('click', async ()=>{
+  const texto=document.getElementById('notaTexto').value.trim(); if(!texto) return alert('Escribí una nota.');
+  try{
+    const r=await fetch(`/api/envios/${envioNotasId}/notas`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto})});
+    if(!r.ok) throw new Error(`HTTP ${r.status}`); document.getElementById('notaTexto').value=''; await cargarNotas();
+    const abierto=!document.getElementById('modalDetalle').classList.contains('hidden'); if(abierto) await mostrarDetalle(envioNotasId);
+  }catch(e){ console.error('Notas POST error', e); alert('No se pudo guardar la nota.'); }
+});
+async function eliminarNota(notaId){
+  if(!IS_ADMIN){ alert('Solo administradores pueden eliminar notas.'); return; }
+  if(!confirm('¿Eliminar esta nota?')) return;
+  try{
+    const r=await fetch(`/api/envios/${envioNotasId}/notas/${notaId}`,{method:'DELETE'});
+    if(r.status===403){ alert('No tenés permisos para eliminar notas.'); return; }
+    if(!r.ok) throw new Error(`HTTP ${r.status}`); await cargarNotas();
+    const abierto=!document.getElementById('modalDetalle').classList.contains('hidden'); if(abierto) await mostrarDetalle(envioNotasId);
+  }catch(e){ console.error('Notas DELETE error', e); alert('No se pudo eliminar la nota.'); }
+}
+
+window.abrirModalNotas=abrirModalNotas; window.cerrarModalNotas=cerrarModalNotas;
+window.aplicarFiltro=aplicarFiltro; window.limpiarFiltros=limpiarFiltros;
+window.mostrarDetalle=mostrarDetalle; window.abrirModalEliminar=abrirModalEliminar;
+window.cerrarModalEliminar=cerrarModalEliminar; window.cerrarModalDetalle=cerrarModalDetalle;
+
+function switchTab(which){
+  const det=document.getElementById('tabDetalle');
+  const his=document.getElementById('tabHistorial');
+  const bDet=document.getElementById('tabBtnDetalle');
+  const bHis=document.getElementById('tabBtnHist');
+  const activate=(btn)=>{ btn.classList.remove('text-slate-600','border-transparent'); btn.classList.add('text-amber-600','dark:text-amber-400','border-amber-500/80','font-medium'); };
+  const deactivate=(btn)=>{ btn.classList.add('text-slate-600','dark:text-slate-300','border-transparent'); btn.classList.remove('text-amber-600','dark:text-amber-400','border-amber-500/80','font-medium'); };
+  if(which==='detalle'){ det.classList.remove('hidden'); his.classList.add('hidden'); activate(bDet); deactivate(bHis); }
+  else { det.classList.add('hidden'); his.classList.remove('hidden'); activate(bHis); deactivate(bDet); }
+}
+
+function renderHistorial(histArray=[]) {
+  const cont = document.getElementById('contenidoHistorial');
+  if (!Array.isArray(histArray) || !histArray.length) {
+    cont.innerHTML = `<p class="text-sm text-slate-500">Sin eventos por ahora.</p>`;
+    return;
+  }
+
+  const rows = histArray.slice().sort((a,b)=> 
+    new Date(b.at||b.fecha||b.updatedAt||0)-new Date(a.at||a.fecha||a.updatedAt||0)
+  ).map(h => {
+    const fechaStr = h.at ? new Date(h.at).toLocaleString('es-AR') : 
+                     h.updatedAt ? new Date(h.updatedAt).toLocaleString('es-AR') : '-';
+    
+    let badge = ''; 
+    let detalleNota = '';
+    
+    if ((h.estado && h.estado.toLowerCase() === 'nota') || h.note) {
+      badge = `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300">Nota</span>`;
+      const safe = (h.note||'').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      detalleNota = `<div class="mt-1 text-xs italic text-slate-600 dark:text-slate-300 whitespace-pre-wrap">${safe}</div>`;
+    } else {
+      // Construir objeto temporal para uiStatus
+      const tempEnvio = {
+        estado: h.estado,
+        estado_meli: h.estado_meli || {}
+      };
+      
+      const { key, label } = uiStatus(tempEnvio);
+      
+      // Extraer substatus crudo de MeLi
+      const subRaw = (h.estado_meli?.substatus || '').toLowerCase().trim();
+      
+      // Badge principal
+      badge = estadoBadge(key, label);
+      
+      // AGREGAR chip de substatus si es relevante
+      if (subRaw) {
+        // Mapeo de substatuses a español
+        const MAP_SUBSTATUS = {
+          'out_for_delivery': '📦 salió a reparto',
+          'arriving_soon': '⏰ llega pronto',
+          'delayed': '⏱️ demorado',
+          'rescheduled_by_buyer': '👤 reprog. comprador',
+          'rescheduled_by_meli': '🔄 reprog. MeLi',
+          'receiver_absent': '🚫 ausente',
+          'not_visited': '⚠️ inaccesible',
+          'bad_address': '📍 dir. errónea'
+          };
+        
+        const subDetalle = MAP_SUBSTATUS[subRaw];
+        
+        if (subDetalle) {
+          // Color contextual según tipo
+          let chipClass = 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300';
+          
+          if (subRaw.includes('absent') || subRaw.includes('not_visited') || subRaw.includes('bad_address')) {
+            chipClass = 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300';
+          } else if (subRaw.includes('rescheduled')) {
+            chipClass = 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300';
+          } else if (subRaw.includes('delay')) {
+            chipClass = 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300';
+          } else if (subRaw.includes('delivery') || subRaw.includes('soon')) {
+            chipClass = 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300';
+          }
+          
+          badge += `<span class="ml-2 text-[11px] px-2 py-0.5 rounded-full border ${chipClass}">${subDetalle}</span>`;
+        }
+      }
+    }
+    
+    const usuario = h.actor_name || h.usuario || '—';
+    
+    return `<tr class="border-b border-slate-200 dark:border-white/10">
+      <td class="px-3 py-2 whitespace-nowrap text-xs text-slate-900 dark:text-slate-100">${fechaStr}</td>
+      <td class="px-3 py-2">${badge}${detalleNota}</td>
+      <td class="px-3 py-2 whitespace-nowrap opacity-80 text-xs text-slate-900 dark:text-slate-100">${usuario}</td>
+    </tr>`;
+  }).join('');
+
+  cont.innerHTML = `<div class="overflow-x-auto"><table class="min-w-full text-sm">
+    <thead class="bg-slate-50 dark:bg-white/5">
+      <tr>
+        <th class="px-3 py-2 text-left font-semibold">Fecha y hora</th>
+        <th class="px-3 py-2 text-left font-semibold">Estado</th>
+        <th class="px-3 py-2 text-left font-semibold">Usuario</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+
+// ========== CAMBIO DE ESTADO MANUAL ==========
+
+async function cambiarEstadoEnvio(envioId, nuevoEstado) {
+  if (!envioId || !nuevoEstado) {
+    console.warn('cambiarEstadoEnvio: faltan parámetros');
+    return;
+  }
+
+  const recargar = async () => {
+    if (typeof aplicarFiltro === 'function') {
+      await aplicarFiltro();
+    } else if (typeof cargarPrimerPagina === 'function') {
+      await cargarPrimerPagina();
+    }
+  };
+
+  try {
+    const res = await fetch(`/api/envios/${envioId}/cambiar-estado`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        nuevo_estado: nuevoEstado,
+        nota: 'Cambio manual de estado'
+      })
+    });
+
+    let payload = null;
+    try {
+      payload = await res.json();
+    } catch (_) {}
+
+    if (!res.ok) {
+      throw new Error(payload?.error || 'Error al cambiar estado');
+    }
+
+    console.log('✓ Estado actualizado:', payload?.estado_nuevo || nuevoEstado);
+  } catch (err) {
+    console.error('Error cambiando estado:', err);
+    alert(`Error: ${err.message}`);
+  } finally {
+    await recargar();
+  }
+}
+
+window.cambiarEstadoEnvio = cambiarEstadoEnvio;
+
+
+
+document.addEventListener('DOMContentLoaded',()=>{
+  ['filtroCliente','filtroTracking','filtroIdVenta','filtroDesde','filtroHasta'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.addEventListener('keydown',e=>{ if(e.key==='Enter') aplicarFiltro(); });
+  });
+  document.getElementById('modalDetalle').addEventListener('click',(e)=>{ if(e.target===e.currentTarget) cerrarModalDetalle(); });
+  document.getElementById('modalEliminar').addEventListener('click',(e)=>{ if(e.target===e.currentTarget) cerrarModalEliminar(); });
+  document.addEventListener('keydown',(e)=>{ if(e.key==='Escape'){ cerrarModalDetalle(); cerrarModalEliminar(); } });
+  cargarChoferes();
+  cargarPartidos().then(()=>cargarPrimerPagina());
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadKPIs();
+  setInterval(loadKPIs, 60_000);
+});
+
+async function loadKPIs() {
+  const el = (id, v) => { const n = document.getElementById(id); if (n) n.textContent = v; };
+
+  try {
+    const r = await fetch('/api/kpis/home', { cache: 'no-store' });
+    if (!r.ok) {
+      if (r.status === 401 || r.status === 403) {
+        location.href = '/auth/login';
+        return;
+      }
+      const text = await r.text();
+      console.error('KPIs HTTP error', r.status, text);
+      throw new Error('kpis_fail');
+    }
+    const j = await r.json();
+    el('kpi-pend', j.pendientes ?? '0');
+    el('kpi-ruta', j.en_ruta ?? '0');
+    el('kpi-ent',  j.entregados ?? '0');
+    el('kpi-inc',  j.incidencias ?? '0');
+  } catch (e) {
+    console.error('No se pudieron cargar los KPIs', e);
+    el('kpi-pend', '—'); el('kpi-ruta', '—'); el('kpi-ent', '—'); el('kpi-inc', '—');
+  }
+}
+
+async function forceSyncMeli(meli_id){
+  try{
+    const r=await fetch(`/api/auth/meli/force-sync/${meli_id}`,{method:'POST'});
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    enviosCargados=[]; await aplicarFiltro();
+  }catch(e){ console.error('force-sync error', e); alert('No se pudo sincronizar con MeLi.'); }
+}
+window.forceSyncMeli=forceSyncMeli;
+</script>
+<!-- ================== FIN DE TU SCRIPT ================== -->
+
+</body>
+</html>
