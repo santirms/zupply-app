@@ -81,7 +81,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         referencia:    p.referencia,
         precio:        costo,
         fecha:         new Date(),
-        estado:        'en_preparacion',
+        estado:        'pendiente',
         requiere_sync_meli: false,
         origen:        'ingreso_manual',
         source:        'panel' // 👈 marca el origen
