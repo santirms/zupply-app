@@ -64,7 +64,7 @@ router.post('/manual', async (req, res) => {
       id_venta:      id_venta || Math.random().toString(36).slice(2,10).toUpperCase(),
       precio,
       fecha:         new Date(),
-      estado:        'en_preparacion',
+      estado:        'pendiente',
       requiere_sync_meli: false,
       origen:        'ingreso_manual'
     });
