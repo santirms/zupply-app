@@ -368,7 +368,7 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
       referencia:    p.referencia         || '',
       fecha:         new Date(),
       precio:        p.manual_precio      ? Number(p.precio) || 0 : 0,
-      estado:        'en_preparacion',
+      estado:        'pendiente',
       requiere_sync_meli: false,
       origen:        'ingreso_manual'
       // precio real se calculará en GET /envios si es 0
@@ -504,7 +504,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         referencia:    p.referencia,
         precio:        costo,
         fecha:         new Date(),
-        estado:        'en_preparacion',
+        estado:        'pendiente',
         requiere_sync_meli: false,
         origen:        'ingreso_manual'
       });
@@ -940,7 +940,7 @@ router.patch('/:id/cambiar-estado', requireAuth, requireRole('admin','coordinado
 
     // Estados permitidos para cambio manual
     const ESTADOS_VALIDOS = [
-      'en_preparacion',
+      'pendiente',
       'en_planta',
       'en_camino',
       'comprador_ausente',

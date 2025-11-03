@@ -219,7 +219,6 @@ function obtenerInfoEstado(estado) {
   const estadoKey = (estado ?? '').toString().trim().toLowerCase();
 
   const estadosZupply = {
-    en_preparacion: { nombre: 'En preparación', color: 'info', icono: 'box-seam' },
     en_planta: { nombre: 'En planta', color: 'secondary', icono: 'box-seam' },
     asignado: { nombre: 'Asignado', color: 'info', icono: 'person-check' },
     en_camino: { nombre: 'En camino', color: 'primary', icono: 'truck' },
