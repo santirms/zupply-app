@@ -44,7 +44,7 @@ router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE'
 // ——— Meli history on-demand con hora real ———
 const HYDRATE_TTL_MIN = 15;  // re-hidratar si pasaron >15'
 
-const WINDOW36H_MS = 36 * 60 * 60 * 1000;
+const WINDOW_7D_MS = 7 * 24 * 60 * 60 * 1000;  // Ventana de 7 días por defecto
 const TIME_FIELD = 'fecha'; // usamos "fecha" para ventana/sort/cursor
 
 function buildFiltroList(req) {
@@ -162,9 +162,9 @@ function buildFiltroList(req) {
     }
   }
  
-  // Ventana por defecto: 36h
+  // Ventana de 7 días por defecto
   if (!desde && !hasta) {
-    f[TIME_FIELD] = { $gte: new Date(Date.now() - WINDOW36H_MS) };
+    f[TIME_FIELD] = { $gte: new Date(Date.now() - WINDOW_7D_MS) };
   } else {
     const r = {};
     if (desde) r.$gte = new Date(`${desde}T00:00:00-03:00`);          // horario AR

@@ -692,13 +692,16 @@ async function aplicarFiltro(){
   try{
     filtrosActivos={ cliente:cliRaw.trim()||undefined, tracking:tracking||undefined, id_venta:id_venta||undefined, desde:desde||undefined, hasta:hasta||undefined, estado:estado||undefined, chofer:choferSel||undefined, partidos:partidos, limit:100 };
 
-    // Si es filtro de incidencias, NO enviar estado específico
-    if (window._filtroIncidencias) {
+    // Si el usuario seleccionó un estado manualmente, desactivar filtro de incidencias
+    const estadoSeleccionado = document.getElementById('filtroEstado')?.value || '';
+
+    if (estadoSeleccionado) {
+      // Usuario eligió estado específico → desactivar incidencias
+      window._filtroIncidencias = false;
+      filtrosActivos.estado = estadoSeleccionado;
+    } else if (window._filtroIncidencias) {
+      // No hay estado seleccionado pero incidencias está activo
       filtrosActivos.incidencias = 'true';
-      delete filtrosActivos.estado; // Limpiar estado para que no envíe ambos
-    } else if (filtrosActivos.estado) {
-      // Si hay estado, NO marcar como incidencias
-      delete filtrosActivos.incidencias;
     }
 
     const q=buildQueryParams(filtrosActivos);
