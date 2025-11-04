@@ -78,7 +78,7 @@ router.get('/home', async (req, res) => {
   // incidencias: 48h con estados específicos
   Envio.countDocuments({
     estado: { $in: ['reprogramado', 'comprador_ausente', 'demorado'] },
-    fecha: { $gte: start48h }
+    fecha: { $gte: start7d }
   })
 ]);
     return res.json({ pendientes, en_ruta, entregados, incidencias });
