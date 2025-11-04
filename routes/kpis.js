@@ -44,29 +44,29 @@ router.get('/home', async (req, res) => {
   try {
     const now = new Date();
 
-    // 48 horas atrás (para pendientes/incidencias)
-    const start48h = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+    // 7 días atrás (para pendientes/incidencias)
+    const start7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     // Entregados de "hoy calendario" (00:00 → 24:00)
     const tISO = todayISO();
     const startDia = atLocal(tISO, '00:00');
     const endDia   = atLocal(tISO, '23:59'); // inclusive; si preferís [00:00, mañana 00:00) usá endNext
 
-    // 36 horas atrás (para EN RUTA)
-    const start36h = new Date(Date.now() - 36 * 60 * 60 * 1000);
+    // 7 días atrás (para EN RUTA)
+    const start7d_ruta = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     // === Consultas (countDocuments) ===
     const [pendientes, en_ruta, entregados, incidencias] = await Promise.all([
     // pendientes: estado=pendiente, últimas 48h
     Envio.countDocuments({
     estado: 'pendiente',
-    fecha: { $gte: start48h }
+    fecha: { $gte: start7d }
   }),
 
   // en ruta: estado=en_camino, últimas 36h (independiente del reset)
   Envio.countDocuments({
     estado: 'en_camino',
-    fecha: { $gte: start36h }
+    fecha: { $gte: start7d_ruta }
   }),
 
   // entregados: hoy (00:00 → 23:59)
