@@ -105,44 +105,60 @@ function buildFiltroList(req) {
     return f;
   }
 
-  // 👇 Filtro por incidencias (múltiples estados)
+  // Filtro por incidencias (múltiples estados + substatuses ML)
   if (incidencias === 'true') {
-    f.estado = {
-      $in: [
-        'reprogramado',
-        'comprador_ausente',
-        'demorado',
-        'no_entregado',
-        'inaccesible',
-        'direccion_erronea'
-      ]
-    };
+    f.$or = [
+      // Incidencias en estado principal
+      { estado: { $in: ['reprogramado', 'comprador_ausente', 'demorado', 'no_entregado', 'inaccesible', 'direccion_erronea'] } },
+
+      // Incidencias en substatuses de ML
+      { 'estado_meli.substatus': { $in: ['receiver_absent', 'not_delivered', 'to_be_agreed', 'returned_to_sender'] } },
+      { 'substatus': { $in: ['receiver_absent', 'not_delivered', 'to_be_agreed', 'returned_to_sender'] } },
+      { 'ml_substatus': { $in: ['receiver_absent', 'not_delivered', 'to_be_agreed', 'returned_to_sender'] } }
+    ];
   } else if (estado) {
-    // 👇 Estado: mapear "reprogramado", "demorado", "comprador_ausente" a substatus MeLi
-    const e = String(estado).toLowerCase();
-    if (e === 'reprogramado') {
-      f.$or = [
-        { estado: 'reprogramado' },
-        { 'estado_meli.substatus': /resched/i },
-        { substatus: /resched/i },
-        { ml_substatus: /resched/i }
-      ];
-    } else if (e === 'demorado') {
-      f.$or = [
-        { estado: 'demorado' },
-        { 'estado_meli.substatus': /delay/i },
-        { substatus: /delay/i },
-        { ml_substatus: /delay/i }
-      ];
-    } else if (e === 'comprador_ausente') {
-      f.$or = [
-        { estado: 'comprador_ausente' },
-        { 'estado_meli.substatus': /(recipient|buyer|client|addressee).*absent|not[_\s-]?at[_\s-]?home/i },
-        { ml_substatus: /(recipient|buyer|client|addressee).*absent|not[_\s-]?at[_\s-]?home/i },
-        { substatus: /(recipient|buyer|client|addressee).*absent|not[_\s-]?at[_\s-]?home/i }
-      ];
+    // Mapeo de estados internos a condiciones que incluyen ML
+    const estadoMap = {
+      'comprador_ausente': {
+        $or: [
+          { estado: 'comprador_ausente' },
+          { 'estado_meli.substatus': 'receiver_absent' },
+          { 'substatus': 'receiver_absent' },
+          { 'ml_substatus': 'receiver_absent' }
+        ]
+      },
+      'no_entregado': {
+        $or: [
+          { estado: 'no_entregado' },
+          { 'estado_meli.substatus': 'not_delivered' },
+          { 'substatus': 'not_delivered' },
+          { 'ml_substatus': 'not_delivered' }
+        ]
+      },
+      'reprogramado': {
+        $or: [
+          { estado: 'reprogramado' },
+          { 'estado_meli.substatus': 'to_be_agreed' },
+          { 'substatus': 'to_be_agreed' },
+          { 'ml_substatus': 'to_be_agreed' }
+        ]
+      },
+      'demorado': {
+        $or: [
+          { estado: 'demorado' },
+          { 'estado_meli.substatus': 'returned_to_sender' },
+          { 'substatus': 'returned_to_sender' },
+          { 'ml_substatus': 'returned_to_sender' }
+        ]
+      }
+    };
+
+    // Si el estado tiene mapeo especial, usarlo
+    if (estadoMap[estado]) {
+      Object.assign(f, estadoMap[estado]);
     } else {
-      f.estado = e; // resto: matchea directo
+      // Estados simples (pendiente, en_camino, entregado, etc)
+      f.estado = estado;
     }
   }
  
