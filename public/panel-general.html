@@ -111,22 +111,26 @@
 
   <!-- Mini-KPIs -->
   <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+    <div onclick="filtrarPorEstado('pendiente')" style="cursor: pointer;"
+         class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:shadow-lg transition-shadow">
       <div class="text-xs opacity-70">Pendientes</div>
       <div id="kpi-pend" class="text-3xl font-semibold mt-1 tracking-tight text-amber-600">—</div>
     </div>
 
-    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+    <div onclick="filtrarPorEstado('en_camino')" style="cursor: pointer;"
+         class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:shadow-lg transition-shadow">
       <div class="text-xs opacity-70">En ruta</div>
       <div id="kpi-ruta" class="text-3xl font-semibold mt-1 tracking-tight text-sky-600 dark:text-sky-300">—</div>
     </div>
 
-    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+    <div onclick="filtrarPorEstado('entregado')" style="cursor: pointer;"
+         class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:shadow-lg transition-shadow">
       <div class="text-xs opacity-70">Entregados</div>
       <div id="kpi-ent" class="text-3xl font-semibold mt-1 tracking-tight text-emerald-600 dark:text-emerald-300">—</div>
     </div>
 
-    <div class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5">
+    <div onclick="filtrarPorIncidencias()" style="cursor: pointer;"
+         class="rounded-2xl p-4 text-left border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:shadow-lg transition-shadow">
       <div class="text-xs opacity-70">Incidencias</div>
       <div id="kpi-inc" class="text-3xl font-semibold mt-1 tracking-tight text-rose-600 dark:text-rose-300">—</div>
     </div>
@@ -1156,6 +1160,51 @@ async function forceSyncMeli(meli_id){
   }catch(e){ console.error('force-sync error', e); alert('No se pudo sincronizar con MeLi.'); }
 }
 window.forceSyncMeli=forceSyncMeli;
+
+// Funciones para filtros rápidos desde KPIs
+function filtrarPorEstado(estado) {
+  // Actualizar URL sin recargar
+  const url = new URL(window.location);
+  url.searchParams.set('estado', estado);
+  url.searchParams.delete('incidencias');
+  window.history.pushState({}, '', url);
+
+  // Actualizar select de estado si existe
+  const selectEstado = document.querySelector('select[name="estado"]') ||
+                       document.querySelector('#filtroEstado');
+  if (selectEstado) {
+    selectEstado.value = estado;
+    selectEstado.dispatchEvent(new Event('change'));
+  }
+
+  // Recargar envíos con filtro
+  window._filtroIncidencias = false;
+  cargarPrimerPagina();
+}
+
+function filtrarPorIncidencias() {
+  // Actualizar URL sin recargar
+  const url = new URL(window.location);
+  url.searchParams.set('incidencias', 'true');
+  url.searchParams.delete('estado');
+  window.history.pushState({}, '', url);
+
+  // Marcar filtro de incidencias
+  window._filtroIncidencias = true;
+
+  // Limpiar select de estado
+  const selectEstado = document.querySelector('select[name="estado"]') ||
+                       document.querySelector('#filtroEstado');
+  if (selectEstado) {
+    selectEstado.value = '';
+  }
+
+  // Recargar envíos con filtro
+  cargarPrimerPagina();
+}
+
+window.filtrarPorEstado = filtrarPorEstado;
+window.filtrarPorIncidencias = filtrarPorIncidencias;
 </script>
 <!-- ================== FIN DE TU SCRIPT ================== -->
 
