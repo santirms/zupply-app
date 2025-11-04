@@ -402,7 +402,7 @@ const nombreClienteEnvio = (envio = {}) => {
 };
 window.nombreClienteEnvio = nombreClienteEnvio;
 
-function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, partidos, chofer, cursor, limit=100 }) {
+function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, partidos, chofer, cursor, incidencias, limit=100 }) {
   const p = new URLSearchParams();
   if (tracking) p.set('tracking', tracking);
   if (id_venta) p.set('id_venta', id_venta);
@@ -410,6 +410,7 @@ function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, p
   if (!tracking) { if (desde) p.set('desde', desde); if (hasta) p.set('hasta', hasta); }
   if (estado) p.set('estado', estado);
   if (chofer) p.set('chofer', chofer);
+  if (incidencias) p.set('incidencias', incidencias);
   if (Array.isArray(partidos) && partidos.length) p.set('partidos', partidos.join(','));
   if (cursor && !tracking) p.set('cursor', cursor);
   p.set('limit', String(limit)); p.set('ts', String(Date.now()));
@@ -419,6 +420,20 @@ function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, p
 async function cargarPrimerPagina() {
   try {
     filtrosActivos = { limit: 100 };
+
+    // Leer filtros desde URL si existen
+    const urlParams = new URLSearchParams(window.location.search);
+    const filtroEstado = urlParams.get('estado');
+    const filtroIncidencias = urlParams.get('incidencias');
+
+    if (filtroEstado) {
+      filtrosActivos.estado = filtroEstado;
+    }
+
+    if (filtroIncidencias === 'true' || window._filtroIncidencias) {
+      filtrosActivos.incidencias = 'true';
+    }
+
     const q = buildQueryParams(filtrosActivos);
     const res = await fetch(`/api/envios?${q.toString()}`, { cache: 'no-store' });
     const data = await res.json();
@@ -672,6 +687,12 @@ async function aplicarFiltro(){
 
   try{
     filtrosActivos={ cliente:cliRaw.trim()||undefined, tracking:tracking||undefined, id_venta:id_venta||undefined, desde:desde||undefined, hasta:hasta||undefined, estado:estado||undefined, chofer:choferSel||undefined, partidos:partidos, limit:100 };
+
+    // Agregar filtro de incidencias si está activo
+    if (window._filtroIncidencias) {
+      filtrosActivos.incidencias = 'true';
+    }
+
     const q=buildQueryParams(filtrosActivos);
     console.log('Query partidos:', q.toString());
     const res=await fetch(`/api/envios?${q.toString()}`,{cache:'no-store'}); const data=await res.json();
@@ -690,6 +711,13 @@ async function limpiarFiltros(){
   const choferSel=document.getElementById('filtroChofer'); if(choferSel) choferSel.value='';
   seleccionPartidos.clear(); const all=document.getElementById('chk_all_partidos'); if(all) all.checked=true;
   document.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]').forEach(cb=>cb.checked=false);
+
+  // Limpiar filtro de incidencias
+  window._filtroIncidencias = false;
+
+  // Limpiar parámetros de URL
+  window.history.replaceState({}, document.title, window.location.pathname);
+
   updateCountPartidos(); await cargarPrimerPagina();
 }
 
@@ -1062,6 +1090,24 @@ window.cambiarEstadoEnvio = cambiarEstadoEnvio;
 
 
 document.addEventListener('DOMContentLoaded',()=>{
+  // Leer filtros de URL al cargar
+  const urlParams = new URLSearchParams(window.location.search);
+  const filtroEstado = urlParams.get('estado');
+  const filtroIncidencias = urlParams.get('incidencias');
+
+  // Si viene filtro de estado desde KPI, aplicarlo
+  if (filtroEstado) {
+    const selectEstado = document.getElementById('filtroEstado');
+    if (selectEstado) {
+      selectEstado.value = filtroEstado;
+    }
+  }
+
+  // Si viene filtro de incidencias, marcarlo
+  if (filtroIncidencias === 'true') {
+    window._filtroIncidencias = true;
+  }
+
   ['filtroCliente','filtroTracking','filtroIdVenta','filtroDesde','filtroHasta'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.addEventListener('keydown',e=>{ if(e.key==='Enter') aplicarFiltro(); });
   });

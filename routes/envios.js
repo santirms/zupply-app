@@ -49,7 +49,7 @@ const TIME_FIELD = 'fecha'; // usamos "fecha" para ventana/sort/cursor
 
 function buildFiltroList(req) {
   const f = {};
-  const { sender_id, estado, tracking, id_venta, desde, hasta, chofer } = req.query;
+  const { sender_id, estado, tracking, id_venta, desde, hasta, chofer, incidencias } = req.query;
   const partidosRaw = req.query.partidos;
   const partidoRaw = req.query.partido;
 
@@ -104,8 +104,21 @@ function buildFiltroList(req) {
     f.$or = [{ tracking }, { id_venta: tracking }, { meli_id: tracking }];
     return f;
   }
-  // 👇 Estado: mapear "reprogramado", "demorado", "comprador_ausente" a substatus MeLi
-  if (estado) {
+
+  // 👇 Filtro por incidencias (múltiples estados)
+  if (incidencias === 'true') {
+    f.estado = {
+      $in: [
+        'reprogramado',
+        'comprador_ausente',
+        'demorado',
+        'no_entregado',
+        'inaccesible',
+        'direccion_erronea'
+      ]
+    };
+  } else if (estado) {
+    // 👇 Estado: mapear "reprogramado", "demorado", "comprador_ausente" a substatus MeLi
     const e = String(estado).toLowerCase();
     if (e === 'reprogramado') {
       f.$or = [
