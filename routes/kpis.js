@@ -82,13 +82,41 @@ router.get('/home', async (req, res) => {
   }),
 
   // entregados: hoy (00:00 → 23:59)
-Envio.countDocuments({
-  estado: 'entregado',
-  $and: [
-    { 'historial.estado': 'entregado' },
-    { 'historial.at': { $gte: startDia, $lte: endDia } }
-  ]
-}),
+// Contar envíos entregados hoy (última transición a entregado)
+const entregadosResult = await Envio.aggregate([
+  // Solo envíos actualmente entregados
+  { $match: { estado: 'entregado' } },
+  
+  // Filtrar historial para quedarnos solo con entradas "entregado"
+  {
+    $addFields: {
+      ultimaEntrega: {
+        $arrayElemAt: [
+          {
+            $filter: {
+              input: '$historial',
+              as: 'h',
+              cond: { $eq: ['$$h.estado', 'entregado'] }
+            }
+          },
+          0  // Primera (más reciente, porque se hace unshift)
+        ]
+      }
+    }
+  },
+  
+  // Filtrar solo los que se entregaron hoy
+  {
+    $match: {
+      'ultimaEntrega.at': { $gte: startDia, $lte: endDia }
+    }
+  },
+  
+  // Contar
+  { $count: 'total' }
+]);
+
+const entregados = entregadosResult[0]?.total || 0;
 
   // incidencias: 48h con estados específicos
   Envio.countDocuments({
