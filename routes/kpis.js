@@ -82,14 +82,12 @@ router.get('/home', async (req, res) => {
   }),
 
   // entregados: hoy (00:00 → 23:59)
-  Envio.countDocuments({
+Envio.countDocuments({
   estado: 'entregado',
-  'historial': {
-    $elemMatch: {
-      estado: 'entregado',
-      at: { $gte: startDia, $lte: endDia }
-    }
-  }
+  $and: [
+    { 'historial.estado': 'entregado' },
+    { 'historial.at': { $gte: startDia, $lte: endDia } }
+  ]
 }),
 
   // incidencias: 48h con estados específicos
