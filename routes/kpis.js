@@ -90,7 +90,7 @@ router.get('/home', async (req, res) => {
       at: { $gte: startDia, $lte: endDia }
     }
   }
-})
+}),
 
   // incidencias: 48h con estados específicos
   Envio.countDocuments({
