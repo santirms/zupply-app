@@ -11,18 +11,30 @@ function atLocal(dayISO, hhmm = '00:00') {
 }
 
 function todayISO() {
+  // Obtener fecha actual en Argentina (UTC-3)
   const now = new Date();
-  return new Date(now.getTime() - now.getTimezoneOffset()*60000)
-    .toISOString()
-    .slice(0,10); // YYYY-MM-DD en local
+  const arTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
+  
+  // Formatear como YYYY-MM-DD
+  const year = arTime.getFullYear();
+  const month = String(arTime.getMonth() + 1).padStart(2, '0');
+  const day = String(arTime.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
 }
 
 function yesterdayISO() {
-  const t = new Date();
-  t.setDate(t.getDate() - 1);
-  return new Date(t.getTime() - t.getTimezoneOffset()*60000)
-    .toISOString()
-    .slice(0,10);
+  const now = new Date();
+  const arTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
+  
+  // Restar 1 día
+  arTime.setDate(arTime.getDate() - 1);
+  
+  const year = arTime.getFullYear();
+  const month = String(arTime.getMonth() + 1).padStart(2, '0');
+  const day = String(arTime.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
 }
 
 /**
