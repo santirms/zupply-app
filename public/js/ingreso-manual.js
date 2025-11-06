@@ -178,6 +178,17 @@ function paqueteMarkup(){
     </script>
   `;
 }
+// AGREGAR AQUÍ (después de insertar el HTML):
+setTimeout(() => {
+  const checkbox = div.querySelector(`#cobraCheck_${randomId}`);
+  const container = div.querySelector(`#montoContainer_${randomId}`);
+  
+  if (checkbox && container) {
+    checkbox.addEventListener('change', function() {
+      container.style.display = this.checked ? 'block' : 'none';
+    });
+  }
+}, 0);
 
 function setTelefonoVisualState(input, state) {
   if (!input) return;
