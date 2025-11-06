@@ -99,6 +99,8 @@ async function generarEtiquetaInformativa(envio, cliente) {
   let y = 85;
 
   // QR Code (izquierda)
+  const tracking = envio.tracking || envio.id_venta || envio.meli_id;
+  
   const qrData = JSON.stringify({
     id: envio.id_venta,
     tracking: envio.tracking || envio.id_venta,
