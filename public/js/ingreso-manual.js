@@ -147,8 +147,7 @@ function paqueteMarkup(){
     <!-- Monto a cobrar -->
     <div class="mt-4 border rounded-xl p-4 bg-slate-50 dark:bg-slate-800/50">
       <div class="flex items-center mb-2">
- <input type="checkbox" name="cobra_en_destino" id="cobraCheck_${randomId}"      
-     class="mr-2">
+ <input type="checkbox" name="cobra_en_destino" id="cobraCheck_${randomId}">
         <label for="cobraCheck_${randomId}" class="text-sm font-medium">
           💰 Cobrar monto en destino
         </label>
@@ -188,13 +187,6 @@ function paqueteMarkup(){
     });
   }
 }, 0);
-  
-  document.getElementById('cobraCheck')?.addEventListener('change', function() {
-  const container = document.getElementById('montoContainer');
-  if (container) {
-    container.style.display = this.checked ? 'block' : 'none';
-  }
-});
   
 }
 
