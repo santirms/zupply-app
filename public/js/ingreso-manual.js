@@ -176,10 +176,13 @@ function paqueteMarkup(){
       };
        </script>
        `;
-    // AGREGAR AQUÍ (después de insertar el HTML):
-  tbody.appendChild(div);
   
-  setTimeout(() => {
+div.innerHTML = paqueteMarkup();
+tbody.appendChild(div);
+
+// AGREGAR AQUÍ (después de appendChild):
+const randomId = div.querySelector('[id^="cobraCheck_"]')?.id.split('_')[1];
+if (randomId) {
   const checkbox = div.querySelector(`#cobraCheck_${randomId}`);
   const container = div.querySelector(`#montoContainer_${randomId}`);
   
@@ -188,7 +191,7 @@ function paqueteMarkup(){
       container.style.display = this.checked ? 'block' : 'none';
     });
   }
-}, 0);
+}
   
 }
 
