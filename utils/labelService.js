@@ -102,10 +102,11 @@ async function generarEtiquetaInformativa(envio, cliente) {
   const tracking = envio.tracking || envio.id_venta || envio.meli_id;
   
   const qrData = JSON.stringify({
-    id: envio.id_venta,
-    tracking: envio.tracking || envio.id_venta,
-    tipo: envio.tipo
-  });
+   id: envio.id_venta || envio.meli_id,
+   tracking: tracking,
+   tipo: envio.tipo || 'envio'
+ });
+ 
 
   const qrImage = await QRCode.toBuffer(qrData, {
     width: 100,
