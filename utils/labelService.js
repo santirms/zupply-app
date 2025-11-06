@@ -57,7 +57,7 @@ async function buildLabelPDF(envio) {
 
 async function generarEtiquetaInformativa(envio, cliente) {
   const doc = new PDFDocument({
-    size: [283.46, 425.2], // 10x15 cm
+    size: [283.46, 425.2], // 10x15 cm (100x150mm)
     margins: { top: 20, bottom: 20, left: 20, right: 20 }
   });
 
@@ -99,10 +99,9 @@ async function generarEtiquetaInformativa(envio, cliente) {
   let y = 85;
 
   // QR Code (izquierda)
-  const tracking = resolveTracking(envio);
   const qrData = JSON.stringify({
     id: envio.id_venta,
-    tracking: tracking,
+    tracking: envio.tracking || envio.id_venta,
     tipo: envio.tipo
   });
 
@@ -120,7 +119,7 @@ async function generarEtiquetaInformativa(envio, cliente) {
 
   doc.fontSize(8)
      .font('Helvetica')
-     .text(`📅 ${dayjs().format('DD/MM/YYYY')}`, 120, y + 15);
+     .text(`📅 ${new Date().toLocaleDateString('es-AR')}`, 120, y + 15);
 
   y += 95;
 
