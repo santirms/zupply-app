@@ -153,17 +153,6 @@ function paqueteMarkup(){
           💰 Cobrar monto en destino
         </label>
       </div>
-      // AGREGAR AQUÍ (después de insertar el HTML):
-  setTimeout(() => {
-  const checkbox = div.querySelector(`#cobraCheck_${randomId}`);
-  const container = div.querySelector(`#montoContainer_${randomId}`);
-  
-  if (checkbox && container) {
-    checkbox.addEventListener('change', function() {
-      container.style.display = this.checked ? 'block' : 'none';
-    });
-  }
-}, 0);
 
       <div id="montoContainer_${randomId}" style="display: none;">
         <label class="block text-sm mb-1">Monto a cobrar ($)</label>
@@ -188,6 +177,18 @@ function paqueteMarkup(){
       };
        </script>
   `;
+  // AGREGAR AQUÍ (después de insertar el HTML):
+setTimeout(() => {
+  const checkbox = div.querySelector(`#cobraCheck_${randomId}`);
+  const container = div.querySelector(`#montoContainer_${randomId}`);
+  
+  if (checkbox && container) {
+    checkbox.addEventListener('change', function() {
+      container.style.display = this.checked ? 'block' : 'none';
+    });
+  }
+}, 0);
+  
 }
 
 function setTelefonoVisualState(input, state) {
