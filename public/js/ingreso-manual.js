@@ -80,6 +80,7 @@ async function cargarClientes() {
 }
 
 function paqueteMarkup(){
+  const randomId = Math.random().toString(36).substr(2, 9);
   return `
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <label class="block text-sm">Destinatario
@@ -109,6 +110,23 @@ function paqueteMarkup(){
                class="mt-1 w-full p-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5"/>
       </label>
 
+      <!-- Tipo de envío -->
+      <label class="block text-sm">Tipo de envío
+        <select name="tipo" class="select-dark mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent">
+          <option value="envio">📦 Envío</option>
+          <option value="retiro">🔄 Retiro</option>
+          <option value="cambio">↔️ Cambio</option>
+        </select>
+      </label>
+
+      <!-- Contenido (opcional) -->
+      <label class="block text-sm">Descripción del contenido <span class="text-slate-400 text-xs">(opcional)</span>
+        <input type="text" name="contenido" maxlength="500"
+               placeholder="Ej: Notebook HP, 2 cajas"
+               class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
+        <small class="mt-1 block text-xs text-slate-500 dark:text-slate-400">Visible en la etiqueta</small>
+      </label>
+
       <div class="flex items-center gap-2 mt-1">
         <input id="chk" type="checkbox" name="manual_precio" onchange="togglePrecioManual(this)"
                class="w-5 h-5 accent-amber-600">
@@ -126,6 +144,24 @@ function paqueteMarkup(){
       </label>
     </div>
 
+    <!-- Monto a cobrar -->
+    <div class="mt-4 border rounded-xl p-4 bg-slate-50 dark:bg-slate-800/50">
+      <div class="flex items-center mb-2">
+        <input type="checkbox" name="cobra_en_destino" id="cobraCheck_${randomId}"
+               class="mr-2 w-4 h-4 accent-amber-600" onchange="toggleMonto_${randomId}(this)">
+        <label for="cobraCheck_${randomId}" class="text-sm font-medium">
+          💰 Cobrar monto en destino
+        </label>
+      </div>
+
+      <div id="montoContainer_${randomId}" style="display: none;">
+        <label class="block text-sm mb-1">Monto a cobrar ($)</label>
+        <input type="number" name="monto_a_cobrar" min="0" step="0.01"
+               placeholder="50000.00"
+               class="w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
+      </div>
+    </div>
+
     <div class="mt-3 flex justify-between">
       <div class="text-xs opacity-60">Se valida el CP→Partido automáticamente</div>
       <button type="button" onclick="this.closest('.paquete-group').remove()"
@@ -133,6 +169,13 @@ function paqueteMarkup(){
         Eliminar paquete
       </button>
     </div>
+
+    <script>
+      window.toggleMonto_${randomId} = function(checkbox) {
+        const container = document.getElementById('montoContainer_${randomId}');
+        container.style.display = checkbox.checked ? 'block' : 'none';
+      };
+    </script>
   `;
 }
 
@@ -248,6 +291,11 @@ async function guardar() {
     const telefono = validarTelefonoInput(div.querySelector("[name='telefono']"), i);
     if (telefono === false) return;
 
+    const tipo = div.querySelector("[name='tipo']")?.value || 'envio';
+    const contenido = div.querySelector("[name='contenido']")?.value.trim() || null;
+    const cobraEnDestino = div.querySelector("[name='cobra_en_destino']")?.checked || false;
+    const montoACobrar = cobraEnDestino ? parseFloat(div.querySelector("[name='monto_a_cobrar']")?.value) || null : null;
+
     paquetes.push({
       cliente_id:    clienteId,
       sender_id:     codigoInt,
@@ -259,7 +307,11 @@ async function guardar() {
       id_venta:      idVenta,
       referencia,
       manual_precio: manual,
-      precio:        manual? precioManual : undefined
+      precio:        manual? precioManual : undefined,
+      tipo:          tipo,
+      contenido:     contenido,
+      cobra_en_destino: cobraEnDestino,
+      monto_a_cobrar:   montoACobrar
     });
   }
 

@@ -145,6 +145,33 @@ const envioSchema = new Schema({
     type: String,
     enum: ['mercadolibre', 'ingreso_manual', 'etiquetas', 'otro'],
     default: 'mercadolibre'
+  },
+
+  // Tipo de envío (envío/retiro/cambio)
+  tipo: {
+    type: String,
+    enum: ['envio', 'retiro', 'cambio'],
+    default: 'envio'
+  },
+
+  // Descripción del contenido
+  contenido: {
+    type: String,
+    maxlength: 500,
+    default: null
+  },
+
+  // Cobro en destino
+  cobra_en_destino: {
+    type: Boolean,
+    default: false
+  },
+
+  // Monto a cobrar en destino
+  monto_a_cobrar: {
+    type: Number,
+    min: 0,
+    default: null
   }
   }, { timestamps: false });
 
