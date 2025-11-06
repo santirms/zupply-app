@@ -81,7 +81,7 @@ async function cargarClientes() {
 
 function paqueteMarkup(){
   const randomId = Math.random().toString(36).substr(2, 9);
-  return `
+  const html = `
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <label class="block text-sm">Destinatario
         <input name="destinatario" required class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
@@ -176,21 +176,11 @@ function paqueteMarkup(){
       };
        </script>
        `;
-  }
-div.innerHTML = paqueteMarkup();
-tbody.appendChild(div);
 
-// AGREGAR AQUÍ (después de appendChild):
-const randomId = div.querySelector('[id^="cobraCheck_"]')?.id.split('_')[1];
-if (randomId) {
-  const checkbox = div.querySelector(`#cobraCheck_${randomId}`);
-  const container = div.querySelector(`#montoContainer_${randomId}`);
-  
-  if (checkbox && container) {
-    checkbox.addEventListener('change', function() {
-      container.style.display = this.checked ? 'block' : 'none';
-    });
-  }
+  return {
+    html: html,
+    randomId: randomId
+  };
 }
 
 function setTelefonoVisualState(input, state) {
@@ -266,8 +256,21 @@ function validarTelefonoInput(input, index) {
 function agregarPaquete() {
   const div = document.createElement('div');
   div.className = 'paquete-group rounded-2xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-white/5';
-  div.innerHTML = paqueteMarkup();
+
+  const markup = paqueteMarkup(); // Ahora devuelve {html, randomId}
+  div.innerHTML = markup.html;
   qs('#paquetes').appendChild(div);
+
+  // Usar el randomId que devolvió la función
+  const checkbox = div.querySelector(`#cobraCheck_${markup.randomId}`);
+  const container = div.querySelector(`#montoContainer_${markup.randomId}`);
+
+  if (checkbox && container) {
+    checkbox.addEventListener('change', function() {
+      container.style.display = this.checked ? 'block' : 'none';
+    });
+  }
+
   initTelefonoInput(div.querySelector("input[name='telefono']"));
 }
 
