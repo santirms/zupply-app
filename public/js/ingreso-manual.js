@@ -177,6 +177,8 @@ function paqueteMarkup(){
        </script>
        `;
     // AGREGAR AQUÍ (después de insertar el HTML):
+  tbody.appendChild(div);
+  
   setTimeout(() => {
   const checkbox = div.querySelector(`#cobraCheck_${randomId}`);
   const container = div.querySelector(`#montoContainer_${randomId}`);
