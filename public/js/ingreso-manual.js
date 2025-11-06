@@ -147,8 +147,8 @@ function paqueteMarkup(){
     <!-- Monto a cobrar -->
     <div class="mt-4 border rounded-xl p-4 bg-slate-50 dark:bg-slate-800/50">
       <div class="flex items-center mb-2">
-        <input type="checkbox" name="cobra_en_destino" id="cobraCheck_${randomId}"
-               class="mr-2 w-4 h-4 accent-amber-600" onchange="toggleMonto_${randomId}(this)">
+       <input type="checkbox" name="cobra_en_destino" id="cobraCheck_${randomId}"
+       class="mr-2">
         <label for="cobraCheck_${randomId}" class="text-sm font-medium">
           💰 Cobrar monto en destino
         </label>
