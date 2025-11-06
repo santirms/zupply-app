@@ -176,10 +176,9 @@ function paqueteMarkup(){
         container.style.display = checkbox.checked ? 'block' : 'none';
       };
        </script>
-  `;
-}
-  // AGREGAR AQUÍ (después de insertar el HTML):
-setTimeout(() => {
+       `;
+    // AGREGAR AQUÍ (después de insertar el HTML):
+  setTimeout(() => {
   const checkbox = div.querySelector(`#cobraCheck_${randomId}`);
   const container = div.querySelector(`#montoContainer_${randomId}`);
   
@@ -189,6 +188,8 @@ setTimeout(() => {
     });
   }
 }, 0);
+  
+}
 
 function setTelefonoVisualState(input, state) {
   if (!input) return;
