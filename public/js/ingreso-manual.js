@@ -154,7 +154,7 @@ function paqueteMarkup(){
         </label>
       </div>
 
-      <div id="montoContainer_${randomId}" style="display: none;">
+      <div id="montoContainer_${randomId}" style="display: none;" class="mt-3">
         <label class="block text-sm mb-1">Monto a cobrar ($)</label>
         <input type="number" name="monto_a_cobrar" min="0" step="0.01"
                placeholder="50000.00"
