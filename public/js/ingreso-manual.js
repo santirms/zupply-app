@@ -189,6 +189,13 @@ function paqueteMarkup(){
   }
 }, 0);
   
+  document.getElementById('cobraCheck')?.addEventListener('change', function() {
+  const container = document.getElementById('montoContainer');
+  if (container) {
+    container.style.display = this.checked ? 'block' : 'none';
+  }
+});
+  
 }
 
 function setTelefonoVisualState(input, state) {
