@@ -176,7 +176,7 @@ function paqueteMarkup(){
       };
        </script>
        `;
-  
+  }
 div.innerHTML = paqueteMarkup();
 tbody.appendChild(div);
 
@@ -191,8 +191,6 @@ if (randomId) {
       container.style.display = this.checked ? 'block' : 'none';
     });
   }
-}
-  
 }
 
 function setTelefonoVisualState(input, state) {
