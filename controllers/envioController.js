@@ -375,21 +375,27 @@ exports.labelByTracking = async (req, res) => {
     const tracking = req.params.tracking || req.params.trackingId;
 
     // Buscamos por id_venta (tu tracking) o meli_id
-    const envio = await Envio.findOne({ id_venta: tracking }) 
-               || await Envio.findOne({ meli_id: tracking });
+    const envio = await Envio.findOne({
+      $or: [
+        { id_venta: tracking },
+        { meli_id: tracking },
+        { tracking: tracking }
+      ]
+    }).populate('cliente_id');
 
-    if (!envio) return res.status(404).send('No encontrado');
+    if (!envio) return res.status(404).send('Envío no encontrado');
 
-    // Si ya hay PDF generado, redirigimos
-    if (envio.label_url) return res.redirect(envio.label_url);
+    // Usar nueva etiqueta informativa
+    const { generarEtiquetaInformativa } = require('../utils/labelService');
+    const pdfBuffer = await generarEtiquetaInformativa(envio.toObject(), envio.cliente_id);
 
-    // Si no hay, lo generamos y redirigimos
-    const { url } = await buildLabelPDF(envio.toObject());
-    await Envio.updateOne({ _id: envio._id }, { $set: { label_url: url } });
-    return res.redirect(url);
-  } catch (e) {
-    console.error('labelByTracking error:', e);
-    return res.status(500).send('Error al generar/servir etiqueta');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${envio.id_venta}.pdf"`);
+    res.send(pdfBuffer);
+
+  } catch (err) {
+    console.error('Error generando etiqueta:', err);
+    res.status(500).send('Error al generar etiqueta');
   }
 };
 
@@ -541,6 +547,16 @@ exports.crearEnviosLote = async (req, res) => {
           throw new Error('Código postal inválido');
         }
 
+        // Validar tipo de envío
+        if (data.tipo && !['envio', 'retiro', 'cambio'].includes(data.tipo)) {
+          throw new Error('Tipo de envío inválido');
+        }
+
+        // Validar monto si cobra_en_destino
+        if (data.cobra_en_destino && !data.monto_a_cobrar) {
+          throw new Error('Debe especificar monto a cobrar');
+        }
+
         const idVentaRaw = data.id_venta ? String(data.id_venta).trim() : null;
         const idVenta = (idVentaRaw ? idVentaRaw.toUpperCase() : await generarIdVenta());
         const tracking = idVenta;
@@ -588,6 +604,10 @@ exports.crearEnviosLote = async (req, res) => {
           requiere_sync_meli: false,
           chofer: null,
           zona: data.partido,
+          tipo: data.tipo || 'envio',
+          contenido: data.contenido || null,
+          cobra_en_destino: data.cobra_en_destino || false,
+          monto_a_cobrar: data.monto_a_cobrar || null,
           historial: [{
             at: new Date(),
             estado: 'pendiente',
