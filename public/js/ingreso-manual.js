@@ -177,6 +177,7 @@ function paqueteMarkup(){
       };
        </script>
   `;
+}
   // AGREGAR AQUÍ (después de insertar el HTML):
 setTimeout(() => {
   const checkbox = div.querySelector(`#cobraCheck_${randomId}`);
@@ -188,8 +189,6 @@ setTimeout(() => {
     });
   }
 }, 0);
-  
-}
 
 function setTelefonoVisualState(input, state) {
   if (!input) return;
