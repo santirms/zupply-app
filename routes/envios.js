@@ -545,7 +545,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
 
       // Subir a S3 y obtener URL
       const { ensureObject, presignGet } = require('../utils/s3');
-      const s3Key = `labels/${envio.id_venta}.pdf`;
+      const s3Key = `remitos/labels/${envio.id_venta}.pdf`;
       await ensureObject(s3Key, pdfBuffer, 'application/pdf');
       const label_url = await presignGet(s3Key, 86400); // 24 horas
 
