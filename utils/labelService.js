@@ -84,7 +84,7 @@ async function generarEtiquetaInformativa(envio, cliente) {
   doc.fontSize(10)
      .fillColor('#000000')
      .font('Helvetica-Bold')
-     .text('TRANSTECH SOLUCIONES LOGÍSTICAS', 90, 25);
+     .text('TRANSTECH LOGÍSTICA', 90, 25);
 
   doc.fontSize(8)
      .font('Helvetica')
@@ -180,15 +180,15 @@ async function generarEtiquetaInformativa(envio, cliente) {
   }
 
   // ===== PIE =====
-
+  const footerY = 340;  // Ajustar este valor según necesites
   // Línea separadora
-  doc.moveTo(20, 365).lineTo(263, 365).stroke();
+  doc.moveTo(20, footerY).lineTo(263, footerY).stroke();
 
   // Info de Zupply (izquierda)
   doc.fontSize(8)
      .font('Helvetica-Bold')
      .fillColor('#6366f1')
-     .text('Creado con Zupply', 20, 375);
+     .text('Creado con Zupply', 20, footerY + 10);
 
   doc.fontSize(7)
      .font('Helvetica')
@@ -196,7 +196,7 @@ async function generarEtiquetaInformativa(envio, cliente) {
      .text('Software de última milla', 20, 388);
 
   doc.fontSize(6)
-     .text(' www.zupply.tech | hola@zupply.tech', 20, 400);
+     .text(' www.zupply.tech | hola@zupply.tech', 20, footerY + 35);
 
   // QR Linktree (derecha)
   const linktreeQR = await QRCode.toBuffer('https://linktr.ee/zupply_tech', {
@@ -204,17 +204,17 @@ async function generarEtiquetaInformativa(envio, cliente) {
     margin: 0
   });
 
-  doc.image(linktreeQR, 220, 370, { width: 35, height: 35 });
+  doc.image(linktreeQR, 220, footerY + 5, { width: 35, height: 35 });
 
   doc.fontSize(5)
      .fillColor('#666666')
-     .text('LinkTree', 220, 407, { width: 35, align: 'center' });
-
+     .text('LinkTree', 220, footerY + 42, { width: 35, align: 'center' });
+  
   // Disclaimer
   doc.fontSize(5)
      .fillColor('#999999')
      .text('Zupply solo provee el software, la operadora es responsable del servicio.',
-           20, 380, { width: 190, align: 'left' });
+            20, footerY + 15, { width: 190, align: 'left' });
 
   doc.end();
 
