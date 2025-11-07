@@ -216,7 +216,7 @@ doc.image(linktreeQR, 220, footerY + 5, { width: 35, height: 35 });
 
 doc.fontSize(5)
    .fillColor('#666666')
-   .text('LinkTree', 220, footerY + 42, { width: 35, align: 'center' });
+   .text('Contacto', 220, footerY + 42, { width: 35, align: 'center' });
 
 doc.end();
 
