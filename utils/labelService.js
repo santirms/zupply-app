@@ -165,6 +165,10 @@ async function generarEtiquetaInformativa(envio, cliente) {
   }
 
   // Monto a cobrar (si aplica)
+  console.log('Envio data:', {
+  cobra_en_destino: envio.cobra_en_destino,
+  monto_a_cobrar: envio.monto_a_cobrar
+});
   if (envio.cobra_en_destino && envio.monto_a_cobrar) {
     y += 20;
     doc.fontSize(12)
