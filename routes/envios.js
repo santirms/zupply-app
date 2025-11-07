@@ -565,7 +565,11 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
 
     return res.status(201).json({ ok: true, total: results.length, docs: results });
   } catch (err) {
-    console.error('Error POST /envios/manual:', err);
+    logger.error('Error creando envío', {
+    message: err.message,
+    code: err.code,
+    stack: err.stack?.split('\n')[0] // Solo primera línea del stack
+  });
     return res.status(500).json({ error: err.message || 'Error al guardar envíos manuales' });
   }
 });
