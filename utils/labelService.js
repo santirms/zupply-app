@@ -89,7 +89,7 @@ async function generarEtiquetaInformativa(envio, cliente) {
   doc.fontSize(8)
      .font('Helvetica')
      .text('Av. Eva Perón 3777 (CP1834)', 90, 40)
-     .text('📞 WhatsApp: +54 9 11 6445-8579', 90, 52);
+     .text('WhatsApp: +54 9 11 6445-8579', 90, 52);
 
   // Línea separadora
   doc.moveTo(20, 75).lineTo(263, 75).stroke();
@@ -122,14 +122,14 @@ async function generarEtiquetaInformativa(envio, cliente) {
 
   doc.fontSize(8)
      .font('Helvetica')
-     .text(`📅 ${new Date().toLocaleDateString('es-AR')}`, 120, y + 15);
+     .text(`Fecha: ${new Date().toLocaleDateString('es-AR')}`, 120, y + 15);
 
   y += 95;
 
   // Destinatario
   doc.fontSize(9)
      .font('Helvetica-Bold')
-     .text('📍 DESTINATARIO', 20, y);
+     .text('DESTINATARIO', 20, y);
 
   y += 15;
 
@@ -149,7 +149,7 @@ async function generarEtiquetaInformativa(envio, cliente) {
 
   if (envio.telefono) {
     y += 15;
-    doc.text(`📱 ${envio.telefono}`, 20, y);
+    doc.text(`Cel: ${envio.telefono}`, 20, y);
   }
 
   // Contenido (si existe)
@@ -157,7 +157,7 @@ async function generarEtiquetaInformativa(envio, cliente) {
     y += 20;
     doc.fontSize(8)
        .font('Helvetica-Bold')
-       .text('📦 CONTENIDO:', 20, y);
+       .text('CONTENIDO:', 20, y);
 
     y += 12;
     doc.font('Helvetica')
@@ -170,7 +170,7 @@ async function generarEtiquetaInformativa(envio, cliente) {
     doc.fontSize(12)
        .fillColor('#dc2626')
        .font('Helvetica-Bold')
-       .text(`💰 COBRA: $${envio.monto_a_cobrar.toLocaleString('es-AR')}`, 20, y);
+       .text(`COBRA: $${envio.monto_a_cobrar.toLocaleString('es-AR')}`, 20, y);
 
     doc.fillColor('#000000');
   }
@@ -192,10 +192,10 @@ async function generarEtiquetaInformativa(envio, cliente) {
      .text('Software de última milla', 20, 388);
 
   doc.fontSize(6)
-     .text('🌐 zupply.tech | ✉️ hola@zupply.tech', 20, 400);
+     .text(' www.zupply.tech | hola@zupply.tech', 20, 400);
 
   // QR Linktree (derecha)
-  const linktreeQR = await QRCode.toBuffer('https://linktr.ee/zupply', {
+  const linktreeQR = await QRCode.toBuffer('https://linktr.ee/zupply_tech', {
     width: 40,
     margin: 0
   });
