@@ -209,7 +209,7 @@ async function generarEtiquetaInformativa(envio, cliente) {
   // Disclaimer
   doc.fontSize(5)
      .fillColor('#999999')
-     .text('Verificar contenido antes de firmar. Zupply provee el software, la operadora es responsable del servicio.',
+     .text('Zupply solo provee el software, la operadora es responsable del servicio.',
            20, 380, { width: 190, align: 'left' });
 
   doc.end();
