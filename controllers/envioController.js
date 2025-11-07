@@ -2,7 +2,7 @@
 const Envio = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const QRCode = require('qrcode');
-const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
+const { generarEtiquetaInformativa, resolveTracking } = require('../utils/labelService');
 const axios = require('axios');
 const { formatSubstatus } = require('../services/meliHistory');
 const logger = require('../utils/logger');
@@ -248,10 +248,11 @@ exports.crearEnvio = async (req, res) => {
     });
 
     // Generar etiqueta 10x15 + QR usando id_venta (o meli_id)
-    const { url } = await buildLabelPDF(nuevo.toObject());
+    // Nota: generarEtiquetaInformativa devuelve Buffer, la URL se genera dinámicamente vía /api/envios/label/:tracking
     const tk = resolveTracking(nuevo);
     const qr_png = await QRCode.toDataURL(tk, { width: 256, margin: 0 });
-    await Envio.updateOne({ _id: nuevo._id }, { $set: { label_url: url, qr_png } });
+    const label_url = `/api/envios/label/${tk}`;
+    await Envio.updateOne({ _id: nuevo._id }, { $set: { label_url, qr_png } });
 
     const doc = await Envio.findById(nuevo._id).lean();
     res.status(201).json(doc);
@@ -326,12 +327,13 @@ exports.getEnvioByTracking = async (req, res) => {
     
     // 2) si no tiene etiqueta, generarla (si usás eso)
     if (!envio.label_url) {
-      const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
+      const { generarEtiquetaInformativa, resolveTracking } = require('../utils/labelService');
       const QRCode = require('qrcode');
-      const { url } = await buildLabelPDF(envio.toObject());
+      // Nota: generarEtiquetaInformativa devuelve Buffer, la URL se genera dinámicamente vía /api/envios/label/:tracking
       const tk = resolveTracking(envio.toObject());
       const qr_png = await QRCode.toDataURL(tk, { width: 256, margin: 0 });
-      await Envio.updateOne({ _id: envio._id }, { $set: { label_url: url, qr_png } });
+      const label_url = `/api/envios/label/${tk}`;
+      await Envio.updateOne({ _id: envio._id }, { $set: { label_url, qr_png } });
     }
 
     // 3) devolver con cliente poblado (solo lo necesario)
