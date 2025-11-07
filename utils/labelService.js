@@ -179,44 +179,46 @@ async function generarEtiquetaInformativa(envio, cliente) {
     doc.fillColor('#000000');
   }
 
-  // ===== PIE =====
-  const footerY = 340;  // Ajustar este valor según necesites
-  // Línea separadora
-  doc.moveTo(20, footerY).lineTo(263, footerY).stroke();
+// ===== PIE =====
+const footerY = 340;
 
-  // Info de Zupply (izquierda)
-  doc.fontSize(8)
-     .font('Helvetica-Bold')
-     .fillColor('#6366f1')
-     .text('Creado con Zupply', 20, footerY + 10);
+// Línea separadora
+doc.moveTo(20, footerY).lineTo(263, footerY).stroke();
 
-  doc.fontSize(7)
-     .font('Helvetica')
-     .fillColor('#666666')
-     .text('Software de última milla', 20, 388);
+// Info de Zupply (izquierda)
+doc.fontSize(8)
+   .font('Helvetica-Bold')
+   .fillColor('#6366f1')
+   .text('Creado con Zupply', 20, footerY + 10);
 
-  doc.fontSize(6)
-     .text(' www.zupply.tech | hola@zupply.tech', 20, footerY + 35);
+doc.fontSize(7)
+   .font('Helvetica')
+   .fillColor('#666666')
+   .text('Software de última milla', 20, footerY + 23);  // footerY + 23
 
-  // QR Linktree (derecha)
-  const linktreeQR = await QRCode.toBuffer('https://linktr.ee/zupply_tech', {
-    width: 40,
-    margin: 0
-  });
+doc.fontSize(6)
+   .fillColor('#000000')
+   .text('www.zupply.tech | hola@zupply.tech', 20, footerY + 35);
 
-  doc.image(linktreeQR, 220, footerY + 5, { width: 35, height: 35 });
+// Disclaimer (debajo de todo)
+doc.fontSize(5)
+   .fillColor('#999999')
+   .text('Zupply solo provee el software, la operadora es responsable del servicio.', 
+         20, footerY + 48, { width: 190, align: 'left' });  // footerY + 48
 
-  doc.fontSize(5)
-     .fillColor('#666666')
-     .text('LinkTree', 220, footerY + 42, { width: 35, align: 'center' });
-  
-  // Disclaimer
-  doc.fontSize(5)
-     .fillColor('#999999')
-     .text('Zupply solo provee el software, la operadora es responsable del servicio.',
-            20, footerY + 15, { width: 190, align: 'left' });
+// QR Linktree (derecha)
+const linktreeQR = await QRCode.toBuffer('https://linktr.ee/zupply_tech', {
+  width: 40,
+  margin: 0
+});
 
-  doc.end();
+doc.image(linktreeQR, 220, footerY + 5, { width: 35, height: 35 });
+
+doc.fontSize(5)
+   .fillColor('#666666')
+   .text('LinkTree', 220, footerY + 42, { width: 35, align: 'center' });
+
+doc.end();
 
   return new Promise((resolve) => {
     doc.on('end', () => resolve(Buffer.concat(buffers)));
