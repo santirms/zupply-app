@@ -5,7 +5,7 @@ const Zona    = require('../models/Zona');
 const Envio   = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const QRCode  = require('qrcode');
-const { buildLabelPDF } = require('../utils/labelService');
+const { generarEtiquetaInformativa } = require('../utils/labelService');
 
 const { requireAuth, requireRole } = require('../middlewares/auth');
 
@@ -88,7 +88,14 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
       });
 
       // etiqueta + QR
-      const { url: label_url } = await buildLabelPDF(envio.toObject());
+      const pdfBuffer = await generarEtiquetaInformativa(envio.toObject(), envio.cliente_id);
+
+      // Subir a S3 y obtener URL
+      const { ensureObject, presignGet } = require('../utils/s3');
+      const s3Key = `labels/${envio.id_venta}.pdf`;
+      await ensureObject(s3Key, pdfBuffer, 'application/pdf');
+      const label_url = await presignGet(s3Key, 86400); // 24 horas
+
       const qr_png = await QRCode.toDataURL(idVenta, { width: 256, margin: 0 });
       await Envio.updateOne({ _id: envio._id }, { $set: { label_url, qr_png } });
 
