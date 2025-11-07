@@ -10,6 +10,8 @@ const axios   = require('axios');
 const QRCode  = require('qrcode');
 const { generarEtiquetaInformativa } = require('../utils/labelService');
 const { ensureMeliHistory: ensureMeliHistorySrv, formatSubstatus } = require('../services/meliHistory');
+const logger = require('../utils/logger');
+
 
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
 const { getEnvioByTracking, labelByTracking } = require('../controllers/envioController');
