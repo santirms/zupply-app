@@ -310,10 +310,9 @@ async function guardar() {
 
     const tipo = div.querySelector("[name='tipo']")?.value || 'envio';
     const contenido = div.querySelector("[name='contenido']")?.value.trim() || null;
-    console.log('Debug cobro:', {
     const cobraEnDestino = div.querySelector("[name='cobra_en_destino']")?.checked || false;    
     const montoACobrar = cobraEnDestino ? parseFloat(div.querySelector("[name='monto_a_cobrar']")?.value) || null : null;
-    });
+   
   
     paquetes.push({
       cliente_id:    clienteId,
