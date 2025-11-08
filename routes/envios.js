@@ -537,7 +537,12 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         fecha:         new Date(),
         estado:        'pendiente',
         requiere_sync_meli: false,
-        origen:        'ingreso_manual'
+        origen:        'ingreso_manual',
+          // ===== CAMPOS NUEVOS =====
+        tipo:              p.tipo || 'envio',
+        contenido:         p.contenido || null,
+        cobra_en_destino:  p.cobra_en_destino || false,
+        monto_a_cobrar:    p.monto_a_cobrar || null
       });
 
       // Generar etiqueta 10x15 + QR usando id_venta
