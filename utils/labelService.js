@@ -163,39 +163,34 @@ async function generarEtiquetaInformativa(envio, cliente) {
        .text(envio.contenido, 20, y, { width: 240 });
   }
 
-  // Monto a cobrar (si aplica)
-  console.log('Envio data:', {
-  cobra_en_destino: envio.cobra_en_destino,
-  monto_a_cobrar: envio.monto_a_cobrar
-});
-  if (envio.cobra_en_destino && envio.monto_a_cobrar) {
-    y += 20;
-    doc.fontSize(16)
-       .fillColor('#dc2626')
-       .font('Helvetica-Bold')
-       .text(`COBRA: $${envio.monto_a_cobrar.toLocaleString('es-AR')}`, 20, y);
+// Monto a cobrar (si aplica)
+if (envio.cobra_en_destino && envio.monto_a_cobrar) {
+  y += 20;
+  doc.fontSize(12)
+     .fillColor('#dc2626')
+     .font('Helvetica-Bold')
+     .text(`COBRA: $${envio.monto_a_cobrar.toLocaleString('es-AR')}`, 20, y);
+  
+  doc.fillColor('#000000');
+  y += 25;
+}
 
-    doc.fillColor('#000000');
-    y += 20
-  }
-
-// Si es CAMBIO, agregar badge destacado
+// Badge para CAMBIO
 if (envio.tipo === 'cambio') {
   y += 15;
   
-  // Recuadro negro con fondo blanco
   doc.rect(20, y, 240, 30)
-     .lineWidth(3)  // Línea más gruesa para que se vea bien en B&N
-     .stroke('#000000');  // Solo borde, sin fill
+     .lineWidth(3)
+     .stroke('#000000');
   
-  // Texto dentro del recuadro
   doc.fontSize(12)
      .fillColor('#000000')
      .font('Helvetica-Bold')
      .text('!! CAMBIO - Retirar producto !!', 30, y + 10);
   
-  y += 40;
+  y += 45;  // Espacio después del recuadro
 }
+
 // Badge para RETIRO
 if (envio.tipo === 'retiro') {
   y += 15;
@@ -209,8 +204,8 @@ if (envio.tipo === 'retiro') {
      .font('Helvetica-Bold')
      .text('!! RETIRO - Retirar producto !!', 30, y + 10);
   
-  y += 40;
-}  
+  y += 45;
+}
   
 // ===== PIE =====
 const footerY = 340;
