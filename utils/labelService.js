@@ -73,6 +73,10 @@ async function generarEtiquetaInformativa(envio, cliente) {
     'cambio': { texto: 'C', color: '#f59e0b' }
   };
 
+  console.log('Debug tipo badge:', {
+  tipo: envio.tipo,
+  badge: tipoBadges[envio.tipo]
+  });
   const badge = tipoBadges[envio.tipo] || tipoBadges['envio'];
 
   doc.fontSize(48)
@@ -208,15 +212,19 @@ doc.fontSize(5)
 
 // QR Linktree (derecha)
 const linktreeQR = await QRCode.toBuffer('https://linktr.ee/zupply_tech', {
-  width: 40,
+  width: 60,
   margin: 0
 });
 
-doc.image(linktreeQR, 220, footerY + 5, { width: 35, height: 35 });
+doc.image(linktreeQR, 210, footerY + 5, {  // X: de 220 a 210 (más a la izq)
+  width: 50,
+  height: 50
+});
 
+// Ajustar texto debajo
 doc.fontSize(5)
    .fillColor('#666666')
-   .text('Contacto', 220, footerY + 42, { width: 35, align: 'center' });
+   .text('Contacto', 210, footerY + 57, { width: 50, align: 'center' });
 
 doc.end();
 
