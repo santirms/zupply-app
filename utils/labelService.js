@@ -170,14 +170,33 @@ async function generarEtiquetaInformativa(envio, cliente) {
 });
   if (envio.cobra_en_destino && envio.monto_a_cobrar) {
     y += 20;
-    doc.fontSize(12)
+    doc.fontSize(16)
        .fillColor('#dc2626')
        .font('Helvetica-Bold')
        .text(`COBRA: $${envio.monto_a_cobrar.toLocaleString('es-AR')}`, 20, y);
 
     doc.fillColor('#000000');
+    y += 20
   }
 
+  // Si es CAMBIO, agregar badge destacado
+if (envio.tipo === 'cambio') {
+  y += 10;
+  
+  // Recuadro naranja llamativo
+  doc.rect(20, y, 240, 30)
+     .fillAndStroke('#f59e0b', '#000000');
+  
+  // Texto dentro del recuadro
+  doc.fontSize(14)
+     .fillColor('#000000')
+     .font('Helvetica-Bold')
+     .text('⚠ CAMBIO - Retirar producto', 25, y + 8);
+  
+  doc.fillColor('#000000');
+  y += 35;
+}
+  
 // ===== PIE =====
 const footerY = 340;
 
