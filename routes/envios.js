@@ -539,7 +539,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         requiere_sync_meli: false,
         origen:        'ingreso_manual',
           // ===== CAMPOS NUEVOS =====
-        tipo:              p.tipo || 'envio', 'retiro', 'cambio',
+        tipo:              p.tipo || 'envio',
         contenido:         p.contenido || null,
         cobra_en_destino:  p.cobra_en_destino || false,
         monto_a_cobrar:    p.monto_a_cobrar || null
