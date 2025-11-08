@@ -179,22 +179,22 @@ async function generarEtiquetaInformativa(envio, cliente) {
     y += 20
   }
 
-  // Si es CAMBIO, agregar badge destacado
+// Si es CAMBIO, agregar badge destacado
 if (envio.tipo === 'cambio') {
-  y += 10;
+  y += 15;
   
-  // Recuadro naranja llamativo
+  // Recuadro negro con fondo blanco
   doc.rect(20, y, 240, 30)
-     .fillAndStroke('#f59e0b', '#000000');
+     .lineWidth(3)  // Línea más gruesa para que se vea bien en B&N
+     .stroke('#000000');  // Solo borde, sin fill
   
   // Texto dentro del recuadro
-  doc.fontSize(14)
+  doc.fontSize(12)
      .fillColor('#000000')
      .font('Helvetica-Bold')
-     .text('⚠ CAMBIO - Retirar producto', 25, y + 8);
+     .text('!! CAMBIO - Retirar producto !!', 30, y + 10);
   
-  doc.fillColor('#000000');
-  y += 35;
+  y += 40;
 }
   
 // ===== PIE =====
