@@ -196,6 +196,21 @@ if (envio.tipo === 'cambio') {
   
   y += 40;
 }
+// Badge para RETIRO
+if (envio.tipo === 'retiro') {
+  y += 15;
+  
+  doc.rect(20, y, 240, 30)
+     .lineWidth(3)
+     .stroke('#000000');
+  
+  doc.fontSize(12)
+     .fillColor('#000000')
+     .font('Helvetica-Bold')
+     .text('!! RETIRO - Retirar producto !!', 30, y + 10);
+  
+  y += 40;
+}  
   
 // ===== PIE =====
 const footerY = 340;
