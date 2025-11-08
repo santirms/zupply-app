@@ -529,6 +529,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         destinatario:  p.destinatario,
         direccion:     p.direccion,
         codigo_postal: p.codigo_postal,
+        telefono:      p.telefono || null,
         zona:          zonaName,
         partido:       zonaName,
         id_venta:      idVenta,     // 👈 tracking del sistema
