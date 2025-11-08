@@ -104,6 +104,8 @@ async function generarEtiquetaInformativa(envio, cliente) {
 
   // QR Code (izquierda)
   const tracking = envio.tracking || envio.id_venta || envio.meli_id;
+
+  const qrData = envio.id_venta;  // Solo el ID
   
   const qrImage = await QRCode.toBuffer(qrData, {
     width: 100,
