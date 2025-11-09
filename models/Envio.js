@@ -172,6 +172,21 @@ const envioSchema = new Schema({
     type: Number,
     min: 0,
     default: null
+  },
+
+  // Confirmación de entrega con firma digital
+  confirmacionEntrega: {
+    confirmada: { type: Boolean, default: false },
+    nombreDestinatario: String,
+    dniDestinatario: String,
+    firmaS3Url: String,
+    firmaS3Key: String,
+    fechaEntrega: Date,
+    horaEntrega: String,
+    geolocalizacion: {
+      lat: Number,
+      lng: Number
+    }
   }
   }, { timestamps: false });
 

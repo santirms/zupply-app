@@ -586,6 +586,139 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
 router.get('/tracking/:tracking', getEnvioByTracking);
 router.get('/tracking/:tracking/label', labelByTracking);
 
+// ========= CONFIRMACIÓN DE ENTREGA CON FIRMA =========
+/**
+ * POST /api/envios/confirmar-entrega
+ * Confirma la entrega de un envío con firma digital del destinatario
+ */
+router.post('/confirmar-entrega', requireAuth, async (req, res) => {
+  try {
+    const {
+      envioId,
+      firmaDigital,
+      nombreDestinatario,
+      dniDestinatario,
+      geolocalizacion
+    } = req.body;
+
+    // Validaciones
+    if (!envioId) {
+      return res.status(400).json({ error: 'El ID del envío es requerido' });
+    }
+
+    if (!firmaDigital) {
+      return res.status(400).json({ error: 'La firma digital es requerida' });
+    }
+
+    if (!dniDestinatario || dniDestinatario.length < 7) {
+      return res.status(400).json({ error: 'El DNI del destinatario debe tener al menos 7 caracteres' });
+    }
+
+    // Buscar el envío
+    const envio = await Envio.findById(envioId);
+    if (!envio) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
+
+    // Subir firma a S3
+    const { subirFirmaEntrega } = require('../utils/s3');
+    const { url, key } = await subirFirmaEntrega(firmaDigital, envioId);
+
+    // Obtener fecha y hora en timezone de Argentina
+    const now = new Date();
+    const fechaEntregaArg = new Date(now.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
+    const horaEntrega = fechaEntregaArg.toLocaleTimeString('es-AR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZone: 'America/Argentina/Buenos_Aires'
+    });
+
+    // Actualizar el envío
+    envio.estado = 'entregado';
+    envio.confirmacionEntrega = {
+      confirmada: true,
+      nombreDestinatario: nombreDestinatario || envio.destinatario,
+      dniDestinatario,
+      firmaS3Url: url,
+      firmaS3Key: key,
+      fechaEntrega: fechaEntregaArg,
+      horaEntrega,
+      geolocalizacion: geolocalizacion || null
+    };
+
+    // Agregar al historial
+    if (!envio.historial) envio.historial = [];
+    envio.historial.push({
+      at: fechaEntregaArg,
+      estado: 'entregado',
+      source: 'confirmacion-entrega',
+      actor_name: nombreDestinatario || 'Destinatario',
+      note: `Entrega confirmada con firma digital. DNI: ${dniDestinatario}`
+    });
+
+    await envio.save();
+
+    console.log(`✓ Entrega confirmada para envío ${envioId} con firma digital`);
+
+    res.json({
+      success: true,
+      envio: {
+        id: envio._id,
+        id_venta: envio.id_venta,
+        estado: envio.estado,
+        destinatario: envio.destinatario,
+        confirmacionEntrega: {
+          confirmada: envio.confirmacionEntrega.confirmada,
+          nombreDestinatario: envio.confirmacionEntrega.nombreDestinatario,
+          fechaEntrega: envio.confirmacionEntrega.fechaEntrega,
+          horaEntrega: envio.confirmacionEntrega.horaEntrega
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Error confirmando entrega:', err);
+    res.status(500).json({ error: err.message || 'Error al confirmar entrega' });
+  }
+});
+
+/**
+ * GET /api/envios/:envioId/firma
+ * Obtiene la firma de entrega de un envío (URL firmada temporal)
+ */
+router.get('/:envioId/firma', requireAuth, async (req, res) => {
+  try {
+    const { envioId } = req.params;
+
+    // Buscar el envío
+    const envio = await Envio.findById(envioId);
+    if (!envio) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
+
+    // Verificar que tenga firma
+    if (!envio.confirmacionEntrega?.confirmada || !envio.confirmacionEntrega?.firmaS3Key) {
+      return res.status(404).json({ error: 'Este envío no tiene firma de entrega registrada' });
+    }
+
+    // Generar URL firmada temporal (válida 1 hora)
+    const { obtenerUrlFirmadaFirma } = require('../utils/s3');
+    const firmaUrl = await obtenerUrlFirmadaFirma(envio.confirmacionEntrega.firmaS3Key, 3600);
+
+    res.json({
+      firmaUrl,
+      nombreDestinatario: envio.confirmacionEntrega.nombreDestinatario,
+      dniDestinatario: envio.confirmacionEntrega.dniDestinatario,
+      fechaEntrega: envio.confirmacionEntrega.fechaEntrega,
+      horaEntrega: envio.confirmacionEntrega.horaEntrega,
+      geolocalizacion: envio.confirmacionEntrega.geolocalizacion
+    });
+  } catch (err) {
+    console.error('Error obteniendo firma de entrega:', err);
+    res.status(500).json({ error: err.message || 'Error al obtener firma' });
+  }
+});
+
 // ========= NOTAS (PONER ANTES DE '/:id') =========
 router.get('/:id/notas',            /*auth.requireUser,*/  ctrl.listarNotas);
 router.post('/:id/notas',           /*auth.requireUser,*/  ctrl.agregarNota);
