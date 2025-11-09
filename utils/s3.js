@@ -1,5 +1,5 @@
 // utils/s3.js
-const { S3Client, PutObjectCommand, HeadObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, HeadObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const s3 = new S3Client({
@@ -24,4 +24,78 @@ async function presignGet(key, expiresSec=3600) {
   return getSignedUrl(s3, new GetObjectCommand({ Bucket: BUCKET, Key: key }), { expiresIn: expiresSec });
 }
 
-module.exports = { ensureObject, presignGet };
+/**
+ * Sube una firma digital de entrega a S3
+ * @param {string} firmaBase64 - Firma en formato base64 (puede incluir prefijo data:image/png;base64,)
+ * @param {string} envioId - ID del envío
+ * @returns {Promise<{url: string, key: string, bucket: string}>} - URL presignada, key y bucket
+ */
+async function subirFirmaEntrega(firmaBase64, envioId) {
+  // Remover prefijo data:image/png;base64, si existe
+  let base64Data = firmaBase64;
+  if (firmaBase64.includes('base64,')) {
+    base64Data = firmaBase64.split('base64,')[1];
+  }
+
+  // Convertir base64 a Buffer
+  const buffer = Buffer.from(base64Data, 'base64');
+
+  // Generar path: envios/firmas-entrega/YYYY/MM/firma-{envioId}-{timestamp}.png
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const timestamp = now.getTime();
+  const key = `envios/firmas-entrega/${year}/${month}/firma-${envioId}-${timestamp}.png`;
+
+  // Metadata
+  const metadata = {
+    'envio-id': String(envioId),
+    'tipo': 'firma-entrega',
+    'fecha-subida': now.toISOString()
+  };
+
+  // Subir a S3 con ACL private
+  await s3.send(new PutObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    Body: buffer,
+    ContentType: 'image/png',
+    ACL: 'private',
+    Metadata: metadata
+  }));
+
+  // Generar URL firmada (válida por 1 hora por defecto)
+  const url = await presignGet(key, 3600);
+
+  return { url, key, bucket: BUCKET };
+}
+
+/**
+ * Genera una URL firmada temporal para acceder a una firma de entrega
+ * @param {string} key - Key de S3 de la firma
+ * @param {number} expiracion - Tiempo de expiración en segundos (default: 3600 = 1 hora)
+ * @returns {Promise<string>} - URL firmada temporal
+ */
+async function obtenerUrlFirmadaFirma(key, expiracion = 3600) {
+  return presignGet(key, expiracion);
+}
+
+/**
+ * Elimina una firma de S3
+ * @param {string} key - Key de S3 de la firma a eliminar
+ * @returns {Promise<void>}
+ */
+async function eliminarFirma(key) {
+  await s3.send(new DeleteObjectCommand({
+    Bucket: BUCKET,
+    Key: key
+  }));
+}
+
+module.exports = {
+  ensureObject,
+  presignGet,
+  subirFirmaEntrega,
+  obtenerUrlFirmadaFirma,
+  eliminarFirma
+};
