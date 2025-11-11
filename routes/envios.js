@@ -595,10 +595,15 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
   try {
     const {
       envioId,
+      tipoReceptor,
+      nombreReceptor,
+      dniReceptor,
+      aclaracionReceptor,
       firmaDigital,
+      geolocalizacion,
+      // Legacy fields para compatibilidad
       nombreDestinatario,
-      dniDestinatario,
-      geolocalizacion
+      dniDestinatario
     } = req.body;
 
     // Validaciones
@@ -606,12 +611,28 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'El ID del envío es requerido' });
     }
 
-    if (!firmaDigital) {
-      return res.status(400).json({ error: 'La firma digital es requerida' });
+    // Validar DNI (nuevo o legacy)
+    const dni = dniReceptor || dniDestinatario;
+    if (!dni || !/^\d{7,8}$/.test(dni)) {
+      return res.status(400).json({ error: 'El DNI debe tener 7-8 dígitos' });
     }
 
-    if (!dniDestinatario || dniDestinatario.length < 7) {
-      return res.status(400).json({ error: 'El DNI del destinatario debe tener al menos 7 caracteres' });
+    // Validar nombre
+    const nombre = nombreReceptor || nombreDestinatario;
+    if (!nombre || nombre.trim().length < 3) {
+      return res.status(400).json({ error: 'El nombre debe tener al menos 3 caracteres' });
+    }
+
+    // Validar tipo de receptor
+    const tiposValidos = ['destinatario', 'porteria', 'familiar', 'otro'];
+    const tipo = tipoReceptor || 'destinatario';
+    if (!tiposValidos.includes(tipo)) {
+      return res.status(400).json({ error: 'Tipo de receptor inválido' });
+    }
+
+    // Si es "otro", requerir aclaración
+    if (tipo === 'otro' && (!aclaracionReceptor || aclaracionReceptor.trim().length < 3)) {
+      return res.status(400).json({ error: 'Debe aclarar la relación con el destinatario' });
     }
 
     // Buscar el envío
@@ -619,10 +640,6 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
     if (!envio) {
       return res.status(404).json({ error: 'Envío no encontrado' });
     }
-
-    // Subir firma a S3
-    const { subirFirmaEntrega } = require('../utils/s3');
-    const { url, key } = await subirFirmaEntrega(firmaDigital, envioId);
 
     // Obtener fecha y hora en timezone de Argentina
     const now = new Date();
@@ -634,32 +651,59 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       timeZone: 'America/Argentina/Buenos_Aires'
     });
 
-    // Actualizar el envío
-    envio.estado = 'entregado';
-    envio.confirmacionEntrega = {
+    // Preparar datos de confirmación
+    const confirmacion = {
       confirmada: true,
-      nombreDestinatario: nombreDestinatario || envio.destinatario,
-      dniDestinatario,
-      firmaS3Url: url,
-      firmaS3Key: key,
+      tipoReceptor: tipo,
+      nombreReceptor: nombre.trim(),
+      dniReceptor: dni,
+      aclaracionReceptor: tipo === 'otro' ? aclaracionReceptor.trim() : null,
       fechaEntrega: fechaEntregaArg,
       horaEntrega,
-      geolocalizacion: geolocalizacion || null
+      geolocalizacion: geolocalizacion || null,
+      // Legacy fields para compatibilidad
+      nombreDestinatario: nombre.trim(),
+      dniDestinatario: dni
     };
+
+    // Si requiere firma, subirla a S3
+    if (envio.requiereFirma && firmaDigital) {
+      const { subirFirmaEntrega } = require('../utils/s3');
+      const { url, key } = await subirFirmaEntrega(firmaDigital, envioId);
+      confirmacion.firmaS3Url = url;
+      confirmacion.firmaS3Key = key;
+    }
+
+    // Actualizar el envío
+    envio.estado = 'entregado';
+    envio.confirmacionEntrega = confirmacion;
 
     // Agregar al historial
     if (!envio.historial) envio.historial = [];
+
+    let nota = `Entrega confirmada. Receptor: ${tipo}`;
+    if (tipo === 'destinatario') {
+      nota += ` (${nombre})`;
+    } else if (tipo === 'porteria') {
+      nota += ` - ${nombre}`;
+    } else if (tipo === 'familiar') {
+      nota += ` - ${nombre}`;
+    } else if (tipo === 'otro') {
+      nota += ` - ${nombre} (${aclaracionReceptor})`;
+    }
+    nota += `. DNI: ${dni}`;
+
     envio.historial.push({
       at: fechaEntregaArg,
       estado: 'entregado',
       source: 'confirmacion-entrega',
-      actor_name: nombreDestinatario || 'Destinatario',
-      note: `Entrega confirmada con firma digital. DNI: ${dniDestinatario}`
+      actor_name: nombre,
+      note: nota
     });
 
     await envio.save();
 
-    console.log(`✓ Entrega confirmada para envío ${envioId} con firma digital`);
+    console.log(`✓ Entrega confirmada para envío ${envioId} - Receptor: ${tipo}`);
 
     res.json({
       success: true,
@@ -670,7 +714,9 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
         destinatario: envio.destinatario,
         confirmacionEntrega: {
           confirmada: envio.confirmacionEntrega.confirmada,
-          nombreDestinatario: envio.confirmacionEntrega.nombreDestinatario,
+          tipoReceptor: envio.confirmacionEntrega.tipoReceptor,
+          nombreReceptor: envio.confirmacionEntrega.nombreReceptor,
+          dniReceptor: envio.confirmacionEntrega.dniReceptor,
           fechaEntrega: envio.confirmacionEntrega.fechaEntrega,
           horaEntrega: envio.confirmacionEntrega.horaEntrega
         }

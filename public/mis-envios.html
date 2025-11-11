@@ -5,6 +5,10 @@
   <title>Mis envíos</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SignaturePad Library -->
+  <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+  <!-- Modal de Confirmación de Entrega -->
+  <script src="/js/confirmar-entrega-modal.js"></script>
 </head>
 <body class="bg-slate-100 min-h-screen">
   <div class="max-w-4xl mx-auto py-6 px-4">
@@ -41,6 +45,12 @@
   };
 
   const ESTADOS = Object.keys(mensajesEstado);
+
+  // Almacenar envíos completos para el modal
+  let enviosActuales = [];
+
+  // Instancia del modal de confirmación
+  let modalConfirmarEntrega = null;
 
   function escapeHtml(value) {
     if (value == null) return '';
@@ -90,16 +100,16 @@
 
     if (!esMercadoLibre) {
       const envioIdAttr = escapeHtml(envio._id);
+      const envioIndexAttr = escapeHtml(envio._envioIndex || 0);
 
       accionesHtml = `
         <div class="flex flex-wrap gap-2 pt-3 mt-3 border-t border-slate-200">
           <button
             type="button"
-            class="px-3 py-2 rounded text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 btn-marcar-estado"
-            data-envio-id="${envioIdAttr}"
-            data-estado="entregado"
+            class="px-3 py-2 rounded text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 btn-entregar"
+            data-envio-index="${envioIndexAttr}"
             data-id-venta="${idVentaAttr}"
-          >Entregado</button>
+          >Entregar</button>
           <button
             type="button"
             class="px-3 py-2 rounded text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 btn-marcar-estado"
@@ -156,9 +166,22 @@
   }
 
   function registrarEventosMarcarEstado() {
-    const botones = document.querySelectorAll('.btn-marcar-estado');
+    // Botones de "Entregar" (abre modal)
+    const botonesEntregar = document.querySelectorAll('.btn-entregar');
+    botonesEntregar.forEach((boton) => {
+      boton.addEventListener('click', () => {
+        const envioIndex = parseInt(boton.getAttribute('data-envio-index'), 10);
+        const envio = enviosActuales[envioIndex];
 
-    botones.forEach((boton) => {
+        if (envio) {
+          abrirModalEntrega(envio);
+        }
+      });
+    });
+
+    // Botones de otros estados (ausente, rechazado, inaccesible)
+    const botonesEstado = document.querySelectorAll('.btn-marcar-estado');
+    botonesEstado.forEach((boton) => {
       boton.addEventListener('click', () => {
         const envioId = boton.getAttribute('data-envio-id');
         const estado = boton.getAttribute('data-estado');
@@ -169,6 +192,31 @@
         }
       });
     });
+  }
+
+  /**
+   * Abre el modal de confirmación de entrega
+   */
+  function abrirModalEntrega(envio) {
+    if (!modalConfirmarEntrega) {
+      modalConfirmarEntrega = new ConfirmarEntregaModal();
+    }
+
+    modalConfirmarEntrega.open(
+      envio,
+      // onConfirm
+      (envioActualizado) => {
+        console.log('Entrega confirmada:', envioActualizado);
+        // Recargar lista de envíos
+        setTimeout(() => {
+          cargarEnvios();
+        }, 1000);
+      },
+      // onClose
+      () => {
+        console.log('Modal cerrado');
+      }
+    );
   }
 
   async function cargarEnvios() {
@@ -195,10 +243,14 @@
             No tenés envíos manuales asignados para hoy.
           </div>
         `;
+        enviosActuales = [];
         return;
       }
 
-      lista.innerHTML = envios.map(renderizarEnvio).join('');
+      // Guardar envíos completos y agregar índice
+      enviosActuales = envios.map((e, i) => ({ ...e, _envioIndex: i }));
+
+      lista.innerHTML = enviosActuales.map(renderizarEnvio).join('');
       registrarEventosMarcarEstado();
     } catch (error) {
       console.error('Error cargando envíos:', error);
