@@ -828,7 +828,7 @@ async function mostrarDetalle(envioId){
     const clienteNombre = clienteNombreRaw === '—' ? '— sin nombre —' : clienteNombreRaw;
     const partido=data.partido?.trim?.()||'-'; const zonaFact=data.zona?.trim?.()||'-';
     const s=uiStatus(data); const hist=data.timeline||data.historial||data.eventos||[];
-    renderHistorial(hist); switchTab('detalle');
+    renderHistorial(hist, data); switchTab('detalle');
     const cd=document.getElementById('contenidoDetalle');
     cd.innerHTML=`
       <p><strong>Cliente:</strong> ${clienteNombre}</p>
@@ -959,22 +959,22 @@ function switchTab(which){
   else { det.classList.add('hidden'); his.classList.remove('hidden'); activate(bHis); deactivate(bDet); }
 }
 
-function renderHistorial(histArray=[]) {
+function renderHistorial(histArray=[], envio=null) {
   const cont = document.getElementById('contenidoHistorial');
   if (!Array.isArray(histArray) || !histArray.length) {
     cont.innerHTML = `<p class="text-sm text-slate-500">Sin eventos por ahora.</p>`;
     return;
   }
 
-  const rows = histArray.slice().sort((a,b)=> 
+  const rows = histArray.slice().sort((a,b)=>
     new Date(b.at||b.fecha||b.updatedAt||0)-new Date(a.at||a.fecha||a.updatedAt||0)
   ).map(h => {
-    const fechaStr = h.at ? new Date(h.at).toLocaleString('es-AR') : 
+    const fechaStr = h.at ? new Date(h.at).toLocaleString('es-AR') :
                      h.updatedAt ? new Date(h.updatedAt).toLocaleString('es-AR') : '-';
-    
-    let badge = ''; 
+
+    let badge = '';
     let detalleNota = '';
-    
+
     if ((h.estado && h.estado.toLowerCase() === 'nota') || h.note) {
       badge = `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300">Nota</span>`;
       const safe = (h.note||'').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -985,15 +985,15 @@ function renderHistorial(histArray=[]) {
         estado: h.estado,
         estado_meli: h.estado_meli || {}
       };
-      
+
       const { key, label } = uiStatus(tempEnvio);
-      
+
       // Extraer substatus crudo de MeLi
       const subRaw = (h.estado_meli?.substatus || '').toLowerCase().trim();
-      
+
       // Badge principal
       badge = estadoBadge(key, label);
-      
+
       // AGREGAR chip de substatus si es relevante
       if (subRaw) {
         // Mapeo de substatuses a español
@@ -1007,13 +1007,13 @@ function renderHistorial(histArray=[]) {
           'not_visited': '⚠️ inaccesible',
           'bad_address': '📍 dir. errónea'
           };
-        
+
         const subDetalle = MAP_SUBSTATUS[subRaw];
-        
+
         if (subDetalle) {
           // Color contextual según tipo
           let chipClass = 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300';
-          
+
           if (subRaw.includes('absent') || subRaw.includes('not_visited') || subRaw.includes('bad_address')) {
             chipClass = 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300';
           } else if (subRaw.includes('rescheduled')) {
@@ -1023,14 +1023,35 @@ function renderHistorial(histArray=[]) {
           } else if (subRaw.includes('delivery') || subRaw.includes('soon')) {
             chipClass = 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300';
           }
-          
+
           badge += `<span class="ml-2 text-[11px] px-2 py-0.5 rounded-full border ${chipClass}">${subDetalle}</span>`;
         }
       }
+
+      // Si es un evento de entrega, agregar detalles del receptor
+      if (key === 'entregado' && envio?.confirmacionEntrega) {
+        const conf = envio.confirmacionEntrega;
+        let detalleEntrega = '<div class="mt-1 text-xs text-slate-700 dark:text-slate-300">';
+
+        if (conf.nombreReceptor) {
+          detalleEntrega += `<div><strong>Recibió:</strong> ${conf.nombreReceptor}`;
+          if (conf.tipoReceptor) {
+            detalleEntrega += ` <span style="color:#666;font-size:0.9em">(${conf.tipoReceptor})</span>`;
+          }
+          detalleEntrega += '</div>';
+        }
+
+        if (conf.dniReceptor) {
+          detalleEntrega += `<div><strong>DNI:</strong> ${conf.dniReceptor}</div>`;
+        }
+
+        detalleEntrega += '</div>';
+        detalleNota = detalleEntrega;
+      }
     }
-    
+
     const usuario = h.actor_name || h.usuario || '—';
-    
+
     return `<tr class="border-b border-slate-200 dark:border-white/10">
       <td class="px-3 py-2 whitespace-nowrap text-xs text-slate-900 dark:text-slate-100">${fechaStr}</td>
       <td class="px-3 py-2">${badge}${detalleNota}</td>
