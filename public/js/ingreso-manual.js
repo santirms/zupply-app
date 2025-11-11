@@ -127,6 +127,20 @@ function paqueteMarkup(){
         <small class="mt-1 block text-xs text-slate-500 dark:text-slate-400">Visible en la etiqueta</small>
       </label>
 
+      <!-- Requiere Firma -->
+      <div class="block text-sm">
+        <label class="flex items-start gap-2 cursor-pointer p-3 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+          <input type="checkbox" name="requiere_firma"
+                 class="mt-0.5 w-5 h-5 accent-amber-600 flex-shrink-0">
+          <div class="flex-1">
+            <span class="font-medium">🖊️ Este envío requiere firma del destinatario</span>
+            <small class="block text-xs text-slate-500 dark:text-slate-400 mt-1">
+              El chofer deberá solicitar firma y DNI al entregar
+            </small>
+          </div>
+        </label>
+      </div>
+
       <div class="flex items-center gap-2 mt-1">
         <input id="chk" type="checkbox" name="manual_precio" onchange="togglePrecioManual(this)"
                class="w-5 h-5 accent-amber-600">
@@ -310,10 +324,11 @@ async function guardar() {
 
     const tipo = div.querySelector("[name='tipo']")?.value || 'envio';
     const contenido = div.querySelector("[name='contenido']")?.value.trim() || null;
-    const cobraEnDestino = div.querySelector("[name='cobra_en_destino']")?.checked || false;    
+    const cobraEnDestino = div.querySelector("[name='cobra_en_destino']")?.checked || false;
     const montoACobrar = cobraEnDestino ? parseFloat(div.querySelector("[name='monto_a_cobrar']")?.value) || null : null;
-   
-  
+    const requiereFirma = div.querySelector("[name='requiere_firma']")?.checked || false;
+
+
     paquetes.push({
       cliente_id:    clienteId,
       sender_id:     codigoInt,
@@ -329,7 +344,8 @@ async function guardar() {
       tipo:          tipo,
       contenido:     contenido,
       cobra_en_destino: cobraEnDestino,
-      monto_a_cobrar:   montoACobrar
+      monto_a_cobrar:   montoACobrar,
+      requiereFirma:    requiereFirma
     });
   }
 
