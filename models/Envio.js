@@ -177,6 +177,15 @@ const envioSchema = new Schema({
   // Confirmación de entrega con firma digital
   confirmacionEntrega: {
     confirmada: { type: Boolean, default: false },
+    tipoReceptor: {
+      type: String,
+      enum: ['destinatario', 'porteria', 'familiar', 'otro'],
+      default: 'destinatario'
+    },
+    nombreReceptor: String,
+    dniReceptor: String,
+    aclaracionReceptor: String,
+    // Campos legacy (mantener compatibilidad)
     nombreDestinatario: String,
     dniDestinatario: String,
     firmaS3Url: String,
@@ -187,6 +196,12 @@ const envioSchema = new Schema({
       lat: Number,
       lng: Number
     }
+  },
+
+  // Flag para indicar si el envío requiere firma digital
+  requiereFirma: {
+    type: Boolean,
+    default: false
   }
   }, { timestamps: false });
 
