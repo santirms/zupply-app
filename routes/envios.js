@@ -681,6 +681,9 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
     // Agregar al historial
     if (!envio.historial) envio.historial = [];
 
+    // Obtener el chofer que está confirmando la entrega
+    const chofer = req.user?.username || req.user?.name || req.user?.email || 'Chofer';
+
     let nota = `Entrega confirmada. Receptor: ${tipo}`;
     if (tipo === 'destinatario') {
       nota += ` (${nombre})`;
@@ -697,7 +700,7 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       at: fechaEntregaArg,
       estado: 'entregado',
       source: 'confirmacion-entrega',
-      actor_name: nombre,
+      actor_name: chofer,  // ← CHOFER que entregó (NO receptor)
       note: nota
     });
 
