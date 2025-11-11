@@ -84,7 +84,12 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         estado:        'pendiente',
         requiere_sync_meli: false,
         origen:        'ingreso_manual',
-        source:        'panel' // 👈 marca el origen
+        source:        'panel', // 👈 marca el origen
+        tipo:              p.tipo || 'envio',
+        contenido:         p.contenido || null,
+        cobra_en_destino:  p.cobra_en_destino || false,
+        monto_a_cobrar:    p.monto_a_cobrar || null,
+        requiereFirma:     p.requiereFirma || false
       });
 
       // etiqueta + QR
@@ -158,7 +163,12 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
         estado:        'pendiente',
         requiere_sync_meli: false,
         origen:        'ingreso_manual',
-        source:        'panel'
+        source:        'panel',
+        tipo:              p.tipo || 'envio',
+        contenido:         p.contenido || null,
+        cobra_en_destino:  p.cobra_en_destino || false,
+        monto_a_cobrar:    p.monto_a_cobrar || null,
+        requiereFirma:     p.requiereFirma || false
       });
     }
 

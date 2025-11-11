@@ -543,7 +543,8 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         tipo:              p.tipo || 'envio',
         contenido:         p.contenido || null,
         cobra_en_destino:  p.cobra_en_destino || false,
-        monto_a_cobrar:    p.monto_a_cobrar || null
+        monto_a_cobrar:    p.monto_a_cobrar || null,
+        requiereFirma:     p.requiereFirma || false
       });
 
       // Generar etiqueta 10x15 + QR usando id_venta
