@@ -84,7 +84,8 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         estado:        'pendiente',
         requiere_sync_meli: false,
         origen:        'ingreso_manual',
-        source:        'panel' // 👈 marca el origen
+        source:        'panel', // 👈 marca el origen
+        requiereFirma: p.requiereFirma || false  // ✅ Propagar desde frontend
       });
 
       // etiqueta + QR
@@ -158,7 +159,8 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
         estado:        'pendiente',
         requiere_sync_meli: false,
         origen:        'ingreso_manual',
-        source:        'panel'
+        source:        'panel',
+        requiereFirma: p.requiereFirma || false  // ✅ Propagar desde frontend
       });
     }
 

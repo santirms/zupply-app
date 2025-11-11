@@ -401,7 +401,8 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
       precio:        p.manual_precio      ? Number(p.precio) || 0 : 0,
       estado:        'pendiente',
       requiere_sync_meli: false,
-      origen:        'ingreso_manual'
+      origen:        'ingreso_manual',
+      requiereFirma: p.requiereFirma || false  // ✅ Propagar desde frontend
       // precio real se calculará en GET /envios si es 0
     }));
 
@@ -543,7 +544,8 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         tipo:              p.tipo || 'envio',
         contenido:         p.contenido || null,
         cobra_en_destino:  p.cobra_en_destino || false,
-        monto_a_cobrar:    p.monto_a_cobrar || null
+        monto_a_cobrar:    p.monto_a_cobrar || null,
+        requiereFirma:     p.requiereFirma || false  // ✅ Propagar desde frontend
       });
 
       // Generar etiqueta 10x15 + QR usando id_venta
