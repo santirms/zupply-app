@@ -19,26 +19,163 @@ function toggleCampoMontoCobro() {
   }
 }
 
-// Validación CP → Partido (simplificado)
-const partidosPorCP = {
-  '1832': 'Lomas de Zamora',
-  '1414': 'CABA',
-  '1828': 'Banfield',
-  // ... agregar más según necesites
-};
+// ========== VALIDACIÓN CP → Partido (usando API) ==========
 
-document.getElementById('paq-cp')?.addEventListener('input', (e) => {
-  const cp = e.target.value;
-  const partido = document.getElementById('paq-partido');
+let timeoutValidacionCP = null;
+let lastValidacionCP = null;
 
-  if (partidosPorCP[cp]) {
-    partido.value = partidosPorCP[cp];
-  } else if (cp.length === 4) {
-    partido.value = 'Verificar manualmente';
-  } else {
-    partido.value = '';
+// Función para validar CP contra la API
+async function validarCodigoPostal(cp) {
+  // Validar formato primero (4 dígitos)
+  if (!/^\d{4}$/.test(cp)) {
+    return { valido: false, mensaje: 'Ingrese 4 dígitos numéricos' };
   }
-});
+
+  try {
+    const response = await fetch(`/api/partidos/cp/${cp}`);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      return {
+        valido: false,
+        mensaje: error.error || error.mensaje || 'Error al validar código postal'
+      };
+    }
+
+    const data = await response.json();
+
+    if (data.valido) {
+      return {
+        valido: true,
+        partido: data.partido,
+        localidad: data.localidad,
+        zona: data.zona
+      };
+    } else {
+      return {
+        valido: false,
+        mensaje: data.mensaje || 'CP no está en zona de cobertura'
+      };
+    }
+  } catch (error) {
+    console.error('Error validando CP:', error);
+    return {
+      valido: false,
+      mensaje: 'Error al verificar. Intente nuevamente.'
+    };
+  }
+}
+
+// Función para actualizar el feedback visual del CP
+function actualizarFeedbackCP(estado, mensaje = '') {
+  const inputCP = document.getElementById('paq-cp');
+  const partidoInput = document.getElementById('paq-partido');
+
+  if (!inputCP || !partidoInput) return;
+
+  // Remover clases anteriores
+  inputCP.classList.remove('border-green-500', 'border-red-500', 'border-blue-500');
+
+  // Buscar o crear elemento de feedback
+  let feedbackEl = inputCP.parentElement.querySelector('.cp-feedback');
+  if (!feedbackEl) {
+    feedbackEl = document.createElement('small');
+    feedbackEl.className = 'cp-feedback text-xs mt-1 block';
+    inputCP.parentElement.appendChild(feedbackEl);
+  }
+
+  switch (estado) {
+    case 'validando':
+      inputCP.classList.add('border-blue-500');
+      feedbackEl.className = 'cp-feedback text-xs mt-1 block text-blue-600 dark:text-blue-400';
+      feedbackEl.textContent = '🔍 Verificando...';
+      partidoInput.value = '';
+      break;
+
+    case 'valido':
+      inputCP.classList.add('border-green-500');
+      feedbackEl.className = 'cp-feedback text-xs mt-1 block text-green-600 dark:text-green-400';
+      feedbackEl.textContent = mensaje || '✓ Código postal válido';
+      break;
+
+    case 'invalido':
+      inputCP.classList.add('border-red-500');
+      feedbackEl.className = 'cp-feedback text-xs mt-1 block text-red-600 dark:text-red-400';
+      feedbackEl.textContent = mensaje || '⚠️ Código postal no válido';
+      partidoInput.value = 'Verificar manualmente';
+      break;
+
+    case 'error':
+      inputCP.classList.add('border-red-500');
+      feedbackEl.className = 'cp-feedback text-xs mt-1 block text-red-600 dark:text-red-400';
+      feedbackEl.textContent = mensaje || '❌ Error al verificar';
+      partidoInput.value = 'Verificar manualmente';
+      break;
+
+    default:
+      feedbackEl.textContent = '';
+      partidoInput.value = '';
+      break;
+  }
+}
+
+// Event listener para el input de código postal con debounce
+const inputCP = document.getElementById('paq-cp');
+if (inputCP) {
+  inputCP.addEventListener('input', async (e) => {
+    const cp = e.target.value.trim();
+    const partidoInput = document.getElementById('paq-partido');
+
+    // Limpiar timeout anterior
+    if (timeoutValidacionCP) {
+      clearTimeout(timeoutValidacionCP);
+    }
+
+    // Si está vacío o tiene menos de 4 dígitos, limpiar
+    if (cp.length === 0) {
+      actualizarFeedbackCP('limpiar');
+      return;
+    }
+
+    if (cp.length < 4) {
+      actualizarFeedbackCP('limpiar');
+      return;
+    }
+
+    // Si tiene 4 dígitos, validar con debounce
+    if (cp.length === 4) {
+      actualizarFeedbackCP('validando');
+
+      // Esperar 300ms después de que el usuario deje de escribir
+      timeoutValidacionCP = setTimeout(async () => {
+        // Evitar validar el mismo CP dos veces seguidas
+        if (lastValidacionCP === cp) {
+          return;
+        }
+
+        lastValidacionCP = cp;
+
+        const resultado = await validarCodigoPostal(cp);
+
+        if (resultado.valido) {
+          // Auto-completar campos
+          partidoInput.value = resultado.partido;
+
+          const mensajeFeedback = `✓ ${resultado.localidad || resultado.partido}${resultado.zona ? ` - Zona ${resultado.zona}` : ''}`;
+          actualizarFeedbackCP('valido', mensajeFeedback);
+        } else {
+          actualizarFeedbackCP('invalido', resultado.mensaje);
+        }
+      }, 300);
+    }
+
+    // Si tiene más de 4 dígitos, mostrar error
+    if (cp.length > 4) {
+      actualizarFeedbackCP('error', 'El código postal debe tener 4 dígitos');
+      partidoInput.value = '';
+    }
+  });
+}
 
 // Listener para cambiar ayuda contextual del tipo de envío
 document.getElementById('paq-tipo-envio')?.addEventListener('change', (e) => {
