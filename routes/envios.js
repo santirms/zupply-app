@@ -649,23 +649,17 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
 
     // Validar cobro en destino si está habilitado
     if (envio.cobroEnDestino?.habilitado && !envio.cobroEnDestino?.cobrado) {
-      if (!confirmarCobro) {
-        return res.status(400).json({
-          error: 'Debe confirmar que cobró el monto en destino antes de confirmar la entrega'
-        });
-      }
-
       if (!metodoPago) {
         return res.status(400).json({
           error: 'Debe especificar el método de pago del cobro en destino'
         });
       }
 
-      // Validar que el método de pago sea válido
-      const metodosValidos = ['efectivo', 'transferencia', 'mercadopago', 'otro'];
+      // Validar que el método de pago sea válido (solo efectivo o transferencia)
+      const metodosValidos = ['efectivo', 'transferencia'];
       if (!metodosValidos.includes(metodoPago)) {
         return res.status(400).json({
-          error: 'Método de pago inválido'
+          error: 'Método de pago inválido. Debe ser efectivo o transferencia.'
         });
       }
     }
@@ -701,7 +695,7 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
     envio.confirmacionEntrega = confirmacion;
 
     // Actualizar cobro en destino si aplica
-    if (envio.cobroEnDestino?.habilitado && confirmarCobro && metodoPago) {
+    if (envio.cobroEnDestino?.habilitado && metodoPago) {
       envio.cobroEnDestino.cobrado = true;
       envio.cobroEnDestino.fechaCobro = fechaEntregaArg;
       envio.cobroEnDestino.metodoPago = metodoPago;
