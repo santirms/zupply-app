@@ -6,6 +6,7 @@ const { generarEtiquetaInformativa, resolveTracking } = require('../utils/labelS
 const axios = require('axios');
 const { formatSubstatus } = require('../services/meliHistory');
 const logger = require('../utils/logger');
+const { getFechaArgentina } = require('../utils/timezone');
 
 // ——— CONFIG ———
 const HYDRATE_TTL_MIN = 15; // re-hidratar si pasaron > 15 min
@@ -69,7 +70,7 @@ async function ensureMeliHistory(envio) {
   const mapped = mapMeliHistory(items);
 
   envio.historial = mergeHistorial(envio.historial || [], mapped);
-  envio.meli_history_last_sync = new Date();
+  envio.meli_history_last_sync = getFechaArgentina();
   await envio.save();
 }
 
@@ -244,7 +245,7 @@ exports.crearEnvio = async (req, res) => {
       referencia,
       latitud,       // 👈 coincide con el schema
       longitud,      // 👈 coincide con el schema
-      fecha: new Date()
+      fecha: getFechaArgentina()
     });
 
     // Generar etiqueta 10x15 + QR usando id_venta (o meli_id)
@@ -589,6 +590,7 @@ exports.crearEnviosLote = async (req, res) => {
           throw new Error(`ID de venta ${idVenta} ya existe`);
         }
 
+        const fechaArg = getFechaArgentina();
         const nuevoEnvio = new Envio({
           sender_id: codigoCliente,
           cliente_id: clienteId,
@@ -600,7 +602,7 @@ exports.crearEnviosLote = async (req, res) => {
           codigo_postal: data.codigo_postal,
           telefono: data.telefono || null,
           referencia: data.referencia || null,
-          fecha: new Date(),
+          fecha: fechaArg,
           estado: 'pendiente',
           origen: 'ingreso_manual',
           requiere_sync_meli: false,
@@ -611,7 +613,7 @@ exports.crearEnviosLote = async (req, res) => {
           cobra_en_destino: data.cobra_en_destino || false,
           monto_a_cobrar: data.monto_a_cobrar || null,
           historial: [{
-            at: new Date(),
+            at: fechaArg,
             estado: 'pendiente',
             source: 'cliente-web',
             actor_name: usuario.email || usuario.username || 'cliente',
@@ -697,10 +699,11 @@ exports.agregarNota = async (req, res) => {
     const actor_role = (req.user?.role || null);
     const tipo = actor_role === 'chofer' ? 'chofer' : (actor_role === 'sistema' ? 'sistema' : 'admin');
 
+    const fechaArg = getFechaArgentina();
     const nota = {
       texto: texto.trim(),
       usuario: actor_name,
-      fecha: new Date(),
+      fecha: fechaArg,
       tipo,
       actor_name,
       actor_role
@@ -712,7 +715,7 @@ exports.agregarNota = async (req, res) => {
     // también guardamos en historial para que aparezca con fecha/hora
     if (!Array.isArray(envio.historial)) envio.historial = [];
     envio.historial.push({
-      at: new Date(),
+      at: fechaArg,
       estado: 'nota',
       actor_name,
       note: texto.trim(),

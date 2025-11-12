@@ -1,5 +1,6 @@
 const Envio = require('../models/Envio');
 const logger = require('../utils/logger');
+const { getFechaArgentina } = require('../utils/timezone');
 
 const ESTADOS_CHOFER = ['entregado', 'comprador_ausente', 'rechazado', 'inaccesible'];
 
@@ -68,7 +69,7 @@ exports.marcarEntregado = async (req, res, next) => {
     const { id } = req.params;
     await Envio.findByIdAndUpdate(id, {
       estado: 'entregado',
-      $push: { historial: { at: new Date(), estado: 'entregado', source: 'panel', actor_name: 'chofer' } }
+      $push: { historial: { at: getFechaArgentina(), estado: 'entregado', source: 'panel', actor_name: 'chofer' } }
     });
     res.json({ ok: true });
   } catch (e) { next(e); }
@@ -130,10 +131,11 @@ exports.marcarEstado = async (req, res) => {
     }
 
     const notasTrimmed = notas ? String(notas).trim() : '';
+    const fechaArg = getFechaArgentina();
 
     envio.historial_estados.unshift({
       estado,
-      fecha: new Date(),
+      fecha: fechaArg,
       usuario: obtenerNombreUsuario(req.user),
       notas: notasTrimmed || null
     });
@@ -141,7 +143,7 @@ exports.marcarEstado = async (req, res) => {
     if (Array.isArray(envio.historial)) {
       const actor = obtenerNombreUsuario(req.user);
       envio.historial.unshift({
-        at: new Date(),
+        at: fechaArg,
         estado,
         source: 'chofer-app',
         actor_name: actor,
@@ -150,7 +152,7 @@ exports.marcarEstado = async (req, res) => {
 
       if (vuelveAPlanta) {
         envio.historial.unshift({
-          at: new Date(),
+          at: fechaArg,
           estado: 'en_planta',
           source: 'auto',
           actor_name: 'Sistema',
@@ -171,7 +173,7 @@ exports.marcarEstado = async (req, res) => {
       envio.notas.push({
         texto: textoNota,
         usuario: usuarioNota,
-        fecha: new Date(),
+        fecha: fechaArg,
         tipo: 'chofer',
         actor_name: usuarioNota,
         actor_role: 'chofer'
