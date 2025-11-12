@@ -596,6 +596,11 @@ router.get('/tracking/:tracking/label', labelByTracking);
  */
 router.post('/confirmar-entrega', requireAuth, async (req, res) => {
   try {
+    // ✅ DEBUG: Log del request body
+    console.log('=== POST /confirmar-entrega ===');
+    console.log('Body completo:', JSON.stringify(req.body, null, 2));
+    console.log('Usuario:', req.user?.username || req.user?.email || 'Desconocido');
+
     const {
       envioId,
       tipoReceptor,
@@ -611,6 +616,9 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       nombreDestinatario,
       dniDestinatario
     } = req.body;
+
+    console.log('Método de pago recibido:', metodoPago);
+    console.log('Confirmar cobro:', confirmarCobro);
 
     // Validaciones
     if (!envioId) {
@@ -647,9 +655,22 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Envío no encontrado' });
     }
 
+    // ✅ DEBUG: Log del envío encontrado
+    console.log('Envío encontrado:', envioId);
+    console.log('cobroEnDestino completo:', JSON.stringify(envio.cobroEnDestino, null, 2));
+    console.log('¿Tiene cobro habilitado?', envio.cobroEnDestino?.habilitado);
+    console.log('¿Ya fue cobrado?', envio.cobroEnDestino?.cobrado);
+    console.log('Monto:', envio.cobroEnDestino?.monto);
+
     // Validar cobro en destino si está habilitado
     if (envio.cobroEnDestino?.habilitado && !envio.cobroEnDestino?.cobrado) {
+      console.log('=== VALIDANDO COBRO EN DESTINO ===');
+      console.log('metodoPago recibido:', metodoPago);
+      console.log('Tipo de metodoPago:', typeof metodoPago);
+      console.log('¿Es efectivo o transferencia?', ['efectivo', 'transferencia'].includes(metodoPago));
+
       if (!metodoPago) {
+        console.log('❌ RECHAZADO: No se envió método de pago');
         return res.status(400).json({
           error: 'Debe especificar el método de pago del cobro en destino'
         });
@@ -658,10 +679,15 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       // Validar que el método de pago sea válido (solo efectivo o transferencia)
       const metodosValidos = ['efectivo', 'transferencia'];
       if (!metodosValidos.includes(metodoPago)) {
+        console.log('❌ RECHAZADO: Método de pago inválido:', metodoPago);
         return res.status(400).json({
           error: 'Método de pago inválido. Debe ser efectivo o transferencia.'
         });
       }
+
+      console.log('✅ Validación de cobro en destino OK');
+    } else {
+      console.log('No requiere validación de cobro en destino (habilitado:', envio.cobroEnDestino?.habilitado, ', cobrado:', envio.cobroEnDestino?.cobrado, ')');
     }
 
     // Obtener fecha y hora en timezone de Argentina
@@ -747,6 +773,8 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
     await envio.save();
 
     console.log(`✓ Entrega confirmada para envío ${envioId} - Receptor: ${tipo}`);
+    console.log('Estado final del envío:', envio.estado);
+    console.log('Cobro en destino actualizado:', JSON.stringify(envio.cobroEnDestino, null, 2));
 
     res.json({
       success: true,
@@ -1049,6 +1077,13 @@ router.get('/:id', async (req, res) => {
 
     // timeline para el front (mergea historial+eventos)
     plain.timeline = buildTimeline(plain);
+
+    // ✅ DEBUG: Log del envío que se devuelve
+    console.log('=== GET /envios/:id ===');
+    console.log('ID solicitado:', rawId);
+    console.log('Envío encontrado:', plain._id);
+    console.log('cobroEnDestino:', JSON.stringify(plain.cobroEnDestino, null, 2));
+
     return res.json(plain);
   } catch (err) {
     console.error('Error al obtener envío:', err);

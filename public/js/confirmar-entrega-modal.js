@@ -103,6 +103,13 @@ class ConfirmarEntregaModal {
     this.tipoReceptor = null;
     this.datosReceptor = { nombre: '', dni: '', aclaracion: '' };
 
+    // ✅ DEBUG: Log cuando se abre el modal
+    console.log('=== MODAL ABIERTO ===');
+    console.log('Envío completo:', envio);
+    console.log('¿Tiene cobro en destino?', envio.cobroEnDestino?.habilitado);
+    console.log('Monto del cobro:', envio.cobroEnDestino?.monto);
+    console.log('¿Ya fue cobrado?', envio.cobroEnDestino?.cobrado);
+
     const modal = document.getElementById('confirmarEntregaModal');
     modal.style.display = 'flex';
     modal.classList.remove('hidden');
@@ -178,23 +185,46 @@ class ConfirmarEntregaModal {
   renderPantallaReceptor() {
     document.getElementById('modalTitle').textContent = '¿Quién recibe el paquete?';
 
+    // ✅ DEBUG: Log al renderizar pantalla
+    console.log('=== RENDERIZANDO PANTALLA RECEPTOR ===');
+    console.log('cobroEnDestino del envío:', this.envio.cobroEnDestino);
+    console.log('¿Debería mostrar cobro en destino?', this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado);
+
     // Alert de cobro en destino si está habilitado
     const cobroDestinoAlert = this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado
       ? `
-        <div class="border-l-4 border-amber-500 bg-amber-50 p-4 rounded-lg mb-6">
+        <div style="
+          border-left: 6px solid #f59e0b;
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          padding: 20px;
+          border-radius: 12px;
+          margin-bottom: 24px;
+          box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+          animation: pulse-border 2s ease-in-out infinite;
+        ">
+          <style>
+            @keyframes pulse-border {
+              0%, 100% { box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3); }
+              50% { box-shadow: 0 6px 20px rgba(245, 158, 11, 0.6); }
+            }
+          </style>
           <div class="flex items-start gap-3">
-            <div class="text-3xl">💵</div>
+            <div style="font-size: 3em; animation: bounce 2s ease-in-out infinite;">💵</div>
             <div class="flex-1">
-              <h3 class="text-lg font-bold text-amber-900 mb-1">¡IMPORTANTE! Cobro en Destino</h3>
-              <p class="text-amber-800 mb-2">
-                Debes cobrar <strong class="text-2xl">${(this.envio.cobroEnDestino.monto || 0).toLocaleString('es-AR', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                  style: 'currency',
-                  currency: 'ARS'
-                })}</strong> al entregar este paquete
+              <h3 style="font-size: 1.5em; font-weight: bold; color: #92400e; margin-bottom: 8px;">
+                🚨 ¡IMPORTANTE! COBRO EN DESTINO 🚨
+              </h3>
+              <p style="color: #92400e; margin-bottom: 12px; font-size: 1.1em;">
+                Debes cobrar <strong style="font-size: 1.8em; color: #dc2626; text-decoration: underline;">
+                  ${(this.envio.cobroEnDestino.monto || 0).toLocaleString('es-AR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                    style: 'currency',
+                    currency: 'ARS'
+                  })}
+                </strong> al entregar este paquete
               </p>
-              <p class="text-sm text-amber-700">
+              <p style="color: #b45309; font-weight: bold; font-size: 1em;">
                 ⚠️ No podrás confirmar la entrega sin registrar el cobro
               </p>
             </div>
@@ -262,15 +292,32 @@ class ConfirmarEntregaModal {
 
           <!-- Cobro en Destino (si está habilitado) -->
           ${this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado ? `
-          <div id="campoCobroDestino" class="mt-6 p-4 rounded-lg" style="background-color: #fff3cd; border: 2px solid #ffc107;">
-            <h4 class="font-bold mb-3" style="color: #856404; font-size: 1.1em;">
-              💵 Cobro en Destino
+          <div id="campoCobroDestino" class="mt-6 p-5 rounded-lg" style="
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 3px solid #f59e0b;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+          ">
+            <h4 class="font-bold mb-4" style="
+              color: #92400e;
+              font-size: 1.4em;
+              text-align: center;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            ">
+              💵 COBRO EN DESTINO - OBLIGATORIO 💵
             </h4>
 
-            <div class="p-3 mb-4 rounded" style="background-color: #fff; border: 1px solid #ffc107;">
-              <p style="color: #856404; margin-bottom: 0;">
-                <strong style="font-size: 1.4em; display: block;">
-                  Monto a cobrar: ${(this.envio.cobroEnDestino.monto || 0).toLocaleString('es-AR', {
+            <div class="p-4 mb-4 rounded" style="
+              background-color: #fff;
+              border: 2px solid #dc2626;
+              text-align: center;
+            ">
+              <p style="color: #92400e; margin-bottom: 4px; font-weight: bold;">
+                MONTO A COBRAR:
+              </p>
+              <p style="margin: 0;">
+                <strong style="font-size: 2.2em; color: #dc2626; font-weight: bold;">
+                  ${(this.envio.cobroEnDestino.monto || 0).toLocaleString('es-AR', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                     style: 'currency',
@@ -281,25 +328,49 @@ class ConfirmarEntregaModal {
             </div>
 
             <div>
-              <label class="block font-bold mb-2" style="color: #856404; font-size: 1em;">
-                ¿Cómo cobró? <span class="text-red-500">*</span>
+              <label class="block font-bold mb-3" style="
+                color: #92400e;
+                font-size: 1.2em;
+                text-align: center;
+              ">
+                ¿CÓMO COBRÓ? <span style="color: #dc2626; font-size: 1.2em;">*</span>
               </label>
               <select
                 id="selectMetodoPago"
-                class="w-full px-3 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                style="font-size: 1.1em; border-color: #ffc107;"
+                class="w-full px-4 py-4 border-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                style="
+                  font-size: 1.3em;
+                  border: 3px solid #f59e0b;
+                  font-weight: bold;
+                  background-color: #fff;
+                  text-align: center;
+                "
               >
-                <option value="">Seleccionar método...</option>
-                <option value="efectivo">💵 Efectivo</option>
-                <option value="transferencia">💳 Transferencia</option>
+                <option value="">⚠️ SELECCIONAR MÉTODO ⚠️</option>
+                <option value="efectivo">💵 EFECTIVO</option>
+                <option value="transferencia">💳 TRANSFERENCIA</option>
               </select>
-              <p id="errorMetodoPago" class="text-sm text-red-600 mt-2 hidden"></p>
+              <p id="errorMetodoPago" class="text-sm mt-2 hidden" style="
+                color: #dc2626;
+                font-weight: bold;
+                text-align: center;
+                font-size: 1em;
+              "></p>
             </div>
 
-            <div class="mt-3">
-              <small class="text-red-600 font-medium">
-                * Debe seleccionar el método de pago antes de continuar
-              </small>
+            <div class="mt-4 p-3 rounded" style="
+              background-color: #fef2f2;
+              border: 2px solid #dc2626;
+            ">
+              <p style="
+                color: #dc2626;
+                font-weight: bold;
+                margin: 0;
+                text-align: center;
+                font-size: 1em;
+              ">
+                🚨 DEBE SELECCIONAR EL MÉTODO DE PAGO ANTES DE CONTINUAR 🚨
+              </p>
             </div>
           </div>
           ` : ''}
@@ -545,12 +616,19 @@ class ConfirmarEntregaModal {
     if (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado) {
       const selectMetodoPago = document.getElementById('selectMetodoPago');
 
+      // ✅ DEBUG: Log de validación cobro
+      console.log('Validando cobro en destino...');
+      console.log('Select de método de pago existe:', !!selectMetodoPago);
+
       if (selectMetodoPago) {
         const metodoPago = selectMetodoPago.value;
+        console.log('Método de pago seleccionado:', metodoPago);
         isValid = isValid && metodoPago && (metodoPago === 'efectivo' || metodoPago === 'transferencia');
+        console.log('¿Es válido el método?', metodoPago && (metodoPago === 'efectivo' || metodoPago === 'transferencia'));
       }
     }
 
+    console.log('Botón continuar - isValid:', isValid);
     btn.disabled = !isValid;
   }
 
@@ -559,6 +637,11 @@ class ConfirmarEntregaModal {
    */
   handleContinuar() {
     if (this.loading) return;
+
+    // ✅ DEBUG: Log cuando se hace click en continuar
+    console.log('=== CLICK EN CONTINUAR ===');
+    console.log('Tipo receptor:', this.tipoReceptor);
+    console.log('Datos receptor:', this.datosReceptor);
 
     // Validar todos los campos
     let isValid = this.validateDni();
@@ -575,8 +658,12 @@ class ConfirmarEntregaModal {
     if (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado) {
       const selectMetodoPago = document.getElementById('selectMetodoPago');
 
+      console.log('Envío tiene cobro en destino - validando...');
+      console.log('Select método pago existe:', !!selectMetodoPago);
+
       if (selectMetodoPago) {
         const metodoPago = selectMetodoPago.value;
+        console.log('Método de pago seleccionado:', metodoPago);
 
         if (!metodoPago) {
           const errorMsg = document.getElementById('errorMetodoPago');
@@ -584,6 +671,7 @@ class ConfirmarEntregaModal {
             errorMsg.textContent = 'Debe seleccionar el método de pago';
             errorMsg.classList.remove('hidden');
           }
+          console.log('❌ ERROR: No se seleccionó método de pago');
           alert('⚠️ Debe seleccionar el método de pago para confirmar la entrega');
           return;
         }
@@ -594,12 +682,14 @@ class ConfirmarEntregaModal {
             errorMsg.textContent = 'Método de pago inválido';
             errorMsg.classList.remove('hidden');
           }
+          console.log('❌ ERROR: Método de pago inválido:', metodoPago);
           alert('⚠️ Método de pago inválido. Solo se acepta Efectivo o Transferencia');
           return;
         }
 
         // Guardar método de pago para enviar al backend
         this.metodoPagoCobro = metodoPago;
+        console.log('✅ Método de pago guardado:', this.metodoPagoCobro);
       }
     }
 
@@ -607,9 +697,11 @@ class ConfirmarEntregaModal {
 
     // Si requiere firma, ir a pantalla 2
     if (this.envio.requiereFirma) {
+      console.log('Pasando a pantalla de firma...');
       this.step = 2;
       this.renderStep();
     } else {
+      console.log('Guardando directamente sin firma...');
       // Guardar directamente sin firma
       this.handleGuardarSinFirma();
     }
@@ -788,6 +880,13 @@ class ConfirmarEntregaModal {
         payload.metodoPago = this.metodoPagoCobro;
       }
 
+      // ✅ DEBUG: Log del payload
+      console.log('=== ENVIANDO PAYLOAD CON FIRMA ===');
+      console.log('Payload completo:', JSON.stringify(payload, null, 2));
+      console.log('¿Tiene cobro en destino?', this.envio.cobroEnDestino?.habilitado);
+      console.log('Método de pago incluido:', payload.metodoPago);
+      console.log('Confirmar cobro:', payload.confirmarCobro);
+
       const response = await fetch('/api/envios/confirmar-entrega', {
         method: 'POST',
         credentials: 'same-origin',
@@ -795,7 +894,10 @@ class ConfirmarEntregaModal {
         body: JSON.stringify(payload)
       });
 
+      console.log('Response status:', response.status);
+
       const resultado = await response.json();
+      console.log('Response data:', resultado);
 
       if (!response.ok) {
         throw new Error(resultado.error || 'Error al confirmar entrega');
@@ -842,6 +944,14 @@ class ConfirmarEntregaModal {
         payload.metodoPago = this.metodoPagoCobro;
       }
 
+      // ✅ DEBUG: Log del payload
+      console.log('=== ENVIANDO PAYLOAD SIN FIRMA ===');
+      console.log('Payload completo:', JSON.stringify(payload, null, 2));
+      console.log('¿Tiene cobro en destino?', this.envio.cobroEnDestino?.habilitado);
+      console.log('Método de pago incluido:', payload.metodoPago);
+      console.log('Confirmar cobro:', payload.confirmarCobro);
+      console.log('metodoPagoCobro guardado:', this.metodoPagoCobro);
+
       const response = await fetch('/api/envios/confirmar-entrega', {
         method: 'POST',
         credentials: 'same-origin',
@@ -849,7 +959,10 @@ class ConfirmarEntregaModal {
         body: JSON.stringify(payload)
       });
 
+      console.log('Response status:', response.status);
+
       const resultado = await response.json();
+      console.log('Response data:', resultado);
 
       if (!response.ok) {
         throw new Error(resultado.error || 'Error al confirmar entrega');
