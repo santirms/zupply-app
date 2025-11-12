@@ -432,12 +432,42 @@ function initTopbar() {
       location.href = '/auth/login';
     });
 
+    // Función para obtener la ruta de inicio según el rol
+    function getHomeRoute(role) {
+      switch(role) {
+        case 'cliente':
+          return '/client-panel.html';
+        case 'admin':
+        case 'coordinador':
+          return '/index.html';
+        case 'chofer':
+          return '/mis-envios.html';
+        default:
+          return '/';
+      }
+    }
+
     fetch('/me', { cache: 'no-store', credentials: 'include' })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((me) => {
         const usernameEl = document.getElementById('username');
         if (usernameEl) {
           usernameEl.textContent = me?.name || me?.username || me?.email || 'Usuario';
+        }
+
+        // Configurar redirección del logo según rol
+        const userRole = me.role || 'admin';
+        const homeRoute = getHomeRoute(userRole);
+
+        const logoLink = document.getElementById('logoLink');
+        const homeLink = document.getElementById('homeLink');
+
+        // Actualizar href del logo y link de inicio
+        if (logoLink) {
+          logoLink.href = homeRoute;
+        }
+        if (homeLink) {
+          homeLink.href = homeRoute;
         }
       })
       .catch(() => {
