@@ -131,28 +131,24 @@ if (inputCP) {
       clearTimeout(timeoutValidacionCP);
     }
 
-    // Si está vacío o tiene menos de 4 dígitos, limpiar
-    if (cp.length === 0) {
-      actualizarFeedbackCP('limpiar');
-      return;
-    }
-
+    // Si está vacío o tiene menos de 4 dígitos, limpiar estado
     if (cp.length < 4) {
+      lastValidacionCP = ''; // ✅ FIX: Limpiar lastValidacionCP para permitir re-validación
       actualizarFeedbackCP('limpiar');
       return;
     }
 
     // Si tiene 4 dígitos, validar con debounce
     if (cp.length === 4) {
+      // Solo validar si es diferente al último validado
+      if (lastValidacionCP === cp) {
+        return;
+      }
+
       actualizarFeedbackCP('validando');
 
       // Esperar 300ms después de que el usuario deje de escribir
       timeoutValidacionCP = setTimeout(async () => {
-        // Evitar validar el mismo CP dos veces seguidas
-        if (lastValidacionCP === cp) {
-          return;
-        }
-
         lastValidacionCP = cp;
 
         const resultado = await validarCodigoPostal(cp);
