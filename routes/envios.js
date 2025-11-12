@@ -11,6 +11,7 @@ const QRCode  = require('qrcode');
 const { generarEtiquetaInformativa } = require('../utils/labelService');
 const { ensureMeliHistory: ensureMeliHistorySrv, formatSubstatus } = require('../services/meliHistory');
 const logger = require('../utils/logger');
+const { getFechaArgentina, getHoraArgentina, getFechaHoraArgentina } = require('../utils/timezone');
 
 
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
@@ -397,7 +398,7 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
       zona:          p.zona               || '',
       id_venta:      p.idVenta            || p.id_venta || '',
       referencia:    p.referencia         || '',
-      fecha:         new Date(),
+      fecha:         getFechaArgentina(),
       precio:        p.manual_precio      ? Number(p.precio) || 0 : 0,
       estado:        'pendiente',
       requiere_sync_meli: false,
@@ -427,8 +428,8 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
       // 1) Buscamos cliente
       const cl = await Cliente.findOne({ sender_id: et.sender_id });
 
-      // 2) Calculamos fecha combinando día/mes del PDF y año/hora actual
-      const now = new Date();
+      // 2) Calculamos fecha combinando día/mes del PDF y año/hora actual (timezone Argentina)
+      const now = getFechaArgentina();
       let fechaEtiqueta = now;
       if (et.fecha) {
         const parsed = new Date(et.fecha);
@@ -536,7 +537,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         id_venta:      idVenta,     // 👈 tracking del sistema
         referencia:    p.referencia,
         precio:        costo,
-        fecha:         new Date(),
+        fecha:         getFechaArgentina(),
         estado:        'pendiente',
         requiere_sync_meli: false,
         origen:        'ingreso_manual',
@@ -644,14 +645,7 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
     }
 
     // Obtener fecha y hora en timezone de Argentina
-    const now = new Date();
-    const fechaEntregaArg = new Date(now.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
-    const horaEntrega = fechaEntregaArg.toLocaleTimeString('es-AR', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      timeZone: 'America/Argentina/Buenos_Aires'
-    });
+    const { fecha: fechaEntregaArg, hora: horaEntrega } = getFechaHoraArgentina();
 
     // Preparar datos de confirmación
     const confirmacion = {
@@ -1069,7 +1063,7 @@ router.patch('/:id/asignar', async (req, res) => {
       $set: { estado: 'asignado' },
       $push: {
         historial: {
-          at: new Date(),
+          at: getFechaArgentina(),
           estado: 'asignado',
           estado_meli: null,
           source: 'zupply:asignacion',
@@ -1098,9 +1092,10 @@ router.patch('/:id/entregar',
   requireAuth, requireRole('chofer'), onlyOwnShipments, onlyManualOrEtiqueta,
   async (req,res,next)=>{
     try {
+      const fechaArg = getFechaArgentina();
       await Envio.findByIdAndUpdate(req.params.id, {
-        $set: { estado:'entregado', deliveredAt: new Date() },
-        $push: { historial: { at:new Date(), estado:'entregado', source:'chofer:panel' } }
+        $set: { estado:'entregado', deliveredAt: fechaArg },
+        $push: { historial: { at: fechaArg, estado:'entregado', source:'chofer:panel' } }
       });
       res.json({ ok:true });
     } catch(e){ next(e); }
@@ -1115,7 +1110,7 @@ router.post('/:id/nota',
       const note = String(req.body.note||'').trim();
       if (!note) return res.status(400).json({ error:'Nota vacía' });
       await Envio.findByIdAndUpdate(req.params.id, {
-        $push: { historial: { at:new Date(), estado:'nota', source:'chofer:panel', note } }
+        $push: { historial: { at: getFechaArgentina(), estado:'nota', source:'chofer:panel', note } }
       });
       res.json({ ok:true });
     } catch(e){ next(e); }
@@ -1197,7 +1192,7 @@ router.patch('/:id/cambiar-estado', requireAuth, requireRole('admin','coordinado
     // Agregar al historial
     if (!envio.historial) envio.historial = [];
     envio.historial.push({
-      at: new Date(),
+      at: getFechaArgentina(),
       estado: nuevoEstado,
       source: 'panel-manual',
       actor_name: actor,
