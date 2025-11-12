@@ -180,8 +180,16 @@ class ConfirmarEntregaModal {
   renderPantallaReceptor() {
     document.getElementById('modalTitle').textContent = '¿Quién recibe el paquete?';
 
-    // Alert de cobro en destino si está habilitado
-    const cobroDestinoAlert = this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado
+    // Debug: Verificar datos de cobro en destino
+    console.log('=== RENDER PANTALLA RECEPTOR ===');
+    console.log('Envío completo:', this.envio);
+    console.log('Cobro en destino:', this.envio.cobroEnDestino);
+    console.log('Habilitado?:', this.envio.cobroEnDestino?.habilitado);
+    console.log('Cobrado?:', this.envio.cobroEnDestino?.cobrado);
+    console.log('Monto:', this.envio.cobroEnDestino?.monto);
+
+    // Alert de cobro en destino si está habilitado (mostrar siempre que esté habilitado, sin importar si ya fue cobrado)
+    const cobroDestinoAlert = this.envio.cobroEnDestino?.habilitado
       ? `
         <div class="border-l-4 border-amber-500 bg-amber-50 p-4 rounded-lg mb-6">
           <div class="flex items-start gap-3">
@@ -262,8 +270,8 @@ class ConfirmarEntregaModal {
             <p id="errorAclaracion" class="text-sm text-red-600 mt-1 hidden"></p>
           </div>
 
-          <!-- Cobro en Destino (si está habilitado) -->
-          ${this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado ? `
+          <!-- Cobro en Destino (si está habilitado) - SIEMPRE mostrar si está habilitado -->
+          ${this.envio.cobroEnDestino?.habilitado ? `
           <div id="campoCobroDestino" class="mt-6 rounded-lg" style="margin-top: 25px; padding: 20px; background-color: #fff3cd; border: 3px solid #ffc107; border-radius: 10px;">
             <h4 class="mb-3" style="color: #856404; margin-bottom: 15px; font-size: 1.3em; font-weight: bold;">
               💵 COBRO EN DESTINO
@@ -398,7 +406,10 @@ class ConfirmarEntregaModal {
     if (selectMetodoPago) {
       selectMetodoPago.addEventListener('change', (e) => {
         const valor = e.target.value;
+        console.log('=== CAMBIO EN SELECT MÉTODO PAGO ===');
+        console.log('Valor seleccionado:', valor);
         this.metodoPagoCobro = valor;
+        console.log('metodoPagoCobro actualizado a:', this.metodoPagoCobro);
 
         // Actualizar feedback visual
         const feedbackDiv = document.getElementById('feedbackMetodoPago');
@@ -571,7 +582,8 @@ class ConfirmarEntregaModal {
     }
 
     // Validar cobro en destino si está habilitado
-    if (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado) {
+    if (this.envio.cobroEnDestino?.habilitado) {
+      console.log('Validando cobro en destino. metodoPagoCobro:', this.metodoPagoCobro);
       isValid = isValid && this.metodoPagoCobro && (this.metodoPagoCobro === 'efectivo' || this.metodoPagoCobro === 'transferencia');
     }
 
@@ -596,7 +608,10 @@ class ConfirmarEntregaModal {
     }
 
     // Validar cobro en destino si está habilitado
-    if (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado) {
+    if (this.envio.cobroEnDestino?.habilitado) {
+      console.log('=== VALIDACIÓN COBRO EN DESTINO ===');
+      console.log('metodoPagoCobro actual:', this.metodoPagoCobro);
+
       if (!this.metodoPagoCobro) {
         const errorMsg = document.getElementById('errorMetodoPago');
         if (errorMsg) {
@@ -604,7 +619,8 @@ class ConfirmarEntregaModal {
           errorMsg.style.display = 'block';
           errorMsg.classList.remove('hidden');
         }
-        alert('⚠️ Debe seleccionar el método de pago para confirmar la entrega');
+        console.error('❌ Validación fallida: No hay método de pago seleccionado');
+        alert('⚠️ COBRO EN DESTINO: Debe seleccionar el método de pago (Efectivo o Transferencia)');
         return;
       }
 
@@ -615,9 +631,12 @@ class ConfirmarEntregaModal {
           errorMsg.style.display = 'block';
           errorMsg.classList.remove('hidden');
         }
+        console.error('❌ Validación fallida: Método de pago inválido:', this.metodoPagoCobro);
         alert('⚠️ Método de pago inválido. Solo se acepta Efectivo o Transferencia');
         return;
       }
+
+      console.log('✓ Validación de cobro en destino OK');
     }
 
     if (!isValid) return;
@@ -800,10 +819,14 @@ class ConfirmarEntregaModal {
       };
 
       // Incluir datos de cobro en destino si aplica
-      if (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado && this.metodoPagoCobro) {
+      if (this.envio.cobroEnDestino?.habilitado && this.metodoPagoCobro) {
+        console.log('✓ Agregando datos de cobro al payload (con firma)');
         payload.confirmarCobro = true;
         payload.metodoPago = this.metodoPagoCobro;
       }
+
+      console.log('=== PAYLOAD FINAL (CON FIRMA) ===');
+      console.log(JSON.stringify(payload, null, 2));
 
       const response = await fetch('/api/envios/confirmar-entrega', {
         method: 'POST',
@@ -854,10 +877,14 @@ class ConfirmarEntregaModal {
       };
 
       // Incluir datos de cobro en destino si aplica
-      if (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado && this.metodoPagoCobro) {
+      if (this.envio.cobroEnDestino?.habilitado && this.metodoPagoCobro) {
+        console.log('✓ Agregando datos de cobro al payload (sin firma)');
         payload.confirmarCobro = true;
         payload.metodoPago = this.metodoPagoCobro;
       }
+
+      console.log('=== PAYLOAD FINAL (SIN FIRMA) ===');
+      console.log(JSON.stringify(payload, null, 2));
 
       const response = await fetch('/api/envios/confirmar-entrega', {
         method: 'POST',
@@ -868,7 +895,12 @@ class ConfirmarEntregaModal {
 
       const resultado = await response.json();
 
+      console.log('=== RESPUESTA DEL BACKEND ===');
+      console.log('Status:', response.status);
+      console.log('Resultado:', resultado);
+
       if (!response.ok) {
+        console.error('❌ Error del backend:', resultado);
         throw new Error(resultado.error || 'Error al confirmar entrega');
       }
 
