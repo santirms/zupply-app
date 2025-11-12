@@ -182,7 +182,7 @@ const envioSchema = new Schema({
     },
     metodoPago: {
       type: String,
-      enum: ['efectivo', 'transferencia', 'mercadopago', 'otro', null],
+      enum: ['efectivo', 'transferencia', null],
       default: null
     }
   },

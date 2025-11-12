@@ -262,53 +262,44 @@ class ConfirmarEntregaModal {
 
           <!-- Cobro en Destino (si está habilitado) -->
           ${this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado ? `
-          <div id="campoCobroDestino" class="border-t-2 border-amber-200 pt-4 mt-4">
-            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-              <h4 class="font-bold text-amber-900 mb-2">💵 Confirmar Cobro</h4>
-              <p class="text-sm text-amber-800 mb-3">
-                Monto a cobrar: <strong class="text-lg">${(this.envio.cobroEnDestino.monto || 0).toLocaleString('es-AR', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                  style: 'currency',
-                  currency: 'ARS'
-                })}</strong>
-              </p>
-            </div>
+          <div id="campoCobroDestino" class="mt-6 p-4 rounded-lg" style="background-color: #fff3cd; border: 2px solid #ffc107;">
+            <h4 class="font-bold mb-3" style="color: #856404; font-size: 1.1em;">
+              💵 Cobro en Destino
+            </h4>
 
-            <div class="mb-3">
-              <label class="flex items-start gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  id="checkConfirmarCobro"
-                  class="mt-1 w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
-                />
-                <span class="text-sm text-slate-700">
-                  <strong>Confirmo que cobré ${(this.envio.cobroEnDestino.monto || 0).toLocaleString('es-AR', {
+            <div class="p-3 mb-4 rounded" style="background-color: #fff; border: 1px solid #ffc107;">
+              <p style="color: #856404; margin-bottom: 0;">
+                <strong style="font-size: 1.4em; display: block;">
+                  Monto a cobrar: ${(this.envio.cobroEnDestino.monto || 0).toLocaleString('es-AR', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                     style: 'currency',
                     currency: 'ARS'
-                  })}</strong>
-                </span>
-              </label>
-              <p id="errorConfirmarCobro" class="text-sm text-red-600 mt-1 hidden"></p>
+                  })}
+                </strong>
+              </p>
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">
-                Método de pago <span class="text-red-500">*</span>
+              <label class="block font-bold mb-2" style="color: #856404; font-size: 1em;">
+                ¿Cómo cobró? <span class="text-red-500">*</span>
               </label>
               <select
                 id="selectMetodoPago"
-                class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="w-full px-3 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                style="font-size: 1.1em; border-color: #ffc107;"
               >
-                <option value="">Seleccionar...</option>
+                <option value="">Seleccionar método...</option>
                 <option value="efectivo">💵 Efectivo</option>
                 <option value="transferencia">💳 Transferencia</option>
-                <option value="mercadopago">🟦 Mercado Pago</option>
-                <option value="otro">Otro</option>
               </select>
-              <p id="errorMetodoPago" class="text-sm text-red-600 mt-1 hidden"></p>
+              <p id="errorMetodoPago" class="text-sm text-red-600 mt-2 hidden"></p>
+            </div>
+
+            <div class="mt-3">
+              <small class="text-red-600 font-medium">
+                * Debe seleccionar el método de pago antes de continuar
+              </small>
             </div>
           </div>
           ` : ''}
@@ -398,14 +389,7 @@ class ConfirmarEntregaModal {
     }
 
     // Eventos para cobro en destino (si aplica)
-    const checkConfirmarCobro = document.getElementById('checkConfirmarCobro');
     const selectMetodoPago = document.getElementById('selectMetodoPago');
-
-    if (checkConfirmarCobro) {
-      checkConfirmarCobro.addEventListener('change', () => {
-        this.updateContinuarButton();
-      });
-    }
 
     if (selectMetodoPago) {
       selectMetodoPago.addEventListener('change', () => {
@@ -559,13 +543,11 @@ class ConfirmarEntregaModal {
 
     // Validar cobro en destino si está habilitado
     if (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado) {
-      const checkConfirmarCobro = document.getElementById('checkConfirmarCobro');
       const selectMetodoPago = document.getElementById('selectMetodoPago');
 
-      if (checkConfirmarCobro && selectMetodoPago) {
-        const cobroConfirmado = checkConfirmarCobro.checked;
+      if (selectMetodoPago) {
         const metodoPago = selectMetodoPago.value;
-        isValid = isValid && cobroConfirmado && metodoPago;
+        isValid = isValid && metodoPago && (metodoPago === 'efectivo' || metodoPago === 'transferencia');
       }
     }
 
@@ -591,28 +573,28 @@ class ConfirmarEntregaModal {
 
     // Validar cobro en destino si está habilitado
     if (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado) {
-      const checkConfirmarCobro = document.getElementById('checkConfirmarCobro');
       const selectMetodoPago = document.getElementById('selectMetodoPago');
 
-      if (checkConfirmarCobro && selectMetodoPago) {
-        const cobroConfirmado = checkConfirmarCobro.checked;
+      if (selectMetodoPago) {
         const metodoPago = selectMetodoPago.value;
-
-        if (!cobroConfirmado) {
-          const errorMsg = document.getElementById('errorConfirmarCobro');
-          if (errorMsg) {
-            errorMsg.textContent = 'Debes confirmar que cobraste el monto';
-            errorMsg.classList.remove('hidden');
-          }
-          return;
-        }
 
         if (!metodoPago) {
           const errorMsg = document.getElementById('errorMetodoPago');
           if (errorMsg) {
-            errorMsg.textContent = 'Debes seleccionar un método de pago';
+            errorMsg.textContent = 'Debe seleccionar el método de pago';
             errorMsg.classList.remove('hidden');
           }
+          alert('⚠️ Debe seleccionar el método de pago para confirmar la entrega');
+          return;
+        }
+
+        if (metodoPago !== 'efectivo' && metodoPago !== 'transferencia') {
+          const errorMsg = document.getElementById('errorMetodoPago');
+          if (errorMsg) {
+            errorMsg.textContent = 'Método de pago inválido';
+            errorMsg.classList.remove('hidden');
+          }
+          alert('⚠️ Método de pago inválido. Solo se acepta Efectivo o Transferencia');
           return;
         }
 
