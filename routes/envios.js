@@ -389,23 +389,40 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
       return res.status(400).json({ error: 'Cliente no encontrado.' });
     }
 
-    const docs = paquetes.map(p => ({
-      cliente_id:    cliente._id,
-      sender_id:     cliente.codigo_cliente,
-      destinatario:  p.destinatario      || '',
-      direccion:     p.direccion          || '',
-      codigo_postal: p.codigo_postal      || p.cp || '',
-      zona:          p.zona               || '',
-      id_venta:      p.idVenta            || p.id_venta || '',
-      referencia:    p.referencia         || '',
-      fecha:         getFechaArgentina(),
-      precio:        p.manual_precio      ? Number(p.precio) || 0 : 0,
-      estado:        'pendiente',
-      requiere_sync_meli: false,
-      origen:        'ingreso_manual',
-      requiereFirma: p.requiereFirma || false  // ✅ Propagar desde frontend
-      // precio real se calculará en GET /envios si es 0
-    }));
+    const docs = paquetes.map(p => {
+      // Convertir campos legacy a estructura cobroEnDestino
+      const cobraEnDestino = p.cobra_en_destino || false;
+      const montoACobrar = cobraEnDestino ? (parseFloat(p.monto_a_cobrar) || 0) : 0;
+
+      return {
+        cliente_id:    cliente._id,
+        sender_id:     cliente.codigo_cliente,
+        destinatario:  p.destinatario      || '',
+        direccion:     p.direccion          || '',
+        codigo_postal: p.codigo_postal      || p.cp || '',
+        zona:          p.zona               || '',
+        id_venta:      p.idVenta            || p.id_venta || '',
+        referencia:    p.referencia         || '',
+        fecha:         getFechaArgentina(),
+        precio:        p.manual_precio      ? Number(p.precio) || 0 : 0,
+        estado:        'pendiente',
+        requiere_sync_meli: false,
+        origen:        'ingreso_manual',
+        // Estructura cobroEnDestino completa
+        cobroEnDestino: {
+          habilitado: cobraEnDestino,
+          monto: montoACobrar,
+          cobrado: false,
+          fechaCobro: null,
+          metodoPago: null
+        },
+        // Campos legacy para compatibilidad
+        cobra_en_destino:  cobraEnDestino,
+        monto_a_cobrar:    montoACobrar > 0 ? montoACobrar : null,
+        requiereFirma: p.requiereFirma || false  // ✅ Propagar desde frontend
+        // precio real se calculará en GET /envios si es 0
+      };
+    });
 
     const inserted = await Envio.insertMany(docs);
     console.log(`guardar-masivo: insertados ${inserted.length}`);
@@ -525,6 +542,10 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         }
       }
 
+      // Convertir campos legacy a estructura cobroEnDestino
+      const cobraEnDestino = p.cobra_en_destino || false;
+      const montoACobrar = cobraEnDestino ? (parseFloat(p.monto_a_cobrar) || 0) : 0;
+
       const envio = await Envio.create({
         cliente_id:    cl._id,
         sender_id:     cl.codigo_cliente,
@@ -541,11 +562,20 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         estado:        'pendiente',
         requiere_sync_meli: false,
         origen:        'ingreso_manual',
-          // ===== CAMPOS NUEVOS =====
+        // ===== CAMPOS NUEVOS =====
         tipo:              p.tipo || 'envio',
         contenido:         p.contenido || null,
-        cobra_en_destino:  p.cobra_en_destino || false,
-        monto_a_cobrar:    p.monto_a_cobrar || null,
+        // Estructura cobroEnDestino completa
+        cobroEnDestino: {
+          habilitado: cobraEnDestino,
+          monto: montoACobrar,
+          cobrado: false,
+          fechaCobro: null,
+          metodoPago: null
+        },
+        // Campos legacy para compatibilidad
+        cobra_en_destino:  cobraEnDestino,
+        monto_a_cobrar:    montoACobrar > 0 ? montoACobrar : null,
         requiereFirma:     p.requiereFirma || false  // ✅ Propagar desde frontend
       });
 
@@ -648,21 +678,26 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
     }
 
     // Validar cobro en destino si está habilitado
-    if (envio.cobroEnDestino?.habilitado && !envio.cobroEnDestino?.cobrado) {
-      if (!metodoPago) {
-        return res.status(400).json({
-          error: 'Debe especificar el método de pago del cobro en destino'
-        });
-      }
+    // SOLO validar si el envío TIENE cobro habilitado y NO fue cobrado aún
+    if (envio.cobroEnDestino?.habilitado === true &&
+        envio.cobroEnDestino?.cobrado !== true &&
+        envio.cobroEnDestino?.monto > 0) {
 
-      // Validar que el método de pago sea válido (solo efectivo o transferencia)
-      const metodosValidos = ['efectivo', 'transferencia'];
-      if (!metodosValidos.includes(metodoPago)) {
+      if (!metodoPago || !['efectivo', 'transferencia'].includes(metodoPago)) {
         return res.status(400).json({
-          error: 'Método de pago inválido. Debe ser efectivo o transferencia.'
+          error: 'Debe especificar el método de pago del cobro en destino',
+          debug: {
+            tieneCobroEnDestino: !!envio.cobroEnDestino,
+            habilitado: envio.cobroEnDestino?.habilitado,
+            monto: envio.cobroEnDestino?.monto,
+            cobrado: envio.cobroEnDestino?.cobrado,
+            metodoPagoRecibido: metodoPago
+          }
         });
       }
     }
+
+    // Si NO tiene cobro en destino o ya fue cobrado, continuar normalmente
 
     // Obtener fecha y hora en timezone de Argentina
     const { fecha: fechaEntregaArg, hora: horaEntrega } = getFechaHoraArgentina();
@@ -694,8 +729,8 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
     envio.estado = 'entregado';
     envio.confirmacionEntrega = confirmacion;
 
-    // Actualizar cobro en destino si aplica
-    if (envio.cobroEnDestino?.habilitado && metodoPago) {
+    // SOLO actualizar cobro si el envío LO TIENE habilitado
+    if (envio.cobroEnDestino?.habilitado === true && metodoPago) {
       envio.cobroEnDestino.cobrado = true;
       envio.cobroEnDestino.fechaCobro = fechaEntregaArg;
       envio.cobroEnDestino.metodoPago = metodoPago;
