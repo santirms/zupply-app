@@ -161,13 +161,37 @@ const envioSchema = new Schema({
     default: null
   },
 
-  // Cobro en destino
+  // Cobro en destino (estructura completa)
+  cobroEnDestino: {
+    habilitado: {
+      type: Boolean,
+      default: false
+    },
+    monto: {
+      type: Number,
+      min: 0,
+      default: 0
+    },
+    cobrado: {
+      type: Boolean,
+      default: false
+    },
+    fechaCobro: {
+      type: Date,
+      default: null
+    },
+    metodoPago: {
+      type: String,
+      enum: ['efectivo', 'transferencia', 'mercadopago', 'otro', null],
+      default: null
+    }
+  },
+
+  // Campos legacy para compatibilidad (deprecated)
   cobra_en_destino: {
     type: Boolean,
     default: false
   },
-
-  // Monto a cobrar en destino
   monto_a_cobrar: {
     type: Number,
     min: 0,

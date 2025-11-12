@@ -555,9 +555,12 @@ exports.crearEnviosLote = async (req, res) => {
           throw new Error('Tipo de envío inválido');
         }
 
-        // Validar monto si cobra_en_destino
-        if (data.cobra_en_destino && !data.monto_a_cobrar) {
-          throw new Error('Debe especificar monto a cobrar');
+        // Validar cobro en destino (soportar tanto formato nuevo como legacy)
+        const cobroHabilitado = data.cobroEnDestino?.habilitado || data.cobra_en_destino || false;
+        const montoCobro = data.cobroEnDestino?.monto || data.monto_a_cobrar || 0;
+
+        if (cobroHabilitado && (!montoCobro || montoCobro <= 0)) {
+          throw new Error('Debe especificar un monto válido mayor a 0 para cobro en destino');
         }
 
         const idVentaRaw = data.id_venta ? String(data.id_venta).trim() : null;
@@ -610,8 +613,17 @@ exports.crearEnviosLote = async (req, res) => {
           zona: data.partido,
           tipo: data.tipo || 'envio',
           contenido: data.contenido || null,
-          cobra_en_destino: data.cobra_en_destino || false,
-          monto_a_cobrar: data.monto_a_cobrar || null,
+          // Nuevo formato de cobro en destino
+          cobroEnDestino: {
+            habilitado: cobroHabilitado,
+            monto: cobroHabilitado ? montoCobro : 0,
+            cobrado: false,
+            fechaCobro: null,
+            metodoPago: null
+          },
+          // Campos legacy para compatibilidad
+          cobra_en_destino: cobroHabilitado,
+          monto_a_cobrar: cobroHabilitado ? montoCobro : null,
           historial: [{
             at: fechaArg,
             estado: 'pendiente',

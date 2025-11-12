@@ -604,6 +604,9 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       aclaracionReceptor,
       firmaDigital,
       geolocalizacion,
+      // Cobro en destino
+      confirmarCobro,
+      metodoPago,
       // Legacy fields para compatibilidad
       nombreDestinatario,
       dniDestinatario
@@ -644,6 +647,29 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Envío no encontrado' });
     }
 
+    // Validar cobro en destino si está habilitado
+    if (envio.cobroEnDestino?.habilitado && !envio.cobroEnDestino?.cobrado) {
+      if (!confirmarCobro) {
+        return res.status(400).json({
+          error: 'Debe confirmar que cobró el monto en destino antes de confirmar la entrega'
+        });
+      }
+
+      if (!metodoPago) {
+        return res.status(400).json({
+          error: 'Debe especificar el método de pago del cobro en destino'
+        });
+      }
+
+      // Validar que el método de pago sea válido
+      const metodosValidos = ['efectivo', 'transferencia', 'mercadopago', 'otro'];
+      if (!metodosValidos.includes(metodoPago)) {
+        return res.status(400).json({
+          error: 'Método de pago inválido'
+        });
+      }
+    }
+
     // Obtener fecha y hora en timezone de Argentina
     const { fecha: fechaEntregaArg, hora: horaEntrega } = getFechaHoraArgentina();
 
@@ -674,6 +700,13 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
     envio.estado = 'entregado';
     envio.confirmacionEntrega = confirmacion;
 
+    // Actualizar cobro en destino si aplica
+    if (envio.cobroEnDestino?.habilitado && confirmarCobro && metodoPago) {
+      envio.cobroEnDestino.cobrado = true;
+      envio.cobroEnDestino.fechaCobro = fechaEntregaArg;
+      envio.cobroEnDestino.metodoPago = metodoPago;
+    }
+
     // Agregar al historial
     if (!envio.historial) envio.historial = [];
 
@@ -699,6 +732,23 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       actor_name: chofer,  // ← CHOFER que entregó (NO receptor)
       note: nota
     });
+
+    // Agregar nota de cobro en destino si aplica
+    if (envio.cobroEnDestino?.habilitado && confirmarCobro && metodoPago) {
+      const montoCobrado = envio.cobroEnDestino.monto.toLocaleString('es-AR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        style: 'currency',
+        currency: 'ARS'
+      });
+      envio.historial.push({
+        at: fechaEntregaArg,
+        estado: 'entregado',
+        source: 'cobro-destino',
+        actor_name: chofer,
+        note: `Cobro en destino confirmado: ${montoCobrado} - Método: ${metodoPago}`
+      });
+    }
 
     await envio.save();
 

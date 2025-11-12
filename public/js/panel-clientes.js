@@ -1,6 +1,24 @@
 // Array de paquetes temporales
 let paquetesTemp = [];
 
+// Toggle campo de monto de cobro en destino
+function toggleCampoMontoCobro() {
+  const checkbox = document.getElementById('paq-cobro-destino');
+  const campoMonto = document.getElementById('campo-monto-cobro');
+  const inputMonto = document.getElementById('paq-monto-cobro');
+
+  if (checkbox && campoMonto && inputMonto) {
+    if (checkbox.checked) {
+      campoMonto.style.display = 'block';
+      inputMonto.required = true;
+    } else {
+      campoMonto.style.display = 'none';
+      inputMonto.required = false;
+      inputMonto.value = '';
+    }
+  }
+}
+
 // Validación CP → Partido (simplificado)
 const partidosPorCP = {
   '1832': 'Lomas de Zamora',
@@ -61,6 +79,15 @@ function agregarPaquete() {
     telefono = telefono.replace(/\s+/g, '');
   }
 
+  // Validar cobro en destino
+  const cobroEnDestino = document.getElementById('paq-cobro-destino')?.checked || false;
+  const montoCobro = document.getElementById('paq-monto-cobro')?.value || '';
+
+  if (cobroEnDestino && (!montoCobro || parseFloat(montoCobro) <= 0)) {
+    alert('Debe ingresar un monto válido mayor a 0 para cobro en destino');
+    return;
+  }
+
   const paquete = {
     id: Date.now(),
     referencia: document.getElementById('paq-referencia')?.value.trim() || '',
@@ -70,7 +97,12 @@ function agregarPaquete() {
     codigo_postal: document.getElementById('paq-cp')?.value.trim() || '',
     partido: document.getElementById('paq-partido')?.value.trim() || '',
     id_venta: document.getElementById('paq-id-venta')?.value.trim() || null,
-    tipo: document.getElementById('paq-tipo-envio')?.value || 'envio'
+    tipo: document.getElementById('paq-tipo-envio')?.value || 'envio',
+    cobroEnDestino: {
+      habilitado: cobroEnDestino,
+      monto: cobroEnDestino ? parseFloat(montoCobro) : 0,
+      cobrado: false
+    }
   };
 
   if (paquete.destinatario.length < 3) {
@@ -100,6 +132,10 @@ function agregarPaquete() {
   form.reset();
   const partidoInput = document.getElementById('paq-partido');
   if (partidoInput) partidoInput.value = '';
+
+  // Reset cobro en destino
+  const campoMontoCobro = document.getElementById('campo-monto-cobro');
+  if (campoMontoCobro) campoMontoCobro.style.display = 'none';
 
   renderizarPaquetes();
 
@@ -179,6 +215,13 @@ function renderizarPaquetes() {
                 <a href="https://wa.me/${paq.telefono}" target="_blank" class="ms-2 text-success">
                   <i class="bi bi-whatsapp"></i>
                 </a>
+              </div>
+            ` : ''}
+            ${paq.cobroEnDestino?.habilitado ? `
+              <div class="mt-2">
+                <span class="badge bg-success">
+                  💵 Cobro en Destino: $${paq.cobroEnDestino.monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
               </div>
             ` : ''}
           </div>
@@ -514,6 +557,47 @@ async function abrirModalDetalle(envioId) {
 
     // Ocultar sección de chofer (el schema no incluye driver_id)
     document.getElementById('modalChoferContainer').classList.add('hidden');
+
+    // Mostrar cobro en destino si está habilitado
+    const cobroDestinoContainer = document.getElementById('modalCobroDestinoContainer');
+    if (envio.cobroEnDestino?.habilitado) {
+      const monto = (envio.cobroEnDestino.monto || 0).toLocaleString('es-AR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+      document.getElementById('modalCobroMonto').textContent = `$${monto}`;
+
+      const cobrado = envio.cobroEnDestino.cobrado;
+      const estadoBadge = cobrado
+        ? '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300">✓ Cobrado</span>'
+        : '<span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300">⏳ Pendiente</span>';
+      document.getElementById('modalCobroEstado').innerHTML = estadoBadge;
+
+      // Mostrar detalles si ya fue cobrado
+      const detallesDiv = document.getElementById('modalCobroDetalles');
+      if (cobrado) {
+        const fechaCobro = envio.cobroEnDestino.fechaCobro
+          ? new Date(envio.cobroEnDestino.fechaCobro).toLocaleString('es-AR')
+          : '-';
+        document.getElementById('modalCobroFecha').textContent = fechaCobro;
+
+        const metodoPago = envio.cobroEnDestino.metodoPago || 'No especificado';
+        const metodosLabels = {
+          'efectivo': '💵 Efectivo',
+          'transferencia': '💳 Transferencia',
+          'mercadopago': '🟦 Mercado Pago',
+          'otro': 'Otro'
+        };
+        document.getElementById('modalCobroMetodo').textContent = metodosLabels[metodoPago] || metodoPago;
+        detallesDiv.classList.remove('hidden');
+      } else {
+        detallesDiv.classList.add('hidden');
+      }
+
+      cobroDestinoContainer.classList.remove('hidden');
+    } else {
+      cobroDestinoContainer.classList.add('hidden');
+    }
 
     const historial = Array.isArray(envio.historial) && envio.historial.length
       ? envio.historial
