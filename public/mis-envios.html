@@ -169,12 +169,56 @@
     // Botones de "Entregar" (abre modal)
     const botonesEntregar = document.querySelectorAll('.btn-entregar');
     botonesEntregar.forEach((boton) => {
-      boton.addEventListener('click', () => {
+      boton.addEventListener('click', async () => {
         const envioIndex = parseInt(boton.getAttribute('data-envio-index'), 10);
-        const envio = enviosActuales[envioIndex];
+        const envioLista = enviosActuales[envioIndex];
 
-        if (envio) {
-          abrirModalEntrega(envio);
+        if (!envioLista) {
+          console.error('Envío no encontrado en la lista');
+          return;
+        }
+
+        // ===== CARGAR ENVÍO COMPLETO DESDE LA API =====
+        console.log('═══════════════════════════════════════════');
+        console.log('🔍 CARGANDO ENVÍO COMPLETO DESDE LA API');
+        console.log('═══════════════════════════════════════════');
+        console.log('Envío de la lista (parcial):', envioLista);
+        console.log('ID del envío:', envioLista._id);
+        console.log('¿Tiene cobroEnDestino en lista?:', envioLista.cobroEnDestino);
+
+        try {
+          // Cargar envío completo desde la API
+          const response = await fetch(`/api/envios/${envioLista._id}`, {
+            credentials: 'same-origin'
+          });
+
+          if (!response.ok) {
+            throw new Error(`Error al cargar envío: ${response.status}`);
+          }
+
+          const envioCompleto = await response.json();
+
+          console.log('-------------------------------------------');
+          console.log('✅ ENVÍO COMPLETO CARGADO DESDE LA API');
+          console.log('Envío completo:', envioCompleto);
+          console.log('-------------------------------------------');
+          console.log('🔹 ID:', envioCompleto._id);
+          console.log('🔹 ID de venta:', envioCompleto.id_venta);
+          console.log('🔹 Destinatario:', envioCompleto.destinatario);
+          console.log('-------------------------------------------');
+          console.log('💰 COBRO EN DESTINO (desde API):');
+          console.log('🔹 cobroEnDestino (objeto completo):', envioCompleto.cobroEnDestino);
+          console.log('🔹 ¿Habilitado?:', envioCompleto.cobroEnDestino?.habilitado);
+          console.log('🔹 Monto:', envioCompleto.cobroEnDestino?.monto);
+          console.log('🔹 ¿Cobrado?:', envioCompleto.cobroEnDestino?.cobrado);
+          console.log('🔹 Método de pago:', envioCompleto.cobroEnDestino?.metodoPago);
+          console.log('═══════════════════════════════════════════');
+
+          // Abrir modal con el envío COMPLETO
+          abrirModalEntrega(envioCompleto);
+        } catch (error) {
+          console.error('❌ ERROR AL CARGAR ENVÍO COMPLETO:', error);
+          alert('Error al cargar los datos del envío. Por favor, intente nuevamente.');
         }
       });
     });
@@ -236,6 +280,24 @@
       }
 
       const envios = Array.isArray(payload) ? payload : payload?.envios || [];
+
+      // ===== DEBUG: Verificar datos de la lista inicial =====
+      console.log('═══════════════════════════════════════════');
+      console.log('📋 ENVÍOS CARGADOS DESDE /api/mis-envios/activos');
+      console.log('═══════════════════════════════════════════');
+      console.log('Total de envíos:', envios.length);
+      if (envios.length > 0) {
+        console.log('Primer envío (muestra):', envios[0]);
+        console.log('-------------------------------------------');
+        console.log('¿Tiene cobroEnDestino?:', !!envios[0].cobroEnDestino);
+        if (envios[0].cobroEnDestino) {
+          console.log('  - Habilitado:', envios[0].cobroEnDestino.habilitado);
+          console.log('  - Monto:', envios[0].cobroEnDestino.monto);
+          console.log('  - Cobrado:', envios[0].cobroEnDestino.cobrado);
+        }
+        console.log('Estructura de campos disponibles:', Object.keys(envios[0]));
+      }
+      console.log('═══════════════════════════════════════════');
 
       if (!envios.length) {
         lista.innerHTML = `
