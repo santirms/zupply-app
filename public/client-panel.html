@@ -31,6 +31,166 @@
 
   <style>
     :root{ --z-primary:#F59E0B; --z-primary-dark:#D97706; --z-primary-fg:#111827; }
+
+    /* Override Bootstrap primary colors */
+    :root {
+      --bs-primary: #FF8C00;
+      --bs-primary-rgb: 255, 140, 0;
+    }
+
+    /* Nav tabs con colores Zupply */
+    .nav-tabs .nav-link {
+      color: #64748b;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .nav-tabs .nav-link:hover {
+      background-color: #FFF5E6;
+      border-color: #FFD700;
+      color: #FF8C00;
+    }
+
+    .nav-tabs .nav-link.active {
+      background-color: #FF8C00 !important;
+      border-color: #FF8C00 !important;
+      color: white !important;
+      font-weight: 600;
+    }
+
+    /* Dark mode para tabs */
+    @media (prefers-color-scheme: dark) {
+      .nav-tabs .nav-link:hover {
+        background-color: rgba(255, 140, 0, 0.1);
+        border-color: #FF8C00;
+        color: #FFA500;
+      }
+    }
+
+    /* Botones primarios con colores Zupply */
+    .btn-primary {
+      background-color: #FF8C00 !important;
+      border-color: #FF8C00 !important;
+      color: white !important;
+    }
+
+    .btn-primary:hover,
+    .btn-primary:focus,
+    .btn-primary:active {
+      background-color: #FF7700 !important;
+      border-color: #FF7700 !important;
+      color: white !important;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
+    }
+
+    .btn-primary:disabled {
+      background-color: #FFB84D !important;
+      border-color: #FFB84D !important;
+      opacity: 0.6;
+    }
+
+    /* Botón de guardar en pestaña Crear Envío */
+    .card-footer .btn-primary {
+      background: linear-gradient(135deg, #FFA500 0%, #FF8C00 100%) !important;
+      border: none !important;
+      font-weight: 600;
+      padding: 0.5rem 1.5rem;
+      transition: all 0.3s;
+    }
+
+    .card-footer .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(255, 140, 0, 0.4);
+    }
+
+    /* Card header con bg-primary */
+    .card-header.bg-primary {
+      background: linear-gradient(135deg, #FFA500 0%, #FF8C00 100%) !important;
+      border-color: #FF8C00 !important;
+    }
+
+    /* Spinners con colores Zupply */
+    .spinner-border {
+      border-color: #FFD700;
+      border-right-color: #FF8C00 !important;
+    }
+
+    /* Links y elementos activos */
+    a:not(.btn) {
+      color: #FF8C00;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    a:not(.btn):hover {
+      color: #FF7700;
+      text-decoration: underline;
+    }
+
+    /* Botones de filtrado */
+    #btnFiltrar,
+    #prevPage,
+    #nextPage {
+      background-color: white;
+      border-color: #e2e8f0;
+      color: #64748b;
+      transition: all 0.2s;
+    }
+
+    #btnFiltrar:hover,
+    #prevPage:hover:not(:disabled),
+    #nextPage:hover:not(:disabled) {
+      background-color: #FFF5E6;
+      border-color: #FF8C00;
+      color: #FF8C00;
+    }
+
+    /* Dark mode para botones de filtrado */
+    @media (prefers-color-scheme: dark) {
+      #btnFiltrar,
+      #prevPage,
+      #nextPage {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
+        color: #94a3b8;
+      }
+
+      #btnFiltrar:hover,
+      #prevPage:hover:not(:disabled),
+      #nextPage:hover:not(:disabled) {
+        background-color: rgba(255, 140, 0, 0.1);
+        border-color: #FF8C00;
+        color: #FFA500;
+      }
+    }
+
+    /* Badge success con el verde correcto */
+    .badge.bg-success,
+    .btn-success {
+      background-color: #28a745 !important;
+      border-color: #28a745 !important;
+    }
+
+    .badge.bg-success:hover,
+    .btn-success:hover {
+      background-color: #218838 !important;
+      border-color: #1e7e34 !important;
+    }
+
+    /* Progress bars con colores Zupply */
+    .progress-bar {
+      background-color: #FF8C00 !important;
+    }
+
+    /* Inputs focus con borde naranja */
+    input:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #FF8C00 !important;
+      box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.1) !important;
+    }
   </style>
   <style>
     /* Dark mode - Pestaña Crear envío */
@@ -41,7 +201,7 @@
       }
 
       #crear .card-header.bg-primary {
-        background-color: #0d6efd !important;
+        background-color: #FF8C00 !important;
       }
 
       #crear .form-label {
@@ -56,7 +216,7 @@
 
       #crear .form-control:focus {
         background-color: #363a4f;
-        border-color: #667eea;
+        border-color: #FF8C00;
         color: #e0e0e0;
       }
 
@@ -93,8 +253,10 @@
     #envios-creados-lista code {
       font-size: 1.1rem;
       padding: 0.2rem 0.5rem;
-      background: #e7f1ff;
+      background: #FFF5E6;
       border-radius: 4px;
+      color: #FF8C00;
+      font-weight: 600;
     }
 
     #modalEnvioCreado .modal-footer {
@@ -118,7 +280,7 @@
     #modalEnvioCreado .btn[style*="gradient"]:hover {
       opacity: 0.9;
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
     }
 
     #modalEnvioCreado .btn-outline-secondary:hover {
@@ -781,7 +943,7 @@
   <div class="modal fade" id="modalEnvioCreado" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog">
       <div class="modal-content">
-        <div class="modal-header text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <div class="modal-header text-white" style="background: linear-gradient(135deg, #FFA500 0%, #FF8C00 100%);">
           <h5 class="modal-title">
             <i class="bi bi-check-circle-fill me-2"></i>
             Envío Creado Correctamente
@@ -789,7 +951,7 @@
         </div>
         <div class="modal-body text-center">
           <div class="mb-4">
-            <i class="bi bi-check-circle-fill" style="font-size: 4rem; color: #667eea;"></i>
+            <i class="bi bi-check-circle-fill" style="font-size: 4rem; color: #FF8C00;"></i>
           </div>
 
           <div id="envios-creados-lista">
@@ -806,14 +968,14 @@
             <i class="bi bi-printer me-1"></i>
             Imprimir Etiqueta(s)
           </button>
-          <button type="button" class="btn" 
-                  style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;"
+          <button type="button" class="btn"
+                  style="background: linear-gradient(135deg, #FFA500 0%, #FF8C00 100%); color: white; border: none;"
                   onclick="crearOtroEnvio()">
             <i class="bi bi-plus-circle me-1"></i>
             Crear Otro Envío
           </button>
-          <button type="button" class="btn" 
-                  style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;"
+          <button type="button" class="btn"
+                  style="background: linear-gradient(135deg, #FFA500 0%, #FF8C00 100%); color: white; border: none;"
                   onclick="verMisEnvios()">
             <i class="bi bi-list me-1"></i>
             Ver Mis Envíos
