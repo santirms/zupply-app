@@ -59,12 +59,10 @@
     }
 
     /* Dark mode para tabs */
-    @media (prefers-color-scheme: dark) {
-      .nav-tabs .nav-link:hover {
-        background-color: rgba(255, 140, 0, 0.1);
-        border-color: #FF8C00;
-        color: #FFA500;
-      }
+    .dark .nav-tabs .nav-link:hover {
+      background-color: rgba(255, 140, 0, 0.1);
+      border-color: #FF8C00;
+      color: #FFA500;
     }
 
     /* Botones primarios con colores Zupply */
@@ -147,22 +145,20 @@
     }
 
     /* Dark mode para botones de filtrado */
-    @media (prefers-color-scheme: dark) {
-      #btnFiltrar,
-      #prevPage,
-      #nextPage {
-        background-color: rgba(255, 255, 255, 0.05);
-        border-color: rgba(255, 255, 255, 0.1);
-        color: #94a3b8;
-      }
+    .dark #btnFiltrar,
+    .dark #prevPage,
+    .dark #nextPage {
+      background-color: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.1);
+      color: #94a3b8;
+    }
 
-      #btnFiltrar:hover,
-      #prevPage:hover:not(:disabled),
-      #nextPage:hover:not(:disabled) {
-        background-color: rgba(255, 140, 0, 0.1);
-        border-color: #FF8C00;
-        color: #FFA500;
-      }
+    .dark #btnFiltrar:hover,
+    .dark #prevPage:hover:not(:disabled),
+    .dark #nextPage:hover:not(:disabled) {
+      background-color: rgba(255, 140, 0, 0.1);
+      border-color: #FF8C00;
+      color: #FFA500;
     }
 
     /* Badge success con el verde correcto */
@@ -191,62 +187,147 @@
       border-color: #FF8C00 !important;
       box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.1) !important;
     }
+
+    /* Dark mode - Inputs de filtros (fecha y select) */
+    .dark input[type="date"],
+    .dark select {
+      background-color: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.1);
+      color: #e2e8f0;
+    }
+
+    .dark input[type="date"]:focus,
+    .dark select:focus {
+      background-color: rgba(255, 255, 255, 0.08);
+      border-color: #FF8C00;
+      color: #e2e8f0;
+    }
+
+    /* Dark mode - Tabla de envíos */
+    .dark #vistaTabla table {
+      color: #e2e8f0;
+    }
+
+    .dark #vistaTabla thead {
+      color: #94a3b8;
+    }
+
+    .dark #vistaTabla thead th {
+      border-bottom-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .dark #vistaTabla tbody tr {
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .dark #vistaTabla tbody tr:hover {
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    /* Dark mode - Modal de detalle */
+    .dark #modalDetalleEnvio .modal-content,
+    .dark .modal-content {
+      background-color: #0B1020;
+      border-color: rgba(255, 255, 255, 0.1);
+      color: #e2e8f0;
+    }
+
+    /* Dark mode - Tabs de Bootstrap en modals */
+    .dark .modal .nav-tabs {
+      border-bottom-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .dark .modal .nav-tabs .nav-link {
+      color: #94a3b8;
+    }
+
+    .dark .modal .nav-tabs .nav-link.active {
+      background-color: #FF8C00 !important;
+      border-color: #FF8C00 !important;
+      color: white !important;
+    }
+
+    /* Dark mode - Cards de Bootstrap */
+    .dark .card {
+      background-color: #1a1d29;
+      border-color: #2d3142;
+      color: #e2e8f0;
+    }
+
+    .dark .card-header {
+      background-color: #2d3142;
+      border-color: #404456;
+      color: #e2e8f0;
+    }
+
+    .dark .card-body {
+      background-color: #1a1d29;
+      color: #e2e8f0;
+    }
+
+    .dark .card-footer {
+      background-color: #2d3142;
+      border-color: #404456;
+    }
+
+    /* Dark mode - Text muted */
+    .dark .text-muted {
+      color: #808495 !important;
+    }
   </style>
   <style>
     /* Dark mode - Pestaña Crear envío */
-    @media (prefers-color-scheme: dark) {
-      #crear .card {
-        background-color: #1a1d29;
-        border-color: #2d3142;
-      }
+    .dark #crear .card {
+      background-color: #1a1d29;
+      border-color: #2d3142;
+    }
 
-      #crear .card-header.bg-primary {
-        background-color: #FF8C00 !important;
-      }
+    .dark #crear .card-header.bg-primary {
+      background-color: #FF8C00 !important;
+    }
 
-      #crear .form-label {
-        color: #e0e0e0;
-      }
+    .dark #crear .form-label {
+      color: #e0e0e0;
+    }
 
-      #crear .form-control {
-        background-color: #2d3142;
-        border-color: #404456;
-        color: #e0e0e0;
-      }
+    .dark #crear .form-control {
+      background-color: #2d3142;
+      border-color: #404456;
+      color: #e0e0e0;
+    }
 
-      #crear .form-control:focus {
-        background-color: #363a4f;
-        border-color: #FF8C00;
-        color: #e0e0e0;
-      }
+    .dark #crear .form-control:focus {
+      background-color: #363a4f;
+      border-color: #FF8C00;
+      color: #e0e0e0;
+    }
 
-      #crear .form-control::placeholder {
-        color: #808495;
-      }
+    .dark #crear .form-control::placeholder {
+      color: #808495;
+    }
 
-      #crear .form-control[readonly] {
-        background-color: #1a1d29;
-        color: #808495;
-      }
+    .dark #crear .form-control[readonly] {
+      background-color: #1a1d29;
+      color: #808495;
+    }
 
-      #crear .form-text,
-      #crear small.text-muted {
-        color: #808495 !important;
-      }
+    .dark #crear .form-text,
+    .dark #crear small.text-muted {
+      color: #808495 !important;
+    }
 
-      #paquetes-container .card {
-        background-color: #2d3142;
-        border-color: #404456;
-      }
+    .dark #paquetes-container .card {
+      background-color: #2d3142;
+      border-color: #404456;
+    }
 
-      #paquetes-container h5,
-      #paquetes-container h6 {
-        color: #e0e0e0;
-      }
+    .dark #paquetes-container h5,
+    .dark #paquetes-container h6 {
+      color: #e0e0e0;
+    }
 
-      #paquetes-container .text-muted {
-        color: #808495 !important;
-      }
+    .dark #paquetes-container .text-muted {
+      color: #808495 !important;
     }
   </style>
   <style>
@@ -296,11 +377,9 @@
     }
 
     /* Dark mode */
-    @media (prefers-color-scheme: dark) {
-      #modalEnvioCreado code {
-        background: #2d3142;
-        color: #a8b2ff;
-      }
+    .dark #modalEnvioCreado code {
+      background: #2d3142;
+      color: #a8b2ff;
     }
   </style>
 </head>
