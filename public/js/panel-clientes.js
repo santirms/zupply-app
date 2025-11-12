@@ -22,6 +22,20 @@ document.getElementById('paq-cp')?.addEventListener('input', (e) => {
   }
 });
 
+// Listener para cambiar ayuda contextual del tipo de envío
+document.getElementById('paq-tipo-envio')?.addEventListener('change', (e) => {
+  const helpText = document.getElementById('paq-tipo-help');
+  if (!helpText) return;
+
+  const textos = {
+    'envio': 'Entrega estándar en domicilio',
+    'retiro': 'Cliente retira en sucursal',
+    'cambio': 'Retiro de producto a cambiar + entrega de nuevo'
+  };
+
+  helpText.textContent = textos[e.target.value] || '';
+});
+
 const CLASES_BADGE_ESTADO = {
   secondary: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/30 dark:text-slate-300',
   info: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300',
@@ -55,7 +69,8 @@ function agregarPaquete() {
     direccion: document.getElementById('paq-direccion')?.value.trim() || '',
     codigo_postal: document.getElementById('paq-cp')?.value.trim() || '',
     partido: document.getElementById('paq-partido')?.value.trim() || '',
-    id_venta: document.getElementById('paq-id-venta')?.value.trim() || null
+    id_venta: document.getElementById('paq-id-venta')?.value.trim() || null,
+    tipo: document.getElementById('paq-tipo-envio')?.value || 'envio'
   };
 
   if (paquete.destinatario.length < 3) {
@@ -118,6 +133,18 @@ function renderizarPaquetes() {
   lista.style.display = 'block';
   count.textContent = paquetesTemp.length;
 
+  const tipoIcons = {
+    'envio': '📦',
+    'retiro': '🏪',
+    'cambio': '🔄'
+  };
+
+  const tipoLabels = {
+    'envio': 'Envío',
+    'retiro': 'Retiro',
+    'cambio': 'Cambio'
+  };
+
   container.innerHTML = paquetesTemp.map((paq) => `
     <div class="card mb-3">
       <div class="card-body">
@@ -126,6 +153,9 @@ function renderizarPaquetes() {
             <h6 class="mb-2">
               <i class="bi bi-box me-2"></i>
               ${paq.destinatario}
+              <span class="badge ${paq.tipo === 'envio' ? 'bg-primary' : paq.tipo === 'retiro' ? 'bg-info' : 'bg-warning'} ms-2">
+                ${tipoIcons[paq.tipo] || '📦'} ${tipoLabels[paq.tipo] || 'Envío'}
+              </span>
             </h6>
             <div class="row small text-muted">
               <div class="col-md-6">
@@ -470,6 +500,17 @@ async function abrirModalDetalle(envioId) {
 
     const estadoActual = obtenerEstadoActual(envio);
     document.getElementById('modalEstado').innerHTML = crearBadgeEstado(estadoActual);
+
+    // Badge del tipo de envío
+    const tipo = envio.tipo || 'envio';
+    const tipoConfig = {
+      'envio': { icon: '📦', label: 'Envío', class: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300' },
+      'retiro': { icon: '🏪', label: 'Retiro', class: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300' },
+      'cambio': { icon: '🔄', label: 'Cambio', class: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300' }
+    };
+    const tipoInfo = tipoConfig[tipo] || tipoConfig['envio'];
+    const tipoBadge = `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border ${tipoInfo.class}">${tipoInfo.icon} ${tipoInfo.label}</span>`;
+    document.getElementById('modalTipo').innerHTML = tipoBadge;
 
     // Ocultar sección de chofer (el schema no incluye driver_id)
     document.getElementById('modalChoferContainer').classList.add('hidden');

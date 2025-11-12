@@ -460,6 +460,7 @@
                     <th class="p-2">Fecha</th>
                     <th class="p-2">Destinatario</th>
                     <th class="p-2">Partido</th>
+                    <th class="p-2">Tipo</th>
                     <th class="p-2">Estado</th>
                   </tr>
                 </thead>
@@ -557,6 +558,19 @@
                     <input type="text" class="form-control" id="paq-id-venta" placeholder="Si se omite, se autogenera">
                   </div>
 
+                  <!-- Tipo de Envío -->
+                  <div class="mb-3">
+                    <label for="paq-tipo-envio" class="form-label">Tipo de Envío</label>
+                    <select id="paq-tipo-envio" class="form-control">
+                      <option value="envio">📦 Envío</option>
+                      <option value="retiro">🏪 Retiro</option>
+                      <option value="cambio">🔄 Cambio</option>
+                    </select>
+                    <small id="paq-tipo-help" class="form-text text-muted">
+                      Entrega estándar en domicilio
+                    </small>
+                  </div>
+
                 </form>
               </div>
               <div class="card-footer text-end">
@@ -620,6 +634,11 @@
             <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Estado</label>
             <div id="modalEstado" class="mt-1">-</div>
           </div>
+        </div>
+
+        <div>
+          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Tipo de Envío</label>
+          <div id="modalTipo" class="mt-1">-</div>
         </div>
 
         <div>
@@ -889,7 +908,7 @@
           if (!ct.includes('application/json')) {
             const text = await r.text();
             console.error('Respuesta no JSON:', r.status, text.slice(0, 200));
-            tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="5">Error ${r.status}: respuesta no JSON</td></tr>`;
+            tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="6">Error ${r.status}: respuesta no JSON</td></tr>`;
             return;
           }
 
@@ -940,6 +959,16 @@
             const estadoActual = obtenerEstadoActual(it);
             const estadoBadge = crearBadgeEstado(estadoActual);
 
+            // Badge del tipo de envío
+            const tipo = it.tipo || 'envio';
+            const tipoConfig = {
+              'envio': { icon: '📦', label: 'Envío', class: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300' },
+              'retiro': { icon: '🏪', label: 'Retiro', class: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300' },
+              'cambio': { icon: '🔄', label: 'Cambio', class: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300' }
+            };
+            const tipoInfo = tipoConfig[tipo] || tipoConfig['envio'];
+            const tipoBadge = `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border ${tipoInfo.class}">${tipoInfo.icon} ${tipoInfo.label}</span>`;
+
             const linkDetalle = envioId
               ? `<a href="#" data-action="abrir-detalle" data-envio-id="${escapeAttribute(String(envioId))}" class="text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-1 cursor-pointer">${identificadorHtml}<i class="bi bi-box-arrow-up-right"></i></a>`
               : identificadorHtml;
@@ -950,13 +979,14 @@
                 <td class="p-2 text-slate-900 dark:text-slate-100">${fecha}</td>
                 <td class="p-2 text-slate-900 dark:text-slate-100">${destinatario}</td>
                 <td class="p-2 text-slate-900 dark:text-slate-100">${escapeHtml(partido || '-')}</td>
+                <td class="p-2">${tipoBadge}</td>
                 <td class="p-2">${estadoBadge}</td>
               </tr>
             `;
           }).join('');
 
           if (!items.length) {
-            tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-sm text-slate-500 dark:text-slate-400">No se encontraron envíos para los filtros seleccionados.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-sm text-slate-500 dark:text-slate-400">No se encontraron envíos para los filtros seleccionados.</td></tr>`;
           }
 
           const pageInfo = document.getElementById('pageInfo');
@@ -970,7 +1000,7 @@
           if (nextBtn) nextBtn.disabled = totalPages > 0 ? page >= totalPages : items.length < limit;
         } catch (e) {
           console.error('Error en loadTabla:', e);
-          tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="5">${e.message}</td></tr>`;
+          tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="6">${e.message}</td></tr>`;
         }
       }
 
