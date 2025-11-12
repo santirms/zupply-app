@@ -105,6 +105,30 @@ class ConfirmarEntregaModal {
     this.datosReceptor = { nombre: '', dni: '', aclaracion: '' };
     this.metodoPagoCobro = ''; // Resetear método de pago
 
+    // ===== DEBUG: Información del envío =====
+    console.log('═══════════════════════════════════════════');
+    console.log('🔍 MODAL CONFIRMAR ENTREGA ABIERTO');
+    console.log('═══════════════════════════════════════════');
+    console.log('Envío completo:', JSON.stringify(envio, null, 2));
+    console.log('-------------------------------------------');
+    console.log('🔹 ID del envío:', envio._id);
+    console.log('🔹 ID de venta:', envio.id_venta);
+    console.log('🔹 Requiere firma:', envio.requiereFirma);
+    console.log('-------------------------------------------');
+    console.log('💰 COBRO EN DESTINO:');
+    console.log('🔹 cobroEnDestino (objeto completo):', envio.cobroEnDestino);
+    console.log('🔹 ¿Tiene cobro habilitado?:', envio?.cobroEnDestino?.habilitado);
+    console.log('🔹 Monto:', envio?.cobroEnDestino?.monto);
+    console.log('🔹 ¿Ya cobrado?:', envio?.cobroEnDestino?.cobrado);
+    console.log('🔹 Método de pago existente:', envio?.cobroEnDestino?.metodoPago);
+    console.log('-------------------------------------------');
+    console.log('✅ Condición para mostrar sección:');
+    console.log('   habilitado && !cobrado =',
+      envio?.cobroEnDestino?.habilitado, '&&',
+      !envio?.cobroEnDestino?.cobrado, '=',
+      (envio?.cobroEnDestino?.habilitado && !envio?.cobroEnDestino?.cobrado));
+    console.log('═══════════════════════════════════════════');
+
     const modal = document.getElementById('confirmarEntregaModal');
     modal.style.display = 'flex';
     modal.classList.remove('hidden');
@@ -180,6 +204,13 @@ class ConfirmarEntregaModal {
   renderPantallaReceptor() {
     document.getElementById('modalTitle').textContent = '¿Quién recibe el paquete?';
 
+    // ===== DEBUG: Renderizado de pantalla receptor =====
+    console.log('🖼️  RENDERIZANDO PANTALLA RECEPTOR');
+    console.log('🔹 Tiene cobro en destino?:', this.envio.cobroEnDestino?.habilitado);
+    console.log('🔹 Ya cobrado?:', this.envio.cobroEnDestino?.cobrado);
+    console.log('🔹 Condición alert header (habilitado && !cobrado):',
+      this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado);
+
     // Alert de cobro en destino si está habilitado
     const cobroDestinoAlert = this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado
       ? `
@@ -204,6 +235,22 @@ class ConfirmarEntregaModal {
         </div>
       `
       : '';
+
+    console.log('🔹 Alert de cobro en header (top):', cobroDestinoAlert ? 'SÍ SE MOSTRARÁ' : 'NO se mostrará');
+
+    // DEBUG: Verificar condición para sección de cobro en formulario
+    const mostrarSeccionCobro = this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado;
+    console.log('🔹 Condición para SECCIÓN DE COBRO EN FORMULARIO (habilitado && !cobrado):',
+      mostrarSeccionCobro);
+    if (mostrarSeccionCobro) {
+      console.log('✅ ✅ ✅ LA SECCIÓN DE COBRO EN FORMULARIO SE DEBE MOSTRAR ✅ ✅ ✅');
+      console.log('   Monto a mostrar:', this.envio.cobroEnDestino.monto);
+    } else {
+      console.log('❌ ❌ ❌ LA SECCIÓN DE COBRO EN FORMULARIO NO SE MOSTRARÁ ❌ ❌ ❌');
+      console.log('   Razones posibles:');
+      console.log('   - habilitado es false/undefined:', !this.envio.cobroEnDestino?.habilitado);
+      console.log('   - cobrado es true:', this.envio.cobroEnDestino?.cobrado);
+    }
 
     const content = `
       <div class="space-y-4">
@@ -324,6 +371,25 @@ class ConfirmarEntregaModal {
     `;
 
     document.getElementById('modalContent').innerHTML = content;
+
+    // DEBUG: Verificar si el elemento de cobro se creó en el DOM
+    setTimeout(() => {
+      const campoCobroDestino = document.getElementById('campoCobroDestino');
+      const selectMetodoPago = document.getElementById('selectMetodoPago');
+      console.log('-------------------------------------------');
+      console.log('🔍 VERIFICACIÓN DOM DESPUÉS DE RENDERIZAR:');
+      console.log('🔹 Elemento #campoCobroDestino existe?:', !!campoCobroDestino);
+      console.log('🔹 Elemento #selectMetodoPago existe?:', !!selectMetodoPago);
+      if (campoCobroDestino) {
+        console.log('✅ El elemento de cobro SÍ se creó en el DOM');
+        console.log('   Display:', window.getComputedStyle(campoCobroDestino).display);
+        console.log('   Visibility:', window.getComputedStyle(campoCobroDestino).visibility);
+      } else {
+        console.log('❌ El elemento de cobro NO se creó en el DOM');
+        console.log('   Esto significa que la condición de renderizado NO se cumplió');
+      }
+      console.log('═══════════════════════════════════════════');
+    }, 100);
 
     // Eventos
     this.setupReceptorEvents();
@@ -785,6 +851,11 @@ class ConfirmarEntregaModal {
     this.setLoading(true);
 
     try {
+      // ===== DEBUG: Construcción del payload =====
+      console.log('═══════════════════════════════════════════');
+      console.log('💾 GUARDANDO ENTREGA CON FIRMA');
+      console.log('═══════════════════════════════════════════');
+
       const firmaDataURL = this.signaturePad.toDataURL('image/png');
 
       const payload = {
@@ -799,11 +870,35 @@ class ConfirmarEntregaModal {
         geolocalizacion: this.geolocalizacion
       };
 
+      console.log('📦 Payload base (con firma):', {
+        ...payload,
+        firmaDigital: '[IMAGE DATA]' // No mostrar la imagen completa
+      });
+
       // Incluir datos de cobro en destino si aplica
+      console.log('-------------------------------------------');
+      console.log('💰 VERIFICANDO COBRO EN DESTINO:');
+      console.log('🔹 ¿Cobro habilitado?:', this.envio.cobroEnDestino?.habilitado);
+      console.log('🔹 ¿Ya cobrado?:', this.envio.cobroEnDestino?.cobrado);
+      console.log('🔹 Método de pago seleccionado:', this.metodoPagoCobro);
+
       if (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado && this.metodoPagoCobro) {
         payload.confirmarCobro = true;
         payload.metodoPago = this.metodoPagoCobro;
+        console.log('✅ SE AGREGÓ INFO DE COBRO AL PAYLOAD');
+        console.log('   - confirmarCobro: true');
+        console.log('   - metodoPago:', this.metodoPagoCobro);
+      } else {
+        console.log('❌ NO SE AGREGÓ INFO DE COBRO AL PAYLOAD');
       }
+
+      console.log('-------------------------------------------');
+      console.log('📤 PAYLOAD FINAL A ENVIAR (con firma):');
+      console.log(JSON.stringify({
+        ...payload,
+        firmaDigital: '[IMAGE DATA]'
+      }, null, 2));
+      console.log('═══════════════════════════════════════════');
 
       const response = await fetch('/api/envios/confirmar-entrega', {
         method: 'POST',
@@ -842,6 +937,11 @@ class ConfirmarEntregaModal {
     this.setLoading(true);
 
     try {
+      // ===== DEBUG: Construcción del payload =====
+      console.log('═══════════════════════════════════════════');
+      console.log('💾 GUARDANDO ENTREGA SIN FIRMA');
+      console.log('═══════════════════════════════════════════');
+
       const payload = {
         envioId: this.envio._id,
         tipoReceptor: this.tipoReceptor,
@@ -853,11 +953,46 @@ class ConfirmarEntregaModal {
         geolocalizacion: this.geolocalizacion
       };
 
+      console.log('📦 Payload base:', JSON.stringify(payload, null, 2));
+
       // Incluir datos de cobro en destino si aplica
+      console.log('-------------------------------------------');
+      console.log('💰 VERIFICANDO COBRO EN DESTINO:');
+      console.log('🔹 ¿Cobro habilitado?:', this.envio.cobroEnDestino?.habilitado);
+      console.log('🔹 ¿Ya cobrado?:', this.envio.cobroEnDestino?.cobrado);
+      console.log('🔹 Método de pago seleccionado:', this.metodoPagoCobro);
+      console.log('🔹 Condición completa (habilitado && !cobrado && metodoPago):',
+        this.envio.cobroEnDestino?.habilitado,
+        '&&',
+        !this.envio.cobroEnDestino?.cobrado,
+        '&&',
+        !!this.metodoPagoCobro,
+        '=',
+        (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado && this.metodoPagoCobro));
+
       if (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado && this.metodoPagoCobro) {
         payload.confirmarCobro = true;
         payload.metodoPago = this.metodoPagoCobro;
+        console.log('✅ SE AGREGÓ INFO DE COBRO AL PAYLOAD');
+        console.log('   - confirmarCobro: true');
+        console.log('   - metodoPago:', this.metodoPagoCobro);
+      } else {
+        console.log('❌ NO SE AGREGÓ INFO DE COBRO AL PAYLOAD');
+        if (!this.envio.cobroEnDestino?.habilitado) {
+          console.log('   Razón: Cobro no habilitado');
+        }
+        if (this.envio.cobroEnDestino?.cobrado) {
+          console.log('   Razón: Ya está cobrado');
+        }
+        if (!this.metodoPagoCobro) {
+          console.log('   Razón: No hay método de pago seleccionado');
+        }
       }
+
+      console.log('-------------------------------------------');
+      console.log('📤 PAYLOAD FINAL A ENVIAR:');
+      console.log(JSON.stringify(payload, null, 2));
+      console.log('═══════════════════════════════════════════');
 
       const response = await fetch('/api/envios/confirmar-entrega', {
         method: 'POST',
