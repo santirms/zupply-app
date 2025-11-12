@@ -420,7 +420,7 @@
       <ul class="nav nav-tabs mb-3" id="panelTabs" role="tablist">
         <li class="nav-item" role="presentation">
           <button class="nav-link active" id="tabla-tab" data-bs-toggle="tab" data-bs-target="#tabla" type="button" role="tab" aria-controls="tabla" aria-selected="true">
-            <i class="bi bi-table"></i> Tabla
+            <i class="bi bi-table"></i> Mis Envíos
           </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -460,8 +460,6 @@
                     <th class="p-2">Fecha</th>
                     <th class="p-2">Destinatario</th>
                     <th class="p-2">Partido</th>
-                    <th class="p-2">Tipo</th>
-                    <th class="p-2">Cobro</th>
                     <th class="p-2">Estado</th>
                   </tr>
                 </thead>
@@ -979,7 +977,7 @@
           if (!ct.includes('application/json')) {
             const text = await r.text();
             console.error('Respuesta no JSON:', r.status, text.slice(0, 200));
-            tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="7">Error ${r.status}: respuesta no JSON</td></tr>`;
+            tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="5">Error ${r.status}: respuesta no JSON</td></tr>`;
             return;
           }
 
@@ -1030,31 +1028,9 @@
             const estadoActual = obtenerEstadoActual(it);
             const estadoBadge = crearBadgeEstado(estadoActual);
 
-            // Badge del tipo de envío
-            const tipo = it.tipo || 'envio';
-            const tipoConfig = {
-              'envio': { icon: '📦', label: 'Envío', class: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300' },
-              'retiro': { icon: '🏪', label: 'Retiro', class: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300' },
-              'cambio': { icon: '🔄', label: 'Cambio', class: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300' }
-            };
-            const tipoInfo = tipoConfig[tipo] || tipoConfig['envio'];
-            const tipoBadge = `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border ${tipoInfo.class}">${tipoInfo.icon} ${tipoInfo.label}</span>`;
-
             const linkDetalle = envioId
               ? `<a href="#" data-action="abrir-detalle" data-envio-id="${escapeAttribute(String(envioId))}" class="text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-1 cursor-pointer">${identificadorHtml}<i class="bi bi-box-arrow-up-right"></i></a>`
               : identificadorHtml;
-
-            // Badge de cobro en destino
-            let cobroBadge = '-';
-            if (it.cobroEnDestino?.habilitado) {
-              const monto = (it.cobroEnDestino.monto || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-              const cobrado = it.cobroEnDestino.cobrado;
-              const badgeClass = cobrado
-                ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300'
-                : 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300';
-              const icon = cobrado ? '✓' : '💵';
-              cobroBadge = `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border ${badgeClass}">${icon} $${monto}</span>`;
-            }
 
             return `
               <tr class="border-t border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5">
@@ -1062,15 +1038,13 @@
                 <td class="p-2 text-slate-900 dark:text-slate-100">${fecha}</td>
                 <td class="p-2 text-slate-900 dark:text-slate-100">${destinatario}</td>
                 <td class="p-2 text-slate-900 dark:text-slate-100">${escapeHtml(partido || '-')}</td>
-                <td class="p-2">${tipoBadge}</td>
-                <td class="p-2">${cobroBadge}</td>
                 <td class="p-2">${estadoBadge}</td>
               </tr>
             `;
           }).join('');
 
           if (!items.length) {
-            tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-sm text-slate-500 dark:text-slate-400">No se encontraron envíos para los filtros seleccionados.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-sm text-slate-500 dark:text-slate-400">No se encontraron envíos para los filtros seleccionados.</td></tr>`;
           }
 
           const pageInfo = document.getElementById('pageInfo');
@@ -1084,7 +1058,7 @@
           if (nextBtn) nextBtn.disabled = totalPages > 0 ? page >= totalPages : items.length < limit;
         } catch (e) {
           console.error('Error en loadTabla:', e);
-          tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="7">${e.message}</td></tr>`;
+          tbody.innerHTML = `<tr><td class="p-2 text-red-600" colspan="5">${e.message}</td></tr>`;
         }
       }
 
