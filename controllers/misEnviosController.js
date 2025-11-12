@@ -257,9 +257,16 @@ const query = {
     const envios = await Envio.find(query)
       .populate('cliente_id', 'nombre razon_social telefono')
       .populate('chofer', 'nombre email')
-      .select('id_venta destinatario direccion partido codigo_postal estado fecha referencia precio')
+      .select('id_venta destinatario direccion partido codigo_postal cp estado fecha referencia precio telefono requiereFirma cobroEnDestino _id')
       .sort({ fecha: -1 })
       .lean();
+
+    // ===== DEBUG: Log de envíos devueltos =====
+    logger.info('[Mis Envios] Campos devueltos', {
+      campos: envios.length > 0 ? Object.keys(envios[0]) : [],
+      tieneCobroEnDestino: envios.length > 0 && envios[0].cobroEnDestino !== undefined,
+      primerEnvioCobroEnDestino: envios.length > 0 ? envios[0].cobroEnDestino : null
+    });
     
     logger.info('[Mis Envios] Resultado', {
       choferId,
