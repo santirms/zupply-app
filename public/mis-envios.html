@@ -9,6 +9,8 @@
   <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
   <!-- Modal de Confirmación de Entrega -->
   <script src="/js/confirmar-entrega-modal.js"></script>
+  <!-- Modal de Intento Fallido con Evidencia -->
+  <script src="/js/registrar-intento-fallido-modal.js"></script>
 </head>
 <body class="bg-slate-100 min-h-screen">
   <div class="max-w-4xl mx-auto py-6 px-4">
@@ -51,6 +53,9 @@
 
   // Instancia del modal de confirmación
   let modalConfirmarEntrega = null;
+
+  // Instancia del modal de intento fallido
+  let modalIntentoFallido = null;
 
   function escapeHtml(value) {
     if (value == null) return '';
@@ -110,6 +115,12 @@
             data-envio-index="${envioIndexAttr}"
             data-id-venta="${idVentaAttr}"
           >Entregar</button>
+          <button
+            type="button"
+            class="px-3 py-2 rounded text-sm font-medium bg-orange-600 text-white hover:bg-orange-700 btn-no-pude-entregar"
+            data-envio-index="${envioIndexAttr}"
+            data-id-venta="${idVentaAttr}"
+          >📋 No Pude Entregar</button>
           <button
             type="button"
             class="px-3 py-2 rounded text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 btn-marcar-estado"
@@ -223,6 +234,39 @@
       });
     });
 
+    // Botones de "No Pude Entregar" (abre modal de intento fallido)
+    const botonesNoPudeEntregar = document.querySelectorAll('.btn-no-pude-entregar');
+    botonesNoPudeEntregar.forEach((boton) => {
+      boton.addEventListener('click', async () => {
+        const envioIndex = parseInt(boton.getAttribute('data-envio-index'), 10);
+        const envioLista = enviosActuales[envioIndex];
+
+        if (!envioLista) {
+          console.error('Envío no encontrado en la lista');
+          return;
+        }
+
+        try {
+          // Cargar envío completo desde la API
+          const response = await fetch(`/api/envios/${envioLista._id}`, {
+            credentials: 'same-origin'
+          });
+
+          if (!response.ok) {
+            throw new Error(`Error al cargar envío: ${response.status}`);
+          }
+
+          const envioCompleto = await response.json();
+
+          // Abrir modal de intento fallido con el envío COMPLETO
+          abrirModalIntentoFallido(envioCompleto);
+        } catch (error) {
+          console.error('❌ ERROR AL CARGAR ENVÍO COMPLETO:', error);
+          alert('Error al cargar los datos del envío. Por favor, intente nuevamente.');
+        }
+      });
+    });
+
     // Botones de otros estados (ausente, rechazado, inaccesible)
     const botonesEstado = document.querySelectorAll('.btn-marcar-estado');
     botonesEstado.forEach((boton) => {
@@ -259,6 +303,31 @@
       // onClose
       () => {
         console.log('Modal cerrado');
+      }
+    );
+  }
+
+  /**
+   * Abre el modal de intento fallido con evidencia
+   */
+  function abrirModalIntentoFallido(envio) {
+    if (!modalIntentoFallido) {
+      modalIntentoFallido = new RegistrarIntentoFallidoModal();
+    }
+
+    modalIntentoFallido.open(
+      envio,
+      // onConfirm
+      () => {
+        console.log('Intento fallido registrado');
+        // Recargar lista de envíos
+        setTimeout(() => {
+          cargarEnvios();
+        }, 1000);
+      },
+      // onClose
+      () => {
+        console.log('Modal intento fallido cerrado');
       }
     );
   }

@@ -226,7 +226,30 @@ const envioSchema = new Schema({
   requiereFirma: {
     type: Boolean,
     default: false
-  }
+  },
+
+  // Intentos fallidos de entrega con evidencia fotográfica
+  intentosFallidos: [{
+    fecha: { type: Date, default: Date.now },
+    motivo: {
+      type: String,
+      enum: [
+        'ausente',
+        'inaccesible',
+        'direccion_incorrecta',
+        'negativa_recibir',
+        'otro'
+      ]
+    },
+    descripcion: String,
+    fotoS3Url: String,
+    fotoS3Key: String,
+    chofer: { type: Schema.Types.ObjectId, ref: 'Usuario' },
+    geolocalizacion: {
+      lat: Number,
+      lng: Number
+    }
+  }]
   }, { timestamps: false });
 
 const NotaSchema = new Schema({
