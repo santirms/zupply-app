@@ -765,6 +765,9 @@ async function abrirModalDetalle(envioId) {
       : Array.isArray(envio.timeline) ? envio.timeline : [];
     renderizarHistorial(historial);
 
+    // Renderizar evidencias
+    renderizarEvidencias(envio);
+
     cambiarTab('detalle');
     const modal = document.getElementById('modalDetalleEnvio');
     modal.classList.remove('hidden');
@@ -784,21 +787,33 @@ function cerrarModalDetalle() {
 function cambiarTab(tab) {
   const tabDetalle = document.getElementById('tabDetalle');
   const tabHistorial = document.getElementById('tabHistorial');
+  const tabEvidencias = document.getElementById('tabEvidencias');
   const contenidoDetalle = document.getElementById('contenidoDetalle');
   const contenidoHistorial = document.getElementById('contenidoHistorial');
+  const contenidoEvidencias = document.getElementById('contenidoEvidencias');
 
   const baseClass = 'px-4 py-2 font-medium border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100';
+  const baseClassWithFlex = 'px-4 py-2 font-medium border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 flex items-center gap-2';
+  const activeClass = 'px-4 py-2 font-medium border-b-2 border-amber-500 text-amber-600 dark:text-amber-400';
+  const activeClassWithFlex = 'px-4 py-2 font-medium border-b-2 border-amber-500 text-amber-600 dark:text-amber-400 flex items-center gap-2';
+
   tabDetalle.className = baseClass;
   tabHistorial.className = baseClass;
+  tabEvidencias.className = baseClassWithFlex;
+
+  contenidoDetalle.classList.add('hidden');
+  contenidoHistorial.classList.add('hidden');
+  contenidoEvidencias.classList.add('hidden');
 
   if (tab === 'detalle') {
-    tabDetalle.className = 'px-4 py-2 font-medium border-b-2 border-amber-500 text-amber-600 dark:text-amber-400';
+    tabDetalle.className = activeClass;
     contenidoDetalle.classList.remove('hidden');
-    contenidoHistorial.classList.add('hidden');
-  } else {
-    tabHistorial.className = 'px-4 py-2 font-medium border-b-2 border-amber-500 text-amber-600 dark:text-amber-400';
+  } else if (tab === 'historial') {
+    tabHistorial.className = activeClass;
     contenidoHistorial.classList.remove('hidden');
-    contenidoDetalle.classList.add('hidden');
+  } else if (tab === 'evidencias') {
+    tabEvidencias.className = activeClassWithFlex;
+    contenidoEvidencias.classList.remove('hidden');
   }
 }
 
@@ -841,6 +856,352 @@ function crearBadgeEstado(estado) {
   const contenido = icon ? `${icon}<span>${info.nombre}</span>` : `<span>${info.nombre}</span>`;
 
   return `<span class="inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full border ${badgeClass}">${contenido}</span>`;
+}
+
+// ========== FUNCIONES PARA EVIDENCIAS ==========
+
+function renderizarEvidencias(envio) {
+  const container = document.getElementById('evidenciasContainer');
+  const badgeEvidencias = document.getElementById('badgeEvidencias');
+
+  if (!container) return;
+
+  const tieneIntentos = envio.intentosFallidos && envio.intentosFallidos.length > 0;
+  const tieneFirma = envio.confirmacionEntrega && envio.confirmacionEntrega.firmaS3Key;
+  const totalEvidencias = (envio.intentosFallidos?.length || 0) + (tieneFirma ? 1 : 0);
+
+  // Actualizar badge
+  if (badgeEvidencias) {
+    if (totalEvidencias > 0) {
+      badgeEvidencias.textContent = totalEvidencias;
+      badgeEvidencias.classList.remove('hidden');
+    } else {
+      badgeEvidencias.classList.add('hidden');
+    }
+  }
+
+  // Si no hay evidencias
+  if (!tieneIntentos && !tieneFirma) {
+    container.innerHTML = `
+      <div class="text-center py-16 text-slate-500 dark:text-slate-400">
+        <div class="text-6xl mb-5">📋</div>
+        <h4 class="text-lg font-semibold mb-2">No hay evidencias disponibles</h4>
+        <p class="text-sm">Este envío no tiene intentos fallidos ni firma digital registrados.</p>
+      </div>
+    `;
+    return;
+  }
+
+  let html = '';
+
+  // SECCIÓN: INTENTOS FALLIDOS
+  if (tieneIntentos) {
+    html += `
+      <div class="mb-8">
+        <div class="flex items-center gap-3 mb-5 pb-4 border-b-4 border-amber-400 dark:border-amber-500">
+          <span class="text-4xl">⚠️</span>
+          <div>
+            <h4 class="text-lg font-semibold text-amber-700 dark:text-amber-400 mb-1">
+              Intentos de Entrega Fallidos
+            </h4>
+            <small class="text-sm text-slate-600 dark:text-slate-400">
+              ${envio.intentosFallidos.length} intento${envio.intentosFallidos.length > 1 ? 's' : ''} registrado${envio.intentosFallidos.length > 1 ? 's' : ''}
+            </small>
+          </div>
+        </div>
+
+        ${envio.intentosFallidos.map((intento, index) => `
+          <div class="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-xl mb-4 border-2 border-amber-300 dark:border-amber-700">
+            <div class="inline-block bg-amber-700 text-white px-3 py-1 rounded-full text-sm font-bold mb-4">
+              Intento #${index + 1}
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div>
+                <div class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1">
+                  📅 Fecha y hora
+                </div>
+                <div class="font-medium">
+                  ${new Date(intento.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </div>
+                <div class="text-sm text-slate-600 dark:text-slate-400">
+                  ${new Date(intento.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+
+              <div>
+                <div class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1">
+                  📦 Motivo
+                </div>
+                <div class="font-medium">
+                  ${intento.motivo === 'ausente' ? '📦 Comprador Ausente' :
+                    intento.motivo === 'inaccesible' ? '🚧 Inaccesible' :
+                    intento.motivo === 'rechazado' ? '❌ Rechazado' :
+                    intento.motivo}
+                </div>
+              </div>
+
+              ${intento.chofer ? `
+                <div>
+                  <div class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1">
+                    🚚 Chofer
+                  </div>
+                  <div class="font-medium">
+                    ${intento.chofer.nombre || 'N/A'}
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+
+            ${intento.descripcion ? `
+              <div class="mb-4 p-3 bg-white/80 dark:bg-white/5 rounded-lg border border-amber-200 dark:border-amber-700">
+                <div class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-2">
+                  💬 Descripción
+                </div>
+                <div class="text-sm">${intento.descripcion}</div>
+              </div>
+            ` : ''}
+
+            <div class="flex gap-2 flex-wrap">
+              ${intento.geolocalizacion ? `
+                <a href="https://www.google.com/maps?q=${intento.geolocalizacion.lat},${intento.geolocalizacion.lng}"
+                   target="_blank"
+                   class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-700 border-2 border-amber-700 dark:border-amber-600 text-amber-700 dark:text-amber-400 rounded-lg font-semibold text-sm hover:bg-amber-700 hover:text-white transition-all">
+                  🗺️ Ver Ubicación
+                </a>
+              ` : ''}
+
+              ${intento.fotoS3Key ? `
+                <button onclick="handleVerFotoEvidencia('${envio._id}', '${intento.fotoS3Key}', 'intento')"
+                        class="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-semibold text-sm transition-all">
+                  📷 Ver Foto de Evidencia
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  // SECCIÓN: FIRMA DIGITAL
+  if (tieneFirma) {
+    const confirmacion = envio.confirmacionEntrega;
+    html += `
+      <div>
+        <div class="flex items-center gap-3 mb-5 pb-4 border-b-4 border-green-500">
+          <span class="text-4xl">✅</span>
+          <div>
+            <h4 class="text-lg font-semibold text-green-600 dark:text-green-400 mb-1">
+              Comprobante de Entrega
+            </h4>
+            <small class="text-sm text-slate-600 dark:text-slate-400">
+              Firmado digitalmente por el receptor
+            </small>
+          </div>
+        </div>
+
+        <div class="bg-green-50 dark:bg-green-900/20 p-5 rounded-xl border-2 border-green-300 dark:border-green-700">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <div class="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">
+                👤 Receptor
+              </div>
+              <div class="font-medium">${confirmacion.nombreReceptor}</div>
+            </div>
+
+            <div>
+              <div class="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">
+                📋 Tipo de receptor
+              </div>
+              <div class="font-medium">
+                ${confirmacion.tipoReceptor === 'destinatario' ? '👤 Destinatario' :
+                  confirmacion.tipoReceptor === 'porteria' ? '🏢 Portería' :
+                  confirmacion.tipoReceptor === 'familiar' ? '👥 Familiar' :
+                  confirmacion.tipoReceptor === 'otro' ? '📝 Otro' : confirmacion.tipoReceptor}
+              </div>
+            </div>
+
+            <div>
+              <div class="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">
+                🆔 DNI
+              </div>
+              <div class="font-medium">${confirmacion.dniReceptor}</div>
+            </div>
+
+            <div>
+              <div class="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">
+                📅 Fecha y hora
+              </div>
+              <div class="font-medium">
+                ${new Date(confirmacion.fechaEntrega).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </div>
+              <div class="text-sm text-green-700 dark:text-green-400">
+                ${new Date(confirmacion.fechaEntrega).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
+          </div>
+
+          ${confirmacion.aclaracionReceptor ? `
+            <div class="mb-4 p-3 bg-white/80 dark:bg-white/5 rounded-lg border border-green-200 dark:border-green-700">
+              <div class="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-2">
+                💬 Aclaración
+              </div>
+              <div class="text-sm">${confirmacion.aclaracionReceptor}</div>
+            </div>
+          ` : ''}
+
+          ${envio.cobroEnDestino?.habilitado ? `
+            <div class="mb-4 p-3 bg-amber-100/50 dark:bg-amber-900/30 rounded-lg border border-amber-300 dark:border-amber-700">
+              <div class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-2">
+                💵 Cobro en destino
+              </div>
+              <div class="font-medium text-lg">
+                $${envio.cobroEnDestino.monto?.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                - ${envio.cobroEnDestino.metodoPago === 'efectivo' ? '💵 Efectivo' : '💳 Transferencia'}
+              </div>
+              <div class="text-sm mt-1 ${envio.cobroEnDestino.cobrado ? 'text-green-600 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}">
+                ${envio.cobroEnDestino.cobrado ? '✓ Cobrado' : '⏳ Pendiente'}
+              </div>
+            </div>
+          ` : ''}
+
+          <button onclick="handleVerFirmaDigital('${envio._id}', '${confirmacion.firmaS3Key}')"
+                  class="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all">
+            🖊️ Ver Firma Digital del Receptor
+          </button>
+
+          <div class="mt-4 p-3 bg-white/60 dark:bg-white/5 rounded-lg text-center text-sm text-green-700 dark:text-green-400 italic">
+            ✓ Esta firma digital tiene validez como comprobante de entrega
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+}
+
+// Función para ver foto de evidencia
+async function handleVerFotoEvidencia(envioId, fotoS3Key, tipo) {
+  const modal = document.getElementById('modalFotoEvidencia');
+  const loader = document.getElementById('modalFotoLoader');
+  const imagen = document.getElementById('modalFotoImagen');
+  const icono = document.getElementById('modalFotoIcono');
+  const texto = document.getElementById('modalFotoTexto');
+  const footer = document.getElementById('modalFotoFooter');
+
+  // Mostrar modal
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  // Configurar título
+  icono.textContent = '📷';
+  texto.textContent = 'Foto de Evidencia';
+
+  // Mostrar loader
+  loader.classList.remove('hidden');
+  imagen.classList.add('hidden');
+
+  // Footer
+  footer.innerHTML = `
+    <div class="inline-block px-5 py-3 bg-amber-500/30 border border-amber-500 rounded-lg text-white">
+      📷 Evidencia fotográfica del intento de entrega
+    </div>
+  `;
+
+  try {
+    const response = await fetch(
+      `/api/envios/${envioId}/foto-evidencia?key=${encodeURIComponent(fotoS3Key)}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      imagen.src = data.url;
+      imagen.onload = () => {
+        loader.classList.add('hidden');
+        imagen.classList.remove('hidden');
+      };
+    } else {
+      alert('No se pudo cargar la foto');
+      cerrarModalFoto();
+    }
+  } catch (error) {
+    console.error('Error al cargar foto:', error);
+    alert('Error al cargar la foto de evidencia');
+    cerrarModalFoto();
+  }
+}
+
+// Función para ver firma digital
+async function handleVerFirmaDigital(envioId, firmaS3Key) {
+  const modal = document.getElementById('modalFotoEvidencia');
+  const loader = document.getElementById('modalFotoLoader');
+  const imagen = document.getElementById('modalFotoImagen');
+  const icono = document.getElementById('modalFotoIcono');
+  const texto = document.getElementById('modalFotoTexto');
+  const footer = document.getElementById('modalFotoFooter');
+
+  // Mostrar modal
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  // Configurar título
+  icono.textContent = '🖊️';
+  texto.textContent = 'Firma Digital del Receptor';
+
+  // Mostrar loader
+  loader.classList.remove('hidden');
+  imagen.classList.add('hidden');
+
+  // Footer
+  footer.innerHTML = `
+    <div class="inline-block px-5 py-3 bg-green-600/30 border border-green-500 rounded-lg text-white">
+      ✓ Esta firma digital tiene validez como comprobante de entrega
+    </div>
+  `;
+
+  try {
+    const response = await fetch(
+      `/api/envios/${envioId}/firma?key=${encodeURIComponent(firmaS3Key)}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      imagen.src = data.url;
+      imagen.onload = () => {
+        loader.classList.add('hidden');
+        imagen.classList.remove('hidden');
+      };
+    } else {
+      alert('No se pudo cargar la firma');
+      cerrarModalFoto();
+    }
+  } catch (error) {
+    console.error('Error al cargar firma:', error);
+    alert('Error al cargar la firma digital');
+    cerrarModalFoto();
+  }
+}
+
+// Función para cerrar modal de foto
+function cerrarModalFoto() {
+  const modal = document.getElementById('modalFotoEvidencia');
+  const imagen = document.getElementById('modalFotoImagen');
+
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  imagen.src = '';
 }
 
 function obtenerEnviosDesdeRespuesta(data) {
@@ -1026,3 +1387,7 @@ window.renderizarPaquetes = renderizarPaquetes;
 window.guardarTodos = guardarTodos;
 window.crearOtroEnvio = crearOtroEnvio;
 window.verMisEnvios = verMisEnvios;
+window.renderizarEvidencias = renderizarEvidencias;
+window.handleVerFotoEvidencia = handleVerFotoEvidencia;
+window.handleVerFirmaDigital = handleVerFirmaDigital;
+window.cerrarModalFoto = cerrarModalFoto;
