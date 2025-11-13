@@ -114,34 +114,13 @@
             class="px-3 py-2 rounded text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 btn-entregar"
             data-envio-index="${envioIndexAttr}"
             data-id-venta="${idVentaAttr}"
-          >Entregar</button>
+          >✓ Entregar</button>
           <button
             type="button"
             class="px-3 py-2 rounded text-sm font-medium bg-orange-600 text-white hover:bg-orange-700 btn-no-pude-entregar"
             data-envio-index="${envioIndexAttr}"
             data-id-venta="${idVentaAttr}"
           >📋 No Pude Entregar</button>
-          <button
-            type="button"
-            class="px-3 py-2 rounded text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 btn-marcar-estado"
-            data-envio-id="${envioIdAttr}"
-            data-estado="comprador_ausente"
-            data-id-venta="${idVentaAttr}"
-          >Ausente</button>
-          <button
-            type="button"
-            class="px-3 py-2 rounded text-sm font-medium bg-rose-600 text-white hover:bg-rose-700 btn-marcar-estado"
-            data-envio-id="${envioIdAttr}"
-            data-estado="rechazado"
-            data-id-venta="${idVentaAttr}"
-          >Rechazado</button>
-          <button
-            type="button"
-            class="px-3 py-2 rounded text-sm font-medium bg-slate-600 text-white hover:bg-slate-700 btn-marcar-estado"
-            data-envio-id="${envioIdAttr}"
-            data-estado="inaccesible"
-            data-id-venta="${idVentaAttr}"
-          >Inaccesible</button>
         </div>
       `;
     } else {

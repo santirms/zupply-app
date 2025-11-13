@@ -1,6 +1,7 @@
 /**
  * RegistrarIntentoFallidoModal
- * Modal para registrar intentos fallidos de entrega con evidencia fotográfica
+ * Modal simplificado para registrar intentos fallidos de entrega
+ * Estilo Mercado Envíos Flex
  */
 
 class RegistrarIntentoFallidoModal {
@@ -8,43 +9,34 @@ class RegistrarIntentoFallidoModal {
     this.envio = null;
     this.onConfirm = null;
     this.onClose = null;
-    this.motivo = null;
+    this.motivoSeleccionado = null;
     this.descripcion = '';
-    this.fotoBase64 = null;
-    this.fotoPreview = null;
+    this.foto = null;
+    this.previewFoto = null;
     this.loading = false;
     this.geolocalizacion = null;
 
     this.motivos = [
       {
-        value: 'ausente',
-        label: '🚫 Comprador Ausente',
-        placeholder: 'Ej: Nadie atendió después de tocar timbre varias veces',
-        emoji: '🚫'
+        id: 'ausente',
+        label: 'Comprador Ausente',
+        icon: '📦',
+        color: '#ffc107',
+        placeholder: 'Ej: Nadie atendió, timbre no funciona (opcional)'
       },
       {
-        value: 'inaccesible',
-        label: '🚧 Dirección Inaccesible',
-        placeholder: 'Ej: Calle inundada, cortada por obras, zona peligrosa',
-        emoji: '🚧'
+        id: 'inaccesible',
+        label: 'Inaccesible',
+        icon: '🚧',
+        color: '#ff9800',
+        placeholder: 'Ej: Calle inundada, cortada (opcional)'
       },
       {
-        value: 'direccion_incorrecta',
-        label: '📍 Dirección Incorrecta',
-        placeholder: 'Ej: No existe la numeración, domicilio no encontrado',
-        emoji: '📍'
-      },
-      {
-        value: 'negativa_recibir',
-        label: '❌ Negativa a Recibir',
-        placeholder: 'Ej: Destinatario rechazó el paquete',
-        emoji: '❌'
-      },
-      {
-        value: 'otro',
-        label: '❓ Otro Motivo',
-        placeholder: 'Describa detalladamente el motivo',
-        emoji: '❓'
+        id: 'rechazado',
+        label: 'Rechazado',
+        icon: '❌',
+        color: '#f44336',
+        placeholder: 'Ej: Cliente rechazó el paquete (opcional)'
       }
     ];
 
@@ -79,14 +71,12 @@ class RegistrarIntentoFallidoModal {
   createModalElement() {
     const modalHtml = `
       <div id="registrarIntentoFallidoModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center p-4" style="display: none;">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
           <!-- Header -->
-          <div class="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-            <h2 class="text-xl font-semibold text-slate-800">📋 Registrar Intento Fallido</h2>
-            <button id="btnCerrarModalIntento" type="button" class="text-slate-400 hover:text-slate-600">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-              </svg>
+          <div class="sticky top-0 bg-orange-500 px-6 py-4 flex items-center justify-between rounded-t-xl">
+            <h2 class="text-xl font-bold text-white">📋 No Pude Entregar</h2>
+            <button id="btnCerrarModalIntento" type="button" class="text-white hover:text-orange-100 text-2xl font-bold">
+              ✕
             </button>
           </div>
 
@@ -127,10 +117,10 @@ class RegistrarIntentoFallidoModal {
     this.envio = envio;
     this.onConfirm = onConfirm;
     this.onClose = onClose;
-    this.motivo = null;
+    this.motivoSeleccionado = null;
     this.descripcion = '';
-    this.fotoBase64 = null;
-    this.fotoPreview = null;
+    this.foto = null;
+    this.previewFoto = null;
     this.loading = false;
 
     this.render();
@@ -143,10 +133,10 @@ class RegistrarIntentoFallidoModal {
   close() {
     document.getElementById('registrarIntentoFallidoModal').style.display = 'none';
     this.envio = null;
-    this.motivo = null;
+    this.motivoSeleccionado = null;
     this.descripcion = '';
-    this.fotoBase64 = null;
-    this.fotoPreview = null;
+    this.foto = null;
+    this.previewFoto = null;
   }
 
   /**
@@ -172,145 +162,206 @@ class RegistrarIntentoFallidoModal {
   render() {
     const content = document.getElementById('modalContentIntento');
 
-    content.innerHTML = `
-      <div class="space-y-6">
-        <!-- Info del envío -->
-        <div class="bg-slate-50 rounded-lg p-4 space-y-2">
-          <div class="flex items-center gap-2">
-            <span class="font-semibold text-slate-700">ID:</span>
-            <span class="text-slate-900">${this.envio.id_venta}</span>
+    if (!this.motivoSeleccionado) {
+      // PANTALLA 1: Selección de motivo con 3 botones grandes
+      content.innerHTML = `
+        <div class="space-y-4">
+          <!-- Info del envío -->
+          <div class="bg-slate-50 rounded-lg p-4 space-y-2 text-sm">
+            <div class="flex gap-2">
+              <span class="font-semibold text-slate-600">ID:</span>
+              <span class="text-slate-900">${this.envio.id_venta}</span>
+            </div>
+            <div class="flex gap-2">
+              <span class="font-semibold text-slate-600">Destinatario:</span>
+              <span class="text-slate-900">${this.envio.destinatario}</span>
+            </div>
+            <div class="flex gap-2">
+              <span class="font-semibold text-slate-600">Dirección:</span>
+              <span class="text-slate-900">${this.envio.direccion}</span>
+            </div>
           </div>
-          <div class="flex items-center gap-2">
-            <span class="font-semibold text-slate-700">Destinatario:</span>
-            <span class="text-slate-900">${this.envio.destinatario}</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="font-semibold text-slate-700">Dirección:</span>
-            <span class="text-slate-900">${this.envio.direccion}</span>
-          </div>
-        </div>
 
-        <!-- Selección de motivo -->
-        <div class="space-y-2">
-          <label class="block text-sm font-medium text-slate-700">
-            Motivo del intento fallido <span class="text-red-500">*</span>
-          </label>
-          <select id="selectMotivo" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-            <option value="">-- Seleccionar motivo --</option>
-            ${this.motivos.map(m => `<option value="${m.value}">${m.label}</option>`).join('')}
-          </select>
-        </div>
+          <!-- Título -->
+          <h3 class="text-lg font-semibold text-slate-800 text-center">
+            ¿Qué sucedió?
+          </h3>
 
-        <!-- Descripción -->
-        <div class="space-y-2">
-          <label class="block text-sm font-medium text-slate-700">
-            Descripción detallada <span class="text-red-500">*</span>
-          </label>
-          <textarea
-            id="textareaDescripcion"
-            rows="3"
-            class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Describa lo sucedido..."
-          ></textarea>
-          <p id="helperDescripcion" class="text-sm text-slate-500"></p>
-        </div>
-
-        <!-- Foto de evidencia -->
-        <div class="space-y-2">
-          <label class="block text-sm font-medium text-slate-700">
-            Foto de evidencia <span class="text-slate-500">(opcional pero recomendada)</span>
-          </label>
-          <input
-            type="file"
-            id="inputFoto"
-            accept="image/*"
-            capture="environment"
-            class="hidden"
-          />
-          <button
-            id="btnTomarFoto"
-            type="button"
-            class="w-full px-4 py-3 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-blue-500 hover:text-blue-600 transition-colors flex items-center justify-center gap-2"
-          >
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-            </svg>
-            <span id="btnFotoText">📷 Tomar Foto</span>
-          </button>
-          <div id="fotoPreviewContainer" class="hidden mt-3">
-            <img id="fotoPreview" src="" alt="Preview" class="w-full rounded-lg border-2 border-slate-200" />
+          <!-- 3 Botones grandes -->
+          <div class="space-y-3">
+            ${this.motivos.map(motivo => `
+              <button
+                type="button"
+                class="btn-motivo w-full p-5 border-2 rounded-lg text-left flex items-center gap-4 transition-all hover:shadow-lg"
+                style="border-color: ${motivo.color};"
+                data-motivo="${motivo.id}"
+              >
+                <span class="text-4xl">${motivo.icon}</span>
+                <span class="text-lg font-bold text-slate-800">${motivo.label}</span>
+              </button>
+            `).join('')}
           </div>
         </div>
+      `;
 
-        <!-- Botones -->
-        <div class="flex gap-3 pt-4">
-          <button
-            id="btnCancelarIntento"
-            type="button"
-            class="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            id="btnRegistrarIntento"
-            type="button"
-            class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span id="btnRegistrarText">✓ Registrar Intento Fallido</span>
-          </button>
+      // Eventos de los botones de motivo
+      document.querySelectorAll('.btn-motivo').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const motivo = e.currentTarget.getAttribute('data-motivo');
+          this.motivoSeleccionado = motivo;
+          this.render();
+        });
+
+        // Efecto hover
+        btn.addEventListener('mouseenter', (e) => {
+          const motivo = this.motivos.find(m => m.id === e.currentTarget.getAttribute('data-motivo'));
+          e.currentTarget.style.backgroundColor = motivo.color;
+          e.currentTarget.querySelector('span:last-child').style.color = 'white';
+        });
+
+        btn.addEventListener('mouseleave', (e) => {
+          e.currentTarget.style.backgroundColor = 'white';
+          e.currentTarget.querySelector('span:last-child').style.color = '#1e293b';
+        });
+      });
+
+    } else {
+      // PANTALLA 2: Detalles y foto
+      const motivoObj = this.motivos.find(m => m.id === this.motivoSeleccionado);
+
+      content.innerHTML = `
+        <div class="space-y-4">
+          <!-- Motivo seleccionado -->
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div class="font-semibold text-slate-700 mb-2">Motivo seleccionado:</div>
+            <div class="flex items-center gap-3">
+              <span class="text-3xl">${motivoObj.icon}</span>
+              <span class="text-lg font-bold text-slate-800">${motivoObj.label}</span>
+            </div>
+          </div>
+
+          <!-- Descripción OPCIONAL -->
+          <div>
+            <label class="block text-sm font-bold text-slate-700 mb-2">
+              Descripción <span class="text-slate-500 font-normal">(opcional)</span>
+            </label>
+            <textarea
+              id="textareaDescripcion"
+              rows="3"
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm"
+              placeholder="${motivoObj.placeholder}"
+            >${this.descripcion}</textarea>
+          </div>
+
+          <!-- Foto OPCIONAL -->
+          <div>
+            <label class="block text-sm font-bold text-slate-700 mb-2">
+              Foto de evidencia <span class="text-slate-500 font-normal">(opcional)</span>
+            </label>
+
+            <input
+              type="file"
+              id="inputFoto"
+              accept="image/*"
+              capture="environment"
+              class="hidden"
+            />
+
+            <button
+              id="btnTomarFoto"
+              type="button"
+              class="w-full px-4 py-4 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-orange-500 hover:bg-orange-50 transition-colors flex items-center justify-center gap-2 text-base"
+            >
+              <span class="text-2xl">📷</span>
+              <span id="btnFotoText">${this.foto ? 'Cambiar Foto' : 'Tomar Foto'}</span>
+            </button>
+
+            ${this.previewFoto ? `
+              <div class="mt-3 text-center">
+                <img
+                  src="${this.previewFoto}"
+                  alt="Preview"
+                  class="max-w-full max-h-48 rounded-lg border-2 border-slate-200 mx-auto"
+                />
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Botones -->
+          <div class="flex gap-3 pt-4">
+            <button
+              id="btnVolver"
+              type="button"
+              class="flex-1 px-4 py-3 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors font-medium"
+              ${this.loading ? 'disabled' : ''}
+            >
+              ← Volver
+            </button>
+
+            <button
+              id="btnRegistrar"
+              type="button"
+              class="flex-2 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-bold text-base disabled:opacity-50 disabled:cursor-not-allowed"
+              ${this.loading ? 'disabled' : ''}
+            >
+              <span id="btnRegistrarText">${this.loading ? 'Registrando...' : '✓ Registrar'}</span>
+            </button>
+          </div>
         </div>
-      </div>
-    `;
+      `;
 
-    // Eventos
-    this.attachEventListeners();
+      // Eventos
+      this.attachEventListenersPantalla2();
+    }
   }
 
   /**
-   * Adjunta event listeners a los elementos
+   * Adjunta event listeners para la pantalla 2
    */
-  attachEventListeners() {
-    // Cambio de motivo
-    document.getElementById('selectMotivo').addEventListener('change', (e) => {
-      this.motivo = e.target.value;
-      const motivoObj = this.motivos.find(m => m.value === this.motivo);
-      const helper = document.getElementById('helperDescripcion');
-      const textarea = document.getElementById('textareaDescripcion');
-
-      if (motivoObj) {
-        helper.textContent = motivoObj.placeholder;
-        textarea.placeholder = motivoObj.placeholder;
-      } else {
-        helper.textContent = '';
-        textarea.placeholder = 'Describa lo sucedido...';
-      }
-    });
-
-    // Cambio de descripción
-    document.getElementById('textareaDescripcion').addEventListener('input', (e) => {
-      this.descripcion = e.target.value;
-    });
+  attachEventListenersPantalla2() {
+    // Descripción
+    const textarea = document.getElementById('textareaDescripcion');
+    if (textarea) {
+      textarea.addEventListener('input', (e) => {
+        this.descripcion = e.target.value;
+      });
+    }
 
     // Botón tomar foto
-    document.getElementById('btnTomarFoto').addEventListener('click', () => {
-      document.getElementById('inputFoto').click();
-    });
+    const btnTomarFoto = document.getElementById('btnTomarFoto');
+    if (btnTomarFoto) {
+      btnTomarFoto.addEventListener('click', () => {
+        document.getElementById('inputFoto').click();
+      });
+    }
 
-    // Cambio de archivo de foto
-    document.getElementById('inputFoto').addEventListener('change', (e) => {
-      this.handleFotoChange(e);
-    });
+    // Input de foto
+    const inputFoto = document.getElementById('inputFoto');
+    if (inputFoto) {
+      inputFoto.addEventListener('change', (e) => {
+        this.handleFotoChange(e);
+      });
+    }
 
-    // Botón cancelar
-    document.getElementById('btnCancelarIntento').addEventListener('click', () => {
-      this.handleClose();
-    });
+    // Botón volver
+    const btnVolver = document.getElementById('btnVolver');
+    if (btnVolver) {
+      btnVolver.addEventListener('click', () => {
+        this.motivoSeleccionado = null;
+        this.descripcion = '';
+        this.foto = null;
+        this.previewFoto = null;
+        this.render();
+      });
+    }
 
     // Botón registrar
-    document.getElementById('btnRegistrarIntento').addEventListener('click', () => {
-      this.handleRegistrar();
-    });
+    const btnRegistrar = document.getElementById('btnRegistrar');
+    if (btnRegistrar) {
+      btnRegistrar.addEventListener('click', () => {
+        this.handleRegistrar();
+      });
+    }
   }
 
   /**
@@ -332,82 +383,60 @@ class RegistrarIntentoFallidoModal {
       return;
     }
 
+    this.foto = file;
+
     const reader = new FileReader();
-
     reader.onload = (e) => {
-      this.fotoBase64 = e.target.result;
-      this.mostrarPreview(this.fotoBase64);
+      this.previewFoto = e.target.result;
+      this.render();
     };
-
     reader.onerror = () => {
       alert('Error al leer la imagen');
     };
-
     reader.readAsDataURL(file);
-  }
-
-  /**
-   * Muestra el preview de la foto
-   */
-  mostrarPreview(dataUrl) {
-    const preview = document.getElementById('fotoPreview');
-    const container = document.getElementById('fotoPreviewContainer');
-    const btnText = document.getElementById('btnFotoText');
-
-    preview.src = dataUrl;
-    container.classList.remove('hidden');
-    btnText.textContent = '🔄 Cambiar Foto';
-  }
-
-  /**
-   * Valida el formulario
-   */
-  validar() {
-    if (!this.motivo) {
-      alert('⚠️ Debe seleccionar un motivo');
-      return false;
-    }
-
-    if (!this.descripcion || this.descripcion.trim().length < 5) {
-      alert('⚠️ La descripción debe tener al menos 5 caracteres');
-      return false;
-    }
-
-    return true;
   }
 
   /**
    * Maneja el registro del intento fallido
    */
   async handleRegistrar() {
-    if (!this.validar()) return;
+    if (!this.motivoSeleccionado) {
+      alert('⚠️ Debe seleccionar un motivo');
+      return;
+    }
+
     if (this.loading) return;
 
     this.loading = true;
     this.setLoadingState(true);
 
     try {
-      const payload = {
-        envioId: this.envio._id,
-        motivo: this.motivo,
-        descripcion: this.descripcion.trim(),
-        geolocalizacion: this.geolocalizacion
-      };
+      // Usar FormData para enviar la foto como archivo
+      const formData = new FormData();
+      formData.append('envioId', this.envio._id);
+      formData.append('motivo', this.motivoSeleccionado);
+      formData.append('descripcion', this.descripcion || ''); // Opcional
 
-      // Agregar foto si existe
-      if (this.fotoBase64) {
-        payload.fotoEvidencia = this.fotoBase64;
+      if (this.foto) {
+        formData.append('fotoEvidencia', this.foto);
       }
+
+      if (this.geolocalizacion) {
+        formData.append('lat', this.geolocalizacion.lat);
+        formData.append('lng', this.geolocalizacion.lng);
+      }
+
+      console.log('Enviando intento fallido:', {
+        envioId: this.envio._id,
+        motivo: this.motivoSeleccionado,
+        tieneFoto: !!this.foto
+      });
 
       const response = await fetch('/api/envios/registrar-intento-fallido', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
+        body: formData
+        // NO incluir Content-Type header, el browser lo setea automáticamente con boundary
       });
-
-      const data = await response.json();
 
       if (response.ok) {
         this.mostrarExito();
@@ -416,13 +445,15 @@ class RegistrarIntentoFallidoModal {
           if (this.onConfirm) this.onConfirm();
         }, 2000);
       } else {
-        alert('❌ Error: ' + (data.error || 'Error al registrar el intento fallido'));
+        const error = await response.json();
+        console.error('Error del backend:', error);
+        alert('❌ Error: ' + (error.error || 'Error al registrar intento'));
         this.setLoadingState(false);
         this.loading = false;
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('❌ Error de conexión al registrar el intento fallido');
+      alert('❌ Error al registrar el intento fallido');
       this.setLoadingState(false);
       this.loading = false;
     }
@@ -432,24 +463,26 @@ class RegistrarIntentoFallidoModal {
    * Establece el estado de carga
    */
   setLoadingState(loading) {
-    const btnRegistrar = document.getElementById('btnRegistrarIntento');
-    const btnCancelar = document.getElementById('btnCancelarIntento');
     const btnRegistrarText = document.getElementById('btnRegistrarText');
+    const btnVolver = document.getElementById('btnVolver');
+    const btnRegistrar = document.getElementById('btnRegistrar');
 
     if (loading) {
-      btnRegistrar.disabled = true;
-      btnCancelar.disabled = true;
-      btnRegistrarText.innerHTML = `
-        <svg class="animate-spin inline-block w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        Registrando...
-      `;
+      if (btnRegistrar) btnRegistrar.disabled = true;
+      if (btnVolver) btnVolver.disabled = true;
+      if (btnRegistrarText) {
+        btnRegistrarText.innerHTML = `
+          <svg class="animate-spin inline-block w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Registrando...
+        `;
+      }
     } else {
-      btnRegistrar.disabled = false;
-      btnCancelar.disabled = false;
-      btnRegistrarText.textContent = '✓ Registrar Intento Fallido';
+      if (btnRegistrar) btnRegistrar.disabled = false;
+      if (btnVolver) btnVolver.disabled = false;
+      if (btnRegistrarText) btnRegistrarText.textContent = '✓ Registrar';
     }
   }
 
@@ -458,7 +491,7 @@ class RegistrarIntentoFallidoModal {
    */
   mostrarExito() {
     const content = document.getElementById('modalContentIntento');
-    const motivoObj = this.motivos.find(m => m.value === this.motivo);
+    const motivoObj = this.motivos.find(m => m.id === this.motivoSeleccionado);
 
     content.innerHTML = `
       <div class="text-center py-8">
@@ -467,15 +500,15 @@ class RegistrarIntentoFallidoModal {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
         </div>
-        <h3 class="text-2xl font-semibold text-slate-800 mb-2">✅ Registrado correctamente</h3>
+        <h3 class="text-2xl font-bold text-slate-800 mb-2">✅ Registrado correctamente</h3>
         <p class="text-slate-600 mb-4">El intento fallido ha sido registrado</p>
         <div class="bg-slate-50 rounded-lg p-4 text-left space-y-2">
-          <div class="flex items-center gap-2">
-            <span class="text-2xl">${motivoObj?.emoji}</span>
-            <span class="font-medium text-slate-700">${motivoObj?.label}</span>
+          <div class="flex items-center gap-3">
+            <span class="text-3xl">${motivoObj?.icon}</span>
+            <span class="font-bold text-slate-700">${motivoObj?.label}</span>
           </div>
-          <p class="text-sm text-slate-600 ml-8">${this.descripcion}</p>
-          ${this.fotoBase64 ? '<p class="text-sm text-green-600 ml-8">📷 Con foto de evidencia</p>' : ''}
+          ${this.descripcion ? `<p class="text-sm text-slate-600 ml-12">${this.descripcion}</p>` : ''}
+          ${this.foto ? '<p class="text-sm text-green-600 ml-12 font-medium">📷 Con foto de evidencia</p>' : ''}
         </div>
       </div>
     `;
