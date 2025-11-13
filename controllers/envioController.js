@@ -531,6 +531,12 @@ exports.crearEnviosLote = async (req, res) => {
       }
     }
 
+    // Obtener el cliente para verificar permisos
+    const cliente = await Cliente.findById(clienteId);
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
     const creados = [];
     const errores = [];
 
@@ -561,6 +567,12 @@ exports.crearEnviosLote = async (req, res) => {
 
         if (cobroHabilitado && (!montoCobro || montoCobro <= 0)) {
           throw new Error('Debe especificar un monto válido mayor a 0 para cobro en destino');
+        }
+
+        // Validar permisos de firma digital
+        const requiereFirma = data.requiereFirma || false;
+        if (requiereFirma && !cliente.permisos?.puedeRequerirFirma) {
+          throw new Error('Este cliente no tiene permiso para solicitar firma digital');
         }
 
         const idVentaRaw = data.id_venta ? String(data.id_venta).trim() : null;
@@ -621,6 +633,8 @@ exports.crearEnviosLote = async (req, res) => {
             fechaCobro: null,
             metodoPago: null
           },
+          // Firma digital
+          requiereFirma: requiereFirma,
           // Campos legacy para compatibilidad
           cobra_en_destino: cobroHabilitado,
           monto_a_cobrar: cobroHabilitado ? montoCobro : null,

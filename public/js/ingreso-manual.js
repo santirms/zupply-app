@@ -102,12 +102,40 @@ async function cargarClientes() {
     sel.addEventListener('change', ()=>{
       const cl = clientes.find(x=>x._id===sel.value);
       qs('#codigo_interno').value = cl?.codigo_cliente || '';
+      actualizarPermisosFirma(cl);
     });
     sel.dispatchEvent(new Event('change'));
   }catch(e){
     console.error('Clientes:', e);
     alert('No se pudieron cargar los clientes');
   }
+}
+
+function actualizarPermisosFirma(cliente) {
+  const puedeRequerirFirma = cliente?.permisos?.puedeRequerirFirma || false;
+  const checkboxes = qsa('input[name="requiere_firma"]');
+
+  checkboxes.forEach(chk => {
+    const container = chk.closest('label').parentElement;
+    const existingMessage = container.querySelector('.mensaje-sin-permiso');
+
+    if (puedeRequerirFirma) {
+      // El cliente tiene permiso: mostrar checkbox y ocultar mensaje
+      chk.closest('label').style.display = 'flex';
+      if (existingMessage) existingMessage.remove();
+    } else {
+      // El cliente no tiene permiso: ocultar checkbox y mostrar mensaje
+      chk.checked = false;
+      chk.closest('label').style.display = 'none';
+
+      if (!existingMessage) {
+        const msg = document.createElement('small');
+        msg.className = 'mensaje-sin-permiso text-xs text-slate-500 dark:text-slate-400 block p-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5';
+        msg.textContent = 'ℹ️ Este cliente no tiene habilitada la función de firma digital';
+        container.appendChild(msg);
+      }
+    }
+  });
 }
 
 function paqueteMarkup(){
@@ -317,6 +345,13 @@ function agregarPaquete() {
   }
 
   initTelefonoInput(div.querySelector("input[name='telefono']"));
+
+  // Aplicar permisos de firma al nuevo paquete
+  const clienteId = qs('#cliente')?.value;
+  if (clienteId) {
+    const cliente = clientes.find(x => x._id === clienteId);
+    actualizarPermisosFirma(cliente);
+  }
 }
 
 function togglePrecioManual(cb) {

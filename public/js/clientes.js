@@ -280,6 +280,7 @@ async function abrirModal(id=null) {
     form.elements['horario_de_corte'].value = data.horario_de_corte || '';
     form.elements['lista_precios'].value    = data.lista_precios?._id || '';
     const chkAI = qs('#chkAutoIngesta'); if (chkAI) chkAI.checked = !!data.auto_ingesta;
+    const chkFirma = qs('#chkPuedeRequerirFirma'); if (chkFirma) chkFirma.checked = !!(data.permisos?.puedeRequerirFirma);
     (data.sender_id || []).forEach(sid => agregarSenderInput(sid));
   } catch (e) {
     console.error('Error al obtener cliente:', e);
@@ -303,11 +304,15 @@ async function guardarCliente(ev) {
   const cuit         = form.querySelector('input[name="cuit"]').value.trim();
   const razon_social = form.querySelector('input[name="razon_social"]').value.trim();
   const sids = qsa('#cuentasContainer input[name="sender_id"]').map(i => i.value.trim()).filter(Boolean);
+  const chkFirma = qs('#chkPuedeRequerirFirma');
 
   const body = {
     nombre, sender_id: sids, lista_precios,
     cuit: cuit || undefined, razon_social: razon_social || undefined,
-    condicion_iva, horario_de_corte
+    condicion_iva, horario_de_corte,
+    permisos: {
+      puedeRequerirFirma: chkFirma ? chkFirma.checked : false
+    }
   };
   const chkAI = qs('#chkAutoIngesta'); if (chkAI && id) body.auto_ingesta = chkAI.checked;
   if (id) {
