@@ -528,6 +528,11 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
       const cl = await Cliente.findById(p.cliente_id).populate('lista_precios');
       if (!cl) throw new Error('Cliente no encontrado');
 
+      // Validar permisos de firma digital
+      if (p.requiereFirma && !cl.permisos?.puedeRequerirFirma) {
+        throw new Error(`El cliente ${cl.nombre} no tiene permiso para solicitar firma digital`);
+      }
+
       const idVenta = (p.id_venta || p.idVenta || '').trim()
         || Math.random().toString(36).substr(2,8).toUpperCase();
 

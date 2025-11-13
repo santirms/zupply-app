@@ -20,7 +20,15 @@ const clienteSchema = new mongoose.Schema({
     required: true
   },
   horario_de_corte:{ type: String, required: true },
-  link_vinculacion:{ type: String }
+  link_vinculacion:{ type: String },
+
+  permisos: {
+    puedeRequerirFirma: {
+      type: Boolean,
+      default: false
+    }
+    // Otros permisos futuros...
+  }
 }, { timestamps: true });
 
 clienteSchema.pre('validate', async function(next) {

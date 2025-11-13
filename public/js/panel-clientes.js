@@ -1,6 +1,24 @@
 // Array de paquetes temporales
 let paquetesTemp = [];
 
+// Cargar permisos del usuario para firma digital
+(async function cargarPermisosUsuario() {
+  try {
+    const response = await fetch('/me', { cache: 'no-store' });
+    if (!response.ok) return;
+
+    const usuario = await response.json();
+    const puedeRequerirFirma = usuario.permisos?.puedeRequerirFirma || false;
+
+    const seccionFirma = document.getElementById('seccion-requiere-firma');
+    if (seccionFirma) {
+      seccionFirma.style.display = puedeRequerirFirma ? 'block' : 'none';
+    }
+  } catch (error) {
+    console.error('Error al cargar permisos de usuario:', error);
+  }
+})();
+
 // Toggle campo de monto de cobro en destino
 function toggleCampoMontoCobro() {
   const checkbox = document.getElementById('paq-cobro-destino');
@@ -221,6 +239,8 @@ function agregarPaquete() {
     return;
   }
 
+  const requiereFirma = document.getElementById('paq-requiere-firma')?.checked || false;
+
   const paquete = {
     id: Date.now(),
     referencia: document.getElementById('paq-referencia')?.value.trim() || '',
@@ -235,7 +255,8 @@ function agregarPaquete() {
       habilitado: cobroEnDestino,
       monto: cobroEnDestino ? parseFloat(montoCobro) : 0,
       cobrado: false
-    }
+    },
+    requiereFirma: requiereFirma
   };
 
   if (paquete.destinatario.length < 3) {
@@ -354,6 +375,13 @@ function renderizarPaquetes() {
               <div class="mt-2">
                 <span class="badge bg-success">
                   💵 Cobro en Destino: $${paq.cobroEnDestino.monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            ` : ''}
+            ${paq.requiereFirma ? `
+              <div class="mt-2">
+                <span class="badge bg-warning">
+                  🖊️ Requiere Firma
                 </span>
               </div>
             ` : ''}

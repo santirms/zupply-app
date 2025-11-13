@@ -52,7 +52,25 @@ async function logout(req, res) {
 async function me(req, res) {
   const u = req.session?.user;
   if (!u?.authenticated) return res.status(401).json({ error: 'No autenticado' });
-  res.json({ ok: true, user: u });
+
+  // Si es cliente, incluir permisos del cliente asociado
+  if (u.role === 'cliente' && u.cliente_id) {
+    try {
+      const Cliente = require('../models/Cliente');
+      const cliente = await Cliente.findById(u.cliente_id);
+      if (cliente && cliente.permisos) {
+        return res.json({
+          ok: true,
+          ...u,
+          permisos: cliente.permisos
+        });
+      }
+    } catch (err) {
+      console.error('Error obteniendo permisos del cliente:', err);
+    }
+  }
+
+  res.json({ ok: true, ...u });
 }
 
 module.exports = { login, logout, me };

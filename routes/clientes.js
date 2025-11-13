@@ -56,7 +56,8 @@ router.post('/', async (req, res) => {
       razon_social:     req.body.razon_social,
       condicion_iva:    req.body.condicion_iva,
       horario_de_corte: req.body.horario_de_corte,
-      link_vinculacion: req.body.link_vinculacion
+      link_vinculacion: req.body.link_vinculacion,
+      permisos:         req.body.permisos || {}
     };
 
     const nuevo = new Cliente(datos);
@@ -87,7 +88,8 @@ router.put('/:id', async (req, res) => {
       razon_social:     req.body.razon_social,
       condicion_iva:    req.body.condicion_iva,
       horario_de_corte: req.body.horario_de_corte,
-      link_vinculacion: req.body.link_vinculacion
+      link_vinculacion: req.body.link_vinculacion,
+      permisos:         req.body.permisos || {}
     };
 
     const upd = await Cliente.findByIdAndUpdate(
