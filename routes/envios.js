@@ -369,7 +369,8 @@ router.get('/', async (req, res) => {
 
     res.json({ rows, nextCursor });
   } catch (err) {
-    console.error('Error GET /envios (list):', err);
+    console.error('Error GET /envios (list):', err.message);
+    console.error('Stack:', err.stack);
     res.status(500).json({ error: 'Error al obtener envíos' });
   }
 });
@@ -428,7 +429,8 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
     console.log(`guardar-masivo: insertados ${inserted.length}`);
     return res.status(201).json({ inserted: inserted.length, docs: inserted });
   } catch (err) {
-    console.error('Error POST /guardar-masivo:', err);
+    console.error('Error POST /guardar-masivo:', err.message);
+    console.error('Stack:', err.stack);
     return res.status(500).json({ error: 'Error al guardar envíos masivos' });
   }
 });
@@ -507,7 +509,8 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
     });
 
   } catch (err) {
-    console.error('Error POST /cargar-masivo:', err);
+    console.error('Error POST /cargar-masivo:', err.message);
+    console.error('Stack:', err.stack);
     return res.status(500).json({ error: 'Error en carga masiva' });
   }
 });
@@ -801,7 +804,8 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Error confirmando entrega:', err);
+    console.error('Error confirmando entrega:', err.message);
+    console.error('Stack:', err.stack);
     res.status(500).json({ error: err.message || 'Error al confirmar entrega' });
   }
 });
@@ -838,7 +842,8 @@ router.get('/:envioId/firma', requireAuth, async (req, res) => {
       geolocalizacion: envio.confirmacionEntrega.geolocalizacion
     });
   } catch (err) {
-    console.error('Error obteniendo firma de entrega:', err);
+    console.error('Error obteniendo firma de entrega:', err.message);
+    console.error('Stack:', err.stack);
     res.status(500).json({ error: err.message || 'Error al obtener firma' });
   }
 });
@@ -866,7 +871,8 @@ router.get('/del-dia', async (req, res) => {
     const enviosDelDia = await Envio.find({ fecha: { $gte: desde, $lt: hasta } });
     res.json({ total: enviosDelDia.length, envios: enviosDelDia });
   } catch (err) {
-    console.error('Error al obtener envíos del día:', err);
+    console.error('Error al obtener envíos del día:', err.message);
+    console.error('Stack:', err.stack);
     res.status(500).json({ error: 'Error al obtener envíos del día' });
   }
 });
@@ -1086,7 +1092,8 @@ router.get('/:id', async (req, res) => {
     plain.timeline = buildTimeline(plain);
     return res.json(plain);
   } catch (err) {
-    console.error('Error al obtener envío:', err);
+    console.error('Error al obtener envío:', err.message);
+    console.error('Stack:', err.stack);
     res.status(500).json({ error: 'Error al obtener envío' });
   }
 });
@@ -1102,7 +1109,8 @@ router.patch('/:id/geocode', async (req, res) => {
     }
     res.json({ ok: true, latitud: envio.latitud, longitud: envio.longitud });
   } catch (err) {
-    console.error('Error PATCH geocode:', err);
+    console.error('Error PATCH geocode:', err.message);
+    console.error('Stack:', err.stack);
     res.status(500).json({ error: 'Error al geocodificar' });
   }
 });
@@ -1161,7 +1169,8 @@ router.patch('/:id/asignar', async (req, res) => {
 
     res.json({ ok: true, envio });
   } catch (err) {
-    console.error('PATCH /envios/:id/asignar error:', err);
+    console.error('PATCH /envios/:id/asignar error:', err.message);
+    console.error('Stack:', err.stack);
     res.status(500).json({ error: 'No se pudo asignar el envío' });
   }
 });
@@ -1204,7 +1213,8 @@ router.delete('/:id', async (req, res) => {
     if (!deleted) return res.status(404).json({ error: 'Envío no encontrado' });
     return res.json({ ok: true, id });
   } catch (err) {
-    console.error('Error DELETE /envios/:id:', err);
+    console.error('Error DELETE /envios/:id:', err.message);
+    console.error('Stack:', err.stack);
     return res.status(500).json({ error: 'Error al eliminar envío' });
   }
 });
