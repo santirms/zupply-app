@@ -1314,81 +1314,110 @@ router.post(
 );
 
 // ========= REGISTRO DE INTENTO FALLIDO CON EVIDENCIA =========
+const multer = require('multer');
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB máximo
+  }
+});
+
 /**
  * POST /api/envios/registrar-intento-fallido
  * Registra un intento fallido de entrega con foto de evidencia
  */
-router.post('/registrar-intento-fallido', requireAuth, async (req, res) => {
+router.post('/registrar-intento-fallido', requireAuth, upload.single('fotoEvidencia'), async (req, res) => {
   try {
-    const {
-      envioId,
-      motivo,
-      descripcion,
-      fotoEvidencia,
-      geolocalizacion
-    } = req.body;
+    console.log('=== REGISTRAR INTENTO FALLIDO ===');
+    console.log('Body:', req.body);
+    console.log('Tiene foto:', !!req.file);
+    console.log('Usuario:', req.user?._id);
+
+    const { envioId, motivo, descripcion, lat, lng } = req.body;
 
     // Validaciones
     if (!envioId) {
-      return res.status(400).json({ error: 'El ID del envío es requerido' });
+      return res.status(400).json({ error: 'envioId es requerido' });
     }
 
     if (!motivo) {
-      return res.status(400).json({ error: 'El motivo del intento fallido es requerido' });
+      return res.status(400).json({ error: 'motivo es requerido' });
     }
 
-    const motivosValidos = ['ausente', 'inaccesible', 'direccion_incorrecta', 'negativa_recibir', 'otro'];
+    // Motivos válidos (simplificados: ausente, inaccesible, rechazado)
+    const motivosValidos = ['ausente', 'inaccesible', 'rechazado'];
     if (!motivosValidos.includes(motivo)) {
       return res.status(400).json({ error: 'Motivo de intento fallido inválido' });
     }
 
-    if (!descripcion || descripcion.trim().length < 5) {
-      return res.status(400).json({ error: 'La descripción debe tener al menos 5 caracteres' });
-    }
-
-    // Buscar el envío
+    // Buscar envío
     const envio = await Envio.findById(envioId);
     if (!envio) {
       return res.status(404).json({ error: 'Envío no encontrado' });
     }
 
+    let fotoS3Url, fotoS3Key;
+
+    // Subir foto a S3 si existe
+    if (req.file) {
+      try {
+        console.log('Subiendo foto a S3...');
+        const AWS = require('aws-sdk');
+        const s3 = new AWS.S3({
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+          region: process.env.AWS_REGION || 'us-east-1'
+        });
+
+        const timestamp = Date.now();
+        const key = `remitos/intentos-fallidos/${envioId}-${timestamp}.jpg`;
+
+        const resultado = await s3.upload({
+          Bucket: process.env.AWS_S3_BUCKET_NAME,
+          Key: key,
+          Body: req.file.buffer,
+          ContentType: req.file.mimetype,
+          ACL: 'private'
+        }).promise();
+
+        fotoS3Url = resultado.Location;
+        fotoS3Key = resultado.Key;
+        console.log('✓ Foto subida:', fotoS3Url);
+      } catch (s3Error) {
+        console.error('Error S3:', s3Error.message);
+        // Continuar sin foto
+      }
+    }
+
     // Obtener fecha y hora en timezone de Argentina
     const { fecha: fechaIntento } = getFechaHoraArgentina();
-
-    // Preparar datos del intento fallido
-    const intentoFallido = {
-      fecha: fechaIntento,
-      motivo,
-      descripcion: descripcion.trim(),
-      chofer: req.user?._id || null,
-      geolocalizacion: geolocalizacion || null
-    };
-
-    // Si hay foto de evidencia, subirla a S3
-    if (fotoEvidencia) {
-      const { subirFotoEvidencia } = require('../utils/s3');
-      const { url, key } = await subirFotoEvidencia(fotoEvidencia, envioId, motivo);
-      intentoFallido.fotoS3Url = url;
-      intentoFallido.fotoS3Key = key;
-    }
 
     // Inicializar array si no existe
     if (!envio.intentosFallidos) {
       envio.intentosFallidos = [];
     }
 
-    // Agregar intento fallido al array
-    envio.intentosFallidos.push(intentoFallido);
+    // Agregar intento
+    envio.intentosFallidos.push({
+      fecha: fechaIntento,
+      motivo,
+      descripcion: descripcion || '', // Opcional
+      fotoS3Url,
+      fotoS3Key,
+      chofer: req.user._id,
+      geolocalizacion: lat && lng ? {
+        lat: parseFloat(lat),
+        lng: parseFloat(lng)
+      } : undefined
+    });
 
     // Actualizar estado según el motivo
     const estadosMotivo = {
       'ausente': 'comprador_ausente',
       'inaccesible': 'inaccesible',
-      'direccion_incorrecta': 'direccion_erronea',
-      'negativa_recibir': 'rechazado',
-      'otro': 'no_entregado'
+      'rechazado': 'rechazado'
     };
-    envio.estado = estadosMotivo[motivo];
+    envio.estado = estadosMotivo[motivo] || 'intento_fallido';
 
     // Agregar al historial
     if (!envio.historial) envio.historial = [];
@@ -1398,38 +1427,40 @@ router.post('/registrar-intento-fallido', requireAuth, async (req, res) => {
     const motivosLabel = {
       'ausente': 'Comprador ausente',
       'inaccesible': 'Dirección inaccesible',
-      'direccion_incorrecta': 'Dirección incorrecta',
-      'negativa_recibir': 'Negativa a recibir',
-      'otro': 'Otro motivo'
+      'rechazado': 'Rechazado'
     };
 
-    let nota = `Intento fallido: ${motivosLabel[motivo]}. ${descripcion.trim()}`;
-    if (fotoEvidencia) {
+    let nota = `Intento fallido: ${motivosLabel[motivo]}`;
+    if (descripcion && descripcion.trim()) {
+      nota += `. ${descripcion.trim()}`;
+    }
+    if (fotoS3Url) {
       nota += ' (con foto de evidencia)';
     }
 
     envio.historial.push({
       at: fechaIntento,
-      estado: estadosMotivo[motivo],
+      estado: estadosMotivo[motivo] || 'intento_fallido',
       source: 'intento-fallido',
       actor_name: chofer,
       note: nota
     });
 
-    // Guardar el envío
     await envio.save();
 
-    logger.info(`Intento fallido registrado - Envío: ${envio.id_venta}, Motivo: ${motivo}, Chofer: ${chofer}`);
+    console.log('✓ Intento registrado exitosamente');
 
     res.json({
       success: true,
-      message: 'Intento fallido registrado correctamente',
-      intentosFallidos: envio.intentosFallidos.length
+      message: 'Intento fallido registrado correctamente'
     });
-  } catch (err) {
-    console.error('Error registrando intento fallido:', err);
-    logger.error('Error registrando intento fallido:', err);
-    res.status(500).json({ error: err.message });
+
+  } catch (error) {
+    console.error('ERROR:', error);
+    res.status(500).json({
+      error: 'Error interno del servidor',
+      detalle: error.message
+    });
   }
 });
 
