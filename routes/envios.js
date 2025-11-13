@@ -1367,26 +1367,18 @@ router.post('/registrar-intento-fallido', requireAuth, upload.single('fotoEviden
     if (req.file) {
       try {
         console.log('Subiendo foto a S3...');
-        const AWS = require('aws-sdk');
-        const s3 = new AWS.S3({
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-          region: process.env.AWS_REGION || 'us-east-1'
-        });
 
-        const timestamp = Date.now();
-        const key = `remitos/intentos-fallidos/${envioId}-${timestamp}.jpg`;
+        // ✅ Usar utilidad s3.js existente
+        const { subirFotoEvidencia } = require('../utils/s3');
 
-        const resultado = await s3.upload({
-          Bucket: process.env.AWS_S3_BUCKET_NAME,
-          Key: key,
-          Body: req.file.buffer,
-          ContentType: req.file.mimetype,
-          ACL: 'private'
-        }).promise();
+        // Convertir buffer a base64
+        const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
 
-        fotoS3Url = resultado.Location;
-        fotoS3Key = resultado.Key;
+        // Subir usando la función existente
+        const resultado = await subirFotoEvidencia(base64Image, envioId, motivo);
+
+        fotoS3Url = resultado.url;
+        fotoS3Key = resultado.key;
         console.log('✓ Foto subida:', fotoS3Url);
       } catch (s3Error) {
         console.error('Error S3:', s3Error.message);
