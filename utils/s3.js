@@ -116,13 +116,13 @@ async function subirFotoEvidencia(fotoBase64, envioId, motivo) {
   // Convertir base64 a Buffer
   const buffer = Buffer.from(base64Data, 'base64');
 
-  // Generar path: envios/evidencia-intentos-fallidos/YYYY/MM/intento-{envioId}-{motivo}-{timestamp}.jpg
+  // Generar path: remitos/intentos-fallidos/YYYY/MM/intento-{envioId}-{motivo}-{timestamp}.jpg
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const timestamp = now.getTime();
   const extension = contentType.split('/')[1];
-  const key = `envios/evidencia-intentos-fallidos/${year}/${month}/intento-${envioId}-${motivo}-${timestamp}.${extension}`;
+  const key = `remitos/intentos-fallidos/${year}/${month}/intento-${envioId}-${motivo}-${timestamp}.${extension}`;
 
   // Metadata
   const metadata = {
