@@ -816,13 +816,74 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/envios/:id/foto-evidencia
+ * Obtiene la foto de evidencia de un intento fallido (URL firmada temporal)
+ */
+router.get('/:id/foto-evidencia', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { key } = req.query;
+
+    if (!key) {
+      return res.status(400).json({ error: 'Key de S3 es requerido' });
+    }
+
+    const envio = await Envio.findById(id);
+    if (!envio) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
+
+    // Verificar que la key pertenece a este envío
+    const keyExiste = envio.intentosFallidos?.some(
+      intento => intento.fotoS3Key === key
+    );
+
+    if (!keyExiste) {
+      return res.status(403).json({ error: 'Acceso no autorizado' });
+    }
+
+    // Generar URL firmada (válida 1 hora)
+    const { obtenerUrlFirmada } = require('../utils/s3');
+    const urlFirmada = await obtenerUrlFirmada(key, 3600);
+
+    res.json({ url: urlFirmada });
+
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * GET /api/envios/:envioId/firma
  * Obtiene la firma de entrega de un envío (URL firmada temporal)
  */
 router.get('/:envioId/firma', requireAuth, async (req, res) => {
   try {
     const { envioId } = req.params;
+    const { key } = req.query;
 
+    // Si se proporciona una key en query, usarla directamente
+    if (key) {
+      // Buscar el envío
+      const envio = await Envio.findById(envioId);
+      if (!envio) {
+        return res.status(404).json({ error: 'Envío no encontrado' });
+      }
+
+      // Verificar que la key es la firma de este envío
+      if (envio.confirmacionEntrega?.firmaS3Key !== key) {
+        return res.status(403).json({ error: 'Acceso no autorizado' });
+      }
+
+      // Generar URL firmada (válida 1 hora)
+      const { obtenerUrlFirmada } = require('../utils/s3');
+      const urlFirmada = await obtenerUrlFirmada(key, 3600);
+
+      return res.json({ url: urlFirmada });
+    }
+
+    // Comportamiento original (sin key en query)
     // Buscar el envío
     const envio = await Envio.findById(envioId);
     if (!envio) {

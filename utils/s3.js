@@ -148,11 +148,22 @@ async function subirFotoEvidencia(fotoBase64, envioId, motivo) {
   return { url, key, bucket: BUCKET };
 }
 
+/**
+ * Genera una URL firmada temporal para acceder a cualquier objeto en S3
+ * @param {string} key - Key de S3 del objeto
+ * @param {number} expiracion - Tiempo de expiración en segundos (default: 3600 = 1 hora)
+ * @returns {Promise<string>} - URL firmada temporal
+ */
+async function obtenerUrlFirmada(key, expiracion = 3600) {
+  return presignGet(key, expiracion);
+}
+
 module.exports = {
   ensureObject,
   presignGet,
   subirFirmaEntrega,
   obtenerUrlFirmadaFirma,
   eliminarFirma,
-  subirFotoEvidencia
+  subirFotoEvidencia,
+  obtenerUrlFirmada
 };
