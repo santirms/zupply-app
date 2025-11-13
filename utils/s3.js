@@ -92,10 +92,67 @@ async function eliminarFirma(key) {
   }));
 }
 
+/**
+ * Sube una foto de evidencia de intento fallido a S3
+ * @param {string} fotoBase64 - Foto en formato base64 (puede incluir prefijo data:image/jpeg;base64,)
+ * @param {string} envioId - ID del envío
+ * @param {string} motivo - Motivo del intento fallido
+ * @returns {Promise<{url: string, key: string, bucket: string}>} - URL presignada, key y bucket
+ */
+async function subirFotoEvidencia(fotoBase64, envioId, motivo) {
+  // Remover prefijo data:image/...;base64, si existe
+  let base64Data = fotoBase64;
+  let contentType = 'image/jpeg';
+
+  if (fotoBase64.includes('base64,')) {
+    const parts = fotoBase64.split('base64,');
+    base64Data = parts[1];
+
+    // Detectar content type del prefijo
+    if (parts[0].includes('image/png')) contentType = 'image/png';
+    else if (parts[0].includes('image/webp')) contentType = 'image/webp';
+  }
+
+  // Convertir base64 a Buffer
+  const buffer = Buffer.from(base64Data, 'base64');
+
+  // Generar path: envios/evidencia-intentos-fallidos/YYYY/MM/intento-{envioId}-{motivo}-{timestamp}.jpg
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const timestamp = now.getTime();
+  const extension = contentType.split('/')[1];
+  const key = `envios/evidencia-intentos-fallidos/${year}/${month}/intento-${envioId}-${motivo}-${timestamp}.${extension}`;
+
+  // Metadata
+  const metadata = {
+    'envio-id': String(envioId),
+    'tipo': 'evidencia-intento-fallido',
+    'motivo': motivo,
+    'fecha-subida': now.toISOString()
+  };
+
+  // Subir a S3 con ACL private
+  await s3.send(new PutObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    Body: buffer,
+    ContentType: contentType,
+    ACL: 'private',
+    Metadata: metadata
+  }));
+
+  // Generar URL firmada (válida por 7 días para evidencia)
+  const url = await presignGet(key, 7 * 24 * 3600);
+
+  return { url, key, bucket: BUCKET };
+}
+
 module.exports = {
   ensureObject,
   presignGet,
   subirFirmaEntrega,
   obtenerUrlFirmadaFirma,
-  eliminarFirma
+  eliminarFirma,
+  subirFotoEvidencia
 };
