@@ -53,24 +53,63 @@ async function me(req, res) {
   const u = req.session?.user;
   if (!u?.authenticated) return res.status(401).json({ error: 'No autenticado' });
 
-  // Si es cliente, incluir permisos del cliente asociado
-  if (u.role === 'cliente' && u.cliente_id) {
+  console.log('=== GET /me ===');
+  console.log('Usuario en sesión:', u);
+
+  // Construir respuesta base
+  const respuesta = {
+    ok: true,
+    _id: u._id,
+    email: u.email,
+    username: u.username,
+    role: u.role,
+    driver_id: u.driver_id || null,
+    cliente_id: u.cliente_id || null,
+    sender_ids: u.sender_ids || []
+  };
+
+  // Si es cliente, buscar información del cliente y permisos
+  if (u.cliente_id) {
     try {
+      console.log('Es cliente, buscando info del cliente:', u.cliente_id);
+
       const Cliente = require('../models/Cliente');
-      const cliente = await Cliente.findById(u.cliente_id);
-      if (cliente && cliente.permisos) {
-        return res.json({
-          ok: true,
-          ...u,
-          permisos: cliente.permisos
-        });
+      const cliente = await Cliente.findById(u.cliente_id)
+        .select('nombre razon_social codigo_cliente permisos')
+        .lean();
+
+      console.log('Cliente encontrado:', cliente);
+
+      if (cliente) {
+        respuesta.cliente = {
+          _id: cliente._id,
+          nombre: cliente.nombre,
+          razon_social: cliente.razon_social,
+          codigo: cliente.codigo_cliente
+        };
+
+        // IMPORTANTE: Incluir permisos
+        respuesta.permisos = cliente.permisos || {
+          puedeRequerirFirma: false
+        };
+
+        console.log('Permisos del cliente:', respuesta.permisos);
       }
     } catch (err) {
-      console.error('Error obteniendo permisos del cliente:', err);
+      console.error('Error obteniendo información del cliente:', err);
     }
   }
 
-  res.json({ ok: true, ...u });
+  // Si es chofer, incluir información del driver
+  if (u.driver_id) {
+    respuesta.driver = {
+      _id: u.driver_id
+    };
+  }
+
+  console.log('Respuesta final /me:', respuesta);
+
+  res.json(respuesta);
 }
 
 module.exports = { login, logout, me };
