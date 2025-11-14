@@ -605,21 +605,28 @@
                     </div>
                   </div>
 
-                  <!-- Requiere Firma -->
-                  <div class="mb-3" id="seccion-requiere-firma" style="display: none;">
-                    <div class="form-check">
-                      <input
-                        type="checkbox"
-                        id="paq-requiere-firma"
-                        class="form-check-input"
-                      />
-                      <label for="paq-requiere-firma" class="form-check-label">
-                        🖊️ Este envío requiere firma del destinatario
+                  <!-- NUEVO: Checkbox Firma Digital -->
+                  <div id="seccionFirmaDigital" style="display: none; margin-top: 15px;">
+                    <div style="
+                      background-color: #e8f4fd;
+                      border: 1px solid #b3d9f2;
+                      border-radius: 6px;
+                      padding: 15px;
+                    ">
+                      <label style="display: flex; align-items: center; margin: 0; cursor: pointer;">
+                        <input
+                          type="checkbox"
+                          id="requiereFirma"
+                          style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;"
+                        >
+                        <div>
+                          <strong style="font-size: 1em;">🖊️ Requiere firma digital del destinatario</strong>
+                          <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                            El chofer solicitará la firma del receptor al momento de la entrega
+                          </div>
+                        </div>
                       </label>
                     </div>
-                    <small class="form-text text-muted">
-                      El chofer deberá solicitar firma y DNI al entregar
-                    </small>
                   </div>
 
                 </form>
