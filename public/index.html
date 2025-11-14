@@ -31,12 +31,28 @@
       --z-primary-dark: #D97706;  /* hover */
       --z-primary-fg: #111827;    /* texto sobre ámbar */
     }
+
+    /* Ocultar body hasta verificar acceso */
+    body {
+      display: none !important;
+    }
+    body.acceso-verificado {
+      display: block !important;
+    }
   </style>
 </head>
 
 <body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
   <!-- Script de redirección según rol -->
   <script>
+    // Timeout de seguridad: si después de 3 segundos no se verificó, redirigir
+    setTimeout(() => {
+      if (!document.body.classList.contains('acceso-verificado')) {
+        console.warn('Timeout de verificación, redirigiendo a login');
+        window.location.replace('/auth/login');
+      }
+    }, 3000);
+
     (async function verificarAcceso() {
       try {
         const response = await fetch('/api/auth/me', {
@@ -66,8 +82,16 @@
           return;
         }
 
-        // admin o coordinador pueden ver el dashboard
-        console.log('Acceso autorizado al dashboard para:', usuario.role);
+        // Admin o coordinador: mostrar contenido
+        if (usuario.role === 'admin' || usuario.role === 'coordinador') {
+          console.log('Acceso autorizado al dashboard para:', usuario.role);
+          document.body.classList.add('acceso-verificado');
+          return;
+        }
+
+        // Rol desconocido
+        console.warn('Rol desconocido:', usuario.role);
+        window.location.replace('/auth/login');
 
       } catch (error) {
         console.error('Error verificando acceso:', error);
