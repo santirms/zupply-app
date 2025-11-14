@@ -50,35 +50,43 @@ async function logout(req, res) {
 }
 
 async function me(req, res) {
-  const u = req.session?.user;
-  if (!u?.authenticated) return res.status(401).json({ error: 'No autenticado' });
+  try {
+    console.log('=== GET /api/auth/me ===');
+    console.log('Usuario ID:', req.user._id);
 
-  console.log('=== GET /me ===');
-  console.log('Usuario en sesión:', u);
+    // Buscar usuario en DB para obtener información actualizada
+    const usuario = await User.findById(req.user._id)
+      .select('-password_hash')
+      .lean();
 
-  // Construir respuesta base
-  const respuesta = {
-    ok: true,
-    _id: u._id,
-    email: u.email,
-    username: u.username,
-    role: u.role,
-    driver_id: u.driver_id || null,
-    cliente_id: u.cliente_id || null,
-    sender_ids: u.sender_ids || []
-  };
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
 
-  // Si es cliente, buscar información del cliente y permisos
-  if (u.cliente_id) {
-    try {
-      console.log('Es cliente, buscando info del cliente:', u.cliente_id);
+    console.log('Usuario encontrado:', usuario.email);
+    console.log('Cliente_id:', usuario.cliente_id);
+
+    // Construir respuesta base
+    const respuesta = {
+      _id: usuario._id,
+      email: usuario.email,
+      username: usuario.username,
+      role: usuario.role,
+      driver_id: usuario.driver_id || null,
+      cliente_id: usuario.cliente_id || null
+    };
+
+    // Si tiene cliente_id, buscar información del cliente y permisos
+    if (usuario.cliente_id) {
+      console.log('Buscando cliente:', usuario.cliente_id);
 
       const Cliente = require('../models/Cliente');
-      const cliente = await Cliente.findById(u.cliente_id)
+      const cliente = await Cliente.findById(usuario.cliente_id)
         .select('nombre razon_social codigo_cliente permisos')
         .lean();
 
-      console.log('Cliente encontrado:', cliente);
+      console.log('Cliente encontrado:', cliente?.nombre);
+      console.log('Permisos:', cliente?.permisos);
 
       if (cliente) {
         respuesta.cliente = {
@@ -92,24 +100,17 @@ async function me(req, res) {
         respuesta.permisos = cliente.permisos || {
           puedeRequerirFirma: false
         };
-
-        console.log('Permisos del cliente:', respuesta.permisos);
       }
-    } catch (err) {
-      console.error('Error obteniendo información del cliente:', err);
     }
+
+    console.log('Respuesta /me:', JSON.stringify(respuesta, null, 2));
+
+    res.json(respuesta);
+
+  } catch (error) {
+    console.error('Error en GET /api/auth/me:', error);
+    res.status(500).json({ error: error.message });
   }
-
-  // Si es chofer, incluir información del driver
-  if (u.driver_id) {
-    respuesta.driver = {
-      _id: u.driver_id
-    };
-  }
-
-  console.log('Respuesta final /me:', respuesta);
-
-  res.json(respuesta);
 }
 
 module.exports = { login, logout, me };
