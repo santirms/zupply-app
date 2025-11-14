@@ -477,43 +477,185 @@ function obtenerInfoEstado(estado) {
   const estadoKey = (estado ?? '').toString().trim().toLowerCase();
 
   const estadosZupply = {
-    en_planta: { nombre: 'En planta', color: 'secondary', icono: 'box-seam' },
-    asignado: { nombre: 'Asignado', color: 'info', icono: 'person-check' },
-    en_camino: { nombre: 'En camino', color: 'primary', icono: 'truck' },
-    entregado: { nombre: 'Entregado', color: 'success', icono: 'check-circle-fill' },
-    comprador_ausente: { nombre: 'Comprador ausente', color: 'warning', icono: 'exclamation-triangle' },
-    rechazado: { nombre: 'Rechazado', color: 'danger', icono: 'x-circle' },
-    inaccesible: { nombre: 'Inaccesible', color: 'secondary', icono: 'slash-circle' },
-    cancelado: { nombre: 'Cancelado', color: 'dark', icono: 'x-circle' },
-    devolucion: { nombre: 'En devolución', color: 'danger', icono: 'arrow-return-left' },
-    incidencia: { nombre: 'Incidencia', color: 'danger', icono: 'exclamation-octagon' },
-    reprogramado: { nombre: 'Reprogramado', color: 'info', icono: 'arrow-repeat' },
-    demorado: { nombre: 'Demorado', color: 'warning', icono: 'hourglass-split' },
-    pendiente: { nombre: 'Pendiente', color: 'secondary', icono: 'clock' }
+    // Azul - En camino
+    'en_planta': {
+      nombre: 'En planta',
+      color: 'info',
+      icono: 'box-seam',
+      clase: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300'
+    },
+    'asignado': {
+      nombre: 'Asignado',
+      color: 'info',
+      icono: 'person-check',
+      clase: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300'
+    },
+    'en_camino': {
+      nombre: 'En camino',
+      color: 'primary',
+      icono: 'truck',
+      clase: 'bg-blue-500 text-white border-blue-600 dark:bg-blue-600 dark:text-white'
+    },
+    'en camino': {
+      nombre: 'En camino',
+      color: 'primary',
+      icono: 'truck',
+      clase: 'bg-blue-500 text-white border-blue-600 dark:bg-blue-600 dark:text-white'
+    },
+
+    // Verde - Entregado
+    'entregado': {
+      nombre: 'Entregado',
+      color: 'success',
+      icono: 'check-circle-fill',
+      clase: 'bg-green-500 text-white border-green-600 dark:bg-green-600 dark:text-white'
+    },
+
+    // Naranja - Comprador Ausente
+    'ausente': {
+      nombre: 'Comprador Ausente',
+      color: 'warning',
+      icono: 'exclamation-triangle',
+      clase: 'bg-orange-500 text-white border-orange-600 dark:bg-orange-600 dark:text-white'
+    },
+    'comprador_ausente': {
+      nombre: 'Comprador Ausente',
+      color: 'warning',
+      icono: 'exclamation-triangle',
+      clase: 'bg-orange-500 text-white border-orange-600 dark:bg-orange-600 dark:text-white'
+    },
+    'comprador ausente': {
+      nombre: 'Comprador Ausente',
+      color: 'warning',
+      icono: 'exclamation-triangle',
+      clase: 'bg-orange-500 text-white border-orange-600 dark:bg-orange-600 dark:text-white'
+    },
+
+    // Rojo - Cancelado, Rechazado, Devolución
+    'cancelado': {
+      nombre: 'Cancelado',
+      color: 'danger',
+      icono: 'x-circle',
+      clase: 'bg-red-500 text-white border-red-600 dark:bg-red-600 dark:text-white'
+    },
+    'rechazado': {
+      nombre: 'Rechazado',
+      color: 'danger',
+      icono: 'x-circle',
+      clase: 'bg-red-500 text-white border-red-600 dark:bg-red-600 dark:text-white'
+    },
+    'devolucion': {
+      nombre: 'En devolución',
+      color: 'danger',
+      icono: 'arrow-return-left',
+      clase: 'bg-red-500 text-white border-red-600 dark:bg-red-600 dark:text-white'
+    },
+    'incidencia': {
+      nombre: 'Incidencia',
+      color: 'danger',
+      icono: 'exclamation-octagon',
+      clase: 'bg-red-500 text-white border-red-600 dark:bg-red-600 dark:text-white'
+    },
+
+    // Gris - Pendiente
+    'pendiente': {
+      nombre: 'Pendiente',
+      color: 'secondary',
+      icono: 'clock',
+      clase: 'bg-slate-400 text-white border-slate-500 dark:bg-slate-600 dark:text-white'
+    },
+
+    // Violeta - Reprogramado
+    'reprogramado': {
+      nombre: 'Reprogramado',
+      color: 'info',
+      icono: 'arrow-repeat',
+      clase: 'bg-purple-500 text-white border-purple-600 dark:bg-purple-600 dark:text-white'
+    },
+
+    // Otros
+    'inaccesible': {
+      nombre: 'Inaccesible',
+      color: 'secondary',
+      icono: 'slash-circle',
+      clase: 'bg-slate-500 text-white border-slate-600 dark:bg-slate-600 dark:text-white'
+    },
+    'demorado': {
+      nombre: 'Demorado',
+      color: 'warning',
+      icono: 'hourglass-split',
+      clase: 'bg-amber-500 text-white border-amber-600 dark:bg-amber-600 dark:text-white'
+    }
   };
 
   const estadosMeli = {
-    pending: { nombre: 'Pendiente', color: 'secondary', icono: 'clock' },
-    handling: { nombre: 'En preparación', color: 'info', icono: 'box-seam' },
-    ready_to_ship: { nombre: 'Listo para enviar', color: 'primary', icono: 'box-arrow-right' },
-    shipped: { nombre: 'En camino', color: 'primary', icono: 'truck' },
-    delivered: { nombre: 'Entregado', color: 'success', icono: 'check-circle-fill' },
-    not_delivered: { nombre: 'No entregado', color: 'warning', icono: 'exclamation-triangle' },
-    cancelled: { nombre: 'Cancelado', color: 'dark', icono: 'x-circle' },
-    returning: { nombre: 'En devolución', color: 'danger', icono: 'arrow-return-left' },
-    returned: { nombre: 'Devuelto', color: 'danger', icono: 'arrow-return-left' }
+    'pending': {
+      nombre: 'Pendiente',
+      color: 'secondary',
+      icono: 'clock',
+      clase: 'bg-slate-400 text-white border-slate-500 dark:bg-slate-600 dark:text-white'
+    },
+    'handling': {
+      nombre: 'En preparación',
+      color: 'info',
+      icono: 'box-seam',
+      clase: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300'
+    },
+    'ready_to_ship': {
+      nombre: 'Listo para enviar',
+      color: 'primary',
+      icono: 'box-arrow-right',
+      clase: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300'
+    },
+    'shipped': {
+      nombre: 'En camino',
+      color: 'primary',
+      icono: 'truck',
+      clase: 'bg-blue-500 text-white border-blue-600 dark:bg-blue-600 dark:text-white'
+    },
+    'delivered': {
+      nombre: 'Entregado',
+      color: 'success',
+      icono: 'check-circle-fill',
+      clase: 'bg-green-500 text-white border-green-600 dark:bg-green-600 dark:text-white'
+    },
+    'not_delivered': {
+      nombre: 'No entregado',
+      color: 'warning',
+      icono: 'exclamation-triangle',
+      clase: 'bg-orange-500 text-white border-orange-600 dark:bg-orange-600 dark:text-white'
+    },
+    'cancelled': {
+      nombre: 'Cancelado',
+      color: 'danger',
+      icono: 'x-circle',
+      clase: 'bg-red-500 text-white border-red-600 dark:bg-red-600 dark:text-white'
+    },
+    'returning': {
+      nombre: 'En devolución',
+      color: 'danger',
+      icono: 'arrow-return-left',
+      clase: 'bg-red-500 text-white border-red-600 dark:bg-red-600 dark:text-white'
+    },
+    'returned': {
+      nombre: 'Devuelto',
+      color: 'danger',
+      icono: 'arrow-return-left',
+      clase: 'bg-red-500 text-white border-red-600 dark:bg-red-600 dark:text-white'
+    }
   };
 
   const info = estadosZupply[estadoKey] || estadosMeli[estadoKey] || null;
   const color = info?.color || 'secondary';
   const nombre = info?.nombre || (estadoKey ? estadoKey.replace(/_/g, ' ').replace(/\b\w/g, letra => letra.toUpperCase()) : 'Desconocido');
   const icono = info?.icono || 'question-circle';
+  const clase = info?.clase || 'bg-slate-400 text-white border-slate-500 dark:bg-slate-600 dark:text-white';
 
   return {
     nombre,
     color,
     icono,
-    clase: info?.clase || CLASES_BADGE_ESTADO[color] || CLASES_BADGE_ESTADO.secondary
+    clase
   };
 }
 
