@@ -1,5 +1,6 @@
 // Array de paquetes temporales
 let paquetesTemp = [];
+let puedeRequerirFirma = false; // Variable global para permisos de firma
 
 // Cargar permisos del usuario para firma digital
 (async function cargarPermisosUsuario() {
@@ -8,9 +9,16 @@ let paquetesTemp = [];
     if (!response.ok) return;
 
     const usuario = await response.json();
-    const puedeRequerirFirma = usuario.permisos?.puedeRequerirFirma || false;
+    console.log('Usuario cargado:', usuario);
+    console.log('Permisos:', usuario.permisos);
 
-    const seccionFirma = document.getElementById('seccion-requiere-firma');
+    // Actualizar variable global
+    puedeRequerirFirma = usuario.permisos?.puedeRequerirFirma || false;
+
+    console.log('Puede requerir firma:', puedeRequerirFirma);
+
+    // Mostrar u ocultar sección de firma digital
+    const seccionFirma = document.getElementById('seccionFirmaDigital');
     if (seccionFirma) {
       seccionFirma.style.display = puedeRequerirFirma ? 'block' : 'none';
     }
@@ -239,7 +247,12 @@ function agregarPaquete() {
     return;
   }
 
-  const requiereFirma = document.getElementById('paq-requiere-firma')?.checked || false;
+  // NUEVO: Capturar firma digital si el cliente tiene permiso
+  const requiereFirma = puedeRequerirFirma
+    ? (document.getElementById('requiereFirma')?.checked || false)
+    : false;
+
+  console.log('Creando paquete - Requiere firma:', requiereFirma);
 
   const paquete = {
     id: Date.now(),
