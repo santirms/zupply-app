@@ -531,15 +531,35 @@ function obtenerInfoEstado(estado) {
       clase: 'bg-orange-500 text-white border-orange-600 dark:bg-orange-600 dark:text-white'
     },
 
-    // Rojo - Cancelado, Rechazado, Devolución
-    'cancelado': {
-      nombre: 'Cancelado',
-      color: 'danger',
-      icono: 'x-circle',
-      clase: 'bg-red-500 text-white border-red-600 dark:bg-red-600 dark:text-white'
+    // Naranja - Otras incidencias
+    'inaccesible': {
+      nombre: 'Inaccesible',
+      color: 'warning',
+      icono: 'slash-circle',
+      clase: 'bg-orange-500 text-white border-orange-600 dark:bg-orange-600 dark:text-white'
+    },
+    'direccion_erronea': {
+      nombre: 'Dirección Errónea',
+      color: 'warning',
+      icono: 'geo-alt-fill',
+      clase: 'bg-orange-500 text-white border-orange-600 dark:bg-orange-600 dark:text-white'
+    },
+    'direccion erronea': {
+      nombre: 'Dirección Errónea',
+      color: 'warning',
+      icono: 'geo-alt-fill',
+      clase: 'bg-orange-500 text-white border-orange-600 dark:bg-orange-600 dark:text-white'
     },
     'rechazado': {
       nombre: 'Rechazado',
+      color: 'warning',
+      icono: 'x-octagon',
+      clase: 'bg-orange-500 text-white border-orange-600 dark:bg-orange-600 dark:text-white'
+    },
+
+    // Rojo - Cancelado, Devolución
+    'cancelado': {
+      nombre: 'Cancelado',
       color: 'danger',
       icono: 'x-circle',
       clase: 'bg-red-500 text-white border-red-600 dark:bg-red-600 dark:text-white'
