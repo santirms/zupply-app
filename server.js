@@ -214,6 +214,7 @@ app.use('/api/mis-envios',       require('./routes/mis-envios'));
 // Otros módulos que ya tenías (si deben estar protegidos, dejalos después del guard)
 app.use('/api/asignaciones',     require('./routes/asignaciones'));
 app.use('/api/detectar-zona',    require('./routes/detectarZona'));
+app.use('/api/auth',             require('./routes/auth'));
 app.use('/api/auth/meli',        require('./routes/meli'));
 app.use('/auth/meli',            require('./routes/meli'));
 
