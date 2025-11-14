@@ -441,7 +441,7 @@
             <input id="fDesde" type="date" class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm">
             <input id="fHasta" type="date" class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm">
             <select id="fEstado" class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm">
-              <option value="todos">📦 Todos los estados</option>
+              <option value="">📦 Todos los estados</option>
 
               <optgroup label="📋 Pendiente">
                 <option value="ready_to_ship">Listo para enviar</option>
@@ -450,29 +450,26 @@
 
               <optgroup label="🚚 En camino">
                 <option value="en_camino">En camino</option>
-                <option value="shipped">En camino (Meli)</option>
               </optgroup>
 
               <optgroup label="✅ Entregado">
                 <option value="entregado">Entregado</option>
-                <option value="delivered">Entregado (Meli)</option>
               </optgroup>
 
               <optgroup label="🏢 En planta">
                 <option value="en_planta">En planta</option>
-                <option value="handling">En preparación (Meli)</option>
               </optgroup>
 
               <optgroup label="⚠️ Incidencia">
                 <option value="reprogramado">Reprogramado</option>
                 <option value="ausente">Comprador Ausente</option>
-                <option value="comprador_ausente">Comprador Ausente</option>
-                <option value="not_delivered">No entregado (Meli)</option>
+                <option value="inaccesible">Inaccesible</option>
+                <option value="direccion_erronea">Dirección Errónea</option>
+                <option value="rechazado">Rechazado</option>
               </optgroup>
 
               <optgroup label="❌ Cancelado">
                 <option value="cancelado">Cancelado</option>
-                <option value="cancelled">Cancelado (Meli)</option>
               </optgroup>
             </select>
             <button id="btnFiltrar" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10">Filtrar</button>
@@ -1050,7 +1047,7 @@
         const searchParams = new URLSearchParams({ page: pagina, limit });
 
         const estadoValue = fEstado?.value;
-        if (estadoValue && estadoValue !== 'todos') {
+        if (estadoValue) {
           searchParams.set('estado', estadoValue);
         }
 
@@ -1218,7 +1215,7 @@
           limit: '500'
         });
         const estadoValue = fEstado?.value;
-        if (estadoValue && estadoValue !== 'todos') {
+        if (estadoValue) {
           params.set('estado', estadoValue);
         }
 
