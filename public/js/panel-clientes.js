@@ -5,8 +5,19 @@ let puedeRequerirFirma = false; // Variable global para permisos de firma
 // Cargar permisos del usuario para firma digital
 (async function cargarPermisosUsuario() {
   try {
-    const response = await fetch('/api/auth/me', { cache: 'no-store' });
-    if (!response.ok) return;
+    const token = localStorage.getItem('token'); // ✅ Obtener token
+    
+    const response = await fetch('/api/auth/me', { 
+      headers: {
+        'Authorization': `Bearer ${token}` // ✅ Enviar token
+      },
+      cache: 'no-store' 
+    });
+    
+    if (!response.ok) {
+      console.error('Error status:', response.status);
+      return;
+    }
 
     const usuario = await response.json();
     console.log('Usuario cargado:', usuario);
