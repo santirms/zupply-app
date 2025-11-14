@@ -35,6 +35,47 @@
 </head>
 
 <body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+  <!-- Script de redirección según rol -->
+  <script>
+    (async function verificarAcceso() {
+      try {
+        const response = await fetch('/api/auth/me', {
+          credentials: 'same-origin',
+          cache: 'no-store'
+        });
+
+        if (!response.ok) {
+          // Token/sesión inválida
+          console.log('No autenticado, redirigiendo a login...');
+          window.location.replace('/auth/login');
+          return;
+        }
+
+        const usuario = await response.json();
+
+        // Redirigir según rol
+        if (usuario.role === 'cliente') {
+          console.log('Usuario tipo cliente, redirigiendo a panel de cliente...');
+          window.location.replace('/client-panel.html');
+          return;
+        }
+
+        if (usuario.role === 'chofer') {
+          console.log('Usuario tipo chofer, redirigiendo a mis envíos...');
+          window.location.replace('/mis-envios.html');
+          return;
+        }
+
+        // admin o coordinador pueden ver el dashboard
+        console.log('Acceso autorizado al dashboard para:', usuario.role);
+
+      } catch (error) {
+        console.error('Error verificando acceso:', error);
+        window.location.replace('/auth/login');
+      }
+    })();
+  </script>
+
   <div class="max-w-7xl mx-auto p-6">
 
     <!-- TOPBAR -->
