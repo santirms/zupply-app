@@ -5,7 +5,7 @@ let puedeRequerirFirma = false; // Variable global para permisos de firma
 // Cargar permisos del usuario para firma digital
 (async function cargarPermisosUsuario() {
   try {
-    const response = await fetch('/me', { cache: 'no-store' });
+    const response = await fetch('/api/auth/me', { cache: 'no-store' });
     if (!response.ok) return;
 
     const usuario = await response.json();
