@@ -272,11 +272,14 @@ class ConfirmarEntregaModal {
               DNI del receptor <span class="text-red-500">*</span>
             </label>
             <input
-              type="text"
+              type="tel"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="inputDni"
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Ej: 12345678"
               maxlength="8"
-              class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
             />
             <p id="errorDni" class="text-sm text-red-600 mt-1 hidden"></p>
           </div>
