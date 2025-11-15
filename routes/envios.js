@@ -13,6 +13,14 @@ const { ensureMeliHistory: ensureMeliHistorySrv, formatSubstatus } = require('..
 const logger = require('../utils/logger');
 const { getFechaArgentina, getHoraArgentina, getFechaHoraArgentina } = require('../utils/timezone');
 
+// Configuración de Multer para upload de archivos
+const multer = require('multer');
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB máximo
+  }
+});
 
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
 const { getEnvioByTracking, labelByTracking } = require('../controllers/envioController');
@@ -632,7 +640,10 @@ router.get('/tracking/:tracking/label', labelByTracking);
  * POST /api/envios/confirmar-entrega
  * Confirma la entrega de un envío con firma digital del destinatario
  */
-router.post('/confirmar-entrega', requireAuth, async (req, res) => {
+router.post('/confirmar-entrega', requireAuth, upload.fields([
+  { name: 'fotoDNI', maxCount: 1 },
+  { name: 'firmaDigital', maxCount: 1 }
+]), async (req, res) => {
   try {
     const {
       envioId,
@@ -640,7 +651,6 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       nombreReceptor,
       dniReceptor,
       aclaracionReceptor,
-      firmaDigital,
       geolocalizacion,
       // Cobro en destino
       confirmarCobro,
@@ -649,6 +659,18 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       nombreDestinatario,
       dniDestinatario
     } = req.body;
+
+    // Parsear geolocalizacion si viene como string
+    let geolocalizacionParsed = null;
+    if (geolocalizacion) {
+      try {
+        geolocalizacionParsed = typeof geolocalizacion === 'string'
+          ? JSON.parse(geolocalizacion)
+          : geolocalizacion;
+      } catch (e) {
+        console.error('Error parseando geolocalización:', e);
+      }
+    }
 
     // Validaciones
     if (!envioId) {
@@ -719,18 +741,59 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       aclaracionReceptor: tipo === 'otro' ? aclaracionReceptor.trim() : null,
       fechaEntrega: fechaEntregaArg,
       horaEntrega,
-      geolocalizacion: geolocalizacion || null,
+      geolocalizacion: geolocalizacionParsed || null,
       // Legacy fields para compatibilidad
       nombreDestinatario: nombre.trim(),
       dniDestinatario: dni
     };
 
     // Si requiere firma, subirla a S3
-    if (envio.requiereFirma && firmaDigital) {
-      const { subirFirmaEntrega } = require('../utils/s3');
-      const { url, key } = await subirFirmaEntrega(firmaDigital, envioId);
-      confirmacion.firmaS3Url = url;
-      confirmacion.firmaS3Key = key;
+    if (envio.requiereFirma && req.files?.firmaDigital) {
+      const firmaFile = req.files.firmaDigital[0];
+      const AWS = require('aws-sdk');
+      const s3 = new AWS.S3({
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        region: process.env.AWS_REGION || 'us-east-1'
+      });
+
+      const firmaKey = `firmas/${envioId}_${Date.now()}.png`;
+      await s3.upload({
+        Bucket: process.env.AWS_S3_BUCKET,
+        Key: firmaKey,
+        Body: firmaFile.buffer,
+        ContentType: 'image/png'
+      }).promise();
+
+      const firmaUrl = `https://${process.env.AWS_S3_BUCKET}.s3.amazonaws.com/${firmaKey}`;
+      confirmacion.firmaS3Url = firmaUrl;
+      confirmacion.firmaS3Key = firmaKey;
+      console.log('✓ Firma subida a S3:', firmaKey);
+    }
+
+    // Subir foto DNI a S3 (si existe)
+    let fotoDNIS3Key = null;
+    if (req.files?.fotoDNI) {
+      const dniFile = req.files.fotoDNI[0];
+      const AWS = require('aws-sdk');
+      const s3 = new AWS.S3({
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        region: process.env.AWS_REGION || 'us-east-1'
+      });
+
+      const dniKey = `dni/${envioId}_${Date.now()}.jpg`;
+
+      await s3.upload({
+        Bucket: process.env.AWS_S3_BUCKET,
+        Key: dniKey,
+        Body: dniFile.buffer,
+        ContentType: 'image/jpeg'
+      }).promise();
+
+      fotoDNIS3Key = dniKey;
+      confirmacion.fotoDNIS3Key = dniKey;
+      console.log('✓ Foto DNI subida a S3:', dniKey);
     }
 
     // Actualizar el envío
@@ -1380,14 +1443,6 @@ router.post(
 );
 
 // ========= REGISTRO DE INTENTO FALLIDO CON EVIDENCIA =========
-const multer = require('multer');
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB máximo
-  }
-});
-
 /**
  * POST /api/envios/registrar-intento-fallido
  * Registra un intento fallido de entrega con foto de evidencia
