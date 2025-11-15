@@ -974,6 +974,51 @@ router.get('/:envioId/firma', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/envios/:id/foto-dni
+ * Obtiene la foto del DNI de un envío (URL firmada temporal)
+ */
+router.get('/:id/foto-dni', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { key } = req.query;
+
+    if (!key) {
+      return res.status(400).json({ error: 'Key es requerido' });
+    }
+
+    const envio = await Envio.findById(id);
+    if (!envio) {
+      return res.status(404).json({ error: 'Envío no encontrado' });
+    }
+
+    // Verificar permisos: si es cliente, solo puede ver sus propios envíos
+    const user = req.session?.user || req.user;
+    if (user?.role === 'cliente') {
+      const envioClienteId = envio.cliente_id?._id || envio.cliente_id;
+      const sameCliente = envioClienteId && user.cliente_id && envioClienteId.toString() === user.cliente_id.toString();
+      if (!sameCliente) {
+        return res.status(403).json({ error: 'No autorizado' });
+      }
+    }
+
+    // Verificar que la key es la foto DNI de este envío
+    if (envio.confirmacionEntrega?.fotoDNIS3Key !== key) {
+      return res.status(403).json({ error: 'Acceso no autorizado' });
+    }
+
+    // Generar URL firmada (válida 1 hora)
+    const { obtenerUrlFirmada } = require('../utils/s3');
+    const urlFirmada = await obtenerUrlFirmada(key, 3600);
+
+    res.json({ url: urlFirmada });
+
+  } catch (error) {
+    console.error('Error obteniendo foto DNI:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ========= NOTAS (PONER ANTES DE '/:id') =========
 router.get('/:id/notas',            /*auth.requireUser,*/  ctrl.listarNotas);
 router.post('/:id/notas',           /*auth.requireUser,*/  ctrl.agregarNota);

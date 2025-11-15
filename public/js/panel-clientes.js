@@ -1257,6 +1257,13 @@ function renderizarEvidencias(envio) {
             🖊️ Ver Firma Digital del Receptor
           </button>
 
+          ${confirmacion.fotoDNIS3Key ? `
+            <button onclick="handleVerFotoDNI('${envio._id}', '${confirmacion.fotoDNIS3Key}')"
+                    class="w-full mt-2 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all">
+              📄 Ver Foto del DNI
+            </button>
+          ` : ''}
+
           <div class="mt-4 p-3 bg-white/60 dark:bg-white/5 rounded-lg text-center text-sm text-green-700 dark:text-green-400 italic">
             ✓ Esta firma digital tiene validez como comprobante de entrega
           </div>
@@ -1388,6 +1395,62 @@ function cerrarModalFoto() {
   modal.classList.add('hidden');
   modal.classList.remove('flex');
   imagen.src = '';
+}
+
+// Función para ver foto DNI
+async function handleVerFotoDNI(envioId, fotoDNIS3Key) {
+  const modal = document.getElementById('modalFotoEvidencia');
+  const loader = document.getElementById('modalFotoLoader');
+  const imagen = document.getElementById('modalFotoImagen');
+  const icono = document.getElementById('modalFotoIcono');
+  const texto = document.getElementById('modalFotoTexto');
+  const footer = document.getElementById('modalFotoFooter');
+
+  // Mostrar modal
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  // Configurar título
+  icono.textContent = '📄';
+  texto.textContent = 'Foto del DNI del Receptor';
+
+  // Mostrar loader
+  loader.classList.remove('hidden');
+  imagen.classList.add('hidden');
+
+  // Footer
+  footer.innerHTML = `
+    <div class="inline-block px-5 py-3 bg-blue-600/30 border border-blue-500 rounded-lg text-white">
+      📄 Foto del DNI capturada al momento de la entrega
+    </div>
+  `;
+
+  try {
+    const response = await fetch(
+      `/api/envios/${envioId}/foto-dni?key=${encodeURIComponent(fotoDNIS3Key)}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      imagen.src = data.url;
+      imagen.onload = () => {
+        loader.classList.add('hidden');
+        imagen.classList.remove('hidden');
+      };
+    } else {
+      alert('No se pudo cargar la foto del DNI');
+      cerrarModalFoto();
+    }
+  } catch (error) {
+    console.error('Error al cargar foto DNI:', error);
+    alert('Error al cargar la foto del DNI');
+    cerrarModalFoto();
+  }
 }
 
 function obtenerEnviosDesdeRespuesta(data) {
@@ -1576,4 +1639,5 @@ window.verMisEnvios = verMisEnvios;
 window.renderizarEvidencias = renderizarEvidencias;
 window.handleVerFotoEvidencia = handleVerFotoEvidencia;
 window.handleVerFirmaDigital = handleVerFirmaDigital;
+window.handleVerFotoDNI = handleVerFotoDNI;
 window.cerrarModalFoto = cerrarModalFoto;
