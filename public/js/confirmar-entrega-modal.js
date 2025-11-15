@@ -300,15 +300,32 @@ class ConfirmarEntregaModal {
             <label class="block text-sm font-medium text-slate-700 mb-1">
               Foto del DNI <span class="text-red-500">*</span>
             </label>
-            <div class="border border-slate-300 rounded-lg p-3 bg-slate-50">
+            <div class="border border-slate-300 rounded-lg p-3" style="background: #f8f9fa; position: relative;">
 
-              <!-- Botón para activar cámara -->
-              <button
-                type="button"
-                id="btnActivarCamaraDNI"
-                class="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 mb-3">
-                📷 Tomar Foto del DNI
-              </button>
+              <!-- Botón para activar cámara - MEJORADO -->
+              <div class="text-center mb-3 p-3 bg-white rounded" style="position: relative; z-index: 10;">
+                <p class="mb-2 text-slate-600 text-sm">
+                  <svg class="inline w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                  </svg>
+                  Capturá una foto clara del DNI del receptor
+                </p>
+                <button
+                  type="button"
+                  id="btnActivarCamaraDNI"
+                  class="w-full bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-all"
+                  style="
+                    padding: 15px 20px;
+                    font-size: 18px;
+                    border-radius: 10px;
+                    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+                    border: 3px solid #0056b3;
+                  "
+                  onmouseover="this.style.transform='scale(1.05)'"
+                  onmouseout="this.style.transform='scale(1)'">
+                  📷 Activar Cámara para DNI
+                </button>
+              </div>
 
               <!-- Video preview con mira rectangular (oculto inicialmente) -->
               <div id="containerCamaraDNI" style="display: none;">
