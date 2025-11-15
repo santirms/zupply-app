@@ -13,6 +13,16 @@ const { ensureMeliHistory: ensureMeliHistorySrv, formatSubstatus } = require('..
 const logger = require('../utils/logger');
 const { getFechaArgentina, getHoraArgentina, getFechaHoraArgentina } = require('../utils/timezone');
 
+// Configuración de AWS SDK v3 para S3
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const s3Client = new S3Client({
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY
+  },
+  region: process.env.S3_REGION || 'us-east-2'
+});
+
 // Configuración de Multer para upload de archivos
 const multer = require('multer');
 const upload = multer({
@@ -750,20 +760,14 @@ router.post('/confirmar-entrega', requireAuth, upload.fields([
     // Si requiere firma, subirla a S3
     if (envio.requiereFirma && req.files?.firmaDigital) {
       const firmaFile = req.files.firmaDigital[0];
-      const AWS = require('aws-sdk');
-      const s3 = new AWS.S3({
-        accessKeyId: process.env.S3_ACCESS_KEY_ID,
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
-        region: process.env.S3_REGION || 'us-east-2'
-      });
-
       const firmaKey = `firmas/${envioId}_${Date.now()}.png`;
-      await s3.upload({
+
+      await s3Client.send(new PutObjectCommand({
         Bucket: process.env.S3_BUCKET,
         Key: firmaKey,
         Body: firmaFile.buffer,
         ContentType: 'image/png'
-      }).promise();
+      }));
 
       const firmaUrl = `https://${process.env.S3_BUCKET}.s3.amazonaws.com/${firmaKey}`;
       confirmacion.firmaS3Url = firmaUrl;
@@ -777,12 +781,12 @@ router.post('/confirmar-entrega', requireAuth, upload.fields([
       const dniFile = req.files.fotoDNI[0];
       const dniKey = `dni/${envioId}_${Date.now()}.jpg`;
 
-      await s3.upload({
+      await s3Client.send(new PutObjectCommand({
         Bucket: process.env.S3_BUCKET,
         Key: dniKey,
         Body: dniFile.buffer,
         ContentType: 'image/jpeg'
-      }).promise();
+      }));
 
       fotoDNIS3Key = dniKey;
       confirmacion.fotoDNIS3Key = dniKey;
