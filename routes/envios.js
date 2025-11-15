@@ -13,6 +13,14 @@ const { ensureMeliHistory: ensureMeliHistorySrv, formatSubstatus } = require('..
 const logger = require('../utils/logger');
 const { getFechaArgentina, getHoraArgentina, getFechaHoraArgentina } = require('../utils/timezone');
 
+// ⬇️ Multer para upload de archivos (firma, foto DNI, evidencia)
+const multer = require('multer');
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB máximo
+  }
+});
 
 // ⬇️ NUEVO: importo solo lo que ya tenés en el controller
 const { getEnvioByTracking, labelByTracking } = require('../controllers/envioController');
@@ -1407,14 +1415,6 @@ router.post(
 );
 
 // ========= REGISTRO DE INTENTO FALLIDO CON EVIDENCIA =========
-const multer = require('multer');
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB máximo
-  }
-});
-
 /**
  * POST /api/envios/registrar-intento-fallido
  * Registra un intento fallido de entrega con foto de evidencia
