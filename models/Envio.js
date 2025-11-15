@@ -212,8 +212,12 @@ const envioSchema = new Schema({
     // Campos legacy (mantener compatibilidad)
     nombreDestinatario: String,
     dniDestinatario: String,
+    // Firma digital
     firmaS3Url: String,
     firmaS3Key: String,
+    // Foto del DNI
+    fotoDNIS3Url: String,
+    fotoDNIS3Key: String,
     fechaEntrega: Date,
     horaEntrega: String,
     geolocalizacion: {

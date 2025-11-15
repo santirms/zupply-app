@@ -627,14 +627,16 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
 router.get('/tracking/:tracking', getEnvioByTracking);
 router.get('/tracking/:tracking/label', labelByTracking);
 
-// ========= CONFIRMACIÓN DE ENTREGA CON FIRMA =========
+// ========= CONFIRMACIÓN DE ENTREGA CON FIRMA Y FOTO DNI =========
 /**
  * POST /api/envios/confirmar-entrega
- * Confirma la entrega de un envío con firma digital del destinatario
+ * Confirma la entrega de un envío con firma digital y foto del DNI del destinatario
  */
-router.post('/confirmar-entrega', requireAuth, async (req, res) => {
+router.post('/confirmar-entrega', requireAuth, upload.fields([
+  { name: 'fotoDNI', maxCount: 1 }
+]), async (req, res) => {
   try {
-    const {
+    let {
       envioId,
       tipoReceptor,
       nombreReceptor,
@@ -649,6 +651,16 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       nombreDestinatario,
       dniDestinatario
     } = req.body;
+
+    // Si geolocalizacion viene como string, parsearlo
+    if (typeof geolocalizacion === 'string') {
+      try {
+        geolocalizacion = JSON.parse(geolocalizacion);
+      } catch (e) {
+        console.warn('Error parseando geolocalizacion:', e.message);
+        geolocalizacion = null;
+      }
+    }
 
     // Validaciones
     if (!envioId) {
@@ -731,6 +743,21 @@ router.post('/confirmar-entrega', requireAuth, async (req, res) => {
       const { url, key } = await subirFirmaEntrega(firmaDigital, envioId);
       confirmacion.firmaS3Url = url;
       confirmacion.firmaS3Key = key;
+    }
+
+    // Subir foto del DNI a S3
+    if (req.files?.fotoDNI) {
+      const dniFile = req.files.fotoDNI[0];
+      const { ensureObject, presignGet } = require('../utils/s3');
+      const dniKey = `dni/${envioId}_${Date.now()}.jpg`;
+
+      await ensureObject(dniKey, dniFile.buffer, 'image/jpeg');
+      const dniUrl = await presignGet(dniKey, 86400 * 365); // 1 año
+
+      confirmacion.fotoDNIS3Url = dniUrl;
+      confirmacion.fotoDNIS3Key = dniKey;
+
+      console.log(`✓ Foto DNI subida a S3: ${dniKey}`);
     }
 
     // Actualizar el envío
