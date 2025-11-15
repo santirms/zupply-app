@@ -760,7 +760,7 @@ router.post('/confirmar-entrega', requireAuth, upload.fields([
     // Si requiere firma, subirla a S3
     if (envio.requiereFirma && req.files?.firmaDigital) {
       const firmaFile = req.files.firmaDigital[0];
-      const firmaKey = `firmas/${envioId}_${Date.now()}.png`;
+      const firmaKey = `firmas-entrega/${envioId}_${Date.now()}.png`;
 
       await s3Client.send(new PutObjectCommand({
         Bucket: process.env.S3_BUCKET,
