@@ -21,6 +21,10 @@ class ConfirmarEntregaModal {
     this.signaturePad = null;
     this.geolocalizacion = null;
 
+    // Variables para captura de foto DNI
+    this.streamDNI = null;
+    this.fotoDNIBlob = null;
+
     this.createModalElement();
     this.captureGeolocation();
   }
@@ -105,6 +109,9 @@ class ConfirmarEntregaModal {
     this.datosReceptor = { nombre: '', dni: '', aclaracion: '' };
     this.metodoPagoCobro = ''; // Resetear método de pago
 
+    // Limpiar recursos de cámara DNI
+    this.limpiarRecursosCamara();
+
     // ===== DEBUG: Información del envío =====
     console.log('═══════════════════════════════════════════');
     console.log('🔍 MODAL CONFIRMAR ENTREGA ABIERTO');
@@ -150,6 +157,9 @@ class ConfirmarEntregaModal {
       this.signaturePad.off();
       this.signaturePad = null;
     }
+
+    // Limpiar recursos de cámara
+    this.limpiarRecursosCamara();
   }
 
   /**
@@ -272,13 +282,119 @@ class ConfirmarEntregaModal {
               DNI del receptor <span class="text-red-500">*</span>
             </label>
             <input
-              type="text"
+              type="tel"
+              inputmode="numeric"
+              pattern="[0-9]*"
               id="inputDni"
               placeholder="Ej: 12345678"
               maxlength="8"
               class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <p id="errorDni" class="text-sm text-red-600 mt-1 hidden"></p>
+          </div>
+
+          <!-- Foto del DNI (siempre visible) -->
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">
+              Foto del DNI <span class="text-red-500">*</span>
+            </label>
+            <div class="border-2 border-slate-300 rounded-lg p-4 bg-slate-50">
+
+              <!-- Botón para activar cámara -->
+              <button
+                type="button"
+                id="btnActivarCamaraDNI"
+                class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 mb-3">
+                📷 Tomar Foto del DNI
+              </button>
+
+              <!-- Video preview con mira rectangular (oculto inicialmente) -->
+              <div id="containerCamaraDNI" style="display: none;">
+                <div style="position: relative; width: 100%; max-width: 500px; margin: 0 auto;">
+                  <video
+                    id="videoCamaraDNI"
+                    autoplay
+                    playsinline
+                    style="width: 100%; height: auto; border-radius: 8px; border: 2px solid #3b82f6;">
+                  </video>
+
+                  <!-- Mira rectangular para guiar la captura -->
+                  <div style="
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    width: 85%;
+                    height: 60%;
+                    border: 3px dashed #10b981;
+                    border-radius: 8px;
+                    pointer-events: none;
+                    box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);
+                  ">
+                    <div style="
+                      position: absolute;
+                      top: -30px;
+                      left: 50%;
+                      transform: translateX(-50%);
+                      background: #10b981;
+                      color: #fff;
+                      padding: 5px 15px;
+                      border-radius: 20px;
+                      font-weight: bold;
+                      font-size: 14px;
+                      white-space: nowrap;
+                    ">
+                      📄 Alineá el DNI dentro del recuadro
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Botón para capturar -->
+                <button
+                  type="button"
+                  id="btnCapturarDNI"
+                  class="w-full px-4 py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 mt-3">
+                  📸 Capturar Foto
+                </button>
+
+                <!-- Botón para cancelar -->
+                <button
+                  type="button"
+                  id="btnCancelarCamaraDNI"
+                  class="w-full px-4 py-2 bg-slate-400 text-white rounded-lg font-medium hover:bg-slate-500 mt-2">
+                  ✕ Cancelar
+                </button>
+              </div>
+
+              <!-- Canvas oculto para capturar la foto -->
+              <canvas id="canvasDNI" style="display: none;"></canvas>
+
+              <!-- Preview de la foto capturada -->
+              <div id="previewDNI" style="display: none; margin-top: 15px;">
+                <p class="text-sm text-emerald-600 font-medium mb-2">✓ Foto del DNI capturada</p>
+                <img
+                  id="imagenDNI"
+                  style="
+                    width: 100%;
+                    max-width: 400px;
+                    border-radius: 8px;
+                    border: 2px solid #10b981;
+                    display: block;
+                    margin: 0 auto;
+                  ">
+                <button
+                  type="button"
+                  id="btnRetomarDNI"
+                  class="w-full px-4 py-2 bg-amber-500 text-white rounded-lg font-medium hover:bg-amber-600 mt-2">
+                  🔄 Retomar Foto
+                </button>
+              </div>
+
+            </div>
+            <p class="text-sm text-slate-500 mt-1">
+              Capturá una foto clara del DNI del receptor
+            </p>
+            <p id="errorFotoDNI" class="text-sm text-red-600 mt-1 hidden">Debe capturar una foto del DNI</p>
           </div>
 
           <!-- Nombre (visible para porteria, familiar, otro) -->
@@ -492,10 +608,146 @@ class ConfirmarEntregaModal {
       });
     }
 
+    // ========== EVENTOS PARA CAPTURA DE FOTO DNI ==========
+
+    // Activar cámara
+    const btnActivarCamaraDNI = document.getElementById('btnActivarCamaraDNI');
+    if (btnActivarCamaraDNI) {
+      btnActivarCamaraDNI.addEventListener('click', () => this.activarCamaraDNI());
+    }
+
+    // Capturar foto
+    const btnCapturarDNI = document.getElementById('btnCapturarDNI');
+    if (btnCapturarDNI) {
+      btnCapturarDNI.addEventListener('click', () => this.capturarFotoDNI());
+    }
+
+    // Cancelar cámara
+    const btnCancelarCamaraDNI = document.getElementById('btnCancelarCamaraDNI');
+    if (btnCancelarCamaraDNI) {
+      btnCancelarCamaraDNI.addEventListener('click', () => this.cancelarCamaraDNI());
+    }
+
+    // Retomar foto
+    const btnRetomarDNI = document.getElementById('btnRetomarDNI');
+    if (btnRetomarDNI) {
+      btnRetomarDNI.addEventListener('click', () => this.retomarFotoDNI());
+    }
+
     // Botón continuar
     document.getElementById('btnContinuar').addEventListener('click', () => {
       this.handleContinuar();
     });
+  }
+
+  /**
+   * Activa la cámara para capturar foto del DNI
+   */
+  async activarCamaraDNI() {
+    try {
+      const video = document.getElementById('videoCamaraDNI');
+
+      // Solicitar cámara con aspect ratio rectangular (ideal para DNI)
+      this.streamDNI = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment', // Cámara trasera
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          aspectRatio: { ideal: 16/9 }
+        }
+      });
+
+      video.srcObject = this.streamDNI;
+
+      // Mostrar preview de cámara
+      document.getElementById('btnActivarCamaraDNI').style.display = 'none';
+      document.getElementById('containerCamaraDNI').style.display = 'block';
+      document.getElementById('previewDNI').style.display = 'none';
+
+    } catch (error) {
+      console.error('Error activando cámara:', error);
+      alert('No se pudo acceder a la cámara. Verificá los permisos.');
+    }
+  }
+
+  /**
+   * Captura la foto del DNI desde el video
+   */
+  capturarFotoDNI() {
+    const video = document.getElementById('videoCamaraDNI');
+    const canvas = document.getElementById('canvasDNI');
+    const ctx = canvas.getContext('2d');
+
+    // Configurar tamaño del canvas igual al video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Dibujar frame del video en el canvas
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Convertir a blob
+    canvas.toBlob((blob) => {
+      this.fotoDNIBlob = blob;
+
+      // Mostrar preview
+      const preview = document.getElementById('imagenDNI');
+      preview.src = URL.createObjectURL(blob);
+
+      // Ocultar cámara, mostrar preview
+      this.detenerCamaraDNI();
+      document.getElementById('containerCamaraDNI').style.display = 'none';
+      document.getElementById('previewDNI').style.display = 'block';
+
+      // Actualizar botón continuar
+      this.updateContinuarButton();
+
+    }, 'image/jpeg', 0.9);
+  }
+
+  /**
+   * Cancela la cámara DNI
+   */
+  cancelarCamaraDNI() {
+    this.detenerCamaraDNI();
+    document.getElementById('containerCamaraDNI').style.display = 'none';
+    document.getElementById('btnActivarCamaraDNI').style.display = 'block';
+  }
+
+  /**
+   * Retoma la foto del DNI (limpia la anterior)
+   */
+  retomarFotoDNI() {
+    this.fotoDNIBlob = null;
+    document.getElementById('previewDNI').style.display = 'none';
+    document.getElementById('btnActivarCamaraDNI').style.display = 'block';
+    this.updateContinuarButton();
+  }
+
+  /**
+   * Detiene el stream de la cámara DNI
+   */
+  detenerCamaraDNI() {
+    if (this.streamDNI) {
+      this.streamDNI.getTracks().forEach(track => track.stop());
+      this.streamDNI = null;
+    }
+  }
+
+  /**
+   * Limpia recursos de cámara al cerrar modal
+   */
+  limpiarRecursosCamara() {
+    this.detenerCamaraDNI();
+    this.fotoDNIBlob = null;
+
+    // Resetear UI si existen los elementos
+    const containerCamara = document.getElementById('containerCamaraDNI');
+    const previewDNI = document.getElementById('previewDNI');
+    const btnActivar = document.getElementById('btnActivarCamaraDNI');
+
+    if (containerCamara) containerCamara.style.display = 'none';
+    if (previewDNI) previewDNI.style.display = 'none';
+    if (btnActivar) btnActivar.style.display = 'block';
   }
 
   /**
@@ -641,6 +893,9 @@ class ConfirmarEntregaModal {
       isValid = isValid && this.metodoPagoCobro && (this.metodoPagoCobro === 'efectivo' || this.metodoPagoCobro === 'transferencia');
     }
 
+    // Validar que se haya capturado la foto del DNI
+    isValid = isValid && this.fotoDNIBlob !== null;
+
     btn.disabled = !isValid;
   }
 
@@ -659,6 +914,16 @@ class ConfirmarEntregaModal {
 
     if (this.tipoReceptor === 'otro') {
       isValid = isValid && this.validateAclaracion();
+    }
+
+    // Validar foto DNI
+    if (!this.fotoDNIBlob) {
+      const errorFotoDNI = document.getElementById('errorFotoDNI');
+      if (errorFotoDNI) {
+        errorFotoDNI.classList.remove('hidden');
+      }
+      alert('⚠️ Debe capturar una foto del DNI del receptor');
+      return;
     }
 
     // Validar cobro en destino si está habilitado
@@ -853,27 +1118,35 @@ class ConfirmarEntregaModal {
     try {
       // ===== DEBUG: Construcción del payload =====
       console.log('═══════════════════════════════════════════');
-      console.log('💾 GUARDANDO ENTREGA CON FIRMA');
+      console.log('💾 GUARDANDO ENTREGA CON FIRMA Y FOTO DNI');
       console.log('═══════════════════════════════════════════');
 
       const firmaDataURL = this.signaturePad.toDataURL('image/png');
 
-      const payload = {
-        envioId: this.envio._id,
-        tipoReceptor: this.tipoReceptor,
-        nombreReceptor: this.tipoReceptor === 'destinatario'
-          ? this.envio.destinatario
-          : this.datosReceptor.nombre,
-        dniReceptor: this.datosReceptor.dni,
-        aclaracionReceptor: this.tipoReceptor === 'otro' ? this.datosReceptor.aclaracion : undefined,
-        firmaDigital: firmaDataURL,
-        geolocalizacion: this.geolocalizacion
-      };
+      // Crear FormData para enviar archivos
+      const formData = new FormData();
+      formData.append('envioId', this.envio._id);
+      formData.append('tipoReceptor', this.tipoReceptor);
+      formData.append('nombreReceptor', this.tipoReceptor === 'destinatario'
+        ? this.envio.destinatario
+        : this.datosReceptor.nombre);
+      formData.append('dniReceptor', this.datosReceptor.dni);
 
-      console.log('📦 Payload base (con firma):', {
-        ...payload,
-        firmaDigital: '[IMAGE DATA]' // No mostrar la imagen completa
-      });
+      if (this.tipoReceptor === 'otro' && this.datosReceptor.aclaracion) {
+        formData.append('aclaracionReceptor', this.datosReceptor.aclaracion);
+      }
+
+      formData.append('firmaDigital', firmaDataURL);
+
+      if (this.geolocalizacion) {
+        formData.append('geolocalizacion', JSON.stringify(this.geolocalizacion));
+      }
+
+      // Agregar foto DNI
+      if (this.fotoDNIBlob) {
+        formData.append('fotoDNI', this.fotoDNIBlob, 'dni.jpg');
+        console.log('✅ Foto DNI agregada al FormData');
+      }
 
       // Incluir datos de cobro en destino si aplica
       console.log('-------------------------------------------');
@@ -883,8 +1156,8 @@ class ConfirmarEntregaModal {
       console.log('🔹 Método de pago seleccionado:', this.metodoPagoCobro);
 
       if (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado && this.metodoPagoCobro) {
-        payload.confirmarCobro = true;
-        payload.metodoPago = this.metodoPagoCobro;
+        formData.append('confirmarCobro', 'true');
+        formData.append('metodoPago', this.metodoPagoCobro);
         console.log('✅ SE AGREGÓ INFO DE COBRO AL PAYLOAD');
         console.log('   - confirmarCobro: true');
         console.log('   - metodoPago:', this.metodoPagoCobro);
@@ -892,19 +1165,12 @@ class ConfirmarEntregaModal {
         console.log('❌ NO SE AGREGÓ INFO DE COBRO AL PAYLOAD');
       }
 
-      console.log('-------------------------------------------');
-      console.log('📤 PAYLOAD FINAL A ENVIAR (con firma):');
-      console.log(JSON.stringify({
-        ...payload,
-        firmaDigital: '[IMAGE DATA]'
-      }, null, 2));
       console.log('═══════════════════════════════════════════');
 
       const response = await fetch('/api/envios/confirmar-entrega', {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: formData // No poner Content-Type, el browser lo setea automáticamente con boundary
       });
 
       const resultado = await response.json();
@@ -939,21 +1205,31 @@ class ConfirmarEntregaModal {
     try {
       // ===== DEBUG: Construcción del payload =====
       console.log('═══════════════════════════════════════════');
-      console.log('💾 GUARDANDO ENTREGA SIN FIRMA');
+      console.log('💾 GUARDANDO ENTREGA SIN FIRMA PERO CON FOTO DNI');
       console.log('═══════════════════════════════════════════');
 
-      const payload = {
-        envioId: this.envio._id,
-        tipoReceptor: this.tipoReceptor,
-        nombreReceptor: this.tipoReceptor === 'destinatario'
-          ? this.envio.destinatario
-          : this.datosReceptor.nombre,
-        dniReceptor: this.datosReceptor.dni,
-        aclaracionReceptor: this.tipoReceptor === 'otro' ? this.datosReceptor.aclaracion : undefined,
-        geolocalizacion: this.geolocalizacion
-      };
+      // Crear FormData para enviar archivos
+      const formData = new FormData();
+      formData.append('envioId', this.envio._id);
+      formData.append('tipoReceptor', this.tipoReceptor);
+      formData.append('nombreReceptor', this.tipoReceptor === 'destinatario'
+        ? this.envio.destinatario
+        : this.datosReceptor.nombre);
+      formData.append('dniReceptor', this.datosReceptor.dni);
 
-      console.log('📦 Payload base:', JSON.stringify(payload, null, 2));
+      if (this.tipoReceptor === 'otro' && this.datosReceptor.aclaracion) {
+        formData.append('aclaracionReceptor', this.datosReceptor.aclaracion);
+      }
+
+      if (this.geolocalizacion) {
+        formData.append('geolocalizacion', JSON.stringify(this.geolocalizacion));
+      }
+
+      // Agregar foto DNI
+      if (this.fotoDNIBlob) {
+        formData.append('fotoDNI', this.fotoDNIBlob, 'dni.jpg');
+        console.log('✅ Foto DNI agregada al FormData');
+      }
 
       // Incluir datos de cobro en destino si aplica
       console.log('-------------------------------------------');
@@ -971,8 +1247,8 @@ class ConfirmarEntregaModal {
         (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado && this.metodoPagoCobro));
 
       if (this.envio.cobroEnDestino?.habilitado && !this.envio.cobroEnDestino?.cobrado && this.metodoPagoCobro) {
-        payload.confirmarCobro = true;
-        payload.metodoPago = this.metodoPagoCobro;
+        formData.append('confirmarCobro', 'true');
+        formData.append('metodoPago', this.metodoPagoCobro);
         console.log('✅ SE AGREGÓ INFO DE COBRO AL PAYLOAD');
         console.log('   - confirmarCobro: true');
         console.log('   - metodoPago:', this.metodoPagoCobro);
@@ -989,16 +1265,12 @@ class ConfirmarEntregaModal {
         }
       }
 
-      console.log('-------------------------------------------');
-      console.log('📤 PAYLOAD FINAL A ENVIAR:');
-      console.log(JSON.stringify(payload, null, 2));
       console.log('═══════════════════════════════════════════');
 
       const response = await fetch('/api/envios/confirmar-entrega', {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: formData // No poner Content-Type, el browser lo setea automáticamente con boundary
       });
 
       const resultado = await response.json();
