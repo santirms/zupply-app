@@ -310,59 +310,70 @@ class ConfirmarEntregaModal {
                 📷 Tomar Foto del DNI
               </button>
 
-              <!-- Video preview con mira rectangular (oculto inicialmente) -->
+              <!-- Video preview con mira HORIZONTAL (oculto inicialmente) -->
               <div id="containerCamaraDNI" style="display: none;">
-                <div style="position: relative; width: 100%; max-width: 500px; margin: 0 auto;">
+                <!-- Video container -->
+                <div style="position: relative; width: 100%; margin: 0 auto; background: #000; border-radius: 8px; overflow: hidden;">
                   <video
                     id="videoCamaraDNI"
                     autoplay
                     playsinline
-                    style="width: 100%; height: auto; border-radius: 8px; border: 2px solid #3b82f6;">
+                    style="width: 100%; height: auto; display: block; max-height: 70vh; object-fit: cover;">
                   </video>
 
-                  <!-- Mira rectangular para guiar la captura -->
+                  <!-- Mira HORIZONTAL para DNI -->
                   <div style="
                     position: absolute;
                     top: 50%;
                     left: 50%;
                     transform: translate(-50%, -50%);
-                    width: 85%;
-                    height: 60%;
+                    width: 80%;
+                    height: 50%;
                     border: 3px dashed #00ff00;
                     border-radius: 8px;
                     pointer-events: none;
-                    box-shadow: 0 0 0 9999px rgba(0,0,0,0.5);
+                    box-shadow: 0 0 0 9999px rgba(0,0,0,0.6);
                   ">
+                    <!-- Instrucción arriba -->
                     <div style="
                       position: absolute;
-                      top: -30px;
+                      top: -40px;
                       left: 50%;
                       transform: translateX(-50%);
                       background: #00ff00;
                       color: #000;
-                      padding: 5px 15px;
+                      padding: 8px 20px;
                       border-radius: 20px;
                       font-weight: bold;
-                      font-size: 14px;
+                      font-size: 15px;
                       white-space: nowrap;
+                      box-shadow: 0 2px 8px rgba(0,255,0,0.5);
                     ">
-                      📄 Alineá el DNI dentro del recuadro
+                      📄 Alineá el DNI horizontalmente
                     </div>
+
+                    <!-- Indicadores de esquinas -->
+                    <div style="position: absolute; top: -3px; left: -3px; width: 20px; height: 20px; border-top: 5px solid #00ff00; border-left: 5px solid #00ff00;"></div>
+                    <div style="position: absolute; top: -3px; right: -3px; width: 20px; height: 20px; border-top: 5px solid #00ff00; border-right: 5px solid #00ff00;"></div>
+                    <div style="position: absolute; bottom: -3px; left: -3px; width: 20px; height: 20px; border-bottom: 5px solid #00ff00; border-left: 5px solid #00ff00;"></div>
+                    <div style="position: absolute; bottom: -3px; right: -3px; width: 20px; height: 20px; border-bottom: 5px solid #00ff00; border-right: 5px solid #00ff00;"></div>
                   </div>
                 </div>
 
-                <!-- Botones de acción -->
-                <div class="mt-3 space-y-2">
+                <!-- Botones FUERA del contenedor de video -->
+                <div style="margin-top: 20px; position: relative; z-index: 100;">
                   <button
                     type="button"
                     id="btnCapturarDNI"
-                    class="w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700">
+                    class="w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700"
+                    style="padding: 15px; font-size: 18px; font-weight: bold; border-radius: 10px; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);">
                     📸 Capturar Foto
                   </button>
                   <button
                     type="button"
                     id="btnCancelarCamaraDNI"
-                    class="w-full px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-100">
+                    class="w-full mt-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-100"
+                    style="padding: 12px; font-size: 16px;">
                     ✕ Cancelar
                   </button>
                 </div>

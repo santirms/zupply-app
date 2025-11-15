@@ -980,38 +980,36 @@ router.get('/:envioId/firma', requireAuth, async (req, res) => {
  */
 router.get('/:id/foto-dni', requireAuth, async (req, res) => {
   try {
-    const { id } = req.params;
     const { key } = req.query;
 
     if (!key) {
       return res.status(400).json({ error: 'Key es requerido' });
     }
 
-    const envio = await Envio.findById(id);
+    const envio = await Envio.findById(req.params.id);
+
     if (!envio) {
       return res.status(404).json({ error: 'Envío no encontrado' });
     }
 
-    // Verificar permisos: si es cliente, solo puede ver sus propios envíos
-    const user = req.session?.user || req.user;
-    if (user?.role === 'cliente') {
-      const envioClienteId = envio.cliente_id?._id || envio.cliente_id;
-      const sameCliente = envioClienteId && user.cliente_id && envioClienteId.toString() === user.cliente_id.toString();
-      if (!sameCliente) {
-        return res.status(403).json({ error: 'No autorizado' });
-      }
+    // Verificar permisos
+    const userRole = req.user.role || req.user.rol;
+    if (userRole === 'cliente' && envio.cliente_id?.toString() !== req.user.cliente_id?.toString()) {
+      return res.status(403).json({ error: 'No autorizado' });
     }
 
-    // Verificar que la key es la foto DNI de este envío
-    if (envio.confirmacionEntrega?.fotoDNIS3Key !== key) {
-      return res.status(403).json({ error: 'Acceso no autorizado' });
-    }
+    // Generar URL firmada
+    const { GetObjectCommand } = require('@aws-sdk/client-s3');
+    const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
-    // Generar URL firmada (válida 1 hora)
-    const { obtenerUrlFirmada } = require('../utils/s3');
-    const urlFirmada = await obtenerUrlFirmada(key, 3600);
+    const command = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET,
+      Key: key
+    });
 
-    res.json({ url: urlFirmada });
+    const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+
+    res.json({ url });
 
   } catch (error) {
     console.error('Error obteniendo foto DNI:', error);
