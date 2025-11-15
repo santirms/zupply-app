@@ -1173,6 +1173,7 @@ function renderizarEvidencias(envio) {
   // SECCIÓN: FIRMA DIGITAL
   if (tieneFirma) {
     const confirmacion = envio.confirmacionEntrega;
+
     html += `
       <div>
         <div class="flex items-center gap-3 mb-5 pb-4 border-b-4 border-green-500">
@@ -1193,7 +1194,14 @@ function renderizarEvidencias(envio) {
               <div class="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">
                 👤 Receptor
               </div>
-              <div class="font-medium">${confirmacion.nombreReceptor}</div>
+              <div class="font-medium">${confirmacion.nombreReceptor || 'N/A'}</div>
+            </div>
+
+            <div>
+              <div class="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">
+                🆔 DNI
+              </div>
+              <div class="font-medium">${confirmacion.dniReceptor || 'N/A'}</div>
             </div>
 
             <div>
@@ -1206,13 +1214,6 @@ function renderizarEvidencias(envio) {
                   confirmacion.tipoReceptor === 'familiar' ? '👥 Familiar' :
                   confirmacion.tipoReceptor === 'otro' ? '📝 Otro' : confirmacion.tipoReceptor}
               </div>
-            </div>
-
-            <div>
-              <div class="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide mb-1">
-                🆔 DNI
-              </div>
-              <div class="font-medium">${confirmacion.dniReceptor}</div>
             </div>
 
             <div>
@@ -1237,35 +1238,25 @@ function renderizarEvidencias(envio) {
             </div>
           ` : ''}
 
-          ${envio.cobroEnDestino?.habilitado ? `
-            <div class="mb-4 p-3 bg-amber-100/50 dark:bg-amber-900/30 rounded-lg border border-amber-300 dark:border-amber-700">
-              <div class="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-2">
-                💵 Cobro en destino
-              </div>
-              <div class="font-medium text-lg">
-                $${envio.cobroEnDestino.monto?.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                - ${envio.cobroEnDestino.metodoPago === 'efectivo' ? '💵 Efectivo' : '💳 Transferencia'}
-              </div>
-              <div class="text-sm mt-1 ${envio.cobroEnDestino.cobrado ? 'text-green-600 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}">
-                ${envio.cobroEnDestino.cobrado ? '✓ Cobrado' : '⏳ Pendiente'}
-              </div>
-            </div>
-          ` : ''}
+          <!-- Botones para ver evidencias -->
+          <div class="space-y-2">
+            ${confirmacion.firmaS3Key ? `
+              <button onclick="handleVerFirmaDigital('${envio._id}', '${confirmacion.firmaS3Key}')"
+                      class="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all">
+                🖊️ Ver Firma Digital
+              </button>
+            ` : ''}
 
-          <button onclick="handleVerFirmaDigital('${envio._id}', '${confirmacion.firmaS3Key}')"
-                  class="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all">
-            🖊️ Ver Firma Digital del Receptor
-          </button>
-
-          ${confirmacion.fotoDNIS3Key ? `
-            <button onclick="handleVerFotoDNI('${envio._id}', '${confirmacion.fotoDNIS3Key}')"
-                    class="w-full mt-2 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all">
-              📄 Ver Foto del DNI
-            </button>
-          ` : ''}
+            ${confirmacion.fotoDNIS3Key ? `
+              <button onclick="handleVerFotoDNI('${envio._id}', '${confirmacion.fotoDNIS3Key}')"
+                      class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all">
+                📄 Ver Foto del DNI
+              </button>
+            ` : ''}
+          </div>
 
           <div class="mt-4 p-3 bg-white/60 dark:bg-white/5 rounded-lg text-center text-sm text-green-700 dark:text-green-400 italic">
-            ✓ Esta firma digital tiene validez como comprobante de entrega
+            ✓ Comprobante válido de entrega
           </div>
         </div>
       </div>
