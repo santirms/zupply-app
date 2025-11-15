@@ -775,13 +775,6 @@ router.post('/confirmar-entrega', requireAuth, upload.fields([
     let fotoDNIS3Key = null;
     if (req.files?.fotoDNI) {
       const dniFile = req.files.fotoDNI[0];
-      const AWS = require('aws-sdk');
-      const s3 = new AWS.S3({
-        accessKeyId: process.env.S3_ACCESS_KEY_ID,
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
-        region: process.env.S3_REGION || 'us-east-2'
-      });
-
       const dniKey = `dni/${envioId}_${Date.now()}.jpg`;
 
       await s3.upload({
