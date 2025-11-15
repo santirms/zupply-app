@@ -752,9 +752,9 @@ router.post('/confirmar-entrega', requireAuth, upload.fields([
       const firmaFile = req.files.firmaDigital[0];
       const AWS = require('aws-sdk');
       const s3 = new AWS.S3({
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        region: process.env.AWS_REGION || 'us-east-1'
+        accessKeyId: process.env.S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+        region: process.env.S3_REGION || 'us-east-2'
       });
 
       const firmaKey = `firmas/${envioId}_${Date.now()}.png`;
