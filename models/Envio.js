@@ -214,6 +214,7 @@ const envioSchema = new Schema({
     dniDestinatario: String,
     firmaS3Url: String,
     firmaS3Key: String,
+    fotoDNIS3Key: String,
     fechaEntrega: Date,
     horaEntrega: String,
     geolocalizacion: {
