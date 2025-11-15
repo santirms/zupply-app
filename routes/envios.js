@@ -759,13 +759,13 @@ router.post('/confirmar-entrega', requireAuth, upload.fields([
 
       const firmaKey = `firmas/${envioId}_${Date.now()}.png`;
       await s3.upload({
-        Bucket: process.env.AWS_S3_BUCKET,
+        Bucket: process.env.S3_BUCKET,
         Key: firmaKey,
         Body: firmaFile.buffer,
         ContentType: 'image/png'
       }).promise();
 
-      const firmaUrl = `https://${process.env.AWS_S3_BUCKET}.s3.amazonaws.com/${firmaKey}`;
+      const firmaUrl = `https://${process.env.S3_BUCKET}.s3.amazonaws.com/${firmaKey}`;
       confirmacion.firmaS3Url = firmaUrl;
       confirmacion.firmaS3Key = firmaKey;
       console.log('✓ Firma subida a S3:', firmaKey);
@@ -777,15 +777,15 @@ router.post('/confirmar-entrega', requireAuth, upload.fields([
       const dniFile = req.files.fotoDNI[0];
       const AWS = require('aws-sdk');
       const s3 = new AWS.S3({
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        region: process.env.AWS_REGION || 'us-east-1'
+        accessKeyId: process.env.S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+        region: process.env.S3_REGION || 'us-east-2'
       });
 
       const dniKey = `dni/${envioId}_${Date.now()}.jpg`;
 
       await s3.upload({
-        Bucket: process.env.AWS_S3_BUCKET,
+        Bucket: process.env.S3_BUCKET,
         Key: dniKey,
         Body: dniFile.buffer,
         ContentType: 'image/jpeg'
