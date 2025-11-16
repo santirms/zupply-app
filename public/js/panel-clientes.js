@@ -757,10 +757,7 @@ function obtenerEstadoActual(envio) {
     return '';
   }
 
-  if (envio.meli_id && envio.estado_meli?.status) {
-    return envio.estado_meli.status;
-  }
-
+  // SIEMPRE usar el estado de Zupply (ya está bien mapeado)
   return obtenerEstadoDesdeValor(envio.estado);
 }
 
