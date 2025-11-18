@@ -20,6 +20,7 @@
     "moment-timezone": "^0.6.0",
     "mongoose": "^7.6.1",
     "multer": "^2.0.1",
+    "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.15.0",
     "qrcode": "^1.5.0",
