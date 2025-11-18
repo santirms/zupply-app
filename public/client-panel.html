@@ -572,12 +572,16 @@
                     </div>
                   </div>
 
-                  <!-- ID de venta (opcional) -->
+                  <!-- ID de venta (solo lectura - autogenerado) -->
                   <div class="mb-3">
                     <label for="paq-id-venta" class="form-label">
-                      ID de venta (opcional)
+                      ID de venta
                     </label>
-                    <input type="text" class="form-control" id="paq-id-venta" placeholder="Si se omite, se autogenera">
+                    <input type="text" class="form-control" id="paq-id-venta" value="Autogenerado" readonly
+                           style="background-color: #f8f9fa; color: #6c757d; cursor: not-allowed;">
+                    <small class="form-text text-muted">
+                      El sistema generará automáticamente un ID único para este envío
+                    </small>
                   </div>
 
                   <!-- Tipo de Envío -->
