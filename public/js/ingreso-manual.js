@@ -599,80 +599,62 @@ function cerrarModalLista() {
   }
 }
 
-function imprimirTodasEtiquetas() {
+async function imprimirTodasEtiquetas() {
   const envios = Array.isArray(window.enviosParaImprimir) ? window.enviosParaImprimir : [];
   if (!envios.length) {
     alert('No hay envíos para imprimir');
     return;
   }
 
-  const etiquetasHTML = envios.map(envio => {
-    const tracking = envio.tracking || envio.id_venta || '';
-    const linkSeguimiento = tracking ? `https://app.zupply.tech/track/${tracking}` : '';
+  try {
+    // Mostrar indicador de carga
+    const loadingMsg = document.createElement('div');
+    loadingMsg.id = 'loading-etiquetas';
+    loadingMsg.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 9999;';
+    loadingMsg.textContent = `Generando ${envios.length} etiquetas...`;
+    document.body.appendChild(loadingMsg);
 
-    return `
-      <div class="etiqueta-page" style="page-break-after: always; width: 10cm; height: 15cm; padding: 1cm; border: 1px solid #ccc; margin-bottom: 1cm;">
-        <div style="text-align: center; font-family: Arial, sans-serif;">
-          <h2 style="margin: 0; font-size: 18px; font-weight: bold;">ZUPPLY</h2>
-          <p style="margin: 5px 0; font-size: 12px;">zupply.tech</p>
+    // Extraer IDs de los envíos
+    const envioIds = envios.map(e => e._id).filter(Boolean);
 
-          <div style="margin: 20px 0;">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${linkSeguimiento}"
-              alt="QR" style="width: 200px; height: 200px;">
-          </div>
+    if (!envioIds.length) {
+      throw new Error('No se encontraron IDs válidos de envíos');
+    }
 
-          <div style="text-align: left; margin-top: 20px;">
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Tracking:</strong> ${tracking}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Destinatario:</strong> ${envio.destinatario || ''}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Dirección:</strong> ${envio.direccion || ''}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>CP:</strong> ${envio.codigo_postal || ''} - ${envio.partido || ''}</p>
-            ${envio.telefono ? `<p style="margin: 5px 0; font-size: 14px;"><strong>Tel:</strong> ${envio.telefono}</p>` : ''}
-            ${envio.referencia ? `<p style="margin: 5px 0; font-size: 12px; color: #666;"><strong>Ref:</strong> ${envio.referencia}</p>` : ''}
-          </div>
+    // Llamar al endpoint de etiquetas en lote
+    const response = await fetch('/api/envios/etiquetas-lote', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ envioIds })
+    });
 
-          <div style="margin-top: 20px; padding-top: 10px; border-top: 1px solid #ccc;">
-            <p style="font-size: 10px; color: #666;">Seguimiento: ${linkSeguimiento}</p>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Error al generar etiquetas');
+    }
 
-  const ventanaImpresion = window.open('', '_blank');
-  if (!ventanaImpresion) {
-    alert('No se pudo abrir la ventana de impresión. Revisa el bloqueador de ventanas emergentes.');
-    return;
+    // Obtener el PDF como blob
+    const blob = await response.blob();
+
+    // Crear URL del blob y abrirlo en nueva pestaña
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+
+    // Limpiar la URL después de un tiempo
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+  } catch (error) {
+    console.error('Error imprimiendo etiquetas:', error);
+    alert(`Error al generar etiquetas: ${error.message}`);
+  } finally {
+    // Quitar indicador de carga
+    const loadingMsg = document.getElementById('loading-etiquetas');
+    if (loadingMsg) {
+      loadingMsg.remove();
+    }
   }
-
-  ventanaImpresion.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Etiquetas - Zupply</title>
-      <style>
-        @media print {
-          body { margin: 0; padding: 0; }
-          .etiqueta-page {
-            page-break-after: always;
-            margin: 0;
-          }
-        }
-        body {
-          font-family: Arial, sans-serif;
-        }
-      </style>
-    </head>
-    <body>
-      ${etiquetasHTML}
-      <script>
-        window.onload = function() {
-          window.print();
-        }
-      </script>
-    </body>
-    </html>
-  `);
-  ventanaImpresion.document.close();
 }
 
 function imprimirEtiquetaIndividual(envioId) {

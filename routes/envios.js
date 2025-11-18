@@ -12,6 +12,7 @@ const { generarEtiquetaInformativa } = require('../utils/labelService');
 const { ensureMeliHistory: ensureMeliHistorySrv, formatSubstatus } = require('../services/meliHistory');
 const logger = require('../utils/logger');
 const { getFechaArgentina, getHoraArgentina, getFechaHoraArgentina } = require('../utils/timezone');
+const { PDFDocument } = require('pdf-lib');
 
 // Configuración de AWS SDK v3 para S3
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
@@ -644,6 +645,105 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
 // Mantener:
 router.get('/tracking/:tracking', getEnvioByTracking);
 router.get('/tracking/:tracking/label', labelByTracking);
+
+// ========= GENERAR ETIQUETAS EN LOTE (PDF COMBINADO) =========
+/**
+ * POST /api/envios/etiquetas-lote
+ * Genera UN SOLO PDF con todas las etiquetas de los envíos solicitados
+ */
+router.post('/etiquetas-lote', requireAuth, async (req, res) => {
+  try {
+    const { envioIds } = req.body;
+
+    // Validaciones
+    if (!Array.isArray(envioIds) || envioIds.length === 0) {
+      return res.status(400).json({ error: 'Debe proporcionar al menos un ID de envío' });
+    }
+
+    if (envioIds.length > 100) {
+      return res.status(400).json({ error: 'No se pueden generar más de 100 etiquetas a la vez' });
+    }
+
+    console.log(`Generando etiquetas para ${envioIds.length} envíos...`);
+
+    // Crear PDF combinado
+    const pdfCombinado = await PDFDocument.create();
+
+    let procesados = 0;
+    let errores = 0;
+
+    for (const envioId of envioIds) {
+      try {
+        let envio;
+
+        // Intentar buscar por _id de MongoDB primero
+        if (mongoose.Types.ObjectId.isValid(envioId)) {
+          envio = await Envio.findById(envioId).populate('cliente_id');
+        }
+
+        // Si no se encontró, buscar por tracking/id_venta
+        if (!envio) {
+          envio = await Envio.findOne({
+            $or: [
+              { id_venta: envioId },
+              { tracking: envioId },
+              { meli_id: envioId }
+            ]
+          }).populate('cliente_id');
+        }
+
+        if (!envio) {
+          console.warn(`Envío ${envioId} no encontrado, saltando...`);
+          errores++;
+          continue;
+        }
+
+        // Generar PDF individual usando la función existente
+        const pdfIndividual = await generarEtiquetaInformativa(envio.toObject(), envio.cliente_id);
+
+        // Cargar el PDF individual
+        const pdfDoc = await PDFDocument.load(pdfIndividual);
+
+        // Copiar todas las páginas del PDF individual al PDF combinado
+        const paginas = await pdfCombinado.copyPages(pdfDoc, pdfDoc.getPageIndices());
+
+        // Agregar cada página al PDF combinado
+        paginas.forEach(pagina => pdfCombinado.addPage(pagina));
+
+        procesados++;
+        console.log(`✓ Etiqueta ${procesados}/${envioIds.length} agregada (${envio.id_venta})`);
+
+      } catch (err) {
+        console.error(`Error procesando envío ${envioId}:`, err.message);
+        errores++;
+      }
+    }
+
+    if (procesados === 0) {
+      return res.status(404).json({
+        error: 'No se pudo generar ninguna etiqueta',
+        detalles: `${errores} errores encontrados`
+      });
+    }
+
+    // Guardar el PDF combinado
+    const pdfBytes = await pdfCombinado.save();
+
+    console.log(`✓ PDF combinado generado: ${procesados} etiquetas, ${errores} errores`);
+
+    // Enviar PDF combinado
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="etiquetas_${Date.now()}.pdf"`);
+    res.send(Buffer.from(pdfBytes));
+
+  } catch (err) {
+    console.error('Error generando etiquetas en lote:', err);
+    res.status(500).json({
+      error: 'Error generando etiquetas',
+      mensaje: err.message
+    });
+  }
+});
 
 // ========= CONFIRMACIÓN DE ENTREGA CON FIRMA =========
 /**

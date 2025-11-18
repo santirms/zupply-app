@@ -1556,12 +1556,54 @@ function imprimirEtiqueta(idVenta) {
   window.open(`/api/envios/tracking/${idVenta}/label`, '_blank');
 }
 
-function imprimirTodasLasEtiquetas() {
-  enviosCreados.forEach((id, index) => {
-    setTimeout(() => {
-      window.open(`/api/envios/tracking/${id}/label`, '_blank');
-    }, index * 300);  // Espaciado de 300ms entre cada ventana
-  });
+async function imprimirTodasLasEtiquetas() {
+  if (!enviosCreados || enviosCreados.length === 0) {
+    alert('No hay etiquetas para imprimir');
+    return;
+  }
+
+  try {
+    // Mostrar indicador de carga
+    const loadingMsg = document.createElement('div');
+    loadingMsg.id = 'loading-etiquetas-panel';
+    loadingMsg.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 9999;';
+    loadingMsg.textContent = `Generando ${enviosCreados.length} etiquetas...`;
+    document.body.appendChild(loadingMsg);
+
+    // Llamar al endpoint de etiquetas en lote
+    const response = await fetch('/api/envios/etiquetas-lote', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ envioIds: enviosCreados })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Error al generar etiquetas');
+    }
+
+    // Obtener el PDF como blob
+    const blob = await response.blob();
+
+    // Crear URL del blob y abrirlo en nueva pestaña
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+
+    // Limpiar la URL después de un tiempo
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+  } catch (error) {
+    console.error('Error imprimiendo etiquetas:', error);
+    alert(`Error al generar etiquetas: ${error.message}`);
+  } finally {
+    // Quitar indicador de carga
+    const loadingMsg = document.getElementById('loading-etiquetas-panel');
+    if (loadingMsg) {
+      loadingMsg.remove();
+    }
+  }
 }
 
 function crearOtroEnvio() {
