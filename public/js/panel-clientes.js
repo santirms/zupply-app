@@ -273,7 +273,7 @@ function agregarPaquete() {
     direccion: document.getElementById('paq-direccion')?.value.trim() || '',
     codigo_postal: document.getElementById('paq-cp')?.value.trim() || '',
     partido: document.getElementById('paq-partido')?.value.trim() || '',
-    id_venta: document.getElementById('paq-id-venta')?.value.trim() || null,
+    id_venta: null, // El backend lo autogenera - campo readonly en el formulario
     tipo: document.getElementById('paq-tipo-envio')?.value || 'envio',
     cobroEnDestino: {
       habilitado: cobroEnDestino,
