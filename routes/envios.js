@@ -876,33 +876,63 @@ router.get('/etiquetas-zpl', requireAuth, async (req, res) => {
 
 // Función auxiliar: generar código ZPL para una etiqueta
 function generarEtiquetaZPL(envio) {
-  // Extraer datos del envío
   const tracking = envio.tracking || envio.id_venta || '';
-  const destinatario = (envio.destinatario || 'S/N').substring(0, 30);
-  const direccion = (envio.direccion || '').substring(0, 40);
-  const partido = (envio.partido || envio.destino?.partido || '').substring(0, 25);
+  const destinatario = (envio.destinatario || 'S/N').substring(0, 35);
+  const direccion = (envio.direccion || '').substring(0, 45);
+  const direccion2 = (envio.direccion || '').length > 45
+    ? envio.direccion.substring(45, 90)
+    : '';
+  const partido = (envio.partido || envio.destino?.partido || '').substring(0, 30);
   const cp = envio.codigo_postal || envio.destino?.cp || '';
   const telefono = envio.telefono || '';
+  const referencia = (envio.referencia || '').substring(0, 40);
+  const sender = envio.sender_id || '';
 
-  // Generar código ZPL
-  // Formato: etiqueta 10x15cm (800x1200 dots para 203dpi)
+  // ZPL para etiqueta 10x15cm (4x6 pulgadas = 800x1200 dots a 200dpi)
   return `^XA
 ^CI28
 ^PW800
 ^LL1200
 
-^FO30,30^A0N,35,35^FD${destinatario}^FS
-^FO30,75^A0N,28,28^FD${direccion}^FS
-^FO30,110^A0N,28,28^FD${partido} - CP: ${cp}^FS
-^FO30,145^A0N,25,25^FDTel: ${telefono}^FS
+^FX === HEADER CON LOGO/NOMBRE ===
+^FO30,30^A0N,40,40^FDZUPPLY^FS
+^FO550,30^A0N,25,25^FD${sender}^FS
 
-^FO30,200^GB740,3,3^FS
+^FO30,80^GB740,3,3^FS
 
-^FO200,250^BY3
-^BCN,120,Y,N,N
+^FX === DATOS DESTINATARIO ===
+^FO30,100^A0N,30,30^FDDestinatario:^FS
+^FO30,135^A0N,35,35^FD${destinatario}^FS
+
+^FO30,185^A0N,25,25^FD${direccion}^FS
+${direccion2 ? `^FO30,215^A0N,25,25^FD${direccion2}^FS` : ''}
+
+^FO30,250^A0N,28,28^FD${partido}^FS
+^FO400,250^A0N,28,28^FDCP: ${cp}^FS
+
+^FO30,290^A0N,22,22^FDTel: ${telefono}^FS
+
+${referencia ? `^FO30,320^A0N,20,20^FDRef: ${referencia}^FS` : ''}
+
+^FO30,360^GB740,3,3^FS
+
+^FX === QR CODE ===
+^FO50,400
+^BQN,2,6
+^FDQA,${tracking}^FS
+
+^FX === CODIGO DE BARRAS ===
+^FO280,400^BY2
+^BCN,100,Y,N,N
 ^FD${tracking}^FS
 
-^FO30,420^A0N,30,30^FDTracking: ${tracking}^FS
+^FX === TRACKING GRANDE ===
+^FO30,550^A0N,45,45^FD${tracking}^FS
+
+^FO30,610^GB740,3,3^FS
+
+^FX === FOOTER ===
+^FO30,630^A0N,20,20^FDwww.zupply.tech^FS
 
 ^XZ
 `;
