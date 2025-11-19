@@ -88,15 +88,34 @@
     return envio.id_venta || 'Sin ID';
   }
 
+  /**
+   * Genera URL de Google Maps para navegación
+   * Prioridad: destino.loc (GeoJSON) > latitud/longitud > dirección como texto
+   */
+  function getUrlComoLlegar(envio) {
+    // Prioridad 1: Coordenadas en destino.loc (GeoJSON)
+    if (envio.destino?.loc?.coordinates) {
+      const [lng, lat] = envio.destino.loc.coordinates;
+      return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+    }
+
+    // Prioridad 2: Coordenadas sueltas
+    if (envio.latitud && envio.longitud) {
+      return `https://www.google.com/maps/dir/?api=1&destination=${envio.latitud},${envio.longitud}`;
+    }
+
+    // Prioridad 3: Fallback con dirección como texto
+    const direccion = `${envio.direccion}, ${envio.partido}, Buenos Aires, Argentina`;
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(direccion)}`;
+  }
+
   function renderizarEnvio(envio) {
     const idVenta = obtenerIdVenta(envio);
     const idVentaAttr = escapeHtml(idVenta);
     const estado = formatEstado(envio.estado);
-    const direccionBase = envio.piso_dpto
-      ? `${envio.direccion} - ${envio.piso_dpto}`
-      : envio.direccion;
-    const direccionPartes = [direccionBase, envio.partido].filter(Boolean);
-    const direccion = direccionPartes.length ? direccionPartes.join(', ') : direccionBase || '';
+    const direccion = envio.direccion || '';
+    const pisoDpto = envio.piso_dpto || '';
+    const partido = envio.partido || '';
     const codigoPostal = envio.codigo_postal || envio.cp || '';
     const fecha = formatFecha(envio.fecha || envio.createdAt || envio.created_at);
     const notas = envio.referencia ? `<p class="text-sm text-slate-500"><span class="font-medium">Referencia:</span> ${escapeHtml(envio.referencia)}</p>` : '';
@@ -146,9 +165,26 @@
             <p class="text-base font-medium text-slate-700">${escapeHtml(estado)}</p>
           </div>
         </header>
+
+        <!-- BOTÓN CÓMO LLEGAR -->
+        <a
+          href="${getUrlComoLlegar(envio)}"
+          target="_blank"
+          class="mt-3 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          Cómo llegar
+        </a>
+
         <div class="mt-3 space-y-1 text-sm text-slate-600">
           <p><span class="font-medium text-slate-700">Destinatario:</span> ${escapeHtml(envio.destinatario || '')}</p>
-          <p><span class="font-medium text-slate-700">Dirección:</span> ${escapeHtml(direccion)} ${codigoPostal ? `<span class="text-slate-500">(CP ${escapeHtml(codigoPostal)})</span>` : ''}</p>
+          <p><span class="font-medium text-slate-700">Dirección:</span> ${escapeHtml(direccion)}</p>
+          ${pisoDpto ? `<p class="text-slate-500 ml-4">${escapeHtml(pisoDpto)}</p>` : ''}
+          <p><span class="font-medium text-slate-700">Localidad:</span> ${escapeHtml(partido)} ${codigoPostal ? `<span class="text-slate-500">(CP ${escapeHtml(codigoPostal)})</span>` : ''}</p>
           ${fecha ? `<p><span class="font-medium text-slate-700">Creado:</span> ${escapeHtml(fecha)}</p>` : ''}
           ${telefono}
           ${notas}
