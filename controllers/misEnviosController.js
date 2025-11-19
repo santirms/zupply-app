@@ -226,32 +226,28 @@ exports.getEnviosActivos = async (req, res) => {
     });
     
     if (!choferId) {
-      return res.status(400).json({ 
-        error: 'No se pudo identificar al chofer' 
+      return res.status(400).json({
+        error: 'No se pudo identificar al chofer'
       });
     }
-    
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    
+
     // Query con campos REALES del modelo
-const query = {
-  // Compatibilidad con múltiples campos de chofer
-  $or: [
-    { chofer: choferId },
-    { chofer_id: choferId },
-    { driver_id: choferId }
-  ],
-  fecha: { $gte: hoy },
-  meli_id: { $in: [null, ''] },
-  estado: { 
-    $nin: ['entregado', 'cancelado', 'devolucion'] 
-  }
-};
-    
-    logger.debug('[Mis Envios] Query', { 
-      chofer: choferId, 
-      fecha_desde: hoy 
+    // SIN filtro de fecha - mostrar todos los pendientes asignados
+    const query = {
+      // Compatibilidad con múltiples campos de chofer
+      $or: [
+        { chofer: choferId },
+        { chofer_id: choferId },
+        { driver_id: choferId }
+      ],
+      meli_id: { $in: [null, ''] },
+      estado: {
+        $nin: ['entregado', 'cancelado', 'devolucion']
+      }
+    };
+
+    logger.debug('[Mis Envios] Query', {
+      chofer: choferId
     });
     
     const envios = await Envio.find(query)
