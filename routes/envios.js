@@ -650,10 +650,11 @@ router.get('/tracking/:tracking/label', labelByTracking);
 /**
  * POST /api/envios/etiquetas-lote
  * Genera UN SOLO PDF con todas las etiquetas de los envíos solicitados
+ * Formatos soportados: termica (10x15cm, 1 por página), a4 (4 por hoja)
  */
 router.post('/etiquetas-lote', requireAuth, async (req, res) => {
   try {
-    const { envioIds } = req.body;
+    const { envioIds, formato = 'termica' } = req.body;
 
     // Validaciones
     if (!Array.isArray(envioIds) || envioIds.length === 0) {
@@ -664,76 +665,56 @@ router.post('/etiquetas-lote', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'No se pueden generar más de 100 etiquetas a la vez' });
     }
 
-    console.log(`Generando etiquetas para ${envioIds.length} envíos...`);
+    console.log(`Generando etiquetas formato ${formato} para ${envioIds.length} envíos...`);
 
-    // Crear PDF combinado
-    const pdfCombinado = await PDFDocument.create();
-
-    let procesados = 0;
-    let errores = 0;
-
+    // Buscar todos los envíos
+    const enviosValidos = [];
     for (const envioId of envioIds) {
-      try {
-        let envio;
+      let envio;
 
-        // Intentar buscar por _id de MongoDB primero
-        if (mongoose.Types.ObjectId.isValid(envioId)) {
-          envio = await Envio.findById(envioId).populate('cliente_id');
-        }
+      // Intentar buscar por _id de MongoDB primero
+      if (mongoose.Types.ObjectId.isValid(envioId)) {
+        envio = await Envio.findById(envioId).populate('cliente_id');
+      }
 
-        // Si no se encontró, buscar por tracking/id_venta
-        if (!envio) {
-          envio = await Envio.findOne({
-            $or: [
-              { id_venta: envioId },
-              { tracking: envioId },
-              { meli_id: envioId }
-            ]
-          }).populate('cliente_id');
-        }
+      // Si no se encontró, buscar por tracking/id_venta
+      if (!envio) {
+        envio = await Envio.findOne({
+          $or: [
+            { id_venta: envioId },
+            { tracking: envioId },
+            { meli_id: envioId }
+          ]
+        }).populate('cliente_id');
+      }
 
-        if (!envio) {
-          console.warn(`Envío ${envioId} no encontrado, saltando...`);
-          errores++;
-          continue;
-        }
-
-        // Generar PDF individual usando la función existente
-        const pdfIndividual = await generarEtiquetaInformativa(envio.toObject(), envio.cliente_id);
-
-        // Cargar el PDF individual
-        const pdfDoc = await PDFDocument.load(pdfIndividual);
-
-        // Copiar todas las páginas del PDF individual al PDF combinado
-        const paginas = await pdfCombinado.copyPages(pdfDoc, pdfDoc.getPageIndices());
-
-        // Agregar cada página al PDF combinado
-        paginas.forEach(pagina => pdfCombinado.addPage(pagina));
-
-        procesados++;
-        console.log(`✓ Etiqueta ${procesados}/${envioIds.length} agregada (${envio.id_venta})`);
-
-      } catch (err) {
-        console.error(`Error procesando envío ${envioId}:`, err.message);
-        errores++;
+      if (envio) {
+        enviosValidos.push(envio);
+      } else {
+        console.warn(`Envío ${envioId} no encontrado, saltando...`);
       }
     }
 
-    if (procesados === 0) {
+    if (enviosValidos.length === 0) {
       return res.status(404).json({
-        error: 'No se pudo generar ninguna etiqueta',
-        detalles: `${errores} errores encontrados`
+        error: 'No se encontraron envíos válidos'
       });
     }
 
-    // Guardar el PDF combinado
-    const pdfBytes = await pdfCombinado.save();
+    // Generar PDF según formato
+    let pdfBytes;
+    if (formato === 'a4') {
+      pdfBytes = await generarEtiquetasA4(enviosValidos);
+    } else {
+      // Formato térmico (default)
+      pdfBytes = await generarEtiquetasTermicas(enviosValidos);
+    }
 
-    console.log(`✓ PDF combinado generado: ${procesados} etiquetas, ${errores} errores`);
+    console.log(`✓ PDF ${formato} generado: ${enviosValidos.length} etiquetas`);
 
-    // Enviar PDF combinado
+    // Enviar PDF
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="etiquetas_${Date.now()}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="etiquetas_${formato}_${Date.now()}.pdf"`);
     res.send(Buffer.from(pdfBytes));
 
   } catch (err) {
@@ -744,6 +725,188 @@ router.post('/etiquetas-lote', requireAuth, async (req, res) => {
     });
   }
 });
+
+// Función auxiliar: generar PDF térmico (1 etiqueta por página, 10x15cm)
+async function generarEtiquetasTermicas(envios) {
+  const pdfCombinado = await PDFDocument.create();
+
+  for (const envio of envios) {
+    try {
+      // Generar PDF individual
+      const pdfIndividual = await generarEtiquetaInformativa(envio.toObject(), envio.cliente_id);
+
+      // Cargar y copiar páginas
+      const pdfDoc = await PDFDocument.load(pdfIndividual);
+      const paginas = await pdfCombinado.copyPages(pdfDoc, pdfDoc.getPageIndices());
+      paginas.forEach(pagina => pdfCombinado.addPage(pagina));
+    } catch (err) {
+      console.error(`Error procesando envío ${envio.id_venta}:`, err.message);
+    }
+  }
+
+  return await pdfCombinado.save();
+}
+
+// Función auxiliar: generar PDF A4 (4 etiquetas por hoja, 2x2)
+async function generarEtiquetasA4(envios) {
+  const pdfDoc = await PDFDocument.create();
+
+  // A4 en puntos (72 puntos = 1 pulgada): 595 x 842
+  const A4_WIDTH = 595;
+  const A4_HEIGHT = 842;
+  const MARGIN = 20;
+
+  // 4 etiquetas por página (2 columnas x 2 filas)
+  const COLS = 2;
+  const ROWS = 2;
+  const ETIQUETA_WIDTH = (A4_WIDTH - MARGIN * 3) / COLS;
+  const ETIQUETA_HEIGHT = (A4_HEIGHT - MARGIN * 3) / ROWS;
+
+  let paginaActual = null;
+  let posicion = 0;
+
+  for (let i = 0; i < envios.length; i++) {
+    const envio = envios[i];
+
+    try {
+      // Crear nueva página cada 4 etiquetas
+      if (posicion % 4 === 0) {
+        paginaActual = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
+        posicion = 0;
+      }
+
+      // Calcular posición en la página (origen abajo-izquierda)
+      const col = posicion % COLS;
+      const row = Math.floor(posicion / COLS);
+      const x = MARGIN + col * (ETIQUETA_WIDTH + MARGIN);
+      const y = A4_HEIGHT - MARGIN - (row + 1) * (ETIQUETA_HEIGHT + MARGIN) + MARGIN;
+
+      // Generar etiqueta individual como PDF
+      const etiquetaPdfBytes = await generarEtiquetaInformativa(envio.toObject(), envio.cliente_id);
+      const etiquetaDoc = await PDFDocument.load(etiquetaPdfBytes);
+
+      // Obtener la primera página de la etiqueta
+      const [etiquetaPagina] = await pdfDoc.embedPages([etiquetaDoc.getPages()[0]]);
+
+      // Dibujar la etiqueta escalada en la posición
+      paginaActual.drawPage(etiquetaPagina, {
+        x,
+        y,
+        width: ETIQUETA_WIDTH,
+        height: ETIQUETA_HEIGHT
+      });
+
+      posicion++;
+    } catch (err) {
+      console.error(`Error procesando envío ${envio.id_venta}:`, err.message);
+    }
+  }
+
+  return await pdfDoc.save();
+}
+
+// ========= GENERAR ETIQUETAS ZPL (ZEBRA) =========
+/**
+ * GET /api/envios/etiquetas-zpl
+ * Genera archivo ZPL para impresoras Zebra
+ */
+router.get('/etiquetas-zpl', requireAuth, async (req, res) => {
+  try {
+    const { ids } = req.query;
+
+    if (!ids) {
+      return res.status(400).json({ error: 'Parámetro ids es requerido' });
+    }
+
+    const envioIds = ids.split(',').filter(Boolean);
+
+    if (envioIds.length === 0) {
+      return res.status(400).json({ error: 'No se especificaron envíos' });
+    }
+
+    console.log(`Generando ZPL para ${envioIds.length} envíos...`);
+
+    let zplCompleto = '';
+
+    for (const envioId of envioIds) {
+      let envio;
+
+      // Intentar buscar por _id de MongoDB primero
+      if (mongoose.Types.ObjectId.isValid(envioId)) {
+        envio = await Envio.findById(envioId);
+      }
+
+      // Si no se encontró, buscar por tracking/id_venta
+      if (!envio) {
+        envio = await Envio.findOne({
+          $or: [
+            { id_venta: envioId },
+            { tracking: envioId },
+            { meli_id: envioId }
+          ]
+        });
+      }
+
+      if (envio) {
+        zplCompleto += generarEtiquetaZPL(envio);
+      } else {
+        console.warn(`Envío ${envioId} no encontrado, saltando...`);
+      }
+    }
+
+    if (!zplCompleto) {
+      return res.status(404).json({ error: 'No se encontraron envíos válidos' });
+    }
+
+    console.log(`✓ ZPL generado para ${envioIds.length} envíos`);
+
+    // Enviar como archivo de texto plano para descargar
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', `attachment; filename="etiquetas_${Date.now()}.zpl"`);
+    res.send(zplCompleto);
+
+  } catch (err) {
+    console.error('Error generando ZPL:', err);
+    res.status(500).json({
+      error: 'Error generando archivo ZPL',
+      mensaje: err.message
+    });
+  }
+});
+
+// Función auxiliar: generar código ZPL para una etiqueta
+function generarEtiquetaZPL(envio) {
+  // Extraer datos del envío
+  const tracking = envio.tracking || envio.id_venta || '';
+  const destinatario = (envio.destinatario || 'S/N').substring(0, 30);
+  const direccion = (envio.direccion || '').substring(0, 40);
+  const partido = (envio.partido || envio.destino?.partido || '').substring(0, 25);
+  const cp = envio.codigo_postal || envio.destino?.cp || '';
+  const telefono = envio.telefono || '';
+
+  // Generar código ZPL
+  // Formato: etiqueta 10x15cm (800x1200 dots para 203dpi)
+  return `^XA
+^CI28
+^PW800
+^LL1200
+
+^FO30,30^A0N,35,35^FD${destinatario}^FS
+^FO30,75^A0N,28,28^FD${direccion}^FS
+^FO30,110^A0N,28,28^FD${partido} - CP: ${cp}^FS
+^FO30,145^A0N,25,25^FDTel: ${telefono}^FS
+
+^FO30,200^GB740,3,3^FS
+
+^FO200,250^BY3
+^BCN,120,Y,N,N
+^FD${tracking}^FS
+
+^FO30,420^A0N,30,30^FDTracking: ${tracking}^FS
+
+^XZ
+`;
+}
 
 // ========= CONFIRMACIÓN DE ENTREGA CON FIRMA =========
 /**

@@ -1536,16 +1536,17 @@ function mostrarModalExito(result) {
     `;
   }
 
-  // Configurar botón de imprimir
+  // Configurar botón de imprimir para abrir modal de opciones
   const btnImprimir = document.getElementById('btn-imprimir-etiquetas');
 
   if (enviosCreados.length === 1) {
     btnImprimir.textContent = 'Imprimir Etiqueta';
-    btnImprimir.onclick = () => imprimirEtiqueta(enviosCreados[0]);
   } else {
     btnImprimir.textContent = `Imprimir ${enviosCreados.length} Etiquetas`;
-    btnImprimir.onclick = imprimirTodasLasEtiquetas;
   }
+
+  // Siempre abrir el modal de opciones
+  btnImprimir.onclick = abrirModalOpcionesImpresion;
 
   const modal = new bootstrap.Modal(document.getElementById('modalEnvioCreado'));
   modal.show();
@@ -1556,7 +1557,45 @@ function imprimirEtiqueta(idVenta) {
   window.open(`/api/envios/tracking/${idVenta}/label`, '_blank');
 }
 
-async function imprimirTodasLasEtiquetas() {
+// Abrir modal de opciones de impresión
+function abrirModalOpcionesImpresion() {
+  const modal = document.getElementById('modalOpcionesImpresion');
+  if (modal) {
+    modal.classList.remove('hidden');
+  }
+}
+
+// Cerrar modal de opciones de impresión
+function cerrarModalOpciones() {
+  const modal = document.getElementById('modalOpcionesImpresion');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+// Confirmar impresión con formato seleccionado
+function confirmarImpresion() {
+  const formato = document.getElementById('formatoEtiquetas')?.value || 'termica';
+
+  if (!enviosCreados || enviosCreados.length === 0) {
+    alert('No hay etiquetas para imprimir');
+    cerrarModalOpciones();
+    return;
+  }
+
+  if (formato === 'zpl') {
+    // Descargar archivo ZPL
+    const ids = enviosCreados.join(',');
+    window.location.href = `/api/envios/etiquetas-zpl?ids=${ids}`;
+  } else {
+    // Generar PDF (térmica o A4)
+    imprimirTodasLasEtiquetas(formato);
+  }
+
+  cerrarModalOpciones();
+}
+
+async function imprimirTodasLasEtiquetas(formato = 'termica') {
   if (!enviosCreados || enviosCreados.length === 0) {
     alert('No hay etiquetas para imprimir');
     return;
@@ -1570,13 +1609,16 @@ async function imprimirTodasLasEtiquetas() {
     loadingMsg.textContent = `Generando ${enviosCreados.length} etiquetas...`;
     document.body.appendChild(loadingMsg);
 
-    // Llamar al endpoint de etiquetas en lote
+    // Llamar al endpoint de etiquetas en lote con formato
     const response = await fetch('/api/envios/etiquetas-lote', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ envioIds: enviosCreados })
+      body: JSON.stringify({
+        envioIds: enviosCreados,
+        formato: formato
+      })
     });
 
     if (!response.ok) {
