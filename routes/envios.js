@@ -884,6 +884,7 @@ function generarEtiquetaZPL(envio) {
   const cp = envio.codigo_postal || 'N/A';
   const telefono = envio.telefono || '';
   const contenido = (envio.contenido || '').substring(0, 40);
+  const referencia = (envio.referencia || '').substring(0, 40);
   const sender = envio.sender_id || 'Cliente';
   const fecha = new Date().toLocaleDateString('es-AR');
 
@@ -939,9 +940,11 @@ ${piso_dpto ? `^FO30,390^A0N,20,20^FD${piso_dpto}^FS` : ''}
 
 ${telefono ? `^FO30,${piso_dpto ? '455' : '430'}^A0N,22,22^FDCel: ${telefono}^FS` : ''}
 
+${referencia ? `^FO30,${piso_dpto ? '490' : '465'}^A0N,20,20^FDRef: ${referencia}^FS` : ''}
+
 ${contenido ? `
-^FO30,${piso_dpto ? '490' : '465'}^A0N,20,20^FDCONTENIDO:^FS
-^FO30,${piso_dpto ? '515' : '490'}^A0N,22,22^FD${contenido}^FS
+^FO30,${piso_dpto ? '525' : '500'}^A0N,20,20^FDCONTENIDO:^FS
+^FO30,${piso_dpto ? '550' : '525'}^A0N,22,22^FD${contenido}^FS
 ` : ''}
 
 `;

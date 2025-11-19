@@ -159,6 +159,19 @@ async function generarEtiquetaInformativa(envio, cliente) {
     doc.text(`Cel: ${envio.telefono}`, 20, y);
   }
 
+  // Referencia (contenido del paquete, instrucciones, etc)
+  if (envio.referencia) {
+    y += 15;
+    doc.fontSize(8)
+       .font('Helvetica-Bold')
+       .text('Ref: ', 20, y);
+
+    // Texto de referencia (puede ser largo, usar wrap)
+    const refText = String(envio.referencia).substring(0, 80);
+    doc.font('Helvetica')
+       .text(refText, 42, y, { width: 200 });
+  }
+
   // Contenido (si existe)
   if (envio.contenido) {
     y += 20;
