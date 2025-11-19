@@ -605,7 +605,7 @@ async function recargarEditor() {
       <div class="flex items-start gap-3 flex-wrap">
         <div class="flex-1 min-w-[280px]">
           <h3 class="text-lg font-bold mb-1">Editar remito</h3>
-          <div class="text-sm opacity-70">ID: ${det._id} — ${new Date(det.fecha).toLocaleString()}</div>
+          <div class="text-sm opacity-70">ID: ${det._id}</div>
           <div class="text-sm opacity-70 mb-2">Chofer: ${det.chofer?.nombre || '-'}</div>
           <div class="flex items-center gap-2 mb-3">
             ${det.remito_url ? `<a class="px-3 py-1.5 rounded bg-slate-700 text-white" href="${det.remito_url}" target="_blank" rel="noopener">Ver PDF</a>` : ''}
