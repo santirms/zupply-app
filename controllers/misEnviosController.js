@@ -257,7 +257,7 @@ const query = {
     const envios = await Envio.find(query)
       .populate('cliente_id', 'nombre razon_social telefono')
       .populate('chofer', 'nombre email')
-      .select('id_venta destinatario direccion partido codigo_postal cp estado fecha referencia precio telefono requiereFirma cobroEnDestino _id')
+      .select('id_venta destinatario direccion piso_dpto partido codigo_postal cp estado fecha referencia precio telefono requiereFirma cobroEnDestino latitud longitud destino _id')
       .sort({ fecha: -1 })
       .lean();
 

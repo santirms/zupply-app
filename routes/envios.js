@@ -879,6 +879,7 @@ function generarEtiquetaZPL(envio) {
   const tracking = envio.tracking || envio.id_venta || envio.meli_id || '';
   const destinatario = (envio.destinatario || 'N/A').substring(0, 35);
   const direccion = (envio.direccion || 'N/A').substring(0, 45);
+  const piso_dpto = (envio.piso_dpto || '').substring(0, 35);
   const partido = (envio.partido || 'N/A').substring(0, 25);
   const cp = envio.codigo_postal || 'N/A';
   const telefono = envio.telefono || '';
@@ -932,13 +933,15 @@ function generarEtiquetaZPL(envio) {
 
 ^FO30,360^A0N,24,24^FD${direccion}^FS
 
-^FO30,395^A0N,24,24^FD${partido} (CP ${cp})^FS
+${piso_dpto ? `^FO30,390^A0N,20,20^FD${piso_dpto}^FS` : ''}
 
-${telefono ? `^FO30,430^A0N,22,22^FDCel: ${telefono}^FS` : ''}
+^FO30,${piso_dpto ? '420' : '395'}^A0N,24,24^FD${partido} (CP ${cp})^FS
+
+${telefono ? `^FO30,${piso_dpto ? '455' : '430'}^A0N,22,22^FDCel: ${telefono}^FS` : ''}
 
 ${contenido ? `
-^FO30,465^A0N,20,20^FDCONTENIDO:^FS
-^FO30,490^A0N,22,22^FD${contenido}^FS
+^FO30,${piso_dpto ? '490' : '465'}^A0N,20,20^FDCONTENIDO:^FS
+^FO30,${piso_dpto ? '515' : '490'}^A0N,22,22^FD${contenido}^FS
 ` : ''}
 
 `;
@@ -946,21 +949,24 @@ ${contenido ? `
   // Cobro en destino
   if (envio.cobroEnDestino?.habilitado && envio.cobroEnDestino?.monto) {
     const monto = envio.cobroEnDestino.monto.toLocaleString('es-AR');
+    const yBase = piso_dpto ? 555 : 530;
     zpl += `
-^FO30,530^A0N,32,32^FDCOBRA: $${monto}^FS
+^FO30,${yBase}^A0N,32,32^FDCOBRA: $${monto}^FS
 `;
   }
 
   // Badge especial para CAMBIO o RETIRO
   if (envio.tipo === 'cambio') {
+    const yBase = piso_dpto ? 605 : 580;
     zpl += `
-^FO30,580^GB752,60,3^FS
-^FO50,595^A0N,30,30^FD!! CAMBIO - Retirar producto !!^FS
+^FO30,${yBase}^GB752,60,3^FS
+^FO50,${yBase + 15}^A0N,30,30^FD!! CAMBIO - Retirar producto !!^FS
 `;
   } else if (envio.tipo === 'retiro') {
+    const yBase = piso_dpto ? 605 : 580;
     zpl += `
-^FO30,580^GB752,60,3^FS
-^FO50,595^A0N,30,30^FD!! RETIRO - Retirar producto !!^FS
+^FO30,${yBase}^GB752,60,3^FS
+^FO50,${yBase + 15}^A0N,30,30^FD!! RETIRO - Retirar producto !!^FS
 `;
   }
 
