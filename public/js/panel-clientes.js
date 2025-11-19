@@ -271,6 +271,7 @@ function agregarPaquete() {
     destinatario: document.getElementById('paq-destinatario')?.value.trim() || '',
     telefono: telefono || null,
     direccion: document.getElementById('paq-direccion')?.value.trim() || '',
+    piso_dpto: document.getElementById('paq-piso-dpto')?.value.trim() || null,
     codigo_postal: document.getElementById('paq-cp')?.value.trim() || '',
     partido: document.getElementById('paq-partido')?.value.trim() || '',
     id_venta: null, // El backend lo autogenera - campo readonly en el formulario

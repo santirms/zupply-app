@@ -138,9 +138,14 @@ async function generarEtiquetaInformativa(envio, cliente) {
 
   y += 15;
 
+  // Dirección con piso/dpto
+  const direccionCompleta = envio.piso_dpto
+    ? `${envio.direccion} - ${envio.piso_dpto}`
+    : envio.direccion;
+
   doc.fontSize(9)
      .font('Helvetica')
-     .text(envio.direccion || 'N/A', 20, y, { width: 240 });
+     .text(direccionCompleta || 'N/A', 20, y, { width: 240 });
 
   y += 20;
 

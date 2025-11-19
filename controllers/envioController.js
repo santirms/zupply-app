@@ -207,6 +207,7 @@ exports.crearEnvio = async (req, res) => {
       partido,
       destinatario,
       direccion,
+      piso_dpto,
       referencia,
       latitud: latitudOriginal,
       longitud: longitudOriginal
@@ -242,6 +243,7 @@ exports.crearEnvio = async (req, res) => {
       partido,
       destinatario,
       direccion,
+      piso_dpto: piso_dpto || null,
       referencia,
       latitud,       // 👈 coincide con el schema
       longitud,      // 👈 coincide con el schema
@@ -646,6 +648,7 @@ exports.crearEnviosLote = async (req, res) => {
           tracking,
           destinatario: data.destinatario,
           direccion: data.direccion,
+          piso_dpto: data.piso_dpto || null,
           partido: data.partido,
           codigo_postal: data.codigo_postal,
           telefono: data.telefono || null,
