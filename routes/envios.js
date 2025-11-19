@@ -918,7 +918,7 @@ function generarEtiquetaZPL(envio) {
 
 ^FX QR Code (izquierda)
 ^FO40,150
-^BQN,2,4
+^BQN,2,5
 ^FDQA,${tracking}^FS
 
 ^FX ID y Fecha (derecha del QR)
