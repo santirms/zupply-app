@@ -1288,28 +1288,28 @@
   </div>
 
   <!-- Modal de opciones de impresión -->
-  <div id="modalOpcionesImpresion" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-    <div class="bg-white dark:bg-[#0B1020] rounded-lg p-6 max-w-md w-full mx-4 border border-slate-200 dark:border-white/10">
-      <h3 class="text-lg font-semibold mb-4 text-slate-900 dark:text-slate-100">🖨️ Opciones de Impresión</h3>
+  <div id="modalOpcionesImpresion" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center" style="z-index: 9999;">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+      <h3 class="text-lg font-semibold mb-4 text-gray-800">🖨️ Opciones de Impresión</h3>
 
-      <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Formato de etiquetas:</label>
-      <select id="formatoEtiquetas" class="w-full border border-slate-300 dark:border-white/10 rounded p-2 mb-4 bg-white dark:bg-white/10 text-slate-900 dark:text-slate-100">
+      <label class="block text-sm font-medium mb-2 text-gray-700">Formato de etiquetas:</label>
+      <select id="formatoEtiquetas" class="w-full border border-gray-300 rounded p-2 mb-4 focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
         <option value="termica">PDF Térmica (10x15cm) - 1 por página</option>
         <option value="a4">PDF A4 - 4 etiquetas por hoja</option>
         <option value="zpl">Zebra ZPL (descarga archivo .zpl)</option>
       </select>
 
-      <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">
+      <p class="text-sm text-gray-500 mb-4">
         <strong>Térmica:</strong> Impresoras de etiquetas<br>
         <strong>A4:</strong> Impresoras comunes (cortar etiquetas)<br>
         <strong>ZPL:</strong> Impresoras Zebra (archivo raw)
       </p>
 
       <div class="flex gap-2 justify-end">
-        <button onclick="cerrarModalOpciones()" class="px-4 py-2 border border-slate-300 dark:border-white/10 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-900 dark:text-slate-100">
+        <button onclick="cerrarModalOpciones()" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 text-gray-700">
           Cancelar
         </button>
-        <button onclick="confirmarImpresion()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+        <button onclick="confirmarImpresion()" class="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600">
           Imprimir
         </button>
       </div>
