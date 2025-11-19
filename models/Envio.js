@@ -92,6 +92,11 @@ const envioSchema = new Schema({
     }
   },
   direccion:      { type: String, required: true },
+  piso_dpto: {
+    type: String,
+    default: null,
+    trim: true
+  },
   referencia:     { type: String },
 
   // Monto final calculado según lista de precios y `zona_precio`

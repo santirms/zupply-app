@@ -92,8 +92,11 @@
     const idVenta = obtenerIdVenta(envio);
     const idVentaAttr = escapeHtml(idVenta);
     const estado = formatEstado(envio.estado);
-    const direccionPartes = [envio.direccion, envio.partido].filter(Boolean);
-    const direccion = direccionPartes.length ? direccionPartes.join(', ') : envio.direccion || '';
+    const direccionBase = envio.piso_dpto
+      ? `${envio.direccion} - ${envio.piso_dpto}`
+      : envio.direccion;
+    const direccionPartes = [direccionBase, envio.partido].filter(Boolean);
+    const direccion = direccionPartes.length ? direccionPartes.join(', ') : direccionBase || '';
     const codigoPostal = envio.codigo_postal || envio.cp || '';
     const fecha = formatFecha(envio.fecha || envio.createdAt || envio.created_at);
     const notas = envio.referencia ? `<p class="text-sm text-slate-500"><span class="font-medium">Referencia:</span> ${escapeHtml(envio.referencia)}</p>` : '';

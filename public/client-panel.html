@@ -551,7 +551,18 @@
                     <label for="paq-direccion" class="form-label">
                       Dirección <span class="text-danger">*</span>
                     </label>
-                    <input type="text" class="form-control" id="paq-direccion" required placeholder="Calle, número, piso, depto">
+                    <input type="text" class="form-control" id="paq-direccion" required placeholder="Calle y número (ej: Aguirre 202)">
+                    <small class="form-text text-muted">
+                      Solo calle y número, sin piso/dpto
+                    </small>
+                  </div>
+
+                  <!-- Piso/Dpto -->
+                  <div class="mb-3">
+                    <label for="paq-piso-dpto" class="form-label">
+                      Piso / Dpto / Timbre (opcional)
+                    </label>
+                    <input type="text" class="form-control" id="paq-piso-dpto" placeholder="Ej: Piso 3, Dpto 11, Timbre 5">
                   </div>
 
                   <div class="row">
