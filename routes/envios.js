@@ -876,66 +876,126 @@ router.get('/etiquetas-zpl', requireAuth, async (req, res) => {
 
 // Función auxiliar: generar código ZPL para una etiqueta
 function generarEtiquetaZPL(envio) {
-  const tracking = envio.tracking || envio.id_venta || '';
-  const destinatario = (envio.destinatario || 'S/N').substring(0, 35);
-  const direccion = (envio.direccion || '').substring(0, 45);
-  const direccion2 = (envio.direccion || '').length > 45
-    ? envio.direccion.substring(45, 90)
-    : '';
-  const partido = (envio.partido || envio.destino?.partido || '').substring(0, 30);
-  const cp = envio.codigo_postal || envio.destino?.cp || '';
+  const tracking = envio.tracking || envio.id_venta || envio.meli_id || '';
+  const destinatario = (envio.destinatario || 'N/A').substring(0, 35);
+  const direccion = (envio.direccion || 'N/A').substring(0, 45);
+  const partido = (envio.partido || 'N/A').substring(0, 25);
+  const cp = envio.codigo_postal || 'N/A';
   const telefono = envio.telefono || '';
-  const referencia = (envio.referencia || '').substring(0, 40);
-  const sender = envio.sender_id || '';
+  const contenido = (envio.contenido || '').substring(0, 40);
+  const sender = envio.sender_id || 'Cliente';
+  const fecha = new Date().toLocaleDateString('es-AR');
 
-  // ZPL para etiqueta 10x15cm (4x6 pulgadas = 800x1200 dots a 200dpi)
-  return `^XA
+  // Determinar badge según tipo
+  const tipoBadge = {
+    'envio': 'E',
+    'retiro': 'R',
+    'cambio': 'C'
+  };
+  const badge = tipoBadge[envio.tipo] || 'E';
+
+  // ZPL para etiqueta 10x15cm (4x6 pulgadas = 812x1218 dots a 203dpi)
+  let zpl = `^XA
 ^CI28
-^PW800
-^LL1200
+^PW812
+^LL1218
 
-^FX === HEADER CON LOGO/NOMBRE ===
-^FO30,30^A0N,40,40^FDZUPPLY^FS
-^FO550,30^A0N,25,25^FD${sender}^FS
+^FX === ENCABEZADO ===
 
-^FO30,80^GB740,3,3^FS
+^FX Badge tipo (círculo con letra)
+^FO30,30^GC80,80,B^FS
+^FO50,45^A0N,50,50^FR^FD${badge}^FS
 
-^FX === DATOS DESTINATARIO ===
-^FO30,100^A0N,30,30^FDDestinatario:^FS
-^FO30,135^A0N,35,35^FD${destinatario}^FS
+^FX Datos logística
+^FO130,35^A0N,28,28^FDTRANSTECH LOGISTICA^FS
+^FO130,70^A0N,20,20^FDAv. Eva Peron 3777 (CP1834)^FS
+^FO130,95^A0N,20,20^FDWhatsApp: +54 9 11 6445-8579^FS
 
-^FO30,185^A0N,25,25^FD${direccion}^FS
-${direccion2 ? `^FO30,215^A0N,25,25^FD${direccion2}^FS` : ''}
+^FX Línea separadora
+^FO20,130^GB772,3,3^FS
 
-^FO30,250^A0N,28,28^FD${partido}^FS
-^FO400,250^A0N,28,28^FDCP: ${cp}^FS
+^FX === CUERPO ===
 
-^FO30,290^A0N,22,22^FDTel: ${telefono}^FS
-
-${referencia ? `^FO30,320^A0N,20,20^FDRef: ${referencia}^FS` : ''}
-
-^FO30,360^GB740,3,3^FS
-
-^FX === QR CODE ===
-^FO50,400
-^BQN,2,6
+^FX QR Code (izquierda)
+^FO40,150
+^BQN,2,4
 ^FDQA,${tracking}^FS
 
-^FX === CODIGO DE BARRAS ===
-^FO280,400^BY2
-^BCN,100,Y,N,N
-^FD${tracking}^FS
+^FX ID y Fecha (derecha del QR)
+^FO200,160^A0N,28,28^FDID: ${tracking}^FS
+^FO200,195^A0N,22,22^FDFecha: ${fecha}^FS
 
-^FX === TRACKING GRANDE ===
-^FO30,550^A0N,45,45^FD${tracking}^FS
+^FX === DESTINATARIO ===
+^FO30,290^A0N,22,22^FDDESTINATARIO^FS
 
-^FO30,610^GB740,3,3^FS
+^FO30,320^A0N,28,28^FD${destinatario}^FS
 
-^FX === FOOTER ===
-^FO30,630^A0N,20,20^FDwww.zupply.tech^FS
+^FO30,360^A0N,24,24^FD${direccion}^FS
+
+^FO30,395^A0N,24,24^FD${partido} (CP ${cp})^FS
+
+${telefono ? `^FO30,430^A0N,22,22^FDCel: ${telefono}^FS` : ''}
+
+${contenido ? `
+^FO30,465^A0N,20,20^FDCONTENIDO:^FS
+^FO30,490^A0N,22,22^FD${contenido}^FS
+` : ''}
+
+`;
+
+  // Cobro en destino
+  if (envio.cobroEnDestino?.habilitado && envio.cobroEnDestino?.monto) {
+    const monto = envio.cobroEnDestino.monto.toLocaleString('es-AR');
+    zpl += `
+^FO30,530^A0N,32,32^FDCOBRA: $${monto}^FS
+`;
+  }
+
+  // Badge especial para CAMBIO o RETIRO
+  if (envio.tipo === 'cambio') {
+    zpl += `
+^FO30,580^GB752,60,3^FS
+^FO50,595^A0N,30,30^FD!! CAMBIO - Retirar producto !!^FS
+`;
+  } else if (envio.tipo === 'retiro') {
+    zpl += `
+^FO30,580^GB752,60,3^FS
+^FO50,595^A0N,30,30^FD!! RETIRO - Retirar producto !!^FS
+`;
+  }
+
+  // Tracking grande centrado
+  zpl += `
+^FO30,680^A0N,50,50^FD${tracking}^FS
+`;
+
+  // Footer
+  zpl += `
+^FX === PIE ===
+
+^FX Línea separadora
+^FO20,980^GB772,3,3^FS
+
+^FX Info Zupply
+^FO30,1000^A0N,22,22^FDCreado con Zupply^FS
+^FO30,1030^A0N,18,18^FDSoftware de ultima milla^FS
+^FO30,1055^A0N,16,16^FDwww.zupply.tech | hola@zupply.tech^FS
+
+^FX QR Linktree (derecha)
+^FO650,990
+^BQN,2,3
+^FDQA,https://linktr.ee/zupply_tech^FS
+
+^FO660,1100^A0N,14,14^FDContacto^FS
+
+^FX Disclaimer
+^FO30,1085^A0N,12,12^FDZupply solo provee el software,^FS
+^FO30,1100^A0N,12,12^FDla operadora es responsable del servicio.^FS
 
 ^XZ
 `;
+
+  return zpl;
 }
 
 // ========= CONFIRMACIÓN DE ENTREGA CON FIRMA =========
