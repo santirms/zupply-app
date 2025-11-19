@@ -245,7 +245,16 @@ exports.crearEnvio = async (req, res) => {
       referencia,
       latitud,       // 👈 coincide con el schema
       longitud,      // 👈 coincide con el schema
-      fecha: getFechaArgentina()
+      fecha: getFechaArgentina(),
+      // Formato GeoJSON para el mapa
+      destino: {
+        partido: partido,
+        cp: codigo_postal,
+        loc: (latitud && longitud) ? {
+          type: 'Point',
+          coordinates: [longitud, latitud]  // [lon, lat] - orden GeoJSON
+        } : null
+      }
     });
 
     // Generar etiqueta 10x15 + QR usando id_venta (o meli_id)
@@ -436,9 +445,33 @@ exports.actualizarEnvio = async (req, res) => {
       const longitudResult = coords?.lon ?? coords?.lng ?? longitudInput ?? toNumberOrNull(envioActual.longitud);
       updates.latitud  = latitudResult ?? null;
       updates.longitud = longitudResult ?? null;
+
+      // Actualizar destino.loc en formato GeoJSON
+      updates.destino = {
+        partido: partidoFinal,
+        cp: codigoPostalFinal,
+        loc: (latitudResult && longitudResult) ? {
+          type: 'Point',
+          coordinates: [longitudResult, latitudResult]
+        } : null
+      };
     } else {
       if (latitudInput !== null) updates.latitud = latitudInput;
       if (longitudInput !== null) updates.longitud = longitudInput;
+
+      // Si se actualizan coordenadas manualmente, actualizar también destino.loc
+      if (latitudInput !== null || longitudInput !== null) {
+        const lat = latitudInput ?? toNumberOrNull(envioActual.latitud);
+        const lon = longitudInput ?? toNumberOrNull(envioActual.longitud);
+        updates.destino = {
+          partido: partidoFinal,
+          cp: codigoPostalFinal,
+          loc: (lat && lon) ? {
+            type: 'Point',
+            coordinates: [lon, lat]
+          } : null
+        };
+      }
     }
     const envio = await Envio.findByIdAndUpdate(req.params.id, updates, { new: true }).lean();
     if (!envio) return res.status(404).json({ msg: 'Envío no encontrado' });
@@ -638,6 +671,12 @@ exports.crearEnviosLote = async (req, res) => {
           // Campos legacy para compatibilidad
           cobra_en_destino: cobroHabilitado,
           monto_a_cobrar: cobroHabilitado ? montoCobro : null,
+          // Formato GeoJSON para el mapa (se geocodificará después)
+          destino: {
+            partido: data.partido,
+            cp: data.codigo_postal,
+            loc: null
+          },
           historial: [{
             at: fechaArg,
             estado: 'pendiente',
@@ -646,6 +685,26 @@ exports.crearEnviosLote = async (req, res) => {
             note: 'Creado desde panel de cliente'
           }]
         });
+
+        // Geocodificar
+        try {
+          const coords = await geocodeDireccion({
+            direccion: data.direccion,
+            codigo_postal: data.codigo_postal,
+            partido: data.partido
+          });
+
+          if (coords?.lat && coords?.lon) {
+            nuevoEnvio.latitud = coords.lat;
+            nuevoEnvio.longitud = coords.lon;
+            nuevoEnvio.destino.loc = {
+              type: 'Point',
+              coordinates: [coords.lon, coords.lat]
+            };
+          }
+        } catch (geoErr) {
+          console.warn('Geocode error:', geoErr.message);
+        }
 
         await nuevoEnvio.save();
         creados.push(idVenta);
