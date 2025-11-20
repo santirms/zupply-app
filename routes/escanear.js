@@ -9,6 +9,7 @@ const Zona    = require('../models/Zona');
 
 const detectarZona     = require('../utils/detectarZona');
 const { getValidToken } = require('../utils/meliUtils');
+const { geocodeDireccion } = require('../utils/geocode');
 
 // ---------- Escaneo MANUAL (por lector/teclado) ----------
 router.post('/manual', async (req, res) => {
@@ -51,6 +52,23 @@ router.post('/manual', async (req, res) => {
       if (hit) precio = hit.precio;
     }
 
+    // Geocodificar dirección
+    let coordenadas = null;
+    if (direccion && partido) {
+      try {
+        coordenadas = await geocodeDireccion({
+          direccion: direccion,
+          codigo_postal: codigo_postal,
+          partido: partido
+        });
+        if (coordenadas) {
+          console.log(`✓ Geocodificado escaneo manual: ${direccion}, ${partido} → ${coordenadas.lat}, ${coordenadas.lon}`);
+        }
+      } catch (geoError) {
+        console.warn('⚠️ Error geocodificando escaneo manual:', geoError.message);
+      }
+    }
+
     const envio = await Envio.create({
       meli_id:       null,
       sender_id:     cliente?.codigo_cliente || sender_id || '',
@@ -66,7 +84,18 @@ router.post('/manual', async (req, res) => {
       fecha:         new Date(),
       estado:        'pendiente',
       requiere_sync_meli: false,
-      origen:        'ingreso_manual'
+      origen:        'ingreso_manual',
+      // Coordenadas para el mapa
+      latitud: coordenadas?.lat || null,
+      longitud: coordenadas?.lon || null,
+      destino: {
+        partido: partido,
+        cp: codigo_postal,
+        loc: coordenadas ? {
+          type: 'Point',
+          coordinates: [coordenadas.lon, coordenadas.lat]
+        } : null
+      }
     });
 
     res.json({ ok: true, envio });
@@ -164,7 +193,7 @@ router.post('/meli', async (req, res) => {
         $setOnInsert: { fecha: new Date() },
         $set: {
           meli_id,
-          sender_id:     cliente.codigo_cliente || sender_id, // tu “interno”
+          sender_id:     cliente.codigo_cliente || sender_id, // tu "interno"
           cliente_id:    cliente._id,
           codigo_postal: cp,
           partido,
@@ -176,8 +205,22 @@ router.post('/meli', async (req, res) => {
           ...(latitud !== null && longitud !== null ? {
             latitud,
             longitud,
-            geocode_source
-          } : {})
+            geocode_source,
+            destino: {
+              partido: partido,
+              cp: cp,
+              loc: {
+                type: 'Point',
+                coordinates: [longitud, latitud]
+              }
+            }
+          } : {
+            destino: {
+              partido: partido,
+              cp: cp,
+              loc: null
+            }
+          })
         }
       },
       { upsert: true }

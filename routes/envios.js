@@ -409,10 +409,31 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
       return res.status(400).json({ error: 'Cliente no encontrado.' });
     }
 
-    const docs = paquetes.map(p => {
+    const docs = await Promise.all(paquetes.map(async p => {
       // Convertir campos legacy a estructura cobroEnDestino
       const cobraEnDestino = p.cobra_en_destino || false;
       const montoACobrar = cobraEnDestino ? (parseFloat(p.monto_a_cobrar) || 0) : 0;
+
+      const zonaName = p.partido || p.zona || '';
+
+      // Geocodificar dirección
+      let coordenadas = null;
+      if (p.direccion && zonaName) {  // Solo si hay dirección Y partido
+        try {
+          coordenadas = await geocodeDireccion({
+            direccion: p.direccion,
+            codigo_postal: p.codigo_postal || p.cp,
+            partido: zonaName
+          });
+          if (coordenadas) {
+            console.log(`✓ Geocodificado: ${p.direccion}, ${zonaName} → ${coordenadas.lat}, ${coordenadas.lon}`);
+          }
+        } catch (geoError) {
+          console.warn('⚠️ Error geocodificando:', geoError.message);
+        }
+      } else {
+        console.warn('⚠️ No se puede geocodificar: falta dirección o partido');
+      }
 
       return {
         cliente_id:    cliente._id,
@@ -421,6 +442,7 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
         direccion:     p.direccion          || '',
         codigo_postal: p.codigo_postal      || p.cp || '',
         zona:          p.zona               || '',
+        partido:       zonaName,
         id_venta:      p.idVenta            || p.id_venta || '',
         referencia:    p.referencia         || '',
         fecha:         getFechaArgentina(),
@@ -439,10 +461,20 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
         // Campos legacy para compatibilidad
         cobra_en_destino:  cobraEnDestino,
         monto_a_cobrar:    montoACobrar > 0 ? montoACobrar : null,
-        requiereFirma: p.requiereFirma || false  // ✅ Propagar desde frontend
-        // precio real se calculará en GET /envios si es 0
+        requiereFirma: p.requiereFirma || false,  // ✅ Propagar desde frontend
+        // Coordenadas para el mapa
+        latitud: coordenadas?.lat || null,
+        longitud: coordenadas?.lon || null,
+        destino: {
+          partido: zonaName,
+          cp: p.codigo_postal || p.cp || '',
+          loc: coordenadas ? {
+            type: 'Point',
+            coordinates: [coordenadas.lon, coordenadas.lat]
+          } : null
+        }
       };
-    });
+    }));
 
     const inserted = await Envio.insertMany(docs);
     console.log(`guardar-masivo: insertados ${inserted.length}`);
@@ -484,18 +516,35 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
         }
       }
 
-        // 3) Derivar partido/zona desde el CP (fallback a lo que venga en la etiqueta)
-  const cp = et.codigo_postal || '';
-  let partido = (et.partido || '').trim();
-  let zona    = (et.zona    || '').trim();
+      // 3) Derivar partido/zona desde el CP (fallback a lo que venga en la etiqueta)
+      const cp = et.codigo_postal || '';
+      let partido = (et.partido || '').trim();
+      let zona    = (et.zona    || '').trim();
 
-  if (!partido || !zona) {
-    try {
-      const z = await detectarZona(cp); // { partido, zona }
-      if (!partido) partido = z?.partido || '';
-      if (!zona)    zona    = z?.zona    || '';
-    } catch { /* noop */ }
-  }
+      if (!partido || !zona) {
+        try {
+          const z = await detectarZona(cp); // { partido, zona }
+          if (!partido) partido = z?.partido || '';
+          if (!zona)    zona    = z?.zona    || '';
+        } catch { /* noop */ }
+      }
+
+      // 4) Geocodificar dirección
+      let coordenadas = null;
+      if (et.direccion && partido) {
+        try {
+          coordenadas = await geocodeDireccion({
+            direccion: et.direccion,
+            codigo_postal: cp,
+            partido: partido
+          });
+          if (coordenadas) {
+            console.log(`✓ Geocodificado etiqueta: ${et.direccion}, ${partido} → ${coordenadas.lat}, ${coordenadas.lon}`);
+          }
+        } catch (geoError) {
+          console.warn('⚠️ Error geocodificando etiqueta:', geoError.message);
+        }
+      }
 
       return {
         meli_id:       et.tracking_id      || '',
@@ -512,7 +561,18 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
         precio:        0,
         estado:        'en_planta',
         requiere_sync_meli: false,
-        origen:        'etiquetas'
+        origen:        'etiquetas',
+        // Coordenadas para el mapa
+        latitud: coordenadas?.lat || null,
+        longitud: coordenadas?.lon || null,
+        destino: {
+          partido: partido,
+          cp: cp,
+          loc: coordenadas ? {
+            type: 'Point',
+            coordinates: [coordenadas.lon, coordenadas.lat]
+          } : null
+        }
       };
     }));
 
@@ -569,6 +629,25 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         }
       }
 
+      // Geocodificar dirección
+      let coordenadas = null;
+      if (p.direccion && zonaName) {  // Solo si hay dirección Y partido
+        try {
+          coordenadas = await geocodeDireccion({
+            direccion: p.direccion,
+            codigo_postal: p.codigo_postal,
+            partido: zonaName
+          });
+          if (coordenadas) {
+            console.log(`✓ Geocodificado: ${p.direccion}, ${zonaName} → ${coordenadas.lat}, ${coordenadas.lon}`);
+          }
+        } catch (geoError) {
+          console.warn('⚠️ Error geocodificando:', geoError.message);
+        }
+      } else {
+        console.warn('⚠️ No se puede geocodificar: falta dirección o partido');
+      }
+
       // Convertir campos legacy a estructura cobroEnDestino
       const cobraEnDestino = p.cobra_en_destino || false;
       const montoACobrar = cobraEnDestino ? (parseFloat(p.monto_a_cobrar) || 0) : 0;
@@ -603,7 +682,18 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         // Campos legacy para compatibilidad
         cobra_en_destino:  cobraEnDestino,
         monto_a_cobrar:    montoACobrar > 0 ? montoACobrar : null,
-        requiereFirma:     p.requiereFirma || false  // ✅ Propagar desde frontend
+        requiereFirma:     p.requiereFirma || false,  // ✅ Propagar desde frontend
+        // Coordenadas para el mapa
+        latitud: coordenadas?.lat || null,
+        longitud: coordenadas?.lon || null,
+        destino: {
+          partido: zonaName,
+          cp: p.codigo_postal,
+          loc: coordenadas ? {
+            type: 'Point',
+            coordinates: [coordenadas.lon, coordenadas.lat]
+          } : null
+        }
       });
 
       // Generar etiqueta 10x15 + QR usando id_venta
