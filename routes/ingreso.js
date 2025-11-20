@@ -158,7 +158,12 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         destinatario: envio.destinatario,
         direccion: envio.direccion,
         codigo_postal: envio.codigo_postal,
-        partido: envio.partido
+        partido: envio.partido,
+        telefono: telefonoLimpio,
+        cliente_id: {
+          _id: cl._id,
+          nombre: cl.nombre
+        }
       });
     }
 
