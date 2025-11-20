@@ -156,7 +156,16 @@ function paqueteMarkup(){
         </small>
       </label>
       <label class="block text-sm">Dirección
-        <input name="direccion" required class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
+        <input name="direccion" required
+               placeholder="Calle y número (ej: Aguirre 202)"
+               class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
+        <small class="mt-1 block text-xs text-slate-500 dark:text-slate-400">Solo calle y número, sin piso/dpto</small>
+      </label>
+
+      <label class="block text-sm">Piso / Dpto / Timbre <span class="text-slate-400 text-xs">(opcional)</span>
+        <input name="piso_dpto"
+               placeholder="Ej: Piso 3, Dpto 11, Timbre 5"
+               class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
       </label>
 
       <label class="block text-sm">Código Postal
@@ -400,6 +409,7 @@ async function guardar() {
       sender_id:     codigoInt,
       destinatario:  div.querySelector("[name='destinatario']").value.trim(),
       direccion:     div.querySelector("[name='direccion']").value.trim(),
+      piso_dpto:     div.querySelector("[name='piso_dpto']")?.value.trim() || null,
       codigo_postal: div.querySelector("[name='codigo_postal']").value.trim(),
       partido:       div.querySelector("[name='partido']").value.trim(),
       telefono:      telefono ?? null,
