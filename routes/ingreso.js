@@ -6,6 +6,7 @@ const Envio   = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const QRCode  = require('qrcode');
 const { generarEtiquetaInformativa } = require('../utils/labelService');
+const { geocodeDireccion } = require('../utils/geocode');
 
 const { requireAuth, requireRole } = require('../middlewares/auth');
 
@@ -68,11 +69,27 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         }
       }
 
+      // Geocodificar dirección
+      let coordenadas = null;
+      try {
+        coordenadas = await geocodeDireccion({
+          direccion: p.direccion,
+          codigo_postal: p.codigo_postal,
+          partido: zonaName
+        });
+        if (coordenadas) {
+          console.log(`✓ Geocodificado: ${p.direccion} → ${coordenadas.lat}, ${coordenadas.lon}`);
+        }
+      } catch (geoError) {
+        console.warn('⚠️ Error geocodificando:', geoError.message);
+      }
+
       const envio = await Envio.create({
         cliente_id:    cl._id,
         sender_id:     cl.codigo_cliente,
         destinatario:  p.destinatario,
         direccion:     p.direccion,
+        piso_dpto:     p.piso_dpto || null,
         codigo_postal: p.codigo_postal,
         zona:          zonaName,
         partido:       zonaName,
@@ -84,8 +101,27 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
         estado:        'pendiente',
         requiere_sync_meli: false,
         origen:        'ingreso_manual',
-        source:        'panel', // 👈 marca el origen
-        requiereFirma: p.requiereFirma || false  // ✅ Propagar desde frontend
+        source:        'panel',
+        requiereFirma: p.requiereFirma || false,
+        tipo:          p.tipo || 'envio',
+        contenido:     p.contenido || null,
+        // Cobro en destino
+        cobroEnDestino: {
+          habilitado: p.cobra_en_destino || false,
+          monto: p.cobra_en_destino ? (p.monto_a_cobrar || 0) : 0,
+          cobrado: false
+        },
+        // Coordenadas para el mapa
+        latitud: coordenadas?.lat || null,
+        longitud: coordenadas?.lon || null,
+        destino: {
+          partido: zonaName,
+          cp: p.codigo_postal,
+          loc: coordenadas ? {
+            type: 'Point',
+            coordinates: [coordenadas.lon, coordenadas.lat]
+          } : null
+        }
       });
 
       // etiqueta + QR
@@ -144,13 +180,32 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
         return res.status(400).json({ error: `Paquete #${index + 1}: ${err.message}` });
       }
 
+      const zonaName = p.zona || p.partido || '';
+
+      // Geocodificar dirección
+      let coordenadas = null;
+      try {
+        coordenadas = await geocodeDireccion({
+          direccion: p.direccion,
+          codigo_postal: p.codigo_postal || p.cp,
+          partido: zonaName
+        });
+        if (coordenadas) {
+          console.log(`✓ Geocodificado: ${p.direccion} → ${coordenadas.lat}, ${coordenadas.lon}`);
+        }
+      } catch (geoError) {
+        console.warn('⚠️ Error geocodificando:', geoError.message);
+      }
+
       docs.push({
         cliente_id:    cliente._id,
         sender_id:     cliente.codigo_cliente,
         destinatario:  p.destinatario      || '',
         direccion:     p.direccion          || '',
+        piso_dpto:     p.piso_dpto || null,
         codigo_postal: p.codigo_postal      || p.cp || '',
-        zona:          p.zona               || '',
+        zona:          zonaName,
+        partido:       zonaName,
         id_venta:      p.idVenta            || p.id_venta || '',
         telefono:      telefonoLimpio,
         referencia:    p.referencia         || '',
@@ -160,7 +215,26 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
         requiere_sync_meli: false,
         origen:        'ingreso_manual',
         source:        'panel',
-        requiereFirma: p.requiereFirma || false  // ✅ Propagar desde frontend
+        requiereFirma: p.requiereFirma || false,
+        tipo:          p.tipo || 'envio',
+        contenido:     p.contenido || null,
+        // Cobro en destino
+        cobroEnDestino: {
+          habilitado: p.cobra_en_destino || false,
+          monto: p.cobra_en_destino ? (p.monto_a_cobrar || 0) : 0,
+          cobrado: false
+        },
+        // Coordenadas para el mapa
+        latitud: coordenadas?.lat || null,
+        longitud: coordenadas?.lon || null,
+        destino: {
+          partido: zonaName,
+          cp: p.codigo_postal || p.cp || '',
+          loc: coordenadas ? {
+            type: 'Point',
+            coordinates: [coordenadas.lon, coordenadas.lat]
+          } : null
+        }
       });
     }
 
