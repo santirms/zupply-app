@@ -55,7 +55,16 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
       const idVenta = (p.id_venta || p.idVenta || '').trim()
         || Math.random().toString(36).substr(2,8).toUpperCase();
 
-      const zonaName = p.zona || p.partido || '';
+      const zonaName = p.partido || p.zona || '';
+
+      console.log('Debug paquete:', {
+        direccion: p.direccion,
+        partido: p.partido,
+        zona: p.zona,
+        zonaName: zonaName,
+        codigo_postal: p.codigo_postal
+      });
+
       let costo = 0;
       if (p.manual_precio) {
         costo = Number(p.precio) || 0;
@@ -71,17 +80,21 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
 
       // Geocodificar dirección
       let coordenadas = null;
-      try {
-        coordenadas = await geocodeDireccion({
-          direccion: p.direccion,
-          codigo_postal: p.codigo_postal,
-          partido: zonaName
-        });
-        if (coordenadas) {
-          console.log(`✓ Geocodificado: ${p.direccion} → ${coordenadas.lat}, ${coordenadas.lon}`);
+      if (p.direccion && zonaName) {  // Solo si hay dirección Y partido
+        try {
+          coordenadas = await geocodeDireccion({
+            direccion: p.direccion,
+            codigo_postal: p.codigo_postal,
+            partido: zonaName
+          });
+          if (coordenadas) {
+            console.log(`✓ Geocodificado: ${p.direccion}, ${zonaName} → ${coordenadas.lat}, ${coordenadas.lon}`);
+          }
+        } catch (geoError) {
+          console.warn('⚠️ Error geocodificando:', geoError.message);
         }
-      } catch (geoError) {
-        console.warn('⚠️ Error geocodificando:', geoError.message);
+      } else {
+        console.warn('⚠️ No se puede geocodificar: falta dirección o partido');
       }
 
       const envio = await Envio.create({
@@ -180,21 +193,33 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
         return res.status(400).json({ error: `Paquete #${index + 1}: ${err.message}` });
       }
 
-      const zonaName = p.zona || p.partido || '';
+      const zonaName = p.partido || p.zona || '';
+
+      console.log('Debug paquete:', {
+        direccion: p.direccion,
+        partido: p.partido,
+        zona: p.zona,
+        zonaName: zonaName,
+        codigo_postal: p.codigo_postal || p.cp
+      });
 
       // Geocodificar dirección
       let coordenadas = null;
-      try {
-        coordenadas = await geocodeDireccion({
-          direccion: p.direccion,
-          codigo_postal: p.codigo_postal || p.cp,
-          partido: zonaName
-        });
-        if (coordenadas) {
-          console.log(`✓ Geocodificado: ${p.direccion} → ${coordenadas.lat}, ${coordenadas.lon}`);
+      if (p.direccion && zonaName) {  // Solo si hay dirección Y partido
+        try {
+          coordenadas = await geocodeDireccion({
+            direccion: p.direccion,
+            codigo_postal: p.codigo_postal || p.cp,
+            partido: zonaName
+          });
+          if (coordenadas) {
+            console.log(`✓ Geocodificado: ${p.direccion}, ${zonaName} → ${coordenadas.lat}, ${coordenadas.lon}`);
+          }
+        } catch (geoError) {
+          console.warn('⚠️ Error geocodificando:', geoError.message);
         }
-      } catch (geoError) {
-        console.warn('⚠️ Error geocodificando:', geoError.message);
+      } else {
+        console.warn('⚠️ No se puede geocodificar: falta dirección o partido');
       }
 
       docs.push({
