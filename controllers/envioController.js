@@ -153,7 +153,8 @@ exports.obtenerShipmentsPanelCliente = async (req, res) => {
     const [envios, total] = await Promise.all([
       Envio.find(query)
         .populate('chofer', 'nombre email')
-        .select('id_venta tracking destinatario direccion partido codigo_postal estado estado_meli fecha meli_id sender_id')
+        .populate('cliente_id', 'nombre razon_social')
+        .select('id_venta tracking destinatario direccion partido codigo_postal estado estado_meli fecha meli_id sender_id cliente_id')
         .sort({ fecha: -1 })
         .skip(skip)
         .limit(limitNumber)

@@ -38,6 +38,30 @@ let puedeRequerirFirma = false; // Variable global para permisos de firma
   }
 })();
 
+// Función para generar mensaje de WhatsApp para la tabla
+function generarMensajeWhatsAppTabla(envio) {
+  const nombreCliente = envio.cliente_id?.nombre ||
+                        envio.cliente_id?.razon_social ||
+                        '';
+  const destinatario = envio.destinatario || 'Cliente';
+  const tracking = envio.tracking || envio.id_venta || '';
+  const linkSeguimiento = `https://app.zupply.tech/track/${tracking}`;
+
+  let mensaje = `Hola ${destinatario}!\n\n`;
+
+  if (nombreCliente) {
+    mensaje += `Tu envío de ${nombreCliente} está en camino 📦\n\n`;
+  } else {
+    mensaje += `Tu envío está en camino 📦\n\n`;
+  }
+
+  mensaje += `Seguí tu pedido en este link:\n${linkSeguimiento}\n\n`;
+  mensaje += `Tracking: ${tracking}\n\n`;
+  mensaje += `Gracias por tu compra!`;
+
+  return mensaje;
+}
+
 // Toggle campo de monto de cobro en destino
 function toggleCampoMontoCobro() {
   const checkbox = document.getElementById('paq-cobro-destino');
@@ -839,6 +863,11 @@ async function abrirModalDetalle(envioId) {
     if (btnWhatsApp) {
       const numeroWhatsApp = typeof telefono === 'string' ? telefono.replace(/\D/g, '') : '';
       if (numeroWhatsApp) {
+        // Obtener nombre del cliente (vendedor)
+        const nombreCliente = envio.cliente_id?.nombre ||
+                              envio.cliente_id?.razon_social ||
+                              '';
+
         const destinatario =
           envio.destinatario ||
           envio.nombre_destinatario ||
@@ -851,9 +880,15 @@ async function abrirModalDetalle(envioId) {
 
         const lineasMensaje = [
           `Hola ${destinatario}!`,
-          '',
-          'Tu envío está en camino 📦'
+          ''
         ];
+
+        // Si hay cliente, incluirlo
+        if (nombreCliente) {
+          lineasMensaje.push(`Tu envío de ${nombreCliente} está en camino 📦`);
+        } else {
+          lineasMensaje.push('Tu envío está en camino 📦');
+        }
 
         if (linkSeguimiento) {
           lineasMensaje.push('', 'Seguí tu pedido en este link:', linkSeguimiento);
