@@ -692,11 +692,20 @@ function generarMensajeWhatsApp(envio = {}) {
   const tracking = envio.tracking || envio.id_venta || '';
   const linkSeguimiento = tracking ? `https://app.zupply.tech/track/${tracking}` : '';
 
-  const lineas = [
-    `Hola ${destinatario}!`,
-    '',
-    'Tu envío está en camino 📦'
-  ];
+  // Obtener nombre del cliente (vendedor)
+  const nombreCliente = envio.cliente_id?.nombre ||
+                        envio.cliente_id?.razon_social ||
+                        envio.sender_id ||
+                        '';
+
+  const lineas = [`Hola ${destinatario}!`];
+
+  // Si hay cliente, incluirlo
+  if (nombreCliente) {
+    lineas.push('', `Tu envío de ${nombreCliente} está en camino 📦`);
+  } else {
+    lineas.push('', 'Tu envío está en camino 📦');
+  }
 
   if (linkSeguimiento) {
     lineas.push('', 'Seguí tu pedido en este link:', linkSeguimiento);
