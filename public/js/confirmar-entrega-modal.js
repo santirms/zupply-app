@@ -316,7 +316,7 @@ class ConfirmarEntregaModal {
           <!-- NUEVA SECCIÓN: Foto del DNI -->
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">
-              Foto del DNI <span class="text-red-500">*</span>
+              📷 Foto del DNI (opcional)
             </label>
             <div class="border border-slate-300 rounded-lg p-3 bg-slate-50">
 
@@ -804,11 +804,6 @@ class ConfirmarEntregaModal {
 
     let isValid = this.validateDni();
 
-    // Validar que se haya capturado foto DNI
-    if (!this.fotoDNIBlob) {
-      isValid = false;
-    }
-
     if (this.tipoReceptor !== 'destinatario') {
       isValid = isValid && this.validateNombre();
     }
@@ -830,17 +825,6 @@ class ConfirmarEntregaModal {
    */
   handleContinuar() {
     if (this.loading) return;
-
-    // Validar que se haya tomado la foto del DNI
-    if (!this.fotoDNIBlob) {
-      const errorFotoDNI = document.getElementById('errorFotoDNI');
-      if (errorFotoDNI) {
-        errorFotoDNI.textContent = 'Debés tomar una foto del DNI del receptor';
-        errorFotoDNI.classList.remove('hidden');
-      }
-      alert('⚠️ Debés tomar una foto del DNI del receptor');
-      return;
-    }
 
     // Validar todos los campos
     let isValid = this.validateDni();
