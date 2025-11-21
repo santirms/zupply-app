@@ -213,7 +213,25 @@ class ConfirmarEntregaModal {
    * PANTALLA 1: Selección de Receptor
    */
   renderPantallaReceptor() {
-    document.getElementById('modalTitle').textContent = '¿Quién recibe el paquete?';
+    // Título con badge de firma si es requerida
+    const tituloBase = '¿Quién recibe el paquete?';
+    const modalTitle = document.getElementById('modalTitle');
+
+    if (this.envio.requiereFirma) {
+      modalTitle.innerHTML = `
+        <div class="flex items-center gap-2 flex-wrap">
+          <span>${tituloBase}</span>
+          <span class="inline-flex items-center gap-1 text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded-lg font-medium">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+            </svg>
+            Firma requerida
+          </span>
+        </div>
+      `;
+    } else {
+      modalTitle.textContent = tituloBase;
+    }
 
     // ===== DEBUG: Renderizado de pantalla receptor =====
     console.log('🖼️  RENDERIZANDO PANTALLA RECEPTOR');
