@@ -4,6 +4,7 @@ const Cliente = require('../models/Cliente');
 const Envio   = require('../models/Envio');
 const { getValidToken } = require('../utils/meliUtils');
 const { mapMeliToInterno } = require('../utils/meliStatus');
+const { ensureMeliHistory } = require('./meliHistory');
 const logger = require('../utils/logger');
 
 async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
@@ -141,6 +142,16 @@ async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
           }
         }
       );
+
+      // AGREGAR: Hidratar historial desde MeLi
+      try {
+        await ensureMeliHistory(e, { force: false });
+      } catch (histErr) {
+        logger.warn('[meliSync] ensureMeliHistory falló', {
+          meli_id: e.meli_id,
+          error: histErr.message
+        });
+      }
 
       ok++;
     } catch (err) {
