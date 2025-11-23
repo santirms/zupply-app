@@ -1346,12 +1346,26 @@ router.get('/:id/foto-evidencia', requireAuth, async (req, res) => {
     }
 
     // Verificar que la key pertenece a este envío
-    const keyExiste = envio.intentosFallidos?.some(
-      intento => intento.fotoS3Key === key
-    );
+    let keyExiste = false;
+
+    // Verificar en intentos fallidos
+    if (envio.intentosFallidos?.some(intento => intento.fotoS3Key === key)) {
+      keyExiste = true;
+    }
+
+    // Verificar en confirmación de entrega
+    if (envio.confirmacionEntrega) {
+      if (
+        envio.confirmacionEntrega.firmaS3Key === key ||
+        envio.confirmacionEntrega.fotoDNIS3Key === key ||
+        envio.confirmacionEntrega.fotoChoferS3Key === key
+      ) {
+        keyExiste = true;
+      }
+    }
 
     if (!keyExiste) {
-      return res.status(403).json({ error: 'Acceso no autorizado' });
+      return res.status(403).json({ error: 'Acceso no autorizado a esta evidencia' });
     }
 
     // Generar URL firmada (válida 1 hora)
