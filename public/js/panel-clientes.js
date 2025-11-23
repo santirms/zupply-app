@@ -1086,8 +1086,8 @@ function renderizarEvidencias(envio) {
   if (!container) return;
 
   const tieneIntentos = envio.intentosFallidos && envio.intentosFallidos.length > 0;
-  const tieneFirma = envio.confirmacionEntrega && envio.confirmacionEntrega.firmaS3Key;
-  const totalEvidencias = (envio.intentosFallidos?.length || 0) + (tieneFirma ? 1 : 0);
+  const tieneConfirmacion = envio.confirmacionEntrega && envio.confirmacionEntrega.confirmada;
+  const totalEvidencias = (envio.intentosFallidos?.length || 0) + (tieneConfirmacion ? 1 : 0);
 
   // Actualizar badge
   if (badgeEvidencias) {
@@ -1100,7 +1100,7 @@ function renderizarEvidencias(envio) {
   }
 
   // Si no hay evidencias
-  if (!tieneIntentos && !tieneFirma) {
+  if (!tieneIntentos && !tieneConfirmacion) {
     container.innerHTML = `
       <div class="text-center py-16 text-slate-500 dark:text-slate-400">
         <div class="text-6xl mb-5">📋</div>
@@ -1204,7 +1204,7 @@ function renderizarEvidencias(envio) {
   }
 
   // SECCIÓN: FIRMA DIGITAL
-  if (tieneFirma) {
+  if (tieneConfirmacion) {
     const confirmacion = envio.confirmacionEntrega;
 
     html += `
@@ -1216,7 +1216,7 @@ function renderizarEvidencias(envio) {
               Comprobante de Entrega
             </h4>
             <small class="text-sm text-slate-600 dark:text-slate-400">
-              Firmado digitalmente por el receptor
+              ${confirmacion.firmaS3Key ? 'Firmado digitalmente por el receptor' : 'Entrega confirmada'}
             </small>
           </div>
         </div>
@@ -1271,19 +1271,26 @@ function renderizarEvidencias(envio) {
             </div>
           ` : ''}
 
-          <!-- Botones para ver evidencias -->
-          <div class="space-y-2">
+          <div class="flex gap-2 flex-wrap mt-4">
+            ${confirmacion.geolocalizacion ? `
+              <a href="https://www.google.com/maps?q=${confirmacion.geolocalizacion.lat},${confirmacion.geolocalizacion.lng}"
+                 target="_blank"
+                 class="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-700 border-2 border-green-700 text-green-700 dark:text-green-400 rounded-lg font-semibold text-sm hover:bg-green-700 hover:text-white transition-all">
+                🗺️ Ver Ubicación
+              </a>
+            ` : ''}
+
             ${confirmacion.firmaS3Key ? `
-              <button onclick="handleVerFirmaDigital('${envio._id}', '${confirmacion.firmaS3Key}')"
-                      class="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all">
+              <button onclick="handleVerFotoEvidencia('${envio._id}', '${confirmacion.firmaS3Key}', 'firma')"
+                      class="inline-flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-semibold text-sm transition-all">
                 🖊️ Ver Firma Digital
               </button>
             ` : ''}
 
             ${confirmacion.fotoDNIS3Key ? `
-              <button onclick="handleVerFotoDNI('${envio._id}', '${confirmacion.fotoDNIS3Key}')"
-                      class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all">
-                📄 Ver Foto del DNI
+              <button onclick="handleVerFotoEvidencia('${envio._id}', '${confirmacion.fotoDNIS3Key}', 'dni')"
+                      class="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold text-sm transition-all">
+                📷 Ver Foto DNI
               </button>
             ` : ''}
           </div>
