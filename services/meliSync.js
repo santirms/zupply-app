@@ -35,7 +35,7 @@ async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
       {
         $and: [
           { 'estado_meli.status': 'delivered' },
-          { updatedAt: { $gte: hace48Horas } },
+          { 'estado_meli.updatedAt': { $gte: hace48Horas } },
           // NO tiene delivered en el historial
           { 'historial.estado_meli.status': { $ne: 'delivered' } }
         ]
