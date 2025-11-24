@@ -257,6 +257,43 @@ exports.getEnviosActivos = async (req, res) => {
       .sort({ fecha: -1 })
       .lean();
 
+    // AGREGAR: Popular localidades desde la colección de partidos (optimizado)
+    const Partido = require('../models/partidos');
+
+    // Obtener todos los CPs únicos de los envíos
+    const cps = [...new Set(envios.map(e => e.codigo_postal || e.cp).filter(Boolean))];
+    const partidosMap = {};
+
+    if (cps.length > 0) {
+      // Traer todos los partidos en una sola query
+      const partidosInfo = await Partido.find({ codigo_postal: { $in: cps } }).lean();
+      partidosInfo.forEach(p => {
+        partidosMap[p.codigo_postal] = p;
+      });
+    }
+
+    // Enriquecer cada envío con localidad y extraer piso/dpto
+    envios.forEach(envio => {
+      const cp = envio.codigo_postal || envio.cp;
+
+      // Agregar localidad desde el mapa de partidos
+      if (cp && partidosMap[cp]) {
+        envio.localidad = partidosMap[cp].localidad;
+        // Asegurar que el partido también esté correcto
+        if (!envio.partido) {
+          envio.partido = partidosMap[cp].partido;
+        }
+      }
+
+      // Extraer piso/dpto de la dirección si no existe como campo separado
+      if (!envio.piso_dpto && envio.direccion) {
+        const match = envio.direccion.match(/(PB|piso\s*\d+|depto\s*\d+|P\d+|D\d+)/gi);
+        if (match) {
+          envio.piso_dpto = match.join(' ');
+        }
+      }
+    });
+
     // ===== DEBUG: Log de envíos devueltos =====
     logger.info('[Mis Envios] Campos devueltos', {
       campos: envios.length > 0 ? Object.keys(envios[0]) : [],
