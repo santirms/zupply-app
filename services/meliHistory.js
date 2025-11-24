@@ -851,6 +851,38 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
   let raw = await getHistory(access, shipmentId);
   let mapped = mapHistory(raw);
 
+  // AGREGAR: Rellenar substatus faltante con el substatus actual del shipment
+  if (sh && sh.substatus && mapped.length > 0) {
+    // Para los eventos más recientes de "shipped", usar el substatus actual
+    const substatusActual = sh.substatus;
+    const statusActual = sh.status;
+
+    // Buscar el evento más reciente que coincida con el status actual
+    for (let i = mapped.length - 1; i >= 0; i--) {
+      const evt = mapped[i];
+
+      // Si el evento tiene el mismo status que el shipment actual pero no tiene substatus
+      if (evt.estado === statusActual && (!evt.estado_meli.substatus || evt.estado_meli.substatus === '')) {
+        evt.estado_meli.substatus = substatusActual;
+        evt.substatus_texto = substatusActual;
+
+        // Actualizar descripción
+        const detalle = evt.notas || evt.descripcion;
+        evt.descripcion = buildDescripcion(statusActual, substatusActual, detalle);
+
+        logger.debug('[meliHistory] Completando substatus faltante', {
+          envio_id: shipmentId,
+          status: statusActual,
+          substatus: substatusActual,
+          evento_fecha: evt.at
+        });
+
+        // Solo actualizar el más reciente
+        break;
+      }
+    }
+  }
+
   // --- si el shipment está en un estado terminal y el history no lo trae,
 //     agregamos un evento sintético con la fecha real del shipment ---
 if (sh && sh.status) {
