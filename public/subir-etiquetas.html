@@ -256,7 +256,13 @@
   ;['dragleave','drop'].forEach(ev => {
     dropArea.addEventListener(ev, (e)=>{ e.preventDefault(); setHighlight(false); });
   });
-  dropArea.addEventListener('click', ()=> fileElem.click());
+  dropArea.addEventListener('click', (e) => {
+    // No abrir file picker si se clickeó un botón
+    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+      return;
+    }
+    fileElem.click();
+  });
 
   dropArea.addEventListener('drop', (e)=>{
     const file = e.dataTransfer.files && e.dataTransfer.files[0];
