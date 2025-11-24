@@ -883,6 +883,86 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     }
   }
 
+  // NUEVO: Preservar estados específicos antes de barrido genérico
+  // Si el shipment actual tiene rescheduled_by_meli, verificar si antes tuvo estados específicos
+  if (sh && sh.substatus === 'rescheduled_by_meli') {
+    // Lista de substatuses específicos que queremos preservar
+    const SUBSTATUSES_ESPECIFICOS = [
+      'receiver_absent',
+      'not_visited',
+      'bad_address',
+      'agency_closed',
+      'delayed',
+      'out_for_delivery',
+      'arriving_soon'
+    ];
+
+    // Buscar eventos específicos en el historial crudo de MeLi
+    const eventosEspecificos = raw.filter(e => {
+      const sub = String(e?.substatus || '').toLowerCase();
+      return SUBSTATUSES_ESPECIFICOS.includes(sub);
+    });
+
+    if (eventosEspecificos.length > 0) {
+      // Para cada evento específico, verificar que esté en el historial mapeado
+      for (const eventoMeli of eventosEspecificos) {
+        const subEspecifico = String(eventoMeli.substatus).toLowerCase();
+
+        // ¿Ya está en el historial?
+        const yaEstaEnHistorial = mapped.some(evt =>
+          evt.estado_meli?.substatus === subEspecifico
+        );
+
+        if (!yaEstaEnHistorial) {
+          // Recuperar el evento
+          const fechaEvento = new Date(
+            eventoMeli.date ||
+            eventoMeli.date_created ||
+            eventoMeli.created_at
+          );
+
+          if (!isNaN(fechaEvento)) {
+            const detalle = sanitizeStr(
+              eventoMeli.status_detail ||
+              eventoMeli.description ||
+              eventoMeli.detail
+            );
+
+            const eventoRecuperado = {
+              at: fechaEvento,
+              estado: eventoMeli.status || 'shipped',
+              estado_meli: {
+                status: eventoMeli.status || 'shipped',
+                substatus: subEspecifico
+              },
+              actor_name: 'MeLi',
+              source: 'meli-history',
+              descripcion: buildDescripcion(
+                eventoMeli.status,
+                subEspecifico,
+                detalle
+              ),
+              substatus_texto: subEspecifico,
+              notas: detalle || null
+            };
+
+            // Insertar en orden cronológico
+            mapped.push(eventoRecuperado);
+
+            logger.info('[meliHistory] Recuperado evento específico', {
+              envio_id: shipmentId,
+              substatus: subEspecifico,
+              fecha: fechaEvento.toISOString()
+            });
+          }
+        }
+      }
+
+      // Re-ordenar después de agregar todos los eventos
+      mapped.sort((a, b) => new Date(a.at) - new Date(b.at));
+    }
+  }
+
   // --- si el shipment está en un estado terminal y el history no lo trae,
 //     agregamos un evento sintético con la fecha real del shipment ---
 if (sh && sh.status) {
