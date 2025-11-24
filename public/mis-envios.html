@@ -84,6 +84,36 @@
     }).format(date);
   }
 
+  function formatTelefono(tel) {
+    if (!tel) return '';
+
+    // Limpiar el número (quitar espacios, guiones, paréntesis)
+    let numero = tel.replace(/[\s\-\(\)]/g, '');
+
+    // Si ya tiene +549, dejarlo como está
+    if (numero.startsWith('+549')) {
+      return numero;
+    }
+
+    // Si empieza con 549, agregar el +
+    if (numero.startsWith('549')) {
+      return '+' + numero;
+    }
+
+    // Si empieza con 9 (ej: 91123456789), agregar +54
+    if (numero.startsWith('9') && numero.length >= 10) {
+      return '+54' + numero;
+    }
+
+    // Si es un número de 10 dígitos sin prefijo (ej: 1123456789), agregar +549
+    if (numero.length === 10) {
+      return '+549' + numero;
+    }
+
+    // Si no matchea nada, devolver con +549
+    return '+549' + numero;
+  }
+
   function obtenerIdVenta(envio) {
     return envio.id_venta || 'Sin ID';
   }
@@ -116,6 +146,7 @@
     const direccion = envio.direccion || '';
     const pisoDpto = envio.piso_dpto || '';
     const partido = envio.partido || '';
+    const localidad = envio.localidad || '';
     const codigoPostal = envio.codigo_postal || envio.cp || '';
     const fecha = formatFecha(envio.fecha || envio.createdAt || envio.created_at);
     const notas = envio.referencia ? `<p class="text-sm text-slate-500"><span class="font-medium">Referencia:</span> ${escapeHtml(envio.referencia)}</p>` : '';
@@ -194,13 +225,14 @@
           <p><span class="font-medium text-slate-700">Destinatario:</span> ${escapeHtml(envio.destinatario || '')}</p>
           <p><span class="font-medium text-slate-700">Dirección:</span> ${escapeHtml(direccion)}</p>
           ${pisoDpto ? `<p class="text-slate-500 ml-4">${escapeHtml(pisoDpto)}</p>` : ''}
-          <p><span class="font-medium text-slate-700">Localidad:</span> ${escapeHtml(partido)} ${codigoPostal ? `<span class="text-slate-500">(CP ${escapeHtml(codigoPostal)})</span>` : ''}</p>
+          ${localidad ? `<p><span class="font-medium text-slate-700">Localidad:</span> ${escapeHtml(localidad)}</p>` : ''}
+          <p><span class="font-medium text-slate-700">Partido:</span> ${escapeHtml(partido)} ${codigoPostal ? `<span class="text-slate-500">(CP ${escapeHtml(codigoPostal)})</span>` : ''}</p>
           ${notas}
         </div>
         ${envio.telefono ? `
         <div class="flex gap-2 mt-3">
           <button
-            onclick="enviarWhatsApp('${escapeHtml(envio.telefono)}')"
+            onclick="enviarWhatsApp('${formatTelefono(envio.telefono)}')"
             class="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white text-sm rounded hover:bg-green-600"
             type="button">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -210,7 +242,7 @@
           </button>
 
           <a
-            href="tel:${escapeHtml(envio.telefono)}"
+            href="tel:${formatTelefono(envio.telefono)}"
             class="flex items-center gap-1 px-3 py-1.5 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
@@ -478,30 +510,17 @@
   /**
    * Envía un mensaje de WhatsApp al número del destinatario
    */
-  function enviarWhatsApp(telefono) {
-    if (!telefono) {
+  function enviarWhatsApp(numero) {
+    if (!numero) {
       alert('Este envío no tiene teléfono registrado');
       return;
     }
 
-    // Limpiar teléfono (quitar espacios, guiones, paréntesis, etc)
-    let tel = telefono.replace(/\D/g, '');
-
-    // Si empieza con 15, agregar 549
-    if (tel.startsWith('15')) {
-      tel = '549' + tel.substring(2);
-    }
-    // Si empieza con 011 o similar, convertir a formato internacional
-    else if (tel.startsWith('0')) {
-      tel = '54' + tel.substring(1);
-    }
-    // Si no tiene código de país, agregar 54
-    else if (!tel.startsWith('54')) {
-      tel = '54' + tel;
-    }
+    // WhatsApp no quiere el +, solo 549...
+    const numeroLimpio = numero.replace(/^\+/, '');
 
     const mensaje = encodeURIComponent('Hola! Estoy llegando con tu compra, tené a mano tu DNI para recibirla 📦');
-    const url = `https://wa.me/${tel}?text=${mensaje}`;
+    const url = `https://wa.me/${numeroLimpio}?text=${mensaje}`;
 
     window.open(url, '_blank');
   }
