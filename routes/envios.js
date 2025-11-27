@@ -699,7 +699,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
       });
 
       // Generar etiqueta 10x15 + QR usando id_venta
-      const pdfBuffer = await generarEtiquetaInformativa(envio.toObject(), envio.cliente_id);
+      const pdfBuffer = await generarEtiquetaInformativa(envio.toObject(), cl);
 
       // Subir a S3 y obtener URL
       const { ensureObject, presignGet } = require('../utils/s3');
