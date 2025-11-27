@@ -820,12 +820,21 @@ router.post('/etiquetas-lote', requireAuth, async (req, res) => {
 
 // Función auxiliar: generar PDF térmico (1 etiqueta por página, 10x15cm)
 async function generarEtiquetasTermicas(envios) {
+  // Popular cliente_id para todas las etiquetas
+  for (let i = 0; i < envios.length; i++) {
+    if (envios[i].cliente_id && typeof envios[i].cliente_id === 'string') {
+      envios[i] = await Envio.findById(envios[i]._id)
+        .populate('cliente_id', 'nombre razon_social')
+        .lean();
+    }
+  }
+
   const pdfCombinado = await PDFDocument.create();
 
   for (const envio of envios) {
     try {
       // Generar PDF individual
-      const pdfIndividual = await generarEtiquetaInformativa(envio.toObject(), envio.cliente_id);
+      const pdfIndividual = await generarEtiquetaInformativa(envio, envio.cliente_id);
 
       // Cargar y copiar páginas
       const pdfDoc = await PDFDocument.load(pdfIndividual);
@@ -841,6 +850,15 @@ async function generarEtiquetasTermicas(envios) {
 
 // Función auxiliar: generar PDF A4 (4 etiquetas por hoja, 2x2)
 async function generarEtiquetasA4(envios) {
+  // Popular cliente_id para todas las etiquetas
+  for (let i = 0; i < envios.length; i++) {
+    if (envios[i].cliente_id && typeof envios[i].cliente_id === 'string') {
+      envios[i] = await Envio.findById(envios[i]._id)
+        .populate('cliente_id', 'nombre razon_social')
+        .lean();
+    }
+  }
+
   const pdfDoc = await PDFDocument.create();
 
   // A4 en puntos (72 puntos = 1 pulgada): 595 x 842
@@ -874,7 +892,7 @@ async function generarEtiquetasA4(envios) {
       const y = A4_HEIGHT - MARGIN - (row + 1) * (ETIQUETA_HEIGHT + MARGIN) + MARGIN;
 
       // Generar etiqueta individual como PDF
-      const etiquetaPdfBytes = await generarEtiquetaInformativa(envio.toObject(), envio.cliente_id);
+      const etiquetaPdfBytes = await generarEtiquetaInformativa(envio, envio.cliente_id);
       const etiquetaDoc = await PDFDocument.load(etiquetaPdfBytes);
 
       // Obtener la primera página de la etiqueta
