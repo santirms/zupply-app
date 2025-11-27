@@ -140,11 +140,24 @@ async function generarEtiquetaInformativa(envio, cliente) {
      .font('Helvetica-Bold')
      .text(`ID: ${envio.id_venta}`, 120, y);
 
-  doc.fontSize(8)
+  doc.fontSize(10)  // ← Aumentado de 8 a 10
      .font('Helvetica')
      .text(`Fecha: ${new Date().toLocaleDateString('es-AR')}`, 120, y + 15);
 
   y += 95;
+
+  // Cliente (si existe)
+  if (envio.cliente_id) {
+    const nombreCliente = envio.cliente_id.nombre ||
+                          envio.cliente_id.razon_social ||
+                          'N/A';
+    doc.fontSize(9)
+       .font('Helvetica-Bold')
+       .fillColor('#6366f1')  // Color distintivo (índigo)
+       .text(`Cliente: ${nombreCliente}`, 20, y);
+    doc.fillColor('#000000');  // Volver a negro
+    y += 18;
+  }
 
   // Destinatario
   doc.fontSize(9)
