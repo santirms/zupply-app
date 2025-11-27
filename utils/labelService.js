@@ -56,6 +56,27 @@ async function buildLabelPDF(envio) {
 }
 
 async function generarEtiquetaInformativa(envio, cliente) {
+  // Buscar localidad desde la tabla de partidos si no viene en el envío
+  let localidad = envio.localidad || null;
+
+  if (!localidad && envio.codigo_postal) {
+    try {
+      const Partido = require('../models/partidos');
+      const partidoDoc = await Partido.findOne({
+        $or: [
+          { codigo_postal: envio.codigo_postal },
+          { codigos_postales: envio.codigo_postal }
+        ]
+      }).lean();
+
+      if (partidoDoc?.localidad) {
+        localidad = partidoDoc.localidad;
+      }
+    } catch (err) {
+      console.warn('No se pudo obtener localidad:', err.message);
+    }
+  }
+
   const doc = new PDFDocument({
     size: [283.46, 425.2], // 10x15 cm (100x150mm)
     margins: { top: 20, bottom: 20, left: 20, right: 20 }
@@ -152,7 +173,13 @@ async function generarEtiquetaInformativa(envio, cliente) {
 
   y += 20;
 
-  doc.text(`${envio.partido || 'N/A'} (CP ${envio.codigo_postal || 'N/A'})`, 20, y);
+  // Armar texto: Localidad, Partido (CP xxxx)
+  const ubicacionParts = [];
+  if (localidad) ubicacionParts.push(localidad);
+  if (envio.partido) ubicacionParts.push(envio.partido);
+  const ubicacion = ubicacionParts.join(', ');
+  const textoCompleto = `${ubicacion || 'N/A'} (CP ${envio.codigo_postal || 'N/A'})`;
+  doc.text(textoCompleto, 20, y);
 
   if (envio.telefono) {
     y += 15;
