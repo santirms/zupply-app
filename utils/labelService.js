@@ -148,7 +148,7 @@ async function generarEtiquetaInformativa(envio, cliente) {
 
   // Cliente (si existe)
   if (envio.cliente_id) {
-    const nombreCliente = envio.cliente_id.nombre ||
+    const nombreCliente = envio.cliente.nombre ||
                           envio.cliente_id.razon_social ||
                           'N/A';
     doc.fontSize(9)
