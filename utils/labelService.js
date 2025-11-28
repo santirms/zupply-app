@@ -5,6 +5,36 @@ const fs = require('fs');
 const path = require('path');
 const dayjs = require('dayjs');
 
+// Helper para formatear teléfono: 5491123334455 → 11 2333 4455
+function formatearTelefono(tel) {
+  if (!tel) return '';
+
+  // Limpiar el número (quitar espacios, guiones, paréntesis, +)
+  let numero = String(tel).replace(/[\s\-\(\)\+]/g, '');
+
+  // Quitar prefijo 549 si existe
+  if (numero.startsWith('549')) {
+    numero = numero.substring(3);
+  }
+  // Quitar prefijo 54 si existe (fallback)
+  else if (numero.startsWith('54')) {
+    numero = numero.substring(2);
+  }
+  // Quitar prefijo 9 si existe
+  else if (numero.startsWith('9') && numero.length >= 10) {
+    numero = numero.substring(1);
+  }
+
+  // Formatear: 1123334455 → 11 2333 4455
+  if (numero.length === 10) {
+    // Formato: AA BBBB CCCC
+    return `${numero.substring(0, 2)} ${numero.substring(2, 6)} ${numero.substring(6)}`;
+  }
+
+  // Si no es de 10 dígitos, devolver sin formato
+  return numero;
+}
+
 const LABEL_SIZE = [283.46, 425.2]; // 10x15 cm
 
 function resolveTracking(envio) {
@@ -200,7 +230,7 @@ async function generarEtiquetaInformativa(envio, cliente) {
 
   if (envio.telefono) {
     y += 15;
-    doc.text(`Cel: ${envio.telefono}`, 20, y);
+    doc.text(`Cel: ${formatearTelefono(envio.telefono)}`, 20, y);
   }
 
   // Referencia (contenido del paquete, instrucciones, etc)
