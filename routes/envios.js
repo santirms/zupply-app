@@ -699,12 +699,11 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
       });
 
       // Generar etiqueta 10x15 + QR usando id_venta
-      logger.info('[Manual] Generando etiqueta', {
-        envio_id: envio._id,
-        cliente_id: cl._id,
-        cliente_nombre: cl.nombre,
-        cliente_razon: cl.razon_social
-      });
+      console.log('=== DEBUG ETIQUETA ===');
+      console.log('Cliente ID:', cl._id);
+      console.log('Cliente nombre:', cl.nombre);
+      console.log('Cliente razon_social:', cl.razon_social);
+      console.log('Cliente completo:', JSON.stringify(cl, null, 2));
 
       const pdfBuffer = await generarEtiquetaInformativa(envio.toObject(), cl);
 
