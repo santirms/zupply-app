@@ -140,7 +140,11 @@ async function generarEtiquetaInformativa(envio, cliente) {
      .font('Helvetica-Bold')
      .text(`ID: ${envio.id_venta}`, 120, y);
 
-  doc.fontSize(10)  // ← Aumentado de 8 a 10
+  const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
+  .replace('.', '')
+  .replace(/(\w)(\w+)/, (_, first, rest) => first.toUpperCase() + rest);
+  
+  doc.fontSize(12)  // ← Aumentado de 8 a 12
      .font('Helvetica')
      .text(`Fecha: ${new Date().toLocaleDateString('es-AR')}`, 120, y + 15);
 
