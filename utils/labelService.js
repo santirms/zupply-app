@@ -143,17 +143,17 @@ async function generarEtiquetaInformativa(envio, cliente) {
   const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
   .replace('.', '')
   .replace(/(\w)(\w+)/, (_, first, rest) => first.toUpperCase() + rest);
-  
-  doc.fontSize(12)  // ← Aumentado de 8 a 12
+
+  doc.fontSize(12)
      .font('Helvetica')
-     .text(`Fecha: ${new Date().toLocaleDateString('es-AR')}`, 120, y + 15);
+     .text(`Fecha: ${fecha}`, 120, y + 15);
 
   y += 95;
 
   // Cliente (si existe)
-  if (envio.cliente_id) {
-    const nombreCliente = envio.cliente.nombre ||
-                          envio.cliente_id.razon_social ||
+  if (cliente) {
+    const nombreCliente = cliente.nombre ||
+                          cliente.razon_social ||
                           'N/A';
     doc.fontSize(9)
        .font('Helvetica-Bold')
