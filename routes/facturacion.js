@@ -94,7 +94,7 @@ router.get('/preview', async (req, res) => {
 // ---------------------------------------------
 router.get('/resumen', async (req, res) => {
   try {
-    const { desde, hasta, clientes } = req.query;
+    const { desde, hasta, clientes, estados } = req.query;
     if (!desde || !hasta) return res.status(400).json({ error: 'Parámetros requeridos: desde, hasta' });
 
     const dtFrom = new Date(desde);
@@ -121,8 +121,14 @@ router.get('/resumen', async (req, res) => {
     }
     if (!ors.length) return res.json({ period: { desde, hasta }, lines: [], totalGeneral: 0, totalesPorCliente: [] });
 
+    // Preparar filtro de estados
+    const estadosArray = estados
+      ? String(estados).split(',').map(s => s.trim()).filter(Boolean)
+      : ['asignado', 'en_camino', 'entregado'];
+
     const envios = await Envio.find({
       fecha: { $gte: dtFrom, $lte: dtTo },
+      estado: { $in: estadosArray },
       $or: ors
     })
     .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado')
@@ -279,7 +285,7 @@ router.post('/emitir', async (req, res) => {
 // Devuelve items por envío (tracking, cliente, zona, precio, etc.)
 router.get('/detalle', async (req, res) => {
   try {
-    const { desde, hasta, clientes } = req.query;
+    const { desde, hasta, clientes, estados } = req.query;
     if (!desde || !hasta) return res.status(400).json({ error: 'Parámetros requeridos: desde, hasta' });
 
     const dtFrom = new Date(desde);
@@ -305,8 +311,14 @@ router.get('/detalle', async (req, res) => {
     }
     if (!ors.length) return res.json({ items: [], total: 0 });
 
+    // Preparar filtro de estados
+    const estadosArray = estados
+      ? String(estados).split(',').map(s => s.trim()).filter(Boolean)
+      : ['asignado', 'en_camino', 'entregado'];
+
     const envios = await Envio.find({
       fecha: { $gte: dtFrom, $lte: dtTo },
+      estado: { $in: estadosArray },
       $or: ors
     })
       .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio')

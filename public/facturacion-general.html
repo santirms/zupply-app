@@ -96,6 +96,23 @@
 </select>
 <p class="text-xs opacity-70 mt-1">Tip: Ctrl/Cmd + click para selección múltiple.</p>
         </div>
+
+        <div>
+          <label class="block text-sm font-medium">Estados a incluir</label>
+          <select id="filtroEstados" multiple size="5"
+            class="mt-1 block w-56 p-2 rounded-xl border border-slate-300 dark:border-white/10
+                   bg-white dark:bg-transparent text-slate-900 dark:text-slate-100 dark:[color-scheme:dark]">
+            <option value="en_planta">En planta</option>
+            <option value="asignado" selected>Asignado</option>
+            <option value="en_camino" selected>En camino</option>
+            <option value="entregado" selected>Entregado</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="comprador_ausente">Comprador ausente</option>
+            <option value="inaccesible">Inaccesible</option>
+          </select>
+          <p class="text-xs opacity-70 mt-1">Por defecto: Asignado + En camino + Entregado</p>
+        </div>
+
         <div>
           <label class="block text-sm font-medium">Desde</label>
           <input type="date" id="desde"
