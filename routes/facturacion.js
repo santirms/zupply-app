@@ -134,6 +134,7 @@ router.get('/resumen', async (req, res) => {
     if (necesitaBusquedaHistorial) {
       envios = await Envio.find({
         $or: ors,
+        fecha: { $gte: dtFrom, $lte: dtTo },
         historial: {
           $elemMatch: {
             at: { $gte: dtFrom, $lte: dtTo },
@@ -346,6 +347,7 @@ router.get('/detalle', async (req, res) => {
       // Buscar envíos que PASARON por esos estados en el período
       envios = await Envio.find({
         $or: ors,
+        fecha: { $gte: dtFrom, $lte: dtTo },
         historial: {
           $elemMatch: {
             at: { $gte: dtFrom, $lte: dtTo },
