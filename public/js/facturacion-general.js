@@ -141,6 +141,17 @@ async function filtrar() {
   const hasta = qs('#hasta').value;
   const clientesParam = getSelectedClientes(); // 'all' o 'id1,id2'
 
+  // NUEVO: Obtener estados seleccionados
+  const selEstados = qs('#filtroEstados');
+  const estadosSeleccionados = Array.from(selEstados.selectedOptions)
+    .map(o => o.value)
+    .filter(Boolean);
+
+  // Si no hay ninguno seleccionado, usar los default
+  const estadosParam = estadosSeleccionados.length > 0
+    ? estadosSeleccionados.join(',')
+    : 'asignado,en_camino,entregado';
+
   if (!desde || !hasta) {
     alert('Seleccioná rango de fechas.');
     return;
@@ -150,15 +161,15 @@ async function filtrar() {
     setBusy(true, 'Generando reporte de facturación…');
 
     // 1) Detalle para la tabla (preview envío x envío)
-    const urlDetalle = `/facturacion/detalle?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}`;
+    const urlDetalle = `/facturacion/detalle?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}&estados=${encodeURIComponent(estadosParam)}`;
     const resDet = await fetch(urlDetalle, { cache:'no-store' });
     if (!resDet.ok) throw new Error('Error generando detalle');
     const det = await resDet.json();
     envios = det.items || [];
     pintarTabla();
 
-    // 2) Resumen para el modal “Facturación”
-    const urlResumen = `/facturacion/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}`;
+    // 2) Resumen para el modal "Facturación"
+    const urlResumen = `/facturacion/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}&estados=${encodeURIComponent(estadosParam)}`;
     const resRes = await fetch(urlResumen, { cache:'no-store' });
     if (!resRes.ok) throw new Error('Error generando resumen');
     window.__FACT_RESUMEN__ = await resRes.json();
