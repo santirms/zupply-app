@@ -126,14 +126,34 @@ router.get('/resumen', async (req, res) => {
       ? String(estados).split(',').map(s => s.trim()).filter(Boolean)
       : ['asignado', 'en_camino', 'entregado'];
 
-    const envios = await Envio.find({
-      fecha: { $gte: dtFrom, $lte: dtTo },
-      estado: { $in: estadosArray },
-      $or: ors
-    })
-    .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado')
-    .sort({ fecha: 1 })
-    .lean();
+    const estadosIntermedios = ['asignado', 'en_camino', 'en_planta'];
+    const necesitaBusquedaHistorial = estadosArray.some(e => estadosIntermedios.includes(e));
+
+    let envios;
+
+    if (necesitaBusquedaHistorial) {
+      envios = await Envio.find({
+        $or: ors,
+        historial: {
+          $elemMatch: {
+            at: { $gte: dtFrom, $lte: dtTo },
+            estado: { $in: estadosArray }
+          }
+        }
+      })
+      .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado historial')
+      .sort({ fecha: 1 })
+      .lean();
+    } else {
+      envios = await Envio.find({
+        fecha: { $gte: dtFrom, $lte: dtTo },
+        estado: { $in: estadosArray },
+        $or: ors
+      })
+      .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado')
+      .sort({ fecha: 1 })
+      .lean();
+    }
 
     // 3) Pre-cargar listas de precios por cliente
     const listasIds = Array.from(new Set(clientesDocs.map(c => String(c.lista_precios)).filter(Boolean)));
@@ -316,15 +336,39 @@ router.get('/detalle', async (req, res) => {
       ? String(estados).split(',').map(s => s.trim()).filter(Boolean)
       : ['asignado', 'en_camino', 'entregado'];
 
-    const envios = await Envio.find({
-      fecha: { $gte: dtFrom, $lte: dtTo },
-      estado: { $in: estadosArray },
-      $or: ors
-    })
+    // Estados intermedios que requieren búsqueda en historial
+    const estadosIntermedios = ['asignado', 'en_camino', 'en_planta'];
+    const necesitaBusquedaHistorial = estadosArray.some(e => estadosIntermedios.includes(e));
+
+    let envios;
+
+    if (necesitaBusquedaHistorial) {
+      // Buscar envíos que PASARON por esos estados en el período
+      envios = await Envio.find({
+        $or: ors,
+        historial: {
+          $elemMatch: {
+            at: { $gte: dtFrom, $lte: dtTo },
+            estado: { $in: estadosArray }
+          }
+        }
+      })
+      .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio historial')
+      .sort({ fecha: 1 })
+      .populate('cliente_id', 'nombre codigo_cliente lista_precios')
+      .lean();
+    } else {
+      // Búsqueda normal por estado final
+      envios = await Envio.find({
+        fecha: { $gte: dtFrom, $lte: dtTo },
+        estado: { $in: estadosArray },
+        $or: ors
+      })
       .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio')
       .sort({ fecha: 1 })
       .populate('cliente_id', 'nombre codigo_cliente lista_precios')
       .lean();
+    }
 
     // Pre-cargo listas de precios (pobladas con nombres de zona)
     const listaIds = Array.from(new Set(envios
