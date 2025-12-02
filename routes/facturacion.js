@@ -6,7 +6,7 @@ const Envio   = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const Lista   = require('../models/listaDePrecios');
 
-const { resolverZonaPorCP } = require('../services/zonaResolver');
+const { resolverZonaPorCP, resolverZonaParaCliente } = require('../services/zonaResolver');
 const PDFDocument = require('pdfkit'); // npm i pdfkit
 const { Readable } = require('stream');
 // Normalizadores mínimos
@@ -150,14 +150,14 @@ router.get('/resumen', async (req, res) => {
       const cliente   = clientesMap.get(clienteId);
       if (!cliente) continue; // por seguridad
 
-      // Resolver zona (preciso)
-      const rz = await resolverZonaPorCP(e.codigo_postal, e.partido);
-      const zonaNombre = rz.zonaNombre || null;
-      if (!zonaNombre) continue;
-
-      // Buscar precio según la lista de ese cliente
+      // Resolver zona SOLO entre las zonas de la lista del cliente
       const lista = listaMap.get(String(cliente.lista_precios));
       if (!lista) continue;
+
+      const zonasDelCliente = lista.zonas || [];
+      const rz = await resolverZonaParaCliente(e.codigo_postal, e.partido, zonasDelCliente);
+      const zonaNombre = rz.zonaNombre || null;
+      if (!zonaNombre) continue;
 
       // Precio por _id preferentemente, si no por nombre
       let precioUnit = 0;
@@ -344,13 +344,14 @@ router.get('/detalle', async (req, res) => {
       const cliente = e.cliente_id;
       if (!cliente) continue;
 
-      // Resolver zona precisa (la que te andaba bien)
-      const rz = await resolverZonaPorCP(e.codigo_postal, e.partido);
+      // Resolver zona SOLO entre las zonas de la lista del cliente
+      const lista = lMap.get(String(cliente.lista_precios));
+      const zonasDelCliente = lista?.zonas || [];
+      const rz = await resolverZonaParaCliente(e.codigo_postal, e.partido, zonasDelCliente);
       const zonaNombre = rz.zonaNombre || null;
 
-      // Precio: por lista del cliente (id o nombre)
+      // Precio: usar el precio de la zona encontrada
       let precio = 0;
-      const lista = lMap.get(String(cliente.lista_precios));
       if (lista && zonaNombre) {
         const z1 = (lista.zonas || []).find(z => z.zona?.nombre?.trim().toLowerCase() === zonaNombre.trim().toLowerCase());
         if (z1) precio = Number(z1.precio) || 0;
