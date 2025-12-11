@@ -211,6 +211,10 @@
                dark:border-white/10 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/15">
         Limpiar
       </button>
+      <button onclick="abrirModalReportes()"
+        class="px-4 py-2 rounded-xl font-semibold shadow-sm bg-indigo-500 hover:bg-indigo-600 text-white">
+        📊 Reportes
+      </button>
     </div>
   </div>
 
@@ -369,6 +373,143 @@
     <div id="modalFotoFooter" style="margin-top: 16px; padding: 12px 20px; background-color: rgba(40, 167, 69, 0.2); border: 1px solid rgba(40, 167, 69, 0.4); border-radius: 6px; color: #d4edda; font-size: 0.9em; text-align: center; display: none;">
       Comprobante con validez legal de entrega
     </div>
+  </div>
+</div>
+
+<!-- Modal Reportes -->
+<div id="modal-reportes" class="fixed inset-0 hidden z-50 bg-black/50 items-center justify-center">
+  <div class="bg-white dark:bg-[#0B1020] rounded-2xl border border-slate-200 dark:border-white/10 w-full max-w-2xl mx-4 p-6 max-h-[90vh] overflow-y-auto">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <h3 class="text-xl font-bold">Generar Reporte</h3>
+      <button onclick="cerrarModalReportes()"
+        class="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">
+        ✕
+      </button>
+    </div>
+
+    <!-- Presets rápidos -->
+    <div class="mb-6">
+      <p class="text-sm font-medium mb-3">Presets rápidos:</p>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <button onclick="generarReportePreset('incidencias')"
+          class="px-4 py-3 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-red-50 dark:hover:bg-red-900/20 text-left">
+          <div class="font-semibold">🔴 Incidencias</div>
+          <div class="text-xs opacity-70 mt-1">Ausente, inaccesible, demorado</div>
+        </button>
+
+        <button onclick="generarReportePreset('pendientes')"
+          class="px-4 py-3 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 text-left">
+          <div class="font-semibold">📦 Pendientes 3+ días</div>
+          <div class="text-xs opacity-70 mt-1">Sin asignar hace tiempo</div>
+        </button>
+
+        <button onclick="generarReportePreset('en_planta')"
+          class="px-4 py-3 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-left">
+          <div class="font-semibold">🏭 En planta estancados</div>
+          <div class="text-xs opacity-70 mt-1">3+ días sin despachar</div>
+        </button>
+      </div>
+    </div>
+
+    <div class="border-t border-slate-200 dark:border-white/10 my-6"></div>
+
+    <!-- Personalización -->
+    <div class="space-y-4">
+      <p class="text-sm font-medium">O personalizar:</p>
+
+      <!-- Cliente(s) -->
+      <div>
+        <label class="block text-sm font-medium mb-1">Cliente(s)</label>
+        <select id="reporteClientes" multiple
+          class="w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent dark:[color-scheme:dark]">
+          <option value="">Todos</option>
+        </select>
+        <p class="text-xs opacity-70 mt-1">Ctrl/Cmd + click para selección múltiple</p>
+      </div>
+
+      <!-- Estados -->
+      <div>
+        <label class="block text-sm font-medium mb-1">Estados</label>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="reporte-estado" value="comprador_ausente" class="rounded">
+            <span>Comprador ausente</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="reporte-estado" value="inaccesible" class="rounded">
+            <span>Inaccesible</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="reporte-estado" value="demorado" class="rounded">
+            <span>Demorado</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="reporte-estado" value="pendiente" class="rounded">
+            <span>Pendiente</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="reporte-estado" value="en_planta" class="rounded">
+            <span>En planta</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="reporte-estado" value="reprogramado" class="rounded">
+            <span>Reprogramado</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Fechas -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Desde</label>
+          <input type="date" id="reporteDesde"
+            class="w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Hasta</label>
+          <input type="date" id="reporteHasta"
+            class="w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent">
+        </div>
+      </div>
+
+      <!-- Opciones adicionales -->
+      <div>
+        <label class="block text-sm font-medium mb-2">Incluir en el reporte:</label>
+        <div class="space-y-2 text-sm">
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="incluirHistorial" checked class="rounded">
+            <span>Historial de estados</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="incluirIntentos" checked class="rounded">
+            <span>Intentos fallidos</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="incluirCoordenadas" class="rounded">
+            <span>Coordenadas GPS</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botones de acción -->
+    <div class="flex flex-wrap gap-3 mt-6">
+      <button onclick="generarReportePersonalizado('preview')"
+        class="flex-1 px-4 py-2 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 font-medium">
+        📊 Vista previa
+      </button>
+      <button onclick="generarReportePersonalizado('xls')"
+        class="flex-1 px-4 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white font-medium">
+        ⬇️ Descargar XLS
+      </button>
+      <button onclick="generarReportePersonalizado('pdf')"
+        class="flex-1 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium">
+        📄 Descargar PDF
+      </button>
+    </div>
+
   </div>
 </div>
 
@@ -1755,6 +1896,157 @@ function filtrarPorIncidencias() {
 
 window.filtrarPorEstado = filtrarPorEstado;
 window.filtrarPorIncidencias = filtrarPorIncidencias;
+
+// ===== MODAL REPORTES =====
+function abrirModalReportes() {
+  const modal = document.getElementById('modal-reportes');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  // Cargar clientes en el select
+  cargarClientesReportes();
+
+  // Setear fechas por defecto (última semana)
+  const hoy = new Date();
+  const hace7dias = new Date(hoy);
+  hace7dias.setDate(hoy.getDate() - 7);
+
+  document.getElementById('reporteDesde').valueAsDate = hace7dias;
+  document.getElementById('reporteHasta').valueAsDate = hoy;
+}
+
+function cerrarModalReportes() {
+  const modal = document.getElementById('modal-reportes');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+async function cargarClientesReportes() {
+  try {
+    const res = await fetch('/clientes');
+    const clientes = await res.json();
+
+    const select = document.getElementById('reporteClientes');
+    select.innerHTML = '<option value="">Todos</option>';
+
+    clientes.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c._id;
+      opt.textContent = c.nombre;
+      select.appendChild(opt);
+    });
+  } catch (err) {
+    console.error('Error cargando clientes:', err);
+  }
+}
+
+async function generarReportePreset(tipo) {
+  let estados = [];
+  let diasAtras = 7;
+
+  switch(tipo) {
+    case 'incidencias':
+      estados = ['comprador_ausente', 'inaccesible', 'demorado', 'reprogramado'];
+      break;
+    case 'pendientes':
+      estados = ['pendiente'];
+      diasAtras = 3;
+      break;
+    case 'en_planta':
+      estados = ['en_planta'];
+      diasAtras = 3;
+      break;
+  }
+
+  const hasta = new Date();
+  const desde = new Date(hasta);
+  desde.setDate(hasta.getDate() - diasAtras);
+
+  await generarReporte({
+    clientes: '',
+    estados: estados.join(','),
+    desde: desde.toISOString().split('T')[0],
+    hasta: hasta.toISOString().split('T')[0],
+    formato: 'xls'
+  });
+}
+
+async function generarReportePersonalizado(formato) {
+  // Obtener clientes seleccionados
+  const selectClientes = document.getElementById('reporteClientes');
+  const clientesSeleccionados = Array.from(selectClientes.selectedOptions)
+    .map(o => o.value)
+    .filter(v => v !== '');
+
+  // Obtener estados seleccionados
+  const estadosCheckboxes = document.querySelectorAll('input[name="reporte-estado"]:checked');
+  const estadosSeleccionados = Array.from(estadosCheckboxes).map(cb => cb.value);
+
+  // Obtener fechas
+  const desde = document.getElementById('reporteDesde').value;
+  const hasta = document.getElementById('reporteHasta').value;
+
+  // Validaciones
+  if (!desde || !hasta) {
+    alert('Por favor seleccioná un rango de fechas');
+    return;
+  }
+
+  if (estadosSeleccionados.length === 0) {
+    alert('Por favor seleccioná al menos un estado');
+    return;
+  }
+
+  await generarReporte({
+    clientes: clientesSeleccionados.join(',') || 'all',
+    estados: estadosSeleccionados.join(','),
+    desde,
+    hasta,
+    formato,
+    incluirHistorial: document.getElementById('incluirHistorial').checked,
+    incluirIntentos: document.getElementById('incluirIntentos').checked,
+    incluirCoordenadas: document.getElementById('incluirCoordenadas').checked
+  });
+}
+
+async function generarReporte(params) {
+  try {
+    // Construir URL del endpoint
+    const url = `/api/reportes/generar?${new URLSearchParams(params).toString()}`;
+
+    if (params.formato === 'preview') {
+      // Abrir vista previa en la misma página
+      const res = await fetch(url);
+      const data = await res.json();
+      mostrarVistaPrevia(data);
+    } else {
+      // Descargar archivo
+      window.open(url, '_blank');
+      cerrarModalReportes();
+    }
+  } catch (err) {
+    console.error('Error generando reporte:', err);
+    alert('No se pudo generar el reporte');
+  }
+}
+
+function mostrarVistaPrevia(data) {
+  // TODO: Implementar vista previa en tabla
+  console.log('Vista previa:', data);
+  alert(`Reporte generado: ${data.items?.length || 0} envíos encontrados`);
+}
+
+// Cerrar modal al hacer click fuera
+document.getElementById('modal-reportes')?.addEventListener('click', (e) => {
+  if (e.target.id === 'modal-reportes') {
+    cerrarModalReportes();
+  }
+});
+
+window.abrirModalReportes = abrirModalReportes;
+window.cerrarModalReportes = cerrarModalReportes;
+window.generarReportePreset = generarReportePreset;
+window.generarReportePersonalizado = generarReportePersonalizado;
 </script>
 <!-- ================== FIN DE TU SCRIPT ================== -->
 
