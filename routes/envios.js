@@ -1906,15 +1906,6 @@ router.patch('/:id/cambiar-estado', requireAuth, requireRole('admin','coordinado
 
     const nuevoEstado = String(nuevo_estado || '').trim();
 
-    const estadosQueRequierenChofer = new Set(['en_camino', 'entregado', 'comprador_ausente']);
-    const tieneChoferAsignado = Boolean(envio.chofer || envio.chofer_id);
-
-    if (estadosQueRequierenChofer.has(nuevoEstado) && !tieneChoferAsignado) {
-      return res.status(400).json({
-        error: `El estado "${nuevoEstado}" requiere que el envío tenga un chofer asignado`
-      });
-    }
-
     // Estados permitidos para cambio manual
     const ESTADOS_VALIDOS = [
       'pendiente',
