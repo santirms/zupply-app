@@ -196,6 +196,7 @@ app.use('/api/partidos',         require('./routes/partidos'));
 app.use('/api/clientes',         require('./routes/clientes'));
 app.use('/api/users',            require('./routes/users'));
 app.use('/api/kpis',             require('./routes/kpis'));
+app.use('/api/reportes',         require('./routes/reportes'));
 app.use('/api/client-panel',     require('./routes/client-panel'));
 
 // PANEL GENERAL DE ENVÍOS (coordinador solo lectura; ver routes/envios.js)
