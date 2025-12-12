@@ -321,33 +321,6 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // ---- Búsqueda fuzzy por dirección ----
-    if (req.query.direccion) {
-      const dirRaw = String(req.query.direccion).trim();
-      if (dirRaw) {
-        // Normalizar: quitar acentos, puntuación, mayúsculas
-        const dirNormalizada = dirRaw
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '') // Quitar acentos
-          .replace(/[^\w\s]/g, '') // Quitar puntos, comas, etc
-          .trim();
-
-        // Dividir en palabras
-        const palabras = dirNormalizada.split(/\s+/).filter(Boolean);
-
-        if (palabras.length > 0) {
-          // Construir regex que matchea todas las palabras en cualquier orden
-          // Ej: "gral san martin" → busca variantes como "General San Martin", "San Martin Gral", etc
-          const regexParts = palabras.map(p => `(?=.*${p})`).join('');
-          const regex = new RegExp(regexParts, 'i');
-
-          if (filtro.$and) filtro.$and.push({ direccion: { $regex: regex } });
-          else filtro.$and = [{ direccion: { $regex: regex } }];
-        }
-      }
-    }
-
     // --- Cursor consistente basado en 'ts' (fecha || createdAt) ---
     // Usamos 'ts' dentro del pipeline, así soporta docs viejos que no tengan 'fecha'
     const sort = { ts: -1, _id: -1 };
