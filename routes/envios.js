@@ -325,15 +325,19 @@ router.get('/', async (req, res) => {
     if (req.query.direccion) {
       const direccionRaw = String(req.query.direccion).trim();
       if (direccionRaw) {
-        // Normalizar: quitar acentos y convertir a minúsculas
-        const direccionNorm = direccionRaw
+        // Construir regex que ignore acentos
+        // "san martin" → "s[aá]n m[aá]rt[ií]n"
+        let escaped = direccionRaw
           .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, ''); // Quitar acentos
+          .replace(/a/gi, '[aáàä]')
+          .replace(/e/gi, '[eéèë]')
+          .replace(/i/gi, '[iíìï]')
+          .replace(/o/gi, '[oóòö]')
+          .replace(/u/gi, '[uúùü]')
+          .replace(/n/gi, '[nñ]');
 
-        // Buscar con regex case-insensitive
         filtro.direccion = {
-          $regex: direccionNorm,
+          $regex: escaped,
           $options: 'i'
         };
       }
