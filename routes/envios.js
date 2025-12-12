@@ -321,6 +321,24 @@ router.get('/', async (req, res) => {
       }
     }
 
+    // ---- Filtro por DIRECCIÓN (case insensitive, sin acentos) ----
+    if (req.query.direccion) {
+      const direccionRaw = String(req.query.direccion).trim();
+      if (direccionRaw) {
+        // Normalizar: quitar acentos y convertir a minúsculas
+        const direccionNorm = direccionRaw
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, ''); // Quitar acentos
+
+        // Buscar con regex case-insensitive
+        filtro.direccion = {
+          $regex: direccionNorm,
+          $options: 'i'
+        };
+      }
+    }
+
     // --- Cursor consistente basado en 'ts' (fecha || createdAt) ---
     // Usamos 'ts' dentro del pipeline, así soporta docs viejos que no tengan 'fecha'
     const sort = { ts: -1, _id: -1 };
