@@ -145,6 +145,13 @@
         class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300
                dark:bg-white/10 dark:border-white/10" />
 
+      <div>
+        <input id="filtroDireccion" type="text" placeholder="Ej: gral san martin, peron"
+          class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300
+                 dark:bg-white/10 dark:border-white/10" />
+        <p class="text-xs opacity-70 mt-1">Búsqueda flexible (sin mayúsculas, abreviaciones)</p>
+      </div>
+
       <input id="filtroTracking" type="text" placeholder="Buscar por tracking (ML o id_venta)"
         class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300
                dark:bg-white/10 dark:border-white/10" />
@@ -618,11 +625,12 @@ const nombreClienteEnvio = (envio = {}) => {
 };
 window.nombreClienteEnvio = nombreClienteEnvio;
 
-function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, partidos, chofer, cursor, incidencias, limit=100 }) {
+function buildQueryParams({ tracking, id_venta, cliente, direccion, desde, hasta, estado, partidos, chofer, cursor, incidencias, limit=100 }) {
   const p = new URLSearchParams();
   if (tracking) p.set('tracking', tracking);
   if (id_venta) p.set('id_venta', id_venta);
   if (cliente)  p.set('cliente', cliente);
+  if (direccion) p.set('direccion', direccion);
   if (!tracking) { if (desde) p.set('desde', desde); if (hasta) p.set('hasta', hasta); }
   if (estado) p.set('estado', estado);
   if (chofer) p.set('chofer', chofer);
@@ -893,6 +901,7 @@ async function aplicarFiltro(){
   const cliRaw=(document.getElementById('filtroCliente')?.value||'');
   const trackingRaw=(document.getElementById('filtroTracking')?.value||'');
   const idVentaRaw=(document.getElementById('filtroIdVenta')?.value||'');
+  const direccion=(document.getElementById('filtroDireccion')?.value||'');
   const desde=(document.getElementById('filtroDesde')?.value||'');
   const hasta=(document.getElementById('filtroHasta')?.value||'');
   const estadoSel=(document.getElementById('filtroEstado')?.value||'').toLowerCase();
@@ -902,7 +911,7 @@ async function aplicarFiltro(){
   const all=document.getElementById('chk_all_partidos'); if(all && all.checked) partidos.length=0;
 
   try{
-    filtrosActivos={ cliente:cliRaw.trim()||undefined, tracking:tracking||undefined, id_venta:id_venta||undefined, desde:desde||undefined, hasta:hasta||undefined, estado:estado||undefined, chofer:choferSel||undefined, partidos:partidos, limit:100 };
+    filtrosActivos={ cliente:cliRaw.trim()||undefined, tracking:tracking||undefined, id_venta:id_venta||undefined, direccion:direccion.trim()||undefined, desde:desde||undefined, hasta:hasta||undefined, estado:estado||undefined, chofer:choferSel||undefined, partidos:partidos, limit:100 };
 
     // Si el usuario seleccionó un estado manualmente, desactivar filtro de incidencias
     const estadoSeleccionado = document.getElementById('filtroEstado')?.value || '';
@@ -926,6 +935,7 @@ async function aplicarFiltro(){
 
 async function limpiarFiltros(){
   document.getElementById('filtroCliente').value='';
+  document.getElementById('filtroDireccion').value='';
   document.getElementById('filtroTracking').value='';
   document.getElementById('filtroIdVenta').value='';
   document.getElementById('filtroDesde').value='';
@@ -1803,7 +1813,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     window._filtroIncidencias = true;
   }
 
-  ['filtroCliente','filtroTracking','filtroIdVenta','filtroDesde','filtroHasta'].forEach(id=>{
+  ['filtroCliente','filtroDireccion','filtroTracking','filtroIdVenta','filtroDesde','filtroHasta'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.addEventListener('keydown',e=>{ if(e.key==='Enter') aplicarFiltro(); });
   });
   document.getElementById('modalDetalle').addEventListener('click',(e)=>{ if(e.target===e.currentTarget) cerrarModalDetalle(); });
