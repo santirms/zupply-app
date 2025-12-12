@@ -626,11 +626,12 @@ const nombreClienteEnvio = (envio = {}) => {
 };
 window.nombreClienteEnvio = nombreClienteEnvio;
 
-function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, partidos, chofer, cursor, incidencias, limit=100 }) {
+function buildQueryParams({ tracking, id_venta, cliente, direccion, desde, hasta, estado, partidos, chofer, cursor, incidencias, limit=100 }) {
   const p = new URLSearchParams();
   if (tracking) p.set('tracking', tracking);
   if (id_venta) p.set('id_venta', id_venta);
   if (cliente)  p.set('cliente', cliente);
+  if (direccion) p.set('direccion', direccion);
   if (!tracking) { if (desde) p.set('desde', desde); if (hasta) p.set('hasta', hasta); }
   if (estado) p.set('estado', estado);
   if (chofer) p.set('chofer', chofer);
