@@ -320,7 +320,12 @@ router.get('/', async (req, res) => {
         else filtro.$and = [{ $or: or }];
       }
     }
-
+    
+   console.log('🔍 DEBUGGING DIRECCIÓN:', {
+  direccion_query: req.query.direccion,
+  tipo: typeof req.query.direccion,
+  todos_query_params: req.query
+   });
     // ---- Filtro por DIRECCIÓN (case insensitive, sin acentos) ----
     if (req.query.direccion) {
       const direccionRaw = String(req.query.direccion).trim();
