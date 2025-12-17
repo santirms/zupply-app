@@ -1120,8 +1120,36 @@ document.getElementById('btnConfirmEliminar').addEventListener('click', async ()
 });
 
 // Notas
-let envioNotasId=null; const IS_ADMIN=(window.USER_ROLE==='admin');
-function abrirModalNotas(id){ envioNotasId=id; const m=document.getElementById('modalNotas'); m.classList.remove('hidden'); m.classList.add('flex'); document.body.classList.add('overflow-hidden'); document.getElementById('notaTexto').value=''; cargarNotas(); }
+let envioNotasId=null;
+const IS_ADMIN = (window.USER_ROLE === 'admin');
+const PUEDE_AGREGAR_NOTAS = (window.USER_ROLE === 'admin' || window.USER_ROLE === 'coordinador');
+function abrirModalNotas(id){
+  envioNotasId=id;
+  const m=document.getElementById('modalNotas');
+  m.classList.remove('hidden');
+  m.classList.add('flex');
+  document.body.classList.add('overflow-hidden');
+  document.getElementById('notaTexto').value='';
+  cargarNotas();
+
+  // Habilitar/deshabilitar formulario según permisos
+  const textarea = document.getElementById('notaTexto');
+  const btnGuardar = document.getElementById('btnGuardarNota');
+
+  if (textarea && btnGuardar) {
+    if (!PUEDE_AGREGAR_NOTAS) {
+      textarea.disabled = true;
+      textarea.placeholder = 'No tenés permisos para agregar notas';
+      btnGuardar.disabled = true;
+      btnGuardar.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+      textarea.disabled = false;
+      textarea.placeholder = 'Escribir nota...';
+      btnGuardar.disabled = false;
+      btnGuardar.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+  }
+}
 function cerrarModalNotas(){ envioNotasId=null; const m=document.getElementById('modalNotas'); m.classList.add('hidden'); m.classList.remove('flex'); document.body.classList.remove('overflow-hidden'); }
 document.getElementById('modalNotas').addEventListener('click',(e)=>{ if(e.target===e.currentTarget) cerrarModalNotas(); });
 document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') cerrarModalNotas(); });
