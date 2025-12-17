@@ -17,7 +17,13 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
   const filename = `ASG-${num}.pdf`;
   const outPath  = path.join(dir, filename);
 
-  const doc = new PDFDocument({ size: 'A4', margin: 36 });
+  // Márgenes más amplios: 50px en lugar de 36px
+  const doc = new PDFDocument({
+    size: 'A4',
+    margin: 50,
+    bufferPages: true // Importante para paginación correcta
+  });
+
   const stream = fs.createWriteStream(outPath);
   doc.pipe(stream);
 
@@ -28,39 +34,47 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
     doc.on('error', reject);
   });
 
-  // Header
-  doc.fontSize(18).text('Remito de salida');
-  doc.moveDown(0.2);
-  doc.fontSize(10)
-     .text(`N°: ASG-${num}`)
-     .text(`Fecha: ${dayjs(asignacion.fecha || asignacion.createdAt).format('DD/MM/YYYY')}`)
-     .text(`Chofer: ${chofer?.nombre || ''}`);
-  if (listaNombre) doc.text(`Lista (pago chofer): ${listaNombre}`); // 👈 reemplaza “Zona”
-  doc.moveDown(0.6);
+  // Función para pintar header en cada página
+  function pintarHeader(paginaActual, totalPaginas) {
+    doc.fontSize(18).font('Helvetica-Bold').text('Remito de salida', { align: 'center' });
+    doc.moveDown(0.3);
 
-  // Título tabla
-  doc.fontSize(11).text('Detalle de paquetes', { underline: true });
-  doc.moveDown(0.3);
+    doc.fontSize(10).font('Helvetica');
+    doc.text(`N°: ASG-${num}`, 50, doc.y);
+    doc.text(`Fecha: ${dayjs(asignacion.fecha || asignacion.createdAt).format('DD/MM/YYYY')}`, 50, doc.y);
+    doc.text(`Chofer: ${chofer?.nombre || ''}`, 50, doc.y);
+    if (listaNombre) doc.text(`Lista (pago chofer): ${listaNombre}`, 50, doc.y);
 
-  // Cabeceras y anchos (sin “Destinatario”)
+    // TOTAL ARRIBA (destacado)
+    doc.fontSize(12).font('Helvetica-Bold')
+       .fillColor('#2563eb')
+       .text(`TOTAL PAQUETES: ${envios.length}`, 50, doc.y, { align: 'right' });
+    doc.fillColor('#000000');
+
+    // Número de página si hay más de una
+    if (totalPaginas > 1) {
+      doc.fontSize(9).font('Helvetica')
+         .text(`Página ${paginaActual} de ${totalPaginas}`, 50, doc.y, { align: 'right' });
+    }
+
+    doc.moveDown(0.5);
+  }
+
+  // Configuración de tabla
   const headers = ['Tracking', 'Cliente', 'Dirección', 'CP/Partido'];
-  const widths  = [140, 120, 220, 100];
-  const startX = doc.x;
-  let y = doc.y;
+  const widths  = [130, 110, 210, 90]; // Ajustado para márgenes de 50px
+  const pageHeight = doc.page.height;
+  const bottomMargin = 80; // Margen inferior para no cortar
+  const maxY = pageHeight - bottomMargin;
 
-  // Pintar cabecera en una línea
-  let x = startX;
-  headers.forEach((h,i) => {
-    doc.text(h, x, y, { width: widths[i] });
-    x += widths[i];
-  });
-  y += 16; // salto bajo cabecera
-  doc.moveTo(startX, y-4).lineTo(startX + widths.reduce((a,b)=>a+b,0), y-4).strokeColor('#000').stroke();
-  doc.fillColor('#000');
+  // Primera pasada: calcular cuántas páginas necesitamos
+  const rowsPerPage = [];
+  let currentPageRows = [];
+  let testY = 150; // Posición Y inicial después del header
 
-  // Filas alineadas: calcular alto máximo por fila y avanzar y
-  doc.fontSize(10);
-  envios.forEach(e => {
+  doc.fontSize(10).font('Helvetica');
+
+  envios.forEach((e, idx) => {
     const cells = [
       e.id_venta || e.meli_id || '',
       e.cliente_id?.nombre || e.sender_id || '',
@@ -68,25 +82,90 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
       [e.codigo_postal||'', e.partido||''].filter(Boolean).join(' ')
     ];
 
-    // altura de cada celda y máximo de la fila
-    const heights = cells.map((txt,i) => height(doc, txt, widths[i]));
+    const heights = cells.map((txt, i) => height(doc, txt, widths[i]));
     const rowH = Math.max(...heights, 14);
 
-    // pintar celdas en la misma y
-    let cx = startX;
-    cells.forEach((txt,i) => {
-      doc.text(String(txt ?? ''), cx, y, { width: widths[i] });
-      cx += widths[i];
-    });
-
-    y += rowH + 6; // avance controlado
-    doc.y = y;
+    // Si esta fila no cabe en la página actual
+    if (testY + rowH + 6 > maxY) {
+      rowsPerPage.push([...currentPageRows]);
+      currentPageRows = [idx];
+      testY = 150 + rowH + 6; // Reset para nueva página
+    } else {
+      currentPageRows.push(idx);
+      testY += rowH + 6;
+    }
   });
 
-  doc.moveDown(0.6);
-  doc.fontSize(12).text(`TOTAL PAQUETES: ${envios.length}`, { align: 'right' });
+  // Agregar última página
+  if (currentPageRows.length > 0) {
+    rowsPerPage.push(currentPageRows);
+  }
 
-  // 👉 firmas eliminadas
+  const totalPaginas = rowsPerPage.length;
+
+  // Segunda pasada: pintar el PDF página por página
+  rowsPerPage.forEach((rows, pageIdx) => {
+    const paginaActual = pageIdx + 1;
+
+    // Nueva página si no es la primera
+    if (pageIdx > 0) {
+      doc.addPage();
+    }
+
+    // Pintar header
+    pintarHeader(paginaActual, totalPaginas);
+
+    // Título de tabla
+    doc.fontSize(11).font('Helvetica-Bold')
+       .text('Detalle de paquetes', 50, doc.y, { underline: true });
+    doc.moveDown(0.3);
+
+    // Cabeceras
+    const startX = 50;
+    let y = doc.y;
+    let x = startX;
+
+    doc.fontSize(9).font('Helvetica-Bold');
+    headers.forEach((h, i) => {
+      doc.text(h, x, y, { width: widths[i], align: 'left' });
+      x += widths[i];
+    });
+
+    y += 16;
+    doc.moveTo(startX, y - 4)
+       .lineTo(startX + widths.reduce((a,b) => a+b, 0), y - 4)
+       .strokeColor('#cccccc')
+       .lineWidth(1)
+       .stroke();
+    doc.fillColor('#000000');
+
+    // Filas de esta página
+    doc.fontSize(9).font('Helvetica');
+
+    rows.forEach(envioIdx => {
+      const e = envios[envioIdx];
+      const cells = [
+        e.id_venta || e.meli_id || '',
+        e.cliente_id?.nombre || e.sender_id || '',
+        e.direccion || '',
+        [e.codigo_postal||'', e.partido||''].filter(Boolean).join(' ')
+      ];
+
+      const heights = cells.map((txt, i) => height(doc, txt, widths[i]));
+      const rowH = Math.max(...heights, 14);
+
+      let cx = startX;
+      cells.forEach((txt, i) => {
+        doc.text(String(txt ?? ''), cx, y, {
+          width: widths[i],
+          align: i === 0 ? 'left' : 'left' // Todo alineado a izquierda
+        });
+        cx += widths[i];
+      });
+
+      y += rowH + 4;
+    });
+  });
 
   doc.end();
 
@@ -107,7 +186,6 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
       return { buffer: pdfBuffer, url: null };
     }
 
-    // Cliente S3
     const s3Client = new S3Client({
       region: process.env.S3_REGION || 'us-east-2',
       endpoint: process.env.S3_ENDPOINT,
@@ -118,7 +196,6 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
       }
     });
 
-    // Generar ruta S3
     const fecha = new Date(asignacion.fecha || Date.now());
     const year = fecha.getFullYear();
     const month = String(fecha.getMonth() + 1).padStart(2, '0');
@@ -127,7 +204,6 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
 
     const s3Key = `remitos/${year}/${month}/${day}/${asgId}.pdf`;
 
-    // Subir archivo a S3
     const putCommand = new PutObjectCommand({
       Bucket: bucketName,
       Key: s3Key,
@@ -144,14 +220,13 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
 
     await s3Client.send(putCommand);
 
-    // Generar URL pre-firmada válida por 7 días
     const getCommand = new GetObjectCommand({
       Bucket: bucketName,
       Key: s3Key
     });
 
     const url = await getSignedUrl(s3Client, getCommand, {
-      expiresIn: 7 * 24 * 60 * 60 // 7 días en segundos (604,800 segundos - máximo AWS)
+      expiresIn: 7 * 24 * 60 * 60
     });
 
     console.log(`✓ Remito guardado en S3: ${s3Key}`);
@@ -160,8 +235,6 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
     return { buffer: pdfBuffer, url, s3Key };
   } catch (error) {
     console.error('❌ Error subiendo remito a S3:', error.message);
-    console.error('Stack:', error.stack);
-    // No fallar la asignación si S3 falla
     return { buffer: pdfBuffer, url: null };
   }
 }
