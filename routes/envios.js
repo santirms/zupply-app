@@ -59,6 +59,10 @@ router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE'
     {
       path: (req) => /^\/[^/]+\/cambiar-estado$/.test(req.path),
       methods: ['PATCH']
+    },
+    {
+      path: (req) => /^\/[^/]+\/notas$/.test(req.path),
+      methods: ['POST']
     }
   ]
 }));
