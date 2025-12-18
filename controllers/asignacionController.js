@@ -100,7 +100,12 @@ if ((!chofer_id && !chofer_nombre) || !tracksNorm.length) {
     { meli_id:  { $in: tracksNorm } },
     { meli_id:  { $in: tracksNum } },
   ]
-}).populate('cliente_id').lean();
+})
+.populate({
+  path: 'cliente_id',
+  select: 'nombre razon_social sender_id'
+})
+.lean();
 
 // indexar encontrados por “cualquiera de sus llaves”
 const foundByKey = new Map();
@@ -304,7 +309,12 @@ async function asignarViaMapa(req, res) {
     if (!chofer_id || !Array.isArray(envio_ids) || !envio_ids.length) {
       return res.status(400).json({ error: 'Faltan datos' });
     }
-    const envios = await Envio.find({ _id: { $in: envio_ids } }).populate('cliente_id').lean();
+    const envios = await Envio.find({ _id: { $in: envio_ids } })
+      .populate({
+        path: 'cliente_id',
+        select: 'nombre razon_social sender_id'
+      })
+      .lean();
     req.body.tracking_ids = envios.map(e => e.id_venta || e.meli_id).filter(Boolean);
     return asignarViaQR(req, res);
   } catch (err) {
