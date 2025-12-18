@@ -16,9 +16,22 @@
   <div class="max-w-4xl mx-auto py-6 px-4">
     <div class="bg-white shadow rounded-lg p-6">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <div>
+        <div class="flex-1">
           <h1 class="text-2xl font-semibold text-slate-800">Mis envíos del día</h1>
-          <p class="text-sm text-slate-600">Solo verás los envíos manuales que tengas asignados para hoy.</p>
+          <p class="text-sm text-slate-600">Solo envíos asignados hoy</p>
+
+          <!-- Contador de paquetes -->
+          <div id="contador-paquetes" class="mt-2 hidden">
+            <div class="inline-flex items-center gap-3 px-3 py-1.5 bg-slate-100 rounded-lg text-sm">
+              <span class="font-semibold text-slate-700">
+                <span id="total-paquetes">0</span> paquetes
+              </span>
+              <span class="text-slate-400">|</span>
+              <span class="text-emerald-600">
+                <span id="manual-paquetes">0</span> manuales
+              </span>
+            </div>
+          </div>
         </div>
         <button
           id="btnRecargar"
@@ -411,12 +424,32 @@
     );
   }
 
+  /**
+   * Actualiza el contador de paquetes
+   */
+  function actualizarContador(envios) {
+    const contador = document.getElementById('contador-paquetes');
+    const totalSpan = document.getElementById('total-paquetes');
+    const manualSpan = document.getElementById('manual-paquetes');
+
+    if (!envios || envios.length === 0) {
+      contador.classList.add('hidden');
+      return;
+    }
+
+    // Todos son manuales en este panel
+    totalSpan.textContent = envios.length;
+    manualSpan.textContent = envios.length;
+
+    contador.classList.remove('hidden');
+  }
+
   async function cargarEnvios() {
     const lista = document.getElementById('list');
     lista.innerHTML = '<div class="text-sm text-slate-500">Cargando envíos...</div>';
 
     try {
-      const response = await fetch('/api/mis-envios/activos', {
+      const response = await fetch('/api/mis-envios/activos?solo_hoy=true', {
         credentials: 'same-origin'
       });
 
@@ -462,6 +495,9 @@
 
       lista.innerHTML = enviosActuales.map(renderizarEnvio).join('');
       registrarEventosMarcarEstado();
+
+      // Actualizar contador
+      actualizarContador(envios);
     } catch (error) {
       console.error('Error cargando envíos:', error);
       lista.innerHTML = `
