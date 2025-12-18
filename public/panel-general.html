@@ -197,6 +197,15 @@
         <option value="cancelado">Cancelado</option>
       </select>
 
+      <select id="filtroOrigen"
+        class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020] dark:text-slate-100">
+        <option value="">— Todos —</option>
+        <option value="mercadolibre"> MercadoLibre Flex</option>
+        <option value="etiquetas"> Etiquetas PDF</option>
+        <option value="ingreso_manual"> Ingreso Manual</option>
+        <option value="tiendanube"> TiendaNube</option>
+      </select>
+
       <select id="filtroChofer"
         class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 dark:bg-[#0B1020] dark:border-white/10 dark:text-slate-100">
         <option value="">— Todos los choferes —</option>
@@ -626,7 +635,7 @@ const nombreClienteEnvio = (envio = {}) => {
 };
 window.nombreClienteEnvio = nombreClienteEnvio;
 
-function buildQueryParams({ tracking, id_venta, cliente, direccion, desde, hasta, estado, partidos, chofer, cursor, incidencias, limit=100 }) {
+function buildQueryParams({ tracking, id_venta, cliente, direccion, desde, hasta, estado, origen, partidos, chofer, cursor, incidencias, limit=100 }) {
   const p = new URLSearchParams();
   if (tracking) p.set('tracking', tracking);
   if (id_venta) p.set('id_venta', id_venta);
@@ -634,6 +643,7 @@ function buildQueryParams({ tracking, id_venta, cliente, direccion, desde, hasta
   if (direccion) p.set('direccion', direccion);
   if (!tracking) { if (desde) p.set('desde', desde); if (hasta) p.set('hasta', hasta); }
   if (estado) p.set('estado', estado);
+  if (origen) p.set('origen', origen);
   if (chofer) p.set('chofer', chofer);
   if (incidencias) p.set('incidencias', incidencias);
   if (Array.isArray(partidos) && partidos.length) p.set('partidos', partidos.join(','));
@@ -906,6 +916,7 @@ async function aplicarFiltro(){
   const desde=(document.getElementById('filtroDesde')?.value||'');
   const hasta=(document.getElementById('filtroHasta')?.value||'');
   const estadoSel=(document.getElementById('filtroEstado')?.value||'').toLowerCase();
+  const origenSel=(document.getElementById('filtroOrigen')?.value||'');
   const choferSel=(document.getElementById('filtroChofer')?.value||'');
   const tracking=trackingRaw.trim(); const id_venta=idVentaRaw.trim(); const estado=estadoSel||'';
   const direccion=direccionRaw.trim();
@@ -913,7 +924,7 @@ async function aplicarFiltro(){
   const all=document.getElementById('chk_all_partidos'); if(all && all.checked) partidos.length=0;
 
   try{
-    filtrosActivos={ cliente:cliRaw.trim()||undefined, tracking:tracking||undefined, id_venta:id_venta||undefined, direccion:direccion||undefined, desde:desde||undefined, hasta:hasta||undefined, estado:estado||undefined, chofer:choferSel||undefined, partidos:partidos, limit:100 };
+    filtrosActivos={ cliente:cliRaw.trim()||undefined, tracking:tracking||undefined, id_venta:id_venta||undefined, direccion:direccion||undefined, desde:desde||undefined, hasta:hasta||undefined, estado:estado||undefined, origen:origenSel||undefined, chofer:choferSel||undefined, partidos:partidos, limit:100 };
 
     // Si el usuario seleccionó un estado manualmente, desactivar filtro de incidencias
     const estadoSeleccionado = document.getElementById('filtroEstado')?.value || '';
@@ -943,6 +954,7 @@ async function limpiarFiltros(){
   document.getElementById('filtroDesde').value='';
   document.getElementById('filtroHasta').value='';
   document.getElementById('filtroEstado').value='';
+  document.getElementById('filtroOrigen').value='';
   const choferSel=document.getElementById('filtroChofer'); if(choferSel) choferSel.value='';
   seleccionPartidos.clear(); const all=document.getElementById('chk_all_partidos'); if(all) all.checked=true;
   document.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]').forEach(cb=>cb.checked=false);

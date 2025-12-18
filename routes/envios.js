@@ -75,7 +75,7 @@ const TIME_FIELD = 'fecha'; // usamos "fecha" para ventana/sort/cursor
 
 function buildFiltroList(req) {
   const f = {};
-  const { sender_id, estado, tracking, id_venta, desde, hasta, chofer, incidencias } = req.query;
+  const { sender_id, estado, tracking, id_venta, desde, hasta, origen, chofer, incidencias } = req.query;
   const partidosRaw = req.query.partidos;
   const partidoRaw = req.query.partido;
 
@@ -350,6 +350,11 @@ router.get('/', async (req, res) => {
           $options: 'i'
         };
       }
+    }
+
+    // ---- Filtro por ORIGEN ----
+    if (req.query.origen) {
+      filtro.origen = req.query.origen;
     }
 
     // --- Cursor consistente basado en 'ts' (fecha || createdAt) ---
