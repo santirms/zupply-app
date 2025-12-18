@@ -77,7 +77,7 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
   envios.forEach((e, idx) => {
     const cells = [
       e.id_venta || e.meli_id || '',
-      e.cliente_id?.nombre || e.sender_id || '',
+      e.cliente_id?.nombre || e.cliente_id?.razon_social || e.sender_id || '',
       e.direccion || '',
       [e.codigo_postal||'', e.partido||''].filter(Boolean).join(' ')
     ];
@@ -146,7 +146,7 @@ async function buildRemitoPDF({ asignacion, chofer, envios, listaNombre }) {
       const e = envios[envioIdx];
       const cells = [
         e.id_venta || e.meli_id || '',
-        e.cliente_id?.nombre || e.sender_id || '',
+        e.cliente_id?.nombre || e.cliente_id?.razon_social || e.sender_id || '',
         e.direccion || '',
         [e.codigo_postal||'', e.partido||''].filter(Boolean).join(' ')
       ];
