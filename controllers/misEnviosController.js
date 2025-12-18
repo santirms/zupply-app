@@ -219,12 +219,14 @@ exports.marcarEstado = async (req, res) => {
 exports.getEnviosActivos = async (req, res) => {
   try {
     const choferId = obtenerChoferId(req);
-    
+    const soloHoy = req.query.solo_hoy === 'true';
+
     logger.info('[Mis Envios] Request de chofer', {
       choferId,
-      userId: req.user?._id
+      userId: req.user?._id,
+      soloHoy
     });
-    
+
     if (!choferId) {
       return res.status(400).json({
         error: 'No se pudo identificar al chofer'
@@ -245,6 +247,28 @@ exports.getEnviosActivos = async (req, res) => {
         $nin: ['entregado', 'cancelado', 'devolucion']
       }
     };
+
+    // Filtrar solo envíos asignados HOY (basado en historial)
+    if (soloHoy) {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+
+      const mañana = new Date(hoy);
+      mañana.setDate(mañana.getDate() + 1);
+
+      // Buscar envíos que fueron asignados/en_camino/en_planta HOY
+      query['historial'] = {
+        $elemMatch: {
+          at: { $gte: hoy, $lt: mañana },
+          estado: { $in: ['asignado', 'en_camino', 'en_planta'] }
+        }
+      };
+
+      logger.debug('[Mis Envios] Filtro solo_hoy activado', {
+        desde: hoy.toISOString(),
+        hasta: mañana.toISOString()
+      });
+    }
 
     logger.debug('[Mis Envios] Query', {
       chofer: choferId
