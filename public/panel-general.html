@@ -67,6 +67,11 @@
   /* Dropdown de Partidos en dark */
   #panelPartidos{ backdrop-filter:saturate(120%) blur(6px); }
 </style>
+
+<!-- Modal de Confirmación de Entrega -->
+<script src="/js/confirmar-entrega-modal.js"></script>
+<!-- Modal de Intento Fallido con Evidencia -->
+<script src="/js/registrar-intento-fallido-modal.js"></script>
 </head>
 
 <body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
@@ -1214,6 +1219,106 @@ window.aplicarFiltro=aplicarFiltro; window.limpiarFiltros=limpiarFiltros;
 window.mostrarDetalle=mostrarDetalle; window.abrirModalEliminar=abrirModalEliminar;
 window.cerrarModalEliminar=cerrarModalEliminar; window.cerrarModalDetalle=cerrarModalDetalle;
 
+// ===== CARGA MANUAL DE EVIDENCIAS (ADMIN/COORDINADOR) =====
+let modalIntentoFallidoManual = null;
+let modalEntregaManual = null;
+let envioActualParaEvidencias = null;
+
+async function abrirModalIntentoFallidoManual(envioId) {
+  try {
+    // Cargar envío completo
+    const response = await fetch(`/api/envios/${envioId}`, {
+      credentials: 'same-origin'
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error al cargar envío: ${response.status}`);
+    }
+
+    const envio = await response.json();
+    envioActualParaEvidencias = envio;
+
+    // Inicializar modal si no existe
+    if (!modalIntentoFallidoManual) {
+      modalIntentoFallidoManual = new RegistrarIntentoFallidoModal();
+    }
+
+    // Abrir modal
+    modalIntentoFallidoManual.open(
+      envio,
+      // onConfirm
+      () => {
+        console.log('Intento fallido registrado manualmente');
+        // Recargar evidencias
+        setTimeout(async () => {
+          const respuesta = await fetch(`/api/envios/${envioId}`);
+          const envioActualizado = await respuesta.json();
+          renderEvidencias(envioActualizado);
+          renderHistorial(envioActualizado.historial, envioActualizado);
+          // Recargar lista principal
+          cargarPrimerPagina();
+        }, 1000);
+      },
+      // onClose
+      () => {
+        console.log('Modal intento fallido cerrado');
+      }
+    );
+  } catch (error) {
+    console.error('Error al abrir modal de intento fallido:', error);
+    alert('Error al cargar los datos del envío. Por favor, intente nuevamente.');
+  }
+}
+
+async function abrirModalEntregaManual(envioId) {
+  try {
+    // Cargar envío completo
+    const response = await fetch(`/api/envios/${envioId}`, {
+      credentials: 'same-origin'
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error al cargar envío: ${response.status}`);
+    }
+
+    const envio = await response.json();
+    envioActualParaEvidencias = envio;
+
+    // Inicializar modal si no existe
+    if (!modalEntregaManual) {
+      modalEntregaManual = new ConfirmarEntregaModal();
+    }
+
+    // Abrir modal
+    modalEntregaManual.open(
+      envio,
+      // onConfirm
+      (envioActualizado) => {
+        console.log('Entrega confirmada manualmente:', envioActualizado);
+        // Recargar evidencias
+        setTimeout(async () => {
+          const respuesta = await fetch(`/api/envios/${envioId}`);
+          const envioNuevo = await respuesta.json();
+          renderEvidencias(envioNuevo);
+          renderHistorial(envioNuevo.historial, envioNuevo);
+          // Recargar lista principal
+          cargarPrimerPagina();
+        }, 1000);
+      },
+      // onClose
+      () => {
+        console.log('Modal entrega cerrado');
+      }
+    );
+  } catch (error) {
+    console.error('Error al abrir modal de entrega:', error);
+    alert('Error al cargar los datos del envío. Por favor, intente nuevamente.');
+  }
+}
+
+window.abrirModalIntentoFallidoManual = abrirModalIntentoFallidoManual;
+window.abrirModalEntregaManual = abrirModalEntregaManual;
+
 function switchTab(which){
   const det=document.getElementById('tabDetalle');
   const his=document.getElementById('tabHistorial');
@@ -1371,6 +1476,9 @@ function renderEvidencias(envio) {
     return;
   }
 
+  // NUEVO: Verificar permisos para botones de carga manual
+  const PUEDE_SUBIR_EVIDENCIAS = (window.USER_ROLE === 'admin' || window.USER_ROLE === 'coordinador');
+
   const intentosFallidos = envio.intentosFallidos || [];
   const confirmacion = envio.confirmacionEntrega;
   const tieneEvidencias = intentosFallidos.length > 0 || (confirmacion && confirmacion.confirmada);
@@ -1387,11 +1495,38 @@ function renderEvidencias(envio) {
   }
 
   if (!tieneEvidencias) {
+    let botonesHtml = '';
+
+    if (PUEDE_SUBIR_EVIDENCIAS) {
+      botonesHtml = `
+        <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            onclick="abrirModalIntentoFallidoManual('${envio._id}')"
+            class="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-medium shadow-sm flex items-center gap-2 justify-center">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            Registrar Intento Fallido
+          </button>
+
+          <button
+            onclick="abrirModalEntregaManual('${envio._id}')"
+            class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium shadow-sm flex items-center gap-2 justify-center">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Confirmar Entrega
+          </button>
+        </div>
+      `;
+    }
+
     cont.innerHTML = `
       <div style="text-align: center; padding: 60px 20px; color: #6c757d;">
         <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;">📋</div>
         <h5 style="color: #495057; margin-bottom: 8px; font-size: 1.1rem; font-weight: 600;">Sin evidencias registradas</h5>
-        <p style="color: #6c757d; margin-bottom: 0;">Este envío no tiene intentos fallidos ni firma digital.</p>
+        <p style="color: #6c757d; margin-bottom: 16px;">Este envío no tiene intentos fallidos ni firma digital.</p>
+        ${botonesHtml}
       </div>
     `;
     return;
@@ -1605,6 +1740,35 @@ function renderEvidencias(envio) {
   }
 
   cont.innerHTML = html;
+
+  // NUEVO: Agregar botones de carga manual al final si tiene permisos
+  if (PUEDE_SUBIR_EVIDENCIAS) {
+    const botonesManual = document.createElement('div');
+    botonesManual.className = 'mt-6 pt-6 border-t border-slate-200 dark:border-white/10';
+    botonesManual.innerHTML = `
+      <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">Cargar evidencias manualmente:</p>
+      <div class="flex flex-col sm:flex-row gap-3">
+        <button
+          onclick="abrirModalIntentoFallidoManual('${envio._id}')"
+          class="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-medium shadow-sm flex items-center gap-2 justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          Registrar Intento Fallido
+        </button>
+
+        <button
+          onclick="abrirModalEntregaManual('${envio._id}')"
+          class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium shadow-sm flex items-center gap-2 justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Confirmar Entrega
+        </button>
+      </div>
+    `;
+    cont.appendChild(botonesManual);
+  }
 }
 
 async function handleVerFotoEvidencia(envioId, fotoS3Key, tipo) {
