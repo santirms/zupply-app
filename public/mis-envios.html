@@ -449,7 +449,8 @@
     lista.innerHTML = '<div class="text-sm text-slate-500">Cargando envíos...</div>';
 
     try {
-      const response = await fetch('/api/mis-envios/activos?solo_hoy=true', {
+      //const response = await fetch('/api/mis-envios/activos?solo_hoy=true', {
+      const response = await fetch('/api/mis-envios/activos', {
         credentials: 'same-origin'
       });
 
