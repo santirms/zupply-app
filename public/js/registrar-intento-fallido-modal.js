@@ -42,6 +42,9 @@ class RegistrarIntentoFallidoModal {
 
     this.createModalElement();
     this.captureGeolocation();
+
+    // Detectar si es dispositivo móvil
+    this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   }
 
   /**
@@ -63,6 +66,33 @@ class RegistrarIntentoFallidoModal {
         { timeout: 5000, enableHighAccuracy: true }
       );
     }
+  }
+
+  /**
+   * Maneja la selección de foto (tanto desde input como drag & drop)
+   */
+  handleFotoSelected(file) {
+    // Validar tipo
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor seleccioná una imagen (JPG, PNG)');
+      return;
+    }
+
+    // Validar tamaño (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('La imagen es muy grande. Máximo 5MB');
+      return;
+    }
+
+    this.foto = file;
+
+    // Preview
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      this.previewFoto = ev.target.result;
+      this.render();
+    };
+    reader.readAsDataURL(file);
   }
 
   /**
@@ -263,18 +293,33 @@ class RegistrarIntentoFallidoModal {
               type="file"
               id="inputFoto"
               accept="image/*"
-              capture="environment"
+              ${this.isMobile ? 'capture="environment"' : ''}
               class="hidden"
             />
 
-            <button
-              id="btnTomarFoto"
-              type="button"
-              class="w-full px-4 py-4 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-orange-500 hover:bg-orange-50 transition-colors flex items-center justify-center gap-2 text-base"
-            >
-              <span class="text-2xl">📷</span>
-              <span id="btnFotoText">${this.foto ? 'Cambiar Foto' : 'Tomar Foto'}</span>
-            </button>
+            ${this.isMobile ? `
+              <!-- Móvil: Botón de cámara -->
+              <button
+                id="btnTomarFoto"
+                type="button"
+                class="w-full px-4 py-4 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-orange-500 hover:bg-orange-50 transition-colors flex items-center justify-center gap-2 text-base"
+              >
+                <span class="text-2xl">📷</span>
+                <span id="btnFotoText">${this.foto ? 'Cambiar Foto' : 'Tomar Foto'}</span>
+              </button>
+            ` : `
+              <!-- PC: Drag & drop + botón -->
+              <div
+                id="dropZoneFoto"
+                class="w-full px-4 py-8 border-2 border-dashed border-slate-300 rounded-lg text-center hover:border-orange-500 hover:bg-orange-50 transition-colors cursor-pointer"
+              >
+                <div class="text-4xl mb-2">📁</div>
+                <p class="text-sm text-slate-600 mb-2">
+                  <span class="font-semibold text-orange-600">Click para seleccionar</span> o arrastrá la foto aquí
+                </p>
+                <p class="text-xs text-slate-500">Formatos: JPG, PNG (máx 5MB)</p>
+              </div>
+            `}
 
             ${this.previewFoto ? `
               <div class="mt-3 text-center">
@@ -327,19 +372,56 @@ class RegistrarIntentoFallidoModal {
       });
     }
 
-    // Botón tomar foto
-    const btnTomarFoto = document.getElementById('btnTomarFoto');
-    if (btnTomarFoto) {
-      btnTomarFoto.addEventListener('click', () => {
-        document.getElementById('inputFoto').click();
-      });
+    // Manejo de foto según dispositivo
+    const inputFoto = document.getElementById('inputFoto');
+
+    if (this.isMobile) {
+      // Móvil: Click en botón abre cámara
+      const btnTomarFoto = document.getElementById('btnTomarFoto');
+      if (btnTomarFoto) {
+        btnTomarFoto.addEventListener('click', () => {
+          inputFoto.click();
+        });
+      }
+    } else {
+      // PC: Click en drop zone abre selector de archivos
+      const dropZone = document.getElementById('dropZoneFoto');
+
+      if (dropZone) {
+        dropZone.addEventListener('click', () => {
+          inputFoto.click();
+        });
+
+        // Drag & drop handlers
+        dropZone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          dropZone.classList.add('border-orange-500', 'bg-orange-50');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+          dropZone.classList.remove('border-orange-500', 'bg-orange-50');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('border-orange-500', 'bg-orange-50');
+
+          const files = e.dataTransfer.files;
+          if (files.length > 0) {
+            const file = files[0];
+            this.handleFotoSelected(file);
+          }
+        });
+      }
     }
 
-    // Input de foto
-    const inputFoto = document.getElementById('inputFoto');
+    // Input de foto (común para móvil y PC)
     if (inputFoto) {
       inputFoto.addEventListener('change', (e) => {
-        this.handleFotoChange(e);
+        const file = e.target.files[0];
+        if (file) {
+          this.handleFotoSelected(file);
+        }
       });
     }
 

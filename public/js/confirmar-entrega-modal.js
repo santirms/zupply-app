@@ -27,6 +27,9 @@ class ConfirmarEntregaModal {
 
     this.createModalElement();
     this.captureGeolocation();
+
+    // Detectar si es dispositivo móvil
+    this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   }
 
   /**
@@ -320,87 +323,108 @@ class ConfirmarEntregaModal {
             </label>
             <div class="border border-slate-300 rounded-lg p-3 bg-slate-50">
 
-              <!-- Botón para activar cámara -->
-              <button
-                type="button"
-                id="btnActivarCamaraDNI"
-                class="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 mb-3">
-                📷 Tomar Foto del DNI
-              </button>
+              ${this.isMobile ? `
+                <!-- Móvil: Botón para activar cámara -->
+                <button
+                  type="button"
+                  id="btnActivarCamaraDNI"
+                  class="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 mb-3">
+                  📷 Tomar Foto del DNI
+                </button>
 
-              <!-- Video preview con mira HORIZONTAL (oculto inicialmente) -->
-              <div id="containerCamaraDNI" style="display: none;">
-                <!-- Video container -->
-                <div style="position: relative; width: 100%; margin: 0 auto; background: #000; border-radius: 8px; overflow: hidden;">
-                  <video
-                    id="videoCamaraDNI"
-                    autoplay
-                    playsinline
-                    style="width: 100%; height: auto; display: block; max-height: 70vh; object-fit: cover;">
-                  </video>
+                <!-- Video preview con mira HORIZONTAL (oculto inicialmente) -->
+                <div id="containerCamaraDNI" style="display: none;">
+                  <!-- Video container -->
+                  <div style="position: relative; width: 100%; margin: 0 auto; background: #000; border-radius: 8px; overflow: hidden;">
+                    <video
+                      id="videoCamaraDNI"
+                      autoplay
+                      playsinline
+                      style="width: 100%; height: auto; display: block; max-height: 70vh; object-fit: cover;">
+                    </video>
 
-                  <!-- Mira HORIZONTAL para DNI -->
-                  <div style="
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    width: 80%;
-                    height: 50%;
-                    border: 3px dashed #00ff00;
-                    border-radius: 8px;
-                    pointer-events: none;
-                    box-shadow: 0 0 0 9999px rgba(0,0,0,0.6);
-                  ">
-                    <!-- Instrucción arriba -->
+                    <!-- Mira HORIZONTAL para DNI -->
                     <div style="
                       position: absolute;
-                      top: -40px;
+                      top: 50%;
                       left: 50%;
-                      transform: translateX(-50%);
-                      background: #00ff00;
-                      color: #000;
-                      padding: 8px 20px;
-                      border-radius: 20px;
-                      font-weight: bold;
-                      font-size: 15px;
-                      white-space: nowrap;
-                      box-shadow: 0 2px 8px rgba(0,255,0,0.5);
+                      transform: translate(-50%, -50%);
+                      width: 80%;
+                      height: 50%;
+                      border: 3px dashed #00ff00;
+                      border-radius: 8px;
+                      pointer-events: none;
+                      box-shadow: 0 0 0 9999px rgba(0,0,0,0.6);
                     ">
-                      📄 Alineá el DNI horizontalmente
-                    </div>
+                      <!-- Instrucción arriba -->
+                      <div style="
+                        position: absolute;
+                        top: -40px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        background: #00ff00;
+                        color: #000;
+                        padding: 8px 20px;
+                        border-radius: 20px;
+                        font-weight: bold;
+                        font-size: 15px;
+                        white-space: nowrap;
+                        box-shadow: 0 2px 8px rgba(0,255,0,0.5);
+                      ">
+                        📄 Alineá el DNI horizontalmente
+                      </div>
 
-                    <!-- Indicadores de esquinas -->
-                    <div style="position: absolute; top: -3px; left: -3px; width: 20px; height: 20px; border-top: 5px solid #00ff00; border-left: 5px solid #00ff00;"></div>
-                    <div style="position: absolute; top: -3px; right: -3px; width: 20px; height: 20px; border-top: 5px solid #00ff00; border-right: 5px solid #00ff00;"></div>
-                    <div style="position: absolute; bottom: -3px; left: -3px; width: 20px; height: 20px; border-bottom: 5px solid #00ff00; border-left: 5px solid #00ff00;"></div>
-                    <div style="position: absolute; bottom: -3px; right: -3px; width: 20px; height: 20px; border-bottom: 5px solid #00ff00; border-right: 5px solid #00ff00;"></div>
+                      <!-- Indicadores de esquinas -->
+                      <div style="position: absolute; top: -3px; left: -3px; width: 20px; height: 20px; border-top: 5px solid #00ff00; border-left: 5px solid #00ff00;"></div>
+                      <div style="position: absolute; top: -3px; right: -3px; width: 20px; height: 20px; border-top: 5px solid #00ff00; border-right: 5px solid #00ff00;"></div>
+                      <div style="position: absolute; bottom: -3px; left: -3px; width: 20px; height: 20px; border-bottom: 5px solid #00ff00; border-left: 5px solid #00ff00;"></div>
+                      <div style="position: absolute; bottom: -3px; right: -3px; width: 20px; height: 20px; border-bottom: 5px solid #00ff00; border-right: 5px solid #00ff00;"></div>
+                    </div>
+                  </div>
+
+                  <!-- Botones FUERA del contenedor de video -->
+                  <div style="margin-top: 20px; position: relative; z-index: 100;">
+                    <button
+                      type="button"
+                      id="btnCapturarDNI"
+                      class="w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700"
+                      style="padding: 15px; font-size: 18px; font-weight: bold; border-radius: 10px; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);">
+                      📸 Capturar Foto
+                    </button>
+                    <button
+                      type="button"
+                      id="btnCancelarCamaraDNI"
+                      class="w-full mt-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-100"
+                      style="padding: 12px; font-size: 16px;">
+                      ✕ Cancelar
+                    </button>
                   </div>
                 </div>
 
-                <!-- Botones FUERA del contenedor de video -->
-                <div style="margin-top: 20px; position: relative; z-index: 100;">
-                  <button
-                    type="button"
-                    id="btnCapturarDNI"
-                    class="w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700"
-                    style="padding: 15px; font-size: 18px; font-weight: bold; border-radius: 10px; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);">
-                    📸 Capturar Foto
-                  </button>
-                  <button
-                    type="button"
-                    id="btnCancelarCamaraDNI"
-                    class="w-full mt-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-100"
-                    style="padding: 12px; font-size: 16px;">
-                    ✕ Cancelar
-                  </button>
+                <!-- Canvas oculto para capturar la foto -->
+                <canvas id="canvasDNI" style="display: none;"></canvas>
+              ` : `
+                <!-- PC: Drag & drop + selector de archivos -->
+                <input
+                  type="file"
+                  id="inputFotoDNI"
+                  accept="image/*"
+                  class="hidden"
+                />
+
+                <div
+                  id="dropZoneDNI"
+                  class="w-full px-4 py-8 border-2 border-dashed border-slate-300 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 transition-colors cursor-pointer"
+                >
+                  <div class="text-4xl mb-2">📁</div>
+                  <p class="text-sm text-slate-600 mb-2">
+                    <span class="font-semibold text-blue-600">Click para seleccionar</span> o arrastrá la foto del DNI aquí
+                  </p>
+                  <p class="text-xs text-slate-500">Formatos: JPG, PNG (máx 5MB)</p>
                 </div>
-              </div>
+              `}
 
-              <!-- Canvas oculto para capturar la foto -->
-              <canvas id="canvasDNI" style="display: none;"></canvas>
-
-              <!-- Preview de la foto capturada -->
+              <!-- Preview de la foto (común para móvil y PC) -->
               <div id="previewDNI" style="display: none; margin-top: 15px;">
                 <p class="text-sm text-emerald-600 font-medium mb-2">✓ Foto del DNI capturada</p>
                 <img
@@ -639,28 +663,72 @@ class ConfirmarEntregaModal {
       });
     }
 
-    // Eventos para foto DNI
-    const btnActivarCamaraDNI = document.getElementById('btnActivarCamaraDNI');
-    if (btnActivarCamaraDNI) {
-      btnActivarCamaraDNI.addEventListener('click', () => {
-        this.handleActivarCamaraDNI();
-      });
+    // Eventos para foto DNI según dispositivo
+    if (this.isMobile) {
+      // Móvil: Cámara en vivo
+      const btnActivarCamaraDNI = document.getElementById('btnActivarCamaraDNI');
+      if (btnActivarCamaraDNI) {
+        btnActivarCamaraDNI.addEventListener('click', () => {
+          this.handleActivarCamaraDNI();
+        });
+      }
+
+      const btnCapturarDNI = document.getElementById('btnCapturarDNI');
+      if (btnCapturarDNI) {
+        btnCapturarDNI.addEventListener('click', () => {
+          this.handleCapturarDNI();
+        });
+      }
+
+      const btnCancelarCamaraDNI = document.getElementById('btnCancelarCamaraDNI');
+      if (btnCancelarCamaraDNI) {
+        btnCancelarCamaraDNI.addEventListener('click', () => {
+          this.handleCancelarCamaraDNI();
+        });
+      }
+    } else {
+      // PC: Drag & drop + selector de archivos
+      const dropZoneDNI = document.getElementById('dropZoneDNI');
+      const inputFotoDNI = document.getElementById('inputFotoDNI');
+
+      if (dropZoneDNI && inputFotoDNI) {
+        // Click en drop zone abre selector
+        dropZoneDNI.addEventListener('click', () => {
+          inputFotoDNI.click();
+        });
+
+        // Drag & drop handlers
+        dropZoneDNI.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          dropZoneDNI.classList.add('border-blue-500', 'bg-blue-50');
+        });
+
+        dropZoneDNI.addEventListener('dragleave', () => {
+          dropZoneDNI.classList.remove('border-blue-500', 'bg-blue-50');
+        });
+
+        dropZoneDNI.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZoneDNI.classList.remove('border-blue-500', 'bg-blue-50');
+
+          const files = e.dataTransfer.files;
+          if (files.length > 0) {
+            const file = files[0];
+            this.handleFotoDNISelected(file);
+          }
+        });
+
+        // Input change (cuando se selecciona archivo)
+        inputFotoDNI.addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            this.handleFotoDNISelected(file);
+          }
+        });
+      }
     }
 
-    const btnCapturarDNI = document.getElementById('btnCapturarDNI');
-    if (btnCapturarDNI) {
-      btnCapturarDNI.addEventListener('click', () => {
-        this.handleCapturarDNI();
-      });
-    }
-
-    const btnCancelarCamaraDNI = document.getElementById('btnCancelarCamaraDNI');
-    if (btnCancelarCamaraDNI) {
-      btnCancelarCamaraDNI.addEventListener('click', () => {
-        this.handleCancelarCamaraDNI();
-      });
-    }
-
+    // Botón retomar (común para móvil y PC)
     const btnRetamarDNI = document.getElementById('btnRetamarDNI');
     if (btnRetamarDNI) {
       btnRetamarDNI.addEventListener('click', () => {
@@ -1416,10 +1484,73 @@ class ConfirmarEntregaModal {
   handleRetamarDNI() {
     this.fotoDNIBlob = null;
     document.getElementById('previewDNI').style.display = 'none';
-    document.getElementById('btnActivarCamaraDNI').style.display = 'block';
+
+    if (this.isMobile) {
+      const btnActivar = document.getElementById('btnActivarCamaraDNI');
+      if (btnActivar) {
+        btnActivar.style.display = 'block';
+      }
+    } else {
+      const dropZone = document.getElementById('dropZoneDNI');
+      if (dropZone) {
+        dropZone.style.display = 'block';
+      }
+    }
 
     // Actualizar botón continuar
     this.updateContinuarButton();
+  }
+
+  /**
+   * Maneja la selección de foto DNI desde archivo (PC)
+   */
+  handleFotoDNISelected(file) {
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor seleccioná una imagen (JPG, PNG)');
+      return;
+    }
+
+    // Validar tamaño (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('La imagen es muy grande. Máximo 5MB');
+      return;
+    }
+
+    // Convertir archivo a blob y mostrar preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      // Crear blob desde data URL
+      fetch(e.target.result)
+        .then(res => res.blob())
+        .then(blob => {
+          this.fotoDNIBlob = blob;
+
+          // Mostrar preview
+          const preview = document.getElementById('imagenDNI');
+          preview.src = e.target.result;
+
+          // Ocultar drop zone, mostrar preview
+          const dropZone = document.getElementById('dropZoneDNI');
+          if (dropZone) {
+            dropZone.style.display = 'none';
+          }
+          document.getElementById('previewDNI').style.display = 'block';
+
+          // Ocultar error si lo había
+          const errorFotoDNI = document.getElementById('errorFotoDNI');
+          if (errorFotoDNI) {
+            errorFotoDNI.classList.add('hidden');
+          }
+
+          // Actualizar botón continuar
+          this.updateContinuarButton();
+        });
+    };
+    reader.onerror = () => {
+      alert('Error al leer la imagen');
+    };
+    reader.readAsDataURL(file);
   }
 
   /**
