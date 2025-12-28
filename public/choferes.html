@@ -895,7 +895,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Cargar datos del usuario
       try {
-        const res = await fetch('/api/me', { credentials: 'same-origin' });
+        const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
         if (res.ok) {
           const user = await res.json();
           console.log('Usuario cargado:', user); // DEBUG
