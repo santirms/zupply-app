@@ -78,10 +78,6 @@
     <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
     <span class="text-sm opacity-80">Panel de Choferes</span>
 
-    <!-- Reloj -->
-    <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10 hidden sm:block"></div>
-    <span id="reloj" class="text-xs opacity-70 hidden sm:inline">--</span>
-
     <!-- Usuario + Tema -->
     <div class="ml-auto flex items-center gap-2">
       <div class="relative" id="userMenuWrap">
@@ -882,25 +878,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btnFiltrarRemitos')?.addEventListener('click', cargarRemitos);
 });
 
-    // ===== Reloj en vivo =====
-    function actualizarReloj() {
-      const now = new Date();
-      const opciones = {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-        timeZone: 'America/Argentina/Buenos_Aires'
-      };
-      const texto = now.toLocaleString('es-AR', opciones);
-      const el = document.getElementById('reloj');
-      if (el) el.textContent = texto;
-    }
-
     // ===== Init
     document.addEventListener('DOMContentLoaded', () => {
       mostrarTab('qr');
@@ -908,14 +885,10 @@ document.addEventListener('DOMContentLoaded', () => {
       initQrScanner();
       renderListQR();
       $('#btnAsignarQR').addEventListener('click', asignarQR);
-
-      // Iniciar reloj
-      actualizarReloj();
-      setInterval(actualizarReloj, 1000);
     });
 
     // ===== Menú de usuario =====
-    document.addEventListener('DOMContentLoaded', async () => {
+    async function initUserMenu() {
       const userBtn = document.getElementById('userBtn');
       const userMenu = document.getElementById('userMenu');
       const usernameSpan = document.getElementById('username');
@@ -925,9 +898,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch('/api/me', { credentials: 'same-origin' });
         if (res.ok) {
           const user = await res.json();
+          console.log('Usuario cargado:', user); // DEBUG
           if (usernameSpan) {
-            usernameSpan.textContent = user.name || user.nombre || user.email || 'Usuario';
+            // Priorizar email sobre nombre
+            usernameSpan.textContent = user.email || user.name || user.nombre || 'Usuario';
+            console.log('Username actualizado a:', usernameSpan.textContent); // DEBUG
+          } else {
+            console.error('No se encontró el elemento #username');
           }
+        } else {
+          console.error('Error en /api/me:', res.status);
         }
       } catch (e) {
         console.error('Error cargando usuario:', e);
@@ -949,13 +929,18 @@ document.addEventListener('DOMContentLoaded', () => {
           e.stopPropagation();
         });
       }
-    });
+    }
 
     function cerrarSesion() {
       if (confirm('¿Cerrar sesión?')) {
         window.location.href = '/logout';
       }
     }
+
+    // Ejecutar al cargar
+    document.addEventListener('DOMContentLoaded', () => {
+      initUserMenu();
+    });
   </script>
 
   </main>
