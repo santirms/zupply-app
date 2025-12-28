@@ -84,6 +84,26 @@
 
     <!-- Usuario + Tema -->
     <div class="ml-auto flex items-center gap-2">
+      <div class="relative" id="userMenuWrap">
+        <button id="userBtn"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+          <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
+          <span id="username" class="max-w-[160px] truncate">Usuario</span>
+          <span class="opacity-70">▾</span>
+        </button>
+
+        <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020] shadow-xl z-50">
+          <div class="p-2">
+            <a href="/index.html" class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-sm">
+              🏠 Inicio
+            </a>
+            <button onclick="cerrarSesion()" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-sm text-left">
+             ⎋  Cerrar sesión
+            </button>
+          </div>
+        </div>
+      </div>
+
       <button id="themeBtn"
         class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
         Tema: auto
@@ -173,6 +193,9 @@
       <select id="fChofer" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]"></select>
       <button id="btnFiltrarRemitos" class="px-4 py-2 rounded-xl font-medium shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">🔍 Filtrar</button>
     </div>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
+      💡 Por defecto se muestran los últimos 15 días. Cambiá las fechas para ver más.
+    </p>
 
     <div class="overflow-x-auto">
   <table class="w-full text-sm">
@@ -548,7 +571,18 @@ async function cargarRemitos() {
 
 
 async function abrirHistorial() {
-  // choferes para el filtro
+  // Setear fechas por defecto: últimos 15 días
+  const hoy = new Date();
+  const hace15dias = new Date(hoy);
+  hace15dias.setDate(hoy.getDate() - 15);
+
+  const fDesde = $('#fDesde');
+  const fHasta = $('#fHasta');
+
+  if (fDesde) fDesde.valueAsDate = hace15dias;
+  if (fHasta) fHasta.valueAsDate = hoy;
+
+  // Cargar choferes para el filtro
   try {
     const res = await fetch('/api/choferes', { credentials:'include' });
     const arr = await res.json().catch(()=>[]);
@@ -556,6 +590,8 @@ async function abrirHistorial() {
     const sel = $('#fChofer');
     sel.innerHTML = `<option value="">(todos)</option>` + activos.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
   } catch {}
+
+  // Cargar remitos con filtro de últimos 15 días
   await cargarRemitos();
   $('#modalRemitos').classList.remove('hidden');
 }
@@ -877,6 +913,49 @@ document.addEventListener('DOMContentLoaded', () => {
       actualizarReloj();
       setInterval(actualizarReloj, 1000);
     });
+
+    // ===== Menú de usuario =====
+    document.addEventListener('DOMContentLoaded', async () => {
+      const userBtn = document.getElementById('userBtn');
+      const userMenu = document.getElementById('userMenu');
+      const usernameSpan = document.getElementById('username');
+
+      // Cargar datos del usuario
+      try {
+        const res = await fetch('/api/me', { credentials: 'same-origin' });
+        if (res.ok) {
+          const user = await res.json();
+          if (usernameSpan) {
+            usernameSpan.textContent = user.name || user.nombre || user.email || 'Usuario';
+          }
+        }
+      } catch (e) {
+        console.error('Error cargando usuario:', e);
+      }
+
+      // Toggle menú
+      if (userBtn && userMenu) {
+        userBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          userMenu.classList.toggle('hidden');
+        });
+
+        // Cerrar al hacer click fuera
+        document.addEventListener('click', () => {
+          userMenu.classList.add('hidden');
+        });
+
+        userMenu.addEventListener('click', (e) => {
+          e.stopPropagation();
+        });
+      }
+    });
+
+    function cerrarSesion() {
+      if (confirm('¿Cerrar sesión?')) {
+        window.location.href = '/logout';
+      }
+    }
   </script>
 
   </main>
