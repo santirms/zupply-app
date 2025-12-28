@@ -15,6 +15,11 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
+    :root {
+      --z-primary: #FFB74D;
+      --z-primary-dark: #F57C00;
+      --z-primary-fg: #000;
+    }
     html.dark select, html.dark select option { background-color:#0b1020; color:#e5e7eb; }
     @media (max-width: 640px){ #btnStartScan { width:64px; height:64px; font-size:24px; } }
       /* 👉 Date, text, textarea */
@@ -80,49 +85,49 @@
 
     <!-- Tabs -->
     <div class="flex gap-3 mb-4">
-      <button data-tab="qr"   class="tab-btn px-4 py-2 rounded bg-amber-500 text-white">Asignación por QR</button>
-      <button data-tab="mapa" class="tab-btn px-4 py-2 rounded bg-slate-200 dark:bg-slate-700">Asignación desde el mapa</button>
+      <button data-tab="qr"   class="tab-btn px-4 py-2 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] text-[var(--z-primary-fg)]">Asignación por QR</button>
+      <button data-tab="mapa" class="tab-btn px-4 py-2 rounded-xl font-semibold border border-slate-300 dark:border-white/10 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700">Asignación desde el mapa</button>
     </div>
 
     <!-- TAB: QR -->
     <section id="tab-qr" class="tab">
       <div class="grid sm:grid-cols-3 gap-3 mb-3">
         <label class="text-sm">Chofer
-          <select id="choferSel" class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded px-2 py-2 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100"></select>
+          <select id="choferSel" class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100"></select>
         </label>
         <label class="text-sm">Lista (pago chofer)
-          <select id="listaSel" class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded px-2 py-2 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100"></select>
+          <select id="listaSel" class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100"></select>
         </label>
         <input id="inputZonaQR" type="hidden" value="">
       </div>
 
       <div class="flex items-center gap-3 mb-3">
-        <button id="btnStartScan" class="rounded bg-slate-200 dark:bg-slate-700 px-4 py-3">📷</button>
-        <input id="inpManualTrk" class="flex-1 border rounded px-3 py-2" placeholder="Pegar tracking y Enter" />
+        <button id="btnStartScan" class="rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 px-4 py-3 shadow-sm">📷</button>
+        <input id="inpManualTrk" class="flex-1 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]" placeholder="Pegar tracking y Enter" />
         <div id="countQR" class="ml-auto text-sm opacity-70"></div>
       </div>
 
       <div id="qr-reader" class="w-full max-w-xs mx-auto hidden"></div>
 
-      <div class="border rounded p-3 bg-white dark:bg-white/5">
+      <div class="border border-slate-200 dark:border-white/10 rounded-2xl p-4 bg-white dark:bg-white/5 shadow-sm">
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
-            <thead class="bg-slate-50 dark:bg-white/5">
-              <tr class="border-b border-black/10 dark:border-white/10">
-                <th class="text-left p-1 text-slate-900 dark:text-slate-100">Tracking</th>
-                <th class="text-left p-1 text-slate-900 dark:text-slate-100">Cliente</th>
-                <th class="text-left p-1 text-slate-900 dark:text-slate-100">Dirección</th>
-                <th class="text-left p-1 text-slate-900 dark:text-slate-100">CP/Partido</th>
-                <th class="text-left p-1 text-slate-900 dark:text-slate-100"></th>
+            <thead class="bg-slate-100 dark:bg-white/5">
+              <tr class="border-b border-slate-200 dark:border-white/10">
+                <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Tracking</th>
+                <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Cliente</th>
+                <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Dirección</th>
+                <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">CP/Partido</th>
+                <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300"></th>
               </tr>
             </thead>
             <tbody id="tblQR" class="bg-white dark:bg-[#0B1020]"></tbody>
           </table>
         </div>
         <div class="mt-3 flex gap-2 justify-end">
-          <a id="btnWA" class="hidden px-4 py-2 rounded bg-green-600 text-white" target="_blank" rel="noopener">WhatsApp</a>
-          <a id="btnRemito" class="hidden px-4 py-2 rounded bg-slate-700 text-white" target="_blank" rel="noopener">Ver remito</a>
-          <button id="btnAsignarQR" class="px-4 py-2 rounded bg-amber-500 hover:bg-amber-600 text-white">Asignar</button>
+          <a id="btnWA" class="hidden px-4 py-2 rounded-xl font-medium shadow-sm bg-green-600 hover:bg-green-700 text-white" target="_blank" rel="noopener">📱 WhatsApp</a>
+          <a id="btnRemito" class="hidden px-4 py-2 rounded-xl font-medium shadow-sm bg-slate-700 hover:bg-slate-800 text-white" target="_blank" rel="noopener">📄 Ver remito</a>
+          <button id="btnAsignarQR" class="px-4 py-2 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">Asignar</button>
         </div>
       </div>
     </section>
@@ -139,34 +144,34 @@
     </section>
 <!-- Botón abrir modal -->
 <div class="mt-6 flex justify-end">
-  <button id="btnOpenHist" class="px-4 py-2 rounded bg-slate-700 text-white">Historial de remitos</button>
+  <button id="btnOpenHist" class="px-4 py-2 rounded-xl font-semibold shadow-sm bg-slate-700 hover:bg-slate-800 text-white">📋 Historial de remitos</button>
 </div>
 
 <!-- Modal Historial Remitos -->
-<div id="modalRemitos" class="hidden fixed inset-0 bg-black/50 z-40 grid place-items-center">
-  <div class="bg-white dark:bg-slate-900 w-[900px] max-w-[95vw] max-h-[85vh] overflow-auto rounded shadow p-4">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="text-lg font-bold">Historial de remitos</h2>
-      <button class="text-xl" onclick="document.getElementById('modalRemitos').classList.add('hidden')">✕</button>
+<div id="modalRemitos" class="hidden fixed inset-0 bg-black/50 z-50 grid place-items-center p-4">
+  <div class="bg-white dark:bg-[#0B1020] w-[900px] max-w-[95vw] max-h-[85vh] overflow-auto rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-bold">📋 Historial de remitos</h2>
+      <button onclick="document.getElementById('modalRemitos').classList.add('hidden')" class="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 text-xl">✕</button>
     </div>
 
-    <div class="flex flex-wrap gap-2 mb-3">
-      <input id="fDesde" type="date" class="border rounded px-2 py-1">
-      <input id="fHasta" type="date" class="border rounded px-2 py-1">
-      <select id="fChofer" class="border rounded px-2 py-1"></select>
-      <button id="btnFiltrarRemitos" class="px-3 py-2 rounded bg-amber-500 text-white">Filtrar</button>
+    <div class="flex flex-wrap gap-3 mb-4">
+      <input id="fDesde" type="date" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]">
+      <input id="fHasta" type="date" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]">
+      <select id="fChofer" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]"></select>
+      <button id="btnFiltrarRemitos" class="px-4 py-2 rounded-xl font-medium shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">🔍 Filtrar</button>
     </div>
 
     <div class="overflow-x-auto">
   <table class="w-full text-sm">
-    <thead>
-      <tr class="border-b border-black/10 dark:border-white/10">
-        <th class="text-left p-1">Fecha</th>
-        <th class="text-left p-1">Chofer</th>
-        <th class="text-left p-1">Zona</th>
-        <th class="text-left p-1">Total</th>
-        <th class="text-left p-1">PDF</th>
-        <th class="text-left p-1">Acciones</th>
+    <thead class="bg-slate-100 dark:bg-white/5">
+      <tr class="border-b border-slate-200 dark:border-white/10">
+        <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Fecha</th>
+        <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Chofer</th>
+        <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Zona</th>
+        <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Total</th>
+        <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">PDF</th>
+        <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Acciones</th>
       </tr>
     </thead>
     <tbody id="tblRemitos"></tbody>
@@ -193,9 +198,16 @@
     function mostrarTab(name) {
       $$('.tab').forEach(t => t.classList.add('hidden'));
       $('#tab-' + name).classList.remove('hidden');
-      $$('.tab-btn').forEach(b => b.classList.remove('bg-amber-500','text-white'));
+      $$('.tab-btn').forEach(b => {
+        b.classList.remove('bg-[var(--z-primary)]','text-[var(--z-primary-fg)]');
+        b.classList.add('border', 'border-slate-300', 'dark:border-white/10', 'bg-slate-100', 'dark:bg-slate-800', 'hover:bg-slate-200', 'dark:hover:bg-slate-700');
+        b.classList.remove('text-white');
+      });
       const btn = $(`.tab-btn[data-tab="${name}"]`);
-      if (btn) btn.classList.add('bg-amber-500','text-white');
+      if (btn) {
+        btn.classList.remove('border', 'border-slate-300', 'dark:border-white/10', 'bg-slate-100', 'dark:bg-slate-800', 'hover:bg-slate-200', 'dark:hover:bg-slate-700');
+        btn.classList.add('bg-[var(--z-primary)]','text-[var(--z-primary-fg)]');
+      }
     }
     document.addEventListener('DOMContentLoaded', () => {
       $$('.tab-btn').forEach(b => b.addEventListener('click', () => mostrarTab(b.dataset.tab)));
@@ -488,8 +500,8 @@ async function cargarRemitos() {
       </td>
       <td class="p-1">
         <div class="flex gap-2">
-          <button class="px-2 py-1 rounded bg-amber-500 text-white" data-edit="${x._id}">Editar</button>
-          <button class="px-2 py-1 rounded bg-red-600 text-white" data-del="${x._id}">Eliminar</button>
+          <button class="px-3 py-1.5 rounded-xl bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)] font-medium shadow-sm" data-edit="${x._id}">✏️ Editar</button>
+          <button class="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-medium shadow-sm" data-del="${x._id}">🗑️ Eliminar</button>
         </div>
       </td>
     </tr>
@@ -556,7 +568,7 @@ async function abrirEditorRemito(asgId) {
 async function recargarEditor() {
   const wrap = document.getElementById('editorRemito');
   wrap.classList.remove('hidden');
-  wrap.innerHTML = `<div class="p-3 rounded border bg-white dark:bg-white/5">Cargando...</div>`;
+  wrap.innerHTML = `<div class="p-6 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm">Cargando...</div>`;
 
   let det = null;
   try {
@@ -601,22 +613,22 @@ async function recargarEditor() {
   const selChoferOptions = editorState.choferes.map(c => `<option value="${c._id}">${c.nombre || '(sin nombre)'}</option>`).join('');
 
   wrap.innerHTML = `
-    <div class="p-3 rounded border bg-white dark:bg-white/5">
+    <div class="p-6 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm">
       <div class="flex items-start gap-3 flex-wrap">
         <div class="flex-1 min-w-[280px]">
           <h3 class="text-lg font-bold mb-1">Editar remito</h3>
           <div class="text-sm opacity-70">ID: ${det._id} — ${new Date(det.fecha).toLocaleString()}</div>
           <div class="text-sm opacity-70 mb-2">Chofer: ${det.chofer?.nombre || '-'}</div>
           <div class="flex items-center gap-2 mb-3">
-            ${det.remito_url ? `<a class="px-3 py-1.5 rounded bg-slate-700 text-white" href="${det.remito_url}" target="_blank" rel="noopener">Ver PDF</a>` : ''}
-            <button id="btnRefrescarEditor" class="px-3 py-1.5 rounded border">Refrescar</button>
+            ${det.remito_url ? `<a class="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-medium shadow-sm" href="${det.remito_url}" target="_blank" rel="noopener">📄 Ver PDF</a>` : ''}
+            <button id="btnRefrescarEditor" class="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">🔄 Refrescar</button>
             <div class="flex items-center gap-3 mt-2">
            <label class="inline-flex items-center gap-2 text-sm">
            <input type="checkbox" id="chkForceDelete" checked>
            Revertir envíos a "pendiente"
            </label>
-           <button id="btnEliminarRemito" class="px-3 py-1.5 rounded bg-red-700 text-white">
-           Eliminar remito
+           <button id="btnEliminarRemito" class="px-3 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-medium shadow-sm">
+           🗑️ Eliminar remito
          </button>
          </div>
           </div>
@@ -624,21 +636,21 @@ async function recargarEditor() {
         <div class="flex-1 min-w-[280px]">
           <label class="text-sm block mb-1">Mover seleccionados a:</label>
           <div class="flex gap-2">
-            <select id="selChoferDestino" class="border rounded px-2 py-2 flex-1">${selChoferOptions}</select>
-            <button id="btnMover" class="px-3 py-2 rounded bg-amber-500 text-white">Mover</button>
+            <select id="selChoferDestino" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 flex-1 bg-white dark:bg-[#0B1020]">${selChoferOptions}</select>
+            <button id="btnMover" class="px-3 py-2 rounded-xl bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)] font-medium shadow-sm">➡️ Mover</button>
           </div>
         </div>
         <div class="flex-1 min-w-[280px]">
           <label class="text-sm block mb-1">Quitar seleccionados</label>
-          <button id="btnQuitar" class="px-3 py-2 rounded bg-red-600 text-white">Quitar</button>
+          <button id="btnQuitar" class="px-3 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-medium shadow-sm">🗑️ Quitar</button>
         </div>
       </div>
 
       <div class="mt-3">
         <label class="text-sm block mb-1">Agregar trackings (separá por coma, espacio o nueva línea)</label>
         <div class="flex gap-2">
-          <textarea id="txtAgregar" class="border rounded px-2 py-2 flex-1" rows="2" placeholder="4548..., 12345..."></textarea>
-          <button id="btnAgregar" class="px-3 py-2 rounded bg-green-600 text-white">Agregar</button>
+          <textarea id="txtAgregar" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 flex-1 bg-white dark:bg-[#0B1020]" rows="2" placeholder="4548..., 12345..."></textarea>
+          <button id="btnAgregar" class="px-3 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-medium shadow-sm">➕ Agregar</button>
         </div>
       </div>
 
