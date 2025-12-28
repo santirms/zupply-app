@@ -63,6 +63,14 @@ router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE'
     {
       path: (req) => /^\/[^/]+\/notas$/.test(req.path),
       methods: ['POST']
+    },
+    {
+      path: '/confirmar-entrega',
+      methods: ['POST']
+    },
+    {
+      path: '/registrar-intento-fallido',
+      methods: ['POST']
     }
   ]
 }));
