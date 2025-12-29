@@ -298,7 +298,6 @@ async function abrirModal(id=null) {
     form.elements['cuit'].value             = data.cuit || '';
     form.elements['razon_social'].value     = data.razon_social || '';
     form.elements['condicion_iva'].value    = data.condicion_iva || '';
-    form.elements['horario_de_corte'].value = data.horario_de_corte || '';
     form.elements['lista_precios'].value    = data.lista_precios?._id || '';
     const chkAI = qs('#chkAutoIngesta'); if (chkAI) chkAI.checked = !!data.auto_ingesta;
     const chkFirma = qs('#chkPuedeRequerirFirma'); if (chkFirma) chkFirma.checked = !!(data.permisos?.puedeRequerirFirma);
@@ -337,11 +336,10 @@ async function guardarCliente(ev) {
 
   const nombre           = form.querySelector('input[name="nombre"]').value.trim();
   const condicion_iva    = form.querySelector('select[name="condicion_iva"]').value;
-  const horario_de_corte = form.querySelector('input[name="horario_de_corte"]').value;
   const lista_precios    = form.querySelector('select[name="lista_precios"]').value;
 
-  if (!nombre || !condicion_iva || !horario_de_corte || !lista_precios) {
-    return alert('Completá Nombre, IVA, Horario de Corte y Lista de Precios.');
+  if (!nombre || !condicion_iva || !lista_precios) {
+    return alert('Completá Nombre, IVA y Lista de Precios.');
   }
 
   const cuit         = form.querySelector('input[name="cuit"]').value.trim();
@@ -352,7 +350,7 @@ async function guardarCliente(ev) {
   const body = {
     nombre, sender_id: sids, lista_precios,
     cuit: cuit || undefined, razon_social: razon_social || undefined,
-    condicion_iva, horario_de_corte,
+    condicion_iva,
     permisos: {
       puedeRequerirFirma: chkFirma ? chkFirma.checked : false
     },
