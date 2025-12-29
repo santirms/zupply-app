@@ -22,6 +22,39 @@ const clienteSchema = new mongoose.Schema({
   horario_de_corte:{ type: String, required: true },
   link_vinculacion:{ type: String },
 
+  // ===== CONFIGURACIÓN DE FACTURACIÓN =====
+  facturacion: {
+    // Horarios de corte
+    horario_corte_lunes_viernes: {
+      type: String,
+      default: '13:00'
+    },
+    horario_corte_sabado: {
+      type: String,
+      default: '12:00'
+    },
+    horario_corte_domingo: {
+      type: String,
+      default: null  // null = no trabaja domingos
+    },
+
+    // Tipo de período
+    tipo_periodo: {
+      type: String,
+      enum: ['semanal', 'quincenal', 'mensual'],
+      default: 'semanal'
+    },
+
+    // Zona horaria
+    zona_horaria: {
+      type: String,
+      default: 'America/Argentina/Buenos_Aires'
+    },
+
+    // Notas (límites diarios, excepciones ML, etc.)
+    notas_facturacion: String
+  },
+
   permisos: {
     puedeRequerirFirma: {
       type: Boolean,
