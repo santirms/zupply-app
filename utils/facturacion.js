@@ -6,34 +6,39 @@ const { DateTime } = require('luxon');
 function getFechaIngresoEnvio(envio) {
   const origen = envio.origen;
 
-  // 1. AUTO-INGESTA: usar campo "fecha"
+  // 1. AUTO-INGESTA (ML sincronizado automáticamente)
+  // origen: 'mercadolibre' + requiere_sync: true
+  // → Usar campo "fecha" (cuando ML lo creó)
   if (origen === 'mercadolibre' && envio.requiere_sync_meli === true) {
-    return envio.fecha;
-  }
-
-  // 2. ESCANEO: buscar primer evento con source "MeLi" o que contenga "meli"
-  if (origen === 'etiquetas' && envio.historial?.length > 0) {
-    const eventoMeLi = envio.historial.find(h =>
-      h.source?.toLowerCase().includes('meli') ||
-      h.actor_name?.toLowerCase().includes('meli')
-    );
-
-    if (eventoMeLi) {
-      return eventoMeLi.at; // Es escaneo
+    // Pero si NO tiene auto_ingesta (es escaneo manual), usar fecha de escaneo
+    if (envio.historial?.length > 0) {
+      const eventoEscaneo = envio.historial.find(h =>
+        h.source === 'zupply:qr' && h.estado === 'asignado'
+      );
+      if (eventoEscaneo) {
+        return eventoEscaneo.at; // Es escaneo, no auto-ingesta
+      }
     }
 
-    // Si no hay evento de MeLi, es subida de etiquetas PDF
+    // Si no hay escaneo, es auto-ingesta real
     return envio.fecha;
   }
 
-  // 3. ETIQUETAS PDF: usar campo "fecha"
+  // 2. ETIQUETAS PDF (subida de archivos)
+  // origen: 'etiquetas'
+  // → Usar campo "fecha" (cuando se subió el PDF)
   if (origen === 'etiquetas') {
     return envio.fecha;
   }
 
-  // 4. MANUAL: usar campo "fecha"
+  // 3. INGRESO MANUAL (creado manualmente en el sistema)
+  // origen: 'ingreso_manual'
+  // → Usar fecha del primer evento del historial (cuando se creó/asignó)
   if (origen === 'ingreso_manual') {
-    return envio.fecha;
+    if (envio.historial?.length > 0) {
+      return envio.historial[0].at;
+    }
+    return envio.fecha || envio.createdAt;
   }
 
   // Fallback: usar fecha o createdAt
