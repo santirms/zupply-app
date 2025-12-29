@@ -7,6 +7,12 @@ const Cliente = require('../models/Cliente');
 const Lista   = require('../models/listaDePrecios');
 
 const { resolverZonaPorCP, resolverZonaParaCliente } = require('../services/zonaResolver');
+const {
+  buildQueryFacturacion,
+  filtrarEnviosFacturables,
+  calcularRangoFacturacion,
+  getFechaIngresoEnvio
+} = require('../utils/facturacion');
 const PDFDocument = require('pdfkit'); // npm i pdfkit
 const { Readable } = require('stream');
 // Normalizadores mínimos
@@ -26,26 +32,35 @@ router.get('/preview', async (req, res) => {
     if (isNaN(dtFrom) || isNaN(dtTo))
       return res.status(400).json({ error: 'Fechas inválidas' });
 
+    // Cargar cliente completo con config de facturación
     const cliente = await Cliente.findById(clienteId).lean();
     if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
 
     const lista = await Lista.findById(cliente.lista_precios).lean();
     if (!lista) return res.status(404).json({ error: 'Lista de precios no encontrada' });
 
-    // Envíos del periodo para ese cliente (por cliente_id o por sender_id)
-    const or = [{ cliente_id: cliente._id }];
-    if (Array.isArray(cliente.sender_id) && cliente.sender_id.length) {
-      for (const s of cliente.sender_id) or.push({ sender_id: s });
-    }
+    // Generar query amplia con nuevas utilidades de facturación
+    const query = buildQueryFacturacion(clienteId, dtFrom, dtTo, cliente);
 
-    const envios = await Envio.find({
-      fecha: { $gte: dtFrom, $lte: dtTo },
-      $or: or
-    })
-    .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio')
-    .sort({ fecha: 1 })
-    .populate('cliente_id', 'nombre codigo_cliente')
-    .lean();
+    // Traer envíos candidatos
+    const enviosCandidatos = await Envio.find(query)
+      .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio origen historial requiere_sync_meli createdAt updatedAt')
+      .sort({ fecha: 1 })
+      .populate('cliente_id', 'nombre codigo_cliente')
+      .lean();
+
+    // Filtrar por fecha de ingreso real + horarios de corte
+    const envios = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo, cliente);
+
+    // Log para debugging
+    const rango = calcularRangoFacturacion(dtFrom, dtTo, cliente);
+    console.log('📊 Facturación/Preview generada:', {
+      cliente: cliente.nombre,
+      rango_solicitado: { desde, hasta },
+      rango_ajustado: rango.info,
+      candidatos: enviosCandidatos.length,
+      facturables: envios.length
+    });
 
     const items = [];
     let total = 0;
@@ -101,19 +116,28 @@ router.get('/resumen', async (req, res) => {
     const dtTo   = new Date(hasta);
     if (isNaN(dtFrom) || isNaN(dtTo)) return res.status(400).json({ error: 'Fechas inválidas' });
 
-    // 1) Determinar universo de clientes
+    // 1) Determinar universo de clientes - INCLUIR configuración de facturación
     let clientesDocs = [];
     if (clientes === 'all' || !clientes) {
-      clientesDocs = await Cliente.find({}).select('nombre sender_id lista_precios codigo_cliente').lean();
+      clientesDocs = await Cliente.find({}).lean();
     } else {
       const ids = String(clientes).split(',').map(s => s.trim()).filter(Boolean);
-      clientesDocs = await Cliente.find({ _id: { $in: ids } })
-        .select('nombre sender_id lista_precios codigo_cliente').lean();
+      clientesDocs = await Cliente.find({ _id: { $in: ids } }).lean();
     }
     const clientesMap = new Map(clientesDocs.map(c => [String(c._id), c]));
 
-    // 2) Traer envíos del período para esos clientes (por cliente_id o sender_id)
-    //    Para no disparar una query por cliente, usamos un OR gigante.
+    // 2) Traer envíos del período para esos clientes
+    // Ampliamos el rango para incluir todos los candidatos posibles
+    const estadosFacturables = [
+      'asignado',
+      'en_camino',
+      'en_planta',
+      'entregado',
+      'comprador_ausente',
+      'inaccesible',
+      'rechazado'
+    ];
+
     const ors = [];
     for (const c of clientesDocs) {
       ors.push({ cliente_id: c._id });
@@ -121,40 +145,50 @@ router.get('/resumen', async (req, res) => {
     }
     if (!ors.length) return res.json({ period: { desde, hasta }, lines: [], totalGeneral: 0, totalesPorCliente: [] });
 
-    // Preparar filtro de estados
-    const estadosArray = estados
-      ? String(estados).split(',').map(s => s.trim()).filter(Boolean)
-      : ['asignado', 'en_camino', 'entregado'];
-
-    const estadosIntermedios = ['asignado', 'en_camino', 'en_planta'];
-    const necesitaBusquedaHistorial = estadosArray.some(e => estadosIntermedios.includes(e));
-
-    let envios;
-
-    if (necesitaBusquedaHistorial) {
-      envios = await Envio.find({
-        $or: ors,
-        fecha: { $gte: dtFrom, $lte: dtTo },
-        historial: {
-          $elemMatch: {
-            at: { $gte: dtFrom, $lte: dtTo },
-            estado: { $in: estadosArray }
-          }
+    // Query amplia que incluye campos necesarios para determinar fecha de ingreso
+    const enviosCandidatos = await Envio.find({
+      $and: [
+        { $or: ors },
+        { estado: { $in: estadosFacturables } },
+        {
+          $or: [
+            { fecha: { $gte: dtFrom, $lte: dtTo } },
+            { createdAt: { $gte: dtFrom, $lte: dtTo } },
+            { 'historial.at': { $gte: dtFrom, $lte: dtTo } }
+          ]
         }
-      })
-      .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado historial')
-      .sort({ fecha: 1 })
-      .lean();
-    } else {
-      envios = await Envio.find({
-        fecha: { $gte: dtFrom, $lte: dtTo },
-        estado: { $in: estadosArray },
-        $or: ors
-      })
-      .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado')
-      .sort({ fecha: 1 })
-      .lean();
+      ]
+    })
+    .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado historial origen requiere_sync_meli createdAt updatedAt')
+    .sort({ fecha: 1 })
+    .lean();
+
+    // Filtrar envíos por fecha de ingreso y horarios de corte según cada cliente
+    const envios = [];
+    for (const envio of enviosCandidatos) {
+      const clienteId = String(envio.cliente_id || '');
+      const cliente = clientesMap.get(clienteId);
+      if (!cliente) continue;
+
+      // Verificar si el envío pasa el filtro de facturación para este cliente
+      const fechaIngreso = getFechaIngresoEnvio(envio);
+      if (!fechaIngreso) continue;
+
+      const rango = calcularRangoFacturacion(dtFrom, dtTo, cliente);
+      const fechaDate = new Date(fechaIngreso);
+
+      if (fechaDate >= rango.desde && fechaDate <= rango.hasta) {
+        envios.push(envio);
+      }
     }
+
+    // Log para debugging
+    console.log('📊 Facturación/Resumen generada:', {
+      clientes_procesados: clientesDocs.length,
+      rango_solicitado: { desde, hasta },
+      candidatos: enviosCandidatos.length,
+      facturables: envios.length
+    });
 
     // 3) Pre-cargar listas de precios por cliente
     const listasIds = Array.from(new Set(clientesDocs.map(c => String(c.lista_precios)).filter(Boolean)));
@@ -313,18 +347,27 @@ router.get('/detalle', async (req, res) => {
     const dtTo   = new Date(hasta);
     if (isNaN(dtFrom) || isNaN(dtTo)) return res.status(400).json({ error: 'Fechas inválidas' });
 
-    // clientes a incluir
+    // clientes a incluir - INCLUIR configuración de facturación
     let clientesDocs = [];
     if (clientes === 'all' || !clientes) {
-      clientesDocs = await Cliente.find({}).select('nombre sender_id lista_precios codigo_cliente').lean();
+      clientesDocs = await Cliente.find({}).lean();
     } else {
       const ids = String(clientes).split(',').map(s => s.trim()).filter(Boolean);
-      clientesDocs = await Cliente.find({ _id: { $in: ids } })
-        .select('nombre sender_id lista_precios codigo_cliente').lean();
+      clientesDocs = await Cliente.find({ _id: { $in: ids } }).lean();
     }
     const cMap = new Map(clientesDocs.map(c => [String(c._id), c]));
 
-    // OR combinado por cliente_id y sender_id
+    // Preparar query amplia
+    const estadosFacturables = [
+      'asignado',
+      'en_camino',
+      'en_planta',
+      'entregado',
+      'comprador_ausente',
+      'inaccesible',
+      'rechazado'
+    ];
+
     const ors = [];
     for (const c of clientesDocs) {
       ors.push({ cliente_id: c._id });
@@ -332,45 +375,51 @@ router.get('/detalle', async (req, res) => {
     }
     if (!ors.length) return res.json({ items: [], total: 0 });
 
-    // Preparar filtro de estados
-    const estadosArray = estados
-      ? String(estados).split(',').map(s => s.trim()).filter(Boolean)
-      : ['asignado', 'en_camino', 'entregado'];
-
-    // Estados intermedios que requieren búsqueda en historial
-    const estadosIntermedios = ['asignado', 'en_camino', 'en_planta'];
-    const necesitaBusquedaHistorial = estadosArray.some(e => estadosIntermedios.includes(e));
-
-    let envios;
-
-    if (necesitaBusquedaHistorial) {
-      // Buscar envíos que PASARON por esos estados en el período
-      envios = await Envio.find({
-        $or: ors,
-        fecha: { $gte: dtFrom, $lte: dtTo },
-        historial: {
-          $elemMatch: {
-            at: { $gte: dtFrom, $lte: dtTo },
-            estado: { $in: estadosArray }
-          }
+    // Query amplia que incluye campos necesarios para determinar fecha de ingreso
+    const enviosCandidatos = await Envio.find({
+      $and: [
+        { $or: ors },
+        { estado: { $in: estadosFacturables } },
+        {
+          $or: [
+            { fecha: { $gte: dtFrom, $lte: dtTo } },
+            { createdAt: { $gte: dtFrom, $lte: dtTo } },
+            { 'historial.at': { $gte: dtFrom, $lte: dtTo } }
+          ]
         }
-      })
-      .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio historial')
-      .sort({ fecha: 1 })
-      .populate('cliente_id', 'nombre codigo_cliente lista_precios')
-      .lean();
-    } else {
-      // Búsqueda normal por estado final
-      envios = await Envio.find({
-        fecha: { $gte: dtFrom, $lte: dtTo },
-        estado: { $in: estadosArray },
-        $or: ors
-      })
-      .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio')
-      .sort({ fecha: 1 })
-      .populate('cliente_id', 'nombre codigo_cliente lista_precios')
-      .lean();
+      ]
+    })
+    .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio historial origen requiere_sync_meli createdAt updatedAt')
+    .sort({ fecha: 1 })
+    .populate('cliente_id', 'nombre codigo_cliente lista_precios')
+    .lean();
+
+    // Filtrar envíos por fecha de ingreso y horarios de corte según cada cliente
+    const envios = [];
+    for (const envio of enviosCandidatos) {
+      const clienteId = String(envio.cliente_id?._id || envio.cliente_id || '');
+      const cliente = cMap.get(clienteId);
+      if (!cliente) continue;
+
+      // Verificar si el envío pasa el filtro de facturación para este cliente
+      const fechaIngreso = getFechaIngresoEnvio(envio);
+      if (!fechaIngreso) continue;
+
+      const rango = calcularRangoFacturacion(dtFrom, dtTo, cliente);
+      const fechaDate = new Date(fechaIngreso);
+
+      if (fechaDate >= rango.desde && fechaDate <= rango.hasta) {
+        envios.push(envio);
+      }
     }
+
+    // Log para debugging
+    console.log('📊 Facturación/Detalle generada:', {
+      clientes_procesados: clientesDocs.length,
+      rango_solicitado: { desde, hasta },
+      candidatos: enviosCandidatos.length,
+      facturables: envios.length
+    });
 
     // Pre-cargo listas de precios (pobladas con nombres de zona)
     const listaIds = Array.from(new Set(envios
