@@ -188,6 +188,27 @@ function configurarModal() {
   qs('#btnNuevo')?.addEventListener('click', () => abrirModal());
   qs('#btnCerrar')?.addEventListener('click', cerrarModal);
   qs('#btnAgregarCuenta')?.addEventListener('click', () => agregarSenderInput());
+  qs('#btnProbarToken')?.addEventListener('click', async () => {
+    const clientId = qs('input[name="id"]').value;
+    if (!clientId) {
+      alert('⚠️ Guardá el cliente primero para poder probar el token');
+      return;
+    }
+
+    const statusSpan = qs('#pingStatus');
+    if (statusSpan) statusSpan.textContent = '⏳ Probando...';
+
+    try {
+      const res = await fetchJSON(`${apiURL('/auth/meli')}/ping/${clientId}`);
+      const msg = `✅ Token válido: ${res.nickname || res.user_id || 'OK'}`;
+      if (statusSpan) statusSpan.textContent = msg;
+      setTimeout(() => { if (statusSpan) statusSpan.textContent = ''; }, 5000);
+    } catch (e) {
+      const msg = `❌ Token inválido: ${e.message}`;
+      if (statusSpan) statusSpan.textContent = msg;
+      alert('No se pudo verificar el token:\n' + e.message);
+    }
+  });
 
   qs('#formCliente')?.addEventListener('submit', guardarCliente);
 
@@ -281,7 +302,13 @@ async function abrirModal(id=null) {
     form.elements['lista_precios'].value    = data.lista_precios?._id || '';
     const chkAI = qs('#chkAutoIngesta'); if (chkAI) chkAI.checked = !!data.auto_ingesta;
     const chkFirma = qs('#chkPuedeRequerirFirma'); if (chkFirma) chkFirma.checked = !!(data.permisos?.puedeRequerirFirma);
-    (data.sender_id || []).forEach(sid => agregarSenderInput(sid));
+    const senderIds = data.sender_id || [];
+    if (senderIds.length > 0) {
+      senderIds.forEach(sid => agregarSenderInput(sid));
+    } else {
+      // Si no tiene cuentas, mostrar un campo vacío para que pueda agregar
+      agregarSenderInput();
+    }
 
     // Cargar configuración de facturación
     if (data.facturacion) {
@@ -338,7 +365,8 @@ async function guardarCliente(ev) {
       notas_facturacion: form.querySelector('[name="notas_facturacion"]').value || ''
     }
   };
-  const chkAI = qs('#chkAutoIngesta'); if (chkAI && id) body.auto_ingesta = chkAI.checked;
+  const chkAI = qs('#chkAutoIngesta');
+  if (chkAI) body.auto_ingesta = chkAI.checked;
   if (id) {
     const codigo = form.querySelector('input[name="codigo_cliente"]').value.trim();
     if (codigo) body.codigo_cliente = codigo;
