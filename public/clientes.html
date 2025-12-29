@@ -207,6 +207,55 @@
           </button>
         </div>
 
+        <!-- Sección de Facturación -->
+        <div class="border-t border-slate-200 dark:border-white/10 pt-6 mt-6">
+          <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+            ⏰ Configuración de Facturación
+          </h3>
+
+          <div class="grid sm:grid-cols-2 gap-4">
+            <label class="text-sm font-medium">
+              Horario de corte (Lunes a Viernes)
+              <input type="time" name="horario_corte_lunes_viernes" value="13:00"
+                class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]">
+              <span class="text-xs text-slate-500 dark:text-slate-400">Hora límite para facturar envíos de lunes a viernes</span>
+            </label>
+
+            <label class="text-sm font-medium">
+              Horario de corte (Sábado)
+              <input type="time" name="horario_corte_sabado" value="12:00"
+                class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]">
+              <span class="text-xs text-slate-500 dark:text-slate-400">Hora límite para facturar envíos del sábado</span>
+            </label>
+
+            <label class="text-sm font-medium">
+              Horario de corte (Domingo)
+              <input type="time" name="horario_corte_domingo" placeholder="Dejar vacío si no trabaja"
+                class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]">
+              <span class="text-xs text-slate-500 dark:text-slate-400">Opcional - dejar vacío si no opera domingos</span>
+            </label>
+
+            <label class="text-sm font-medium">
+              Tipo de período de facturación
+              <select name="tipo_periodo"
+                class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]">
+                <option value="semanal">Semanal</option>
+                <option value="quincenal">Quincenal</option>
+                <option value="mensual">Mensual</option>
+              </select>
+              <span class="text-xs text-slate-500 dark:text-slate-400">Frecuencia de facturación para este cliente</span>
+            </label>
+          </div>
+
+          <label class="text-sm font-medium block mt-4">
+            Notas de facturación (opcional)
+            <textarea name="notas_facturacion" rows="3"
+              class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]"
+              placeholder="Ej: Límite 50 envíos/día, ML penaliza si >100/día, no facturar feriados"></textarea>
+            <span class="text-xs text-slate-500 dark:text-slate-400">Información adicional sobre límites, excepciones, etc.</span>
+          </label>
+        </div>
+
         <div class="flex justify-end gap-2 pt-4 border-t border-slate-200 dark:border-white/10">
           <button type="button" id="btnCerrar" class="px-4 py-2 rounded-xl border border-slate-300 dark:border-white/10">Cerrar</button>
           <button type="submit"
