@@ -55,16 +55,17 @@ function calcularRangoFacturacion(desde, hasta, cliente) {
 
   let dtDesde, dtHasta;
 
+  // Parsear fechas como fechas LOCALES en Argentina, no UTC
   if (typeof desde === 'string') {
-    // String "YYYY-MM-DD" → parsear como fecha local en Argentina
-    dtDesde = DateTime.fromISO(desde, { zone: tz });
+    // Agregar la hora para que sea medianoche LOCAL, no UTC
+    dtDesde = DateTime.fromISO(desde + 'T00:00:00', { zone: tz });
   } else {
     // Date object → convertir a DateTime
     dtDesde = DateTime.fromJSDate(desde, { zone: tz });
   }
 
   if (typeof hasta === 'string') {
-    dtHasta = DateTime.fromISO(hasta, { zone: tz });
+    dtHasta = DateTime.fromISO(hasta + 'T23:59:59', { zone: tz });
   } else {
     dtHasta = DateTime.fromJSDate(hasta, { zone: tz });
   }
@@ -77,13 +78,13 @@ function calcularRangoFacturacion(desde, hasta, cliente) {
     let dtDesdeSinConf, dtHastaSinConf;
 
     if (typeof desde === 'string') {
-      dtDesdeSinConf = DateTime.fromISO(desde, { zone: tz }).startOf('day');
+      dtDesdeSinConf = DateTime.fromISO(desde + 'T00:00:00', { zone: tz }).startOf('day');
     } else {
       dtDesdeSinConf = DateTime.fromJSDate(desde, { zone: tz }).startOf('day');
     }
 
     if (typeof hasta === 'string') {
-      dtHastaSinConf = DateTime.fromISO(hasta, { zone: tz }).endOf('day');
+      dtHastaSinConf = DateTime.fromISO(hasta + 'T23:59:59', { zone: tz }).endOf('day');
     } else {
       dtHastaSinConf = DateTime.fromJSDate(hasta, { zone: tz }).endOf('day');
     }
