@@ -49,31 +49,57 @@ function getFechaIngresoEnvio(envio) {
  * Calcula el rango de fechas ajustado según horarios de corte del cliente
  */
 function calcularRangoFacturacion(desde, hasta, cliente) {
-  // Asegurar que desde y hasta son objetos Date
-  const desdeDate = desde instanceof Date ? desde : new Date(desde);
-  const hastaDate = hasta instanceof Date ? hasta : new Date(hasta);
+  // Parsear fechas respetando timezone argentino
+  // Si viene como string "YYYY-MM-DD", parsearlo como fecha local argentina
+  const tz = (cliente?.facturacion?.zona_horaria) || 'America/Argentina/Buenos_Aires';
+
+  let dtDesde, dtHasta;
+
+  if (typeof desde === 'string') {
+    // String "YYYY-MM-DD" → parsear como fecha local en Argentina
+    dtDesde = DateTime.fromISO(desde, { zone: tz });
+  } else {
+    // Date object → convertir a DateTime
+    dtDesde = DateTime.fromJSDate(desde, { zone: tz });
+  }
+
+  if (typeof hasta === 'string') {
+    dtHasta = DateTime.fromISO(hasta, { zone: tz });
+  } else {
+    dtHasta = DateTime.fromJSDate(hasta, { zone: tz });
+  }
 
   // Si el cliente NO tiene configuración de facturación, usar rango exacto
   if (!cliente || !cliente.facturacion) {
-    desdeDate.setHours(0, 0, 0, 0);
-    hastaDate.setHours(23, 59, 59, 999);
+    // Parsear correctamente respetando timezone
+    const tz = 'America/Argentina/Buenos_Aires';
+
+    let dtDesdeSinConf, dtHastaSinConf;
+
+    if (typeof desde === 'string') {
+      dtDesdeSinConf = DateTime.fromISO(desde, { zone: tz }).startOf('day');
+    } else {
+      dtDesdeSinConf = DateTime.fromJSDate(desde, { zone: tz }).startOf('day');
+    }
+
+    if (typeof hasta === 'string') {
+      dtHastaSinConf = DateTime.fromISO(hasta, { zone: tz }).endOf('day');
+    } else {
+      dtHastaSinConf = DateTime.fromJSDate(hasta, { zone: tz }).endOf('day');
+    }
 
     return {
-      desde: desdeDate,
-      hasta: hastaDate,
+      desde: dtDesdeSinConf.toJSDate(),
+      hasta: dtHastaSinConf.toJSDate(),
       info: {
-        desde_str: desdeDate.toISOString(),
-        hasta_str: hastaDate.toISOString(),
+        desde_str: dtDesdeSinConf.toISO(),
+        hasta_str: dtHastaSinConf.toISO(),
         sin_configuracion: true
       }
     };
   }
 
   // Cliente CON configuración → aplicar horarios de corte
-  const tz = cliente.facturacion.zona_horaria || 'America/Argentina/Buenos_Aires';
-
-  let dtDesde = DateTime.fromJSDate(desdeDate, { zone: tz });
-  let dtHasta = DateTime.fromJSDate(hastaDate, { zone: tz });
 
   // ========== AJUSTAR DÍA DESDE (después del corte) ==========
   const diaSemanaDe = dtDesde.weekday;
