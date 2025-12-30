@@ -162,16 +162,41 @@ function calcularRangoFacturacion(desde, hasta, cliente) {
  */
 function filtrarEnviosFacturables(envios, desde, hasta, cliente) {
   const rango = calcularRangoFacturacion(desde, hasta, cliente);
+  
+  let dentroRango = 0;
+  let fueraRango = 0;
+  let sinFecha = 0;
 
-  return envios.filter(envio => {
+  const resultado = envios.filter(envio => {
     const fechaIngreso = getFechaIngresoEnvio(envio);
-    if (!fechaIngreso) return false;
+    if (!fechaIngreso) {
+      sinFecha++;
+      return false;
+    }
 
     const fechaDate = new Date(fechaIngreso);
-    return fechaDate >= rango.desde && fechaDate <= rango.hasta;
+    const pasa = fechaDate >= rango.desde && fechaDate <= rango.hasta;
+    
+    if (pasa) {
+      dentroRango++;
+    } else {
+      fueraRango++;
+    }
+    
+    return pasa;
   });
-}
+  
+  console.log('🔍 Filtrado de envíos:', {
+    total: envios.length,
+    dentro_rango: dentroRango,
+    fuera_rango: fueraRango,
+    sin_fecha: sinFecha,
+    rango_desde: rango.desde.toISOString(),
+    rango_hasta: rango.hasta.toISOString()
+  });
 
+  return resultado;
+}
 /**
  * Genera query de MongoDB para envíos facturables
  * NOTA: La query trae todos los envíos del cliente, luego se filtran en memoria
