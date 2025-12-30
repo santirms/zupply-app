@@ -163,22 +163,27 @@ router.get('/resumen', async (req, res) => {
     .sort({ fecha: 1 })
     .lean();
 
-    // Filtrar envíos por fecha de ingreso y horarios de corte según cada cliente
+    // Filtrar envíos usando la función centralizada
+    // Si hay múltiples clientes, agrupar por cliente y filtrar cada grupo
     const envios = [];
-    for (const envio of enviosCandidatos) {
-      const clienteId = String(envio.cliente_id || '');
-      const cliente = clientesMap.get(clienteId);
-      if (!cliente) continue;
 
-      // Verificar si el envío pasa el filtro de facturación para este cliente
-      const fechaIngreso = getFechaIngresoEnvio(envio);
-      if (!fechaIngreso) continue;
+    if (clientesDocs.length === 1) {
+      // Un solo cliente: filtrar todos juntos
+      const cliente = clientesDocs[0];
+      const filtrados = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo, cliente);
+      envios.push(...filtrados);
+    } else {
+      // Múltiples clientes: filtrar por cliente
+      for (const envio of enviosCandidatos) {
+        const clienteId = String(envio.cliente_id || '');
+        const cliente = clientesMap.get(clienteId);
+        if (!cliente) continue;
 
-      const rango = calcularRangoFacturacion(dtFrom, dtTo, cliente);
-      const fechaDate = new Date(fechaIngreso);
-
-      if (fechaDate >= rango.desde && fechaDate <= rango.hasta) {
-        envios.push(envio);
+        // Filtrar este envío individual
+        const filtrado = filtrarEnviosFacturables([envio], dtFrom, dtTo, cliente);
+        if (filtrado.length > 0) {
+          envios.push(envio);
+        }
       }
     }
 
@@ -394,22 +399,27 @@ router.get('/detalle', async (req, res) => {
     .populate('cliente_id', 'nombre codigo_cliente lista_precios')
     .lean();
 
-    // Filtrar envíos por fecha de ingreso y horarios de corte según cada cliente
+    // Filtrar envíos usando la función centralizada
+    // Si hay múltiples clientes, agrupar por cliente y filtrar cada grupo
     const envios = [];
-    for (const envio of enviosCandidatos) {
-      const clienteId = String(envio.cliente_id?._id || envio.cliente_id || '');
-      const cliente = cMap.get(clienteId);
-      if (!cliente) continue;
 
-      // Verificar si el envío pasa el filtro de facturación para este cliente
-      const fechaIngreso = getFechaIngresoEnvio(envio);
-      if (!fechaIngreso) continue;
+    if (clientesDocs.length === 1) {
+      // Un solo cliente: filtrar todos juntos
+      const cliente = clientesDocs[0];
+      const filtrados = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo, cliente);
+      envios.push(...filtrados);
+    } else {
+      // Múltiples clientes: filtrar por cliente
+      for (const envio of enviosCandidatos) {
+        const clienteId = String(envio.cliente_id?._id || envio.cliente_id || '');
+        const cliente = cMap.get(clienteId);
+        if (!cliente) continue;
 
-      const rango = calcularRangoFacturacion(dtFrom, dtTo, cliente);
-      const fechaDate = new Date(fechaIngreso);
-
-      if (fechaDate >= rango.desde && fechaDate <= rango.hasta) {
-        envios.push(envio);
+        // Filtrar este envío individual
+        const filtrado = filtrarEnviosFacturables([envio], dtFrom, dtTo, cliente);
+        if (filtrado.length > 0) {
+          envios.push(envio);
+        }
       }
     }
 
