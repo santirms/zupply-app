@@ -20,7 +20,19 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
       tiene_envios: !!req.body.envios,
       cantidad: (req.body.etiquetas || req.body.envios || []).length
     });
-    
+    const { text: textoCompleto, numpages } = data;
+
+console.log(`📄 PDF procesado: ${numpages} páginas, ${textoCompleto.length} caracteres`);
+
+// ===== AGREGAR ESTAS LÍNEAS AQUÍ =====
+console.log('📝 Texto extraído del PDF:');
+console.log('─'.repeat(80));
+console.log(textoCompleto);
+console.log('─'.repeat(80));
+// ===== FIN DE LAS LÍNEAS A AGREGAR =====
+
+const bloques = textoCompleto.split(/(?=Envio:)/);
+console.log(`📦 ${bloques.length} etiquetas detectadas`);
     const etiquetas = req.body.etiquetas || req.body.envios;
     if (!Array.isArray(etiquetas) || etiquetas.length === 0) {
       console.log('❌ Error: No se recibieron etiquetas');
