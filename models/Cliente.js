@@ -19,7 +19,7 @@ const clienteSchema = new mongoose.Schema({
     enum: ['Responsable Inscripto', 'Monotributo', 'Exento'],
     required: true
   },
-  horario_de_corte:{ type: String, required: true },
+  horario_de_corte:{ type: String, required: false },
   link_vinculacion:{ type: String },
 
   // ===== CONFIGURACIÓN DE FACTURACIÓN =====
