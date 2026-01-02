@@ -15,8 +15,15 @@ router.use(requireAuth);
 // 🟢 ADMIN y COORDINADOR pueden subir etiquetas
 router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, res) => {
   try {
+    console.log('📦 Carga masiva - Body recibido:', { 
+      tiene_etiquetas: !!req.body.etiquetas,
+      tiene_envios: !!req.body.envios,
+      cantidad: (req.body.etiquetas || req.body.envios || []).length
+    });
+    
     const etiquetas = req.body.etiquetas || req.body.envios;
     if (!Array.isArray(etiquetas) || etiquetas.length === 0) {
+      console.log('❌ Error: No se recibieron etiquetas');
       return res.status(400).json({ error: 'No se recibieron etiquetas.' });
     }
 
