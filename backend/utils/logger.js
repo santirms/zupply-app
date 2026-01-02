@@ -6,6 +6,20 @@ const util = require('util');
 const isProduction = process.env.NODE_ENV === 'production';
 const isDevelopment = process.env.NODE_ENV === 'development';
 
+// Función para manejar referencias circulares en JSON.stringify
+const getCircularReplacer = () => {
+  const seen = new WeakSet();
+  return (key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return '[Circular]';
+      }
+      seen.add(value);
+    }
+    return value;
+  };
+};
+
 // Formato personalizado
 const customFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
@@ -15,7 +29,11 @@ const customFormat = winston.format.combine(
 
     // Agregar metadata si existe
     if (Object.keys(meta).length > 0) {
-      log += ` ${JSON.stringify(meta)}`;
+      try {
+        log += ` ${JSON.stringify(meta, getCircularReplacer())}`;
+      } catch (error) {
+        log += ' [Error serializing metadata]';
+      }
     }
 
     // Agregar stack trace para errores

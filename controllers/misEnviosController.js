@@ -1,5 +1,6 @@
 const Envio = require('../models/Envio');
 const logger = require('../utils/logger');
+const { getFechaArgentina } = require('../utils/timezone');
 
 const ESTADOS_CHOFER = ['entregado', 'comprador_ausente', 'rechazado', 'inaccesible'];
 
@@ -68,7 +69,7 @@ exports.marcarEntregado = async (req, res, next) => {
     const { id } = req.params;
     await Envio.findByIdAndUpdate(id, {
       estado: 'entregado',
-      $push: { historial: { at: new Date(), estado: 'entregado', source: 'panel', actor_name: 'chofer' } }
+      $push: { historial: { at: getFechaArgentina(), estado: 'entregado', source: 'panel', actor_name: 'chofer' } }
     });
     res.json({ ok: true });
   } catch (e) { next(e); }
@@ -130,10 +131,11 @@ exports.marcarEstado = async (req, res) => {
     }
 
     const notasTrimmed = notas ? String(notas).trim() : '';
+    const fechaArg = getFechaArgentina();
 
     envio.historial_estados.unshift({
       estado,
-      fecha: new Date(),
+      fecha: fechaArg,
       usuario: obtenerNombreUsuario(req.user),
       notas: notasTrimmed || null
     });
@@ -141,7 +143,7 @@ exports.marcarEstado = async (req, res) => {
     if (Array.isArray(envio.historial)) {
       const actor = obtenerNombreUsuario(req.user);
       envio.historial.unshift({
-        at: new Date(),
+        at: fechaArg,
         estado,
         source: 'chofer-app',
         actor_name: actor,
@@ -150,7 +152,7 @@ exports.marcarEstado = async (req, res) => {
 
       if (vuelveAPlanta) {
         envio.historial.unshift({
-          at: new Date(),
+          at: fechaArg,
           estado: 'en_planta',
           source: 'auto',
           actor_name: 'Sistema',
@@ -171,7 +173,7 @@ exports.marcarEstado = async (req, res) => {
       envio.notas.push({
         texto: textoNota,
         usuario: usuarioNota,
-        fecha: new Date(),
+        fecha: fechaArg,
         tipo: 'chofer',
         actor_name: usuarioNota,
         actor_role: 'chofer'
@@ -217,47 +219,111 @@ exports.marcarEstado = async (req, res) => {
 exports.getEnviosActivos = async (req, res) => {
   try {
     const choferId = obtenerChoferId(req);
-    
+    const soloHoy = req.query.solo_hoy === 'true';
+
     logger.info('[Mis Envios] Request de chofer', {
       choferId,
-      userId: req.user?._id
+      userId: req.user?._id,
+      soloHoy
     });
-    
+
     if (!choferId) {
-      return res.status(400).json({ 
-        error: 'No se pudo identificar al chofer' 
+      return res.status(400).json({
+        error: 'No se pudo identificar al chofer'
       });
     }
-    
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    
+
     // Query con campos REALES del modelo
-const query = {
-  // Compatibilidad con múltiples campos de chofer
-  $or: [
-    { chofer: choferId },
-    { chofer_id: choferId },
-    { driver_id: choferId }
-  ],
-  fecha: { $gte: hoy },
-  meli_id: { $in: [null, ''] },
-  estado: { 
-    $nin: ['entregado', 'cancelado', 'devolucion'] 
-  }
-};
-    
-    logger.debug('[Mis Envios] Query', { 
-      chofer: choferId, 
-      fecha_desde: hoy 
+    // SIN filtro de fecha - mostrar todos los pendientes asignados
+    const query = {
+      // Compatibilidad con múltiples campos de chofer
+      $or: [
+        { chofer: choferId },
+        { chofer_id: choferId },
+        { driver_id: choferId }
+      ],
+      meli_id: { $in: [null, ''] },
+      estado: {
+        $nin: ['entregado', 'cancelado', 'devolucion']
+      }
+    };
+
+    // Filtrar solo envíos asignados HOY (basado en historial)
+    if (soloHoy) {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+
+      const mañana = new Date(hoy);
+      mañana.setDate(mañana.getDate() + 1);
+
+      // Buscar envíos que fueron asignados/en_camino/en_planta HOY
+      query['historial'] = {
+        $elemMatch: {
+          at: { $gte: hoy, $lt: mañana },
+          estado: { $in: ['asignado', 'en_camino', 'en_planta'] }
+        }
+      };
+
+      logger.debug('[Mis Envios] Filtro solo_hoy activado', {
+        desde: hoy.toISOString(),
+        hasta: mañana.toISOString()
+      });
+    }
+
+    logger.debug('[Mis Envios] Query', {
+      chofer: choferId
     });
     
     const envios = await Envio.find(query)
       .populate('cliente_id', 'nombre razon_social telefono')
       .populate('chofer', 'nombre email')
-      .select('id_venta destinatario direccion partido codigo_postal estado fecha referencia precio')
+      .select('id_venta destinatario direccion piso_dpto partido codigo_postal cp estado fecha referencia precio telefono requiereFirma cobroEnDestino latitud longitud destino _id')
       .sort({ fecha: -1 })
       .lean();
+
+    // AGREGAR: Popular localidades desde la colección de partidos (optimizado)
+    const Partido = require('../models/partidos');
+
+    // Obtener todos los CPs únicos de los envíos
+    const cps = [...new Set(envios.map(e => e.codigo_postal || e.cp).filter(Boolean))];
+    const partidosMap = {};
+
+    if (cps.length > 0) {
+      // Traer todos los partidos en una sola query
+      const partidosInfo = await Partido.find({ codigo_postal: { $in: cps } }).lean();
+      partidosInfo.forEach(p => {
+        partidosMap[p.codigo_postal] = p;
+      });
+    }
+
+    // Enriquecer cada envío con localidad y extraer piso/dpto
+    envios.forEach(envio => {
+      const cp = envio.codigo_postal || envio.cp;
+
+      // Agregar localidad desde el mapa de partidos
+      if (cp && partidosMap[cp]) {
+        envio.localidad = partidosMap[cp].localidad;
+        // Asegurar que el partido también esté correcto
+        if (!envio.partido) {
+          envio.partido = partidosMap[cp].partido;
+        }
+      }
+
+      // Extraer piso/dpto de la dirección si no existe como campo separado
+      if (!envio.piso_dpto && envio.direccion) {
+        const match = envio.direccion.match(/(PB|piso\s*\d+|depto\s*\d+|P\d+|D\d+)/gi);
+        if (match) {
+          envio.piso_dpto = match.join(' ');
+        }
+      }
+    });
+
+    // ===== DEBUG: Log de envíos devueltos =====
+    logger.info('[Mis Envios] Campos devueltos', {
+      campos: envios.length > 0 ? Object.keys(envios[0]) : [],
+      tieneCobroEnDestino: envios.length > 0 && envios[0].cobroEnDestino !== undefined,
+      primerEnvioCobroEnDestino: envios.length > 0 ? envios[0].cobroEnDestino : null
+    });
     
     logger.info('[Mis Envios] Resultado', {
       choferId,

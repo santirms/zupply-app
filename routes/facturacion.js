@@ -6,7 +6,13 @@ const Envio   = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const Lista   = require('../models/listaDePrecios');
 
-const { resolverZonaPorCP } = require('../services/zonaResolver');
+const { resolverZonaPorCP, resolverZonaParaCliente } = require('../services/zonaResolver');
+const {
+  buildQueryFacturacion,
+  filtrarEnviosFacturables,
+  calcularRangoFacturacion,
+  getFechaIngresoEnvio
+} = require('../utils/facturacion');
 const PDFDocument = require('pdfkit'); // npm i pdfkit
 const { Readable } = require('stream');
 // Normalizadores mínimos
@@ -26,26 +32,35 @@ router.get('/preview', async (req, res) => {
     if (isNaN(dtFrom) || isNaN(dtTo))
       return res.status(400).json({ error: 'Fechas inválidas' });
 
+    // Cargar cliente completo con config de facturación
     const cliente = await Cliente.findById(clienteId).lean();
     if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado' });
 
     const lista = await Lista.findById(cliente.lista_precios).lean();
     if (!lista) return res.status(404).json({ error: 'Lista de precios no encontrada' });
 
-    // Envíos del periodo para ese cliente (por cliente_id o por sender_id)
-    const or = [{ cliente_id: cliente._id }];
-    if (Array.isArray(cliente.sender_id) && cliente.sender_id.length) {
-      for (const s of cliente.sender_id) or.push({ sender_id: s });
-    }
+    // Generar query amplia con nuevas utilidades de facturación
+    const query = buildQueryFacturacion(clienteId, dtFrom, dtTo, cliente);
 
-    const envios = await Envio.find({
-      fecha: { $gte: dtFrom, $lte: dtTo },
-      $or: or
-    })
-    .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio')
-    .sort({ fecha: 1 })
-    .populate('cliente_id', 'nombre codigo_cliente')
-    .lean();
+    // Traer envíos candidatos
+    const enviosCandidatos = await Envio.find(query)
+      .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio origen historial requiere_sync_meli createdAt updatedAt')
+      .sort({ fecha: 1 })
+      .populate('cliente_id', 'nombre codigo_cliente')
+      .lean();
+
+    // Filtrar por fecha de ingreso real + horarios de corte
+    const envios = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo, cliente);
+
+    // Log para debugging
+    const rango = calcularRangoFacturacion(dtFrom, dtTo, cliente);
+    console.log('📊 Facturación/Preview generada:', {
+      cliente: cliente.nombre,
+      rango_solicitado: { desde, hasta },
+      rango_ajustado: rango.info,
+      candidatos: enviosCandidatos.length,
+      facturables: envios.length
+    });
 
     const items = [];
     let total = 0;
@@ -94,26 +109,35 @@ router.get('/preview', async (req, res) => {
 // ---------------------------------------------
 router.get('/resumen', async (req, res) => {
   try {
-    const { desde, hasta, clientes } = req.query;
+    const { desde, hasta, clientes, estados } = req.query;
     if (!desde || !hasta) return res.status(400).json({ error: 'Parámetros requeridos: desde, hasta' });
 
     const dtFrom = new Date(desde);
     const dtTo   = new Date(hasta);
     if (isNaN(dtFrom) || isNaN(dtTo)) return res.status(400).json({ error: 'Fechas inválidas' });
 
-    // 1) Determinar universo de clientes
+    // 1) Determinar universo de clientes - INCLUIR configuración de facturación
     let clientesDocs = [];
     if (clientes === 'all' || !clientes) {
-      clientesDocs = await Cliente.find({}).select('nombre sender_id lista_precios codigo_cliente').lean();
+      clientesDocs = await Cliente.find({}).lean();
     } else {
       const ids = String(clientes).split(',').map(s => s.trim()).filter(Boolean);
-      clientesDocs = await Cliente.find({ _id: { $in: ids } })
-        .select('nombre sender_id lista_precios codigo_cliente').lean();
+      clientesDocs = await Cliente.find({ _id: { $in: ids } }).lean();
     }
     const clientesMap = new Map(clientesDocs.map(c => [String(c._id), c]));
 
-    // 2) Traer envíos del período para esos clientes (por cliente_id o sender_id)
-    //    Para no disparar una query por cliente, usamos un OR gigante.
+    // 2) Traer envíos del período para esos clientes
+    // Ampliamos el rango para incluir todos los candidatos posibles
+    const estadosFacturables = [
+      'asignado',
+      'en_camino',
+      'en_planta',
+      'entregado',
+      'comprador_ausente',
+      'inaccesible',
+      'rechazado'
+    ];
+
     const ors = [];
     for (const c of clientesDocs) {
       ors.push({ cliente_id: c._id });
@@ -121,13 +145,55 @@ router.get('/resumen', async (req, res) => {
     }
     if (!ors.length) return res.json({ period: { desde, hasta }, lines: [], totalGeneral: 0, totalesPorCliente: [] });
 
-    const envios = await Envio.find({
-      fecha: { $gte: dtFrom, $lte: dtTo },
-      $or: ors
+    // Query amplia que incluye campos necesarios para determinar fecha de ingreso
+    const enviosCandidatos = await Envio.find({
+      $and: [
+        { $or: ors },
+        { estado: { $in: estadosFacturables } },
+        {
+          $or: [
+            { fecha: { $gte: dtFrom, $lte: dtTo } },
+            { createdAt: { $gte: dtFrom, $lte: dtTo } },
+            { 'historial.at': { $gte: dtFrom, $lte: dtTo } }
+          ]
+        }
+      ]
     })
-    .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado')
+    .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado historial origen requiere_sync_meli createdAt updatedAt')
     .sort({ fecha: 1 })
     .lean();
+
+    // Filtrar envíos usando la función centralizada
+    // Si hay múltiples clientes, agrupar por cliente y filtrar cada grupo
+    const envios = [];
+
+    if (clientesDocs.length === 1) {
+      // Un solo cliente: filtrar todos juntos
+      const cliente = clientesDocs[0];
+      const filtrados = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo, cliente);
+      envios.push(...filtrados);
+    } else {
+      // Múltiples clientes: filtrar por cliente
+      for (const envio of enviosCandidatos) {
+        const clienteId = String(envio.cliente_id || '');
+        const cliente = clientesMap.get(clienteId);
+        if (!cliente) continue;
+
+        // Filtrar este envío individual
+        const filtrado = filtrarEnviosFacturables([envio], dtFrom, dtTo, cliente);
+        if (filtrado.length > 0) {
+          envios.push(envio);
+        }
+      }
+    }
+
+    // Log para debugging
+    console.log('📊 Facturación/Resumen generada:', {
+      clientes_procesados: clientesDocs.length,
+      rango_solicitado: { desde, hasta },
+      candidatos: enviosCandidatos.length,
+      facturables: envios.length
+    });
 
     // 3) Pre-cargar listas de precios por cliente
     const listasIds = Array.from(new Set(clientesDocs.map(c => String(c.lista_precios)).filter(Boolean)));
@@ -144,14 +210,14 @@ router.get('/resumen', async (req, res) => {
       const cliente   = clientesMap.get(clienteId);
       if (!cliente) continue; // por seguridad
 
-      // Resolver zona (preciso)
-      const rz = await resolverZonaPorCP(e.codigo_postal, e.partido);
-      const zonaNombre = rz.zonaNombre || null;
-      if (!zonaNombre) continue;
-
-      // Buscar precio según la lista de ese cliente
+      // Resolver zona SOLO entre las zonas de la lista del cliente
       const lista = listaMap.get(String(cliente.lista_precios));
       if (!lista) continue;
+
+      const zonasDelCliente = lista.zonas || [];
+      const rz = await resolverZonaParaCliente(e.codigo_postal, e.partido, zonasDelCliente);
+      const zonaNombre = rz.zonaNombre || null;
+      if (!zonaNombre) continue;
 
       // Precio por _id preferentemente, si no por nombre
       let precioUnit = 0;
@@ -279,25 +345,34 @@ router.post('/emitir', async (req, res) => {
 // Devuelve items por envío (tracking, cliente, zona, precio, etc.)
 router.get('/detalle', async (req, res) => {
   try {
-    const { desde, hasta, clientes } = req.query;
+    const { desde, hasta, clientes, estados } = req.query;
     if (!desde || !hasta) return res.status(400).json({ error: 'Parámetros requeridos: desde, hasta' });
 
     const dtFrom = new Date(desde);
     const dtTo   = new Date(hasta);
     if (isNaN(dtFrom) || isNaN(dtTo)) return res.status(400).json({ error: 'Fechas inválidas' });
 
-    // clientes a incluir
+    // clientes a incluir - INCLUIR configuración de facturación
     let clientesDocs = [];
     if (clientes === 'all' || !clientes) {
-      clientesDocs = await Cliente.find({}).select('nombre sender_id lista_precios codigo_cliente').lean();
+      clientesDocs = await Cliente.find({}).lean();
     } else {
       const ids = String(clientes).split(',').map(s => s.trim()).filter(Boolean);
-      clientesDocs = await Cliente.find({ _id: { $in: ids } })
-        .select('nombre sender_id lista_precios codigo_cliente').lean();
+      clientesDocs = await Cliente.find({ _id: { $in: ids } }).lean();
     }
     const cMap = new Map(clientesDocs.map(c => [String(c._id), c]));
 
-    // OR combinado por cliente_id y sender_id
+    // Preparar query amplia
+    const estadosFacturables = [
+      'asignado',
+      'en_camino',
+      'en_planta',
+      'entregado',
+      'comprador_ausente',
+      'inaccesible',
+      'rechazado'
+    ];
+
     const ors = [];
     for (const c of clientesDocs) {
       ors.push({ cliente_id: c._id });
@@ -305,14 +380,56 @@ router.get('/detalle', async (req, res) => {
     }
     if (!ors.length) return res.json({ items: [], total: 0 });
 
-    const envios = await Envio.find({
-      fecha: { $gte: dtFrom, $lte: dtTo },
-      $or: ors
+    // Query amplia que incluye campos necesarios para determinar fecha de ingreso
+    const enviosCandidatos = await Envio.find({
+      $and: [
+        { $or: ors },
+        { estado: { $in: estadosFacturables } },
+        {
+          $or: [
+            { fecha: { $gte: dtFrom, $lte: dtTo } },
+            { createdAt: { $gte: dtFrom, $lte: dtTo } },
+            { 'historial.at': { $gte: dtFrom, $lte: dtTo } }
+          ]
+        }
+      ]
     })
-      .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio')
-      .sort({ fecha: 1 })
-      .populate('cliente_id', 'nombre codigo_cliente lista_precios')
-      .lean();
+    .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio historial origen requiere_sync_meli createdAt updatedAt')
+    .sort({ fecha: 1 })
+    .populate('cliente_id', 'nombre codigo_cliente lista_precios')
+    .lean();
+
+    // Filtrar envíos usando la función centralizada
+    // Si hay múltiples clientes, agrupar por cliente y filtrar cada grupo
+    const envios = [];
+
+    if (clientesDocs.length === 1) {
+      // Un solo cliente: filtrar todos juntos
+      const cliente = clientesDocs[0];
+      const filtrados = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo, cliente);
+      envios.push(...filtrados);
+    } else {
+      // Múltiples clientes: filtrar por cliente
+      for (const envio of enviosCandidatos) {
+        const clienteId = String(envio.cliente_id?._id || envio.cliente_id || '');
+        const cliente = cMap.get(clienteId);
+        if (!cliente) continue;
+
+        // Filtrar este envío individual
+        const filtrado = filtrarEnviosFacturables([envio], dtFrom, dtTo, cliente);
+        if (filtrado.length > 0) {
+          envios.push(envio);
+        }
+      }
+    }
+
+    // Log para debugging
+    console.log('📊 Facturación/Detalle generada:', {
+      clientes_procesados: clientesDocs.length,
+      rango_solicitado: { desde, hasta },
+      candidatos: enviosCandidatos.length,
+      facturables: envios.length
+    });
 
     // Pre-cargo listas de precios (pobladas con nombres de zona)
     const listaIds = Array.from(new Set(envios
@@ -332,13 +449,14 @@ router.get('/detalle', async (req, res) => {
       const cliente = e.cliente_id;
       if (!cliente) continue;
 
-      // Resolver zona precisa (la que te andaba bien)
-      const rz = await resolverZonaPorCP(e.codigo_postal, e.partido);
+      // Resolver zona SOLO entre las zonas de la lista del cliente
+      const lista = lMap.get(String(cliente.lista_precios));
+      const zonasDelCliente = lista?.zonas || [];
+      const rz = await resolverZonaParaCliente(e.codigo_postal, e.partido, zonasDelCliente);
       const zonaNombre = rz.zonaNombre || null;
 
-      // Precio: por lista del cliente (id o nombre)
+      // Precio: usar el precio de la zona encontrada
       let precio = 0;
-      const lista = lMap.get(String(cliente.lista_precios));
       if (lista && zonaNombre) {
         const z1 = (lista.zonas || []).find(z => z.zona?.nombre?.trim().toLowerCase() === zonaNombre.trim().toLowerCase());
         if (z1) precio = Number(z1.precio) || 0;

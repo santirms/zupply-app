@@ -31,70 +31,313 @@
 
   <style>
     :root{ --z-primary:#F59E0B; --z-primary-dark:#D97706; --z-primary-fg:#111827; }
+
+    /* Override Bootstrap primary colors */
+    :root {
+      --bs-primary: #FF8C00;
+      --bs-primary-rgb: 255, 140, 0;
+    }
+
+    /* Nav tabs con colores Zupply */
+    .nav-tabs .nav-link {
+      color: #64748b;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .nav-tabs .nav-link:hover {
+      background-color: #FFF5E6;
+      border-color: #FFD700;
+      color: #FF8C00;
+    }
+
+    .nav-tabs .nav-link.active {
+      background-color: #FF8C00 !important;
+      border-color: #FF8C00 !important;
+      color: white !important;
+      font-weight: 600;
+    }
+
+    /* Dark mode para tabs */
+    .dark .nav-tabs .nav-link:hover {
+      background-color: rgba(255, 140, 0, 0.1);
+      border-color: #FF8C00;
+      color: #FFA500;
+    }
+
+    /* Botones primarios con colores Zupply */
+    .btn-primary {
+      background-color: #FF8C00 !important;
+      border-color: #FF8C00 !important;
+      color: white !important;
+    }
+
+    .btn-primary:hover,
+    .btn-primary:focus,
+    .btn-primary:active {
+      background-color: #FF7700 !important;
+      border-color: #FF7700 !important;
+      color: white !important;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
+    }
+
+    .btn-primary:disabled {
+      background-color: #FFB84D !important;
+      border-color: #FFB84D !important;
+      opacity: 0.6;
+    }
+
+    /* Botón de guardar en pestaña Crear Envío */
+    .card-footer .btn-primary {
+      background: linear-gradient(135deg, #FFA500 0%, #FF8C00 100%) !important;
+      border: none !important;
+      font-weight: 600;
+      padding: 0.5rem 1.5rem;
+      transition: all 0.3s;
+    }
+
+    .card-footer .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(255, 140, 0, 0.4);
+    }
+
+    /* Card header con bg-primary */
+    .card-header.bg-primary {
+      background: linear-gradient(135deg, #FFA500 0%, #FF8C00 100%) !important;
+      border-color: #FF8C00 !important;
+    }
+
+    /* Spinners con colores Zupply */
+    .spinner-border {
+      border-color: #FFD700;
+      border-right-color: #FF8C00 !important;
+    }
+
+    /* Links y elementos activos */
+    a:not(.btn) {
+      color: #FF8C00;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    a:not(.btn):hover {
+      color: #FF7700;
+      text-decoration: underline;
+    }
+
+    /* Botones de filtrado */
+    #btnFiltrar,
+    #prevPage,
+    #nextPage {
+      background-color: white;
+      border-color: #e2e8f0;
+      color: #64748b;
+      transition: all 0.2s;
+    }
+
+    #btnFiltrar:hover,
+    #prevPage:hover:not(:disabled),
+    #nextPage:hover:not(:disabled) {
+      background-color: #FFF5E6;
+      border-color: #FF8C00;
+      color: #FF8C00;
+    }
+
+    /* Dark mode para botones de filtrado */
+    .dark #btnFiltrar,
+    .dark #prevPage,
+    .dark #nextPage {
+      background-color: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.1);
+      color: #94a3b8;
+    }
+
+    .dark #btnFiltrar:hover,
+    .dark #prevPage:hover:not(:disabled),
+    .dark #nextPage:hover:not(:disabled) {
+      background-color: rgba(255, 140, 0, 0.1);
+      border-color: #FF8C00;
+      color: #FFA500;
+    }
+
+    /* Badge success con el verde correcto */
+    .badge.bg-success,
+    .btn-success {
+      background-color: #28a745 !important;
+      border-color: #28a745 !important;
+    }
+
+    .badge.bg-success:hover,
+    .btn-success:hover {
+      background-color: #218838 !important;
+      border-color: #1e7e34 !important;
+    }
+
+    /* Progress bars con colores Zupply */
+    .progress-bar {
+      background-color: #FF8C00 !important;
+    }
+
+    /* Inputs focus con borde naranja */
+    input:focus,
+    select:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #FF8C00 !important;
+      box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.1) !important;
+    }
+
+    /* Dark mode - Inputs de filtros (fecha y select) */
+    .dark input[type="date"],
+    .dark select {
+      background-color: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.1);
+      color: #e2e8f0;
+    }
+
+    .dark input[type="date"]:focus,
+    .dark select:focus {
+      background-color: rgba(255, 255, 255, 0.08);
+      border-color: #FF8C00;
+      color: #e2e8f0;
+    }
+
+    /* Dark mode - Tabla de envíos */
+    .dark #vistaTabla table {
+      color: #e2e8f0;
+    }
+
+    .dark #vistaTabla thead {
+      color: #94a3b8;
+    }
+
+    .dark #vistaTabla thead th {
+      border-bottom-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .dark #vistaTabla tbody tr {
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .dark #vistaTabla tbody tr:hover {
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    /* Dark mode - Modal de detalle */
+    .dark #modalDetalleEnvio .modal-content,
+    .dark .modal-content {
+      background-color: #0B1020;
+      border-color: rgba(255, 255, 255, 0.1);
+      color: #e2e8f0;
+    }
+
+    /* Dark mode - Tabs de Bootstrap en modals */
+    .dark .modal .nav-tabs {
+      border-bottom-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .dark .modal .nav-tabs .nav-link {
+      color: #94a3b8;
+    }
+
+    .dark .modal .nav-tabs .nav-link.active {
+      background-color: #FF8C00 !important;
+      border-color: #FF8C00 !important;
+      color: white !important;
+    }
+
+    /* Dark mode - Cards de Bootstrap */
+    .dark .card {
+      background-color: #1a1d29;
+      border-color: #2d3142;
+      color: #e2e8f0;
+    }
+
+    .dark .card-header {
+      background-color: #2d3142;
+      border-color: #404456;
+      color: #e2e8f0;
+    }
+
+    .dark .card-body {
+      background-color: #1a1d29;
+      color: #e2e8f0;
+    }
+
+    .dark .card-footer {
+      background-color: #2d3142;
+      border-color: #404456;
+    }
+
+    /* Dark mode - Text muted */
+    .dark .text-muted {
+      color: #808495 !important;
+    }
   </style>
   <style>
     /* Dark mode - Pestaña Crear envío */
-    @media (prefers-color-scheme: dark) {
-      #crear .card {
-        background-color: #1a1d29;
-        border-color: #2d3142;
-      }
+    .dark #crear .card {
+      background-color: #1a1d29;
+      border-color: #2d3142;
+    }
 
-      #crear .card-header.bg-primary {
-        background-color: #0d6efd !important;
-      }
+    .dark #crear .card-header.bg-primary {
+      background-color: #FF8C00 !important;
+    }
 
-      #crear .form-label {
-        color: #e0e0e0;
-      }
+    .dark #crear .form-label {
+      color: #e0e0e0;
+    }
 
-      #crear .form-control {
-        background-color: #2d3142;
-        border-color: #404456;
-        color: #e0e0e0;
-      }
+    .dark #crear .form-control {
+      background-color: #2d3142;
+      border-color: #404456;
+      color: #e0e0e0;
+    }
 
-      #crear .form-control:focus {
-        background-color: #363a4f;
-        border-color: #667eea;
-        color: #e0e0e0;
-      }
+    .dark #crear .form-control:focus {
+      background-color: #363a4f;
+      border-color: #FF8C00;
+      color: #e0e0e0;
+    }
 
-      #crear .form-control::placeholder {
-        color: #808495;
-      }
+    .dark #crear .form-control::placeholder {
+      color: #808495;
+    }
 
-      #crear .form-control[readonly] {
-        background-color: #1a1d29;
-        color: #808495;
-      }
+    .dark #crear .form-control[readonly] {
+      background-color: #1a1d29;
+      color: #808495;
+    }
 
-      #crear .form-text,
-      #crear small.text-muted {
-        color: #808495 !important;
-      }
+    .dark #crear .form-text,
+    .dark #crear small.text-muted {
+      color: #808495 !important;
+    }
 
-      #paquetes-container .card {
-        background-color: #2d3142;
-        border-color: #404456;
-      }
+    .dark #paquetes-container .card {
+      background-color: #2d3142;
+      border-color: #404456;
+    }
 
-      #paquetes-container h5,
-      #paquetes-container h6 {
-        color: #e0e0e0;
-      }
+    .dark #paquetes-container h5,
+    .dark #paquetes-container h6 {
+      color: #e0e0e0;
+    }
 
-      #paquetes-container .text-muted {
-        color: #808495 !important;
-      }
+    .dark #paquetes-container .text-muted {
+      color: #808495 !important;
     }
   </style>
   <style>
     #envios-creados-lista code {
       font-size: 1.1rem;
       padding: 0.2rem 0.5rem;
-      background: #e7f1ff;
+      background: #FFF5E6;
       border-radius: 4px;
+      color: #FF8C00;
+      font-weight: 600;
     }
 
     #modalEnvioCreado .modal-footer {
@@ -118,7 +361,7 @@
     #modalEnvioCreado .btn[style*="gradient"]:hover {
       opacity: 0.9;
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
     }
 
     #modalEnvioCreado .btn-outline-secondary:hover {
@@ -134,11 +377,9 @@
     }
 
     /* Dark mode */
-    @media (prefers-color-scheme: dark) {
-      #modalEnvioCreado code {
-        background: #2d3142;
-        color: #a8b2ff;
-      }
+    .dark #modalEnvioCreado code {
+      background: #2d3142;
+      color: #a8b2ff;
     }
   </style>
 </head>
@@ -147,7 +388,7 @@
     <!-- TOPBAR (mismo estilo que tu escáner) -->
     <header class="sticky top-0 z-40 mb-4">
       <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
-        <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+        <a href="#" id="logoLink" class="flex items-center gap-3" title="Inicio">
           <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)"><span class="text-white font-black">Z</span></div>
           <span class="sm:hidden font-semibold tracking-wide text-amber-500">zupply</span>
           <img src="/assets/logo-zupply.svg" class="h-5 hidden sm:block" onerror="this.remove()">
@@ -163,8 +404,8 @@
               <span class="opacity-70">▾</span>
             </button>
             <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
-              <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
-              <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <a href="#" id="homeLink" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Inicio</a>
+              <div id="menuDivider" class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
               <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
             </div>
           </div>
@@ -179,7 +420,7 @@
       <ul class="nav nav-tabs mb-3" id="panelTabs" role="tablist">
         <li class="nav-item" role="presentation">
           <button class="nav-link active" id="tabla-tab" data-bs-toggle="tab" data-bs-target="#tabla" type="button" role="tab" aria-controls="tabla" aria-selected="true">
-            <i class="bi bi-table"></i> Tabla
+            <i class="bi bi-table"></i> Mis Envíos
           </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -200,12 +441,35 @@
             <input id="fDesde" type="date" class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm">
             <input id="fHasta" type="date" class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm">
             <select id="fEstado" class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm">
-              <option value="todos">Todos</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="en_camino">En camino</option>
-              <option value="entregado">Entregado</option>
-              <option value="incidencia">Incidencia</option>
-              <option value="reprogramado">Reprogramado</option>
+              <option value="">📦 Todos los estados</option>
+
+              <optgroup label="📋 Pendiente">
+                <option value="pendiente">Pendiente</option>
+              </optgroup>
+
+              <optgroup label="🚚 En camino">
+                <option value="en_camino">En camino</option>
+              </optgroup>
+
+              <optgroup label="✅ Entregado">
+                <option value="entregado">Entregado</option>
+              </optgroup>
+
+              <optgroup label="🏢 En planta">
+                <option value="en_planta">En planta</option>
+              </optgroup>
+
+              <optgroup label="⚠️ Incidencia">
+                <option value="reprogramado">Reprogramado</option>
+                <option value="ausente">Comprador Ausente</option>
+                <option value="inaccesible">Inaccesible</option>
+                <option value="direccion_erronea">Dirección Errónea</option>
+                <option value="rechazado">Rechazado</option>
+              </optgroup>
+
+              <optgroup label="❌ Cancelado">
+                <option value="cancelado">Cancelado</option>
+              </optgroup>
             </select>
             <button id="btnFiltrar" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10">Filtrar</button>
           </div>
@@ -257,7 +521,7 @@
                   <!-- Referencia -->
                   <div class="mb-3">
                     <label for="paq-referencia" class="form-label">Referencia</label>
-                    <input type="text" class="form-control" id="paq-referencia" placeholder="Ej: Entrega urgente">
+                    <input type="text" class="form-control" id="paq-referencia" placeholder="Ej: Porton color negro">
                   </div>
 
                   <div class="row">
@@ -276,7 +540,7 @@
                       </label>
                       <input type="text" class="form-control" id="paq-telefono" placeholder="549 + código de área + número">
                       <small class="form-text text-muted">
-                        Formato: 549 + código de área + número<br>
+                        Formato: 549 + código de área sin 0 + número<br>
                         Ejemplo AMBA: 5491123456789 | Provincia: 5492214567890
                       </small>
                     </div>
@@ -287,7 +551,18 @@
                     <label for="paq-direccion" class="form-label">
                       Dirección <span class="text-danger">*</span>
                     </label>
-                    <input type="text" class="form-control" id="paq-direccion" required placeholder="Calle, número, piso, depto">
+                    <input type="text" class="form-control" id="paq-direccion" required placeholder="Calle y número (ej: Aguirre 202)">
+                    <small class="form-text text-muted">
+                      Solo calle y número, sin piso/dpto
+                    </small>
+                  </div>
+
+                  <!-- Piso/Dpto -->
+                  <div class="mb-3">
+                    <label for="paq-piso-dpto" class="form-label">
+                      Piso / Dpto / Timbre (opcional)
+                    </label>
+                    <input type="text" class="form-control" id="paq-piso-dpto" placeholder="Ej: Piso 3, Dpto 11, Timbre 5">
                   </div>
 
                   <div class="row">
@@ -308,12 +583,88 @@
                     </div>
                   </div>
 
-                  <!-- ID de venta (opcional) -->
+                  <!-- ID de venta (solo lectura - autogenerado) -->
                   <div class="mb-3">
                     <label for="paq-id-venta" class="form-label">
-                      ID de venta (opcional)
+                      ID de venta
                     </label>
-                    <input type="text" class="form-control" id="paq-id-venta" placeholder="Si se omite, se autogenera">
+                    <input type="text" class="form-control" id="paq-id-venta" value="Autogenerado" readonly
+                           style="background-color: #f8f9fa; color: #6c757d; cursor: not-allowed;">
+                    <small class="form-text text-muted">
+                      El sistema generará automáticamente un ID único para este envío
+                    </small>
+                  </div>
+
+                  <!-- Tipo de Envío -->
+                  <div class="mb-3">
+                    <label for="paq-tipo-envio" class="form-label">Tipo de Envío</label>
+                    <select id="paq-tipo-envio" class="form-control">
+                      <option value="envio">📦 Envío</option>
+                      <option value="retiro">🏪 Retiro</option>
+                      <option value="cambio">🔄 Cambio</option>
+                    </select>
+                    <small id="paq-tipo-help" class="form-text text-muted">
+                      Entrega estándar en domicilio
+                    </small>
+                  </div>
+
+                  <!-- Cobro en Destino -->
+                  <div class="mb-3">
+                    <div class="form-check">
+                      <input
+                        type="checkbox"
+                        id="paq-cobro-destino"
+                        class="form-check-input"
+                        onchange="toggleCampoMontoCobro()"
+                      />
+                      <label for="paq-cobro-destino" class="form-check-label">
+                        💵 Cobro en Destino
+                      </label>
+                    </div>
+
+                    <div id="campo-monto-cobro" class="mt-3" style="display: none;">
+                      <label for="paq-monto-cobro" class="form-label">
+                        Monto a Cobrar <span class="text-danger">*</span>
+                      </label>
+                      <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input
+                          type="number"
+                          id="paq-monto-cobro"
+                          class="form-control"
+                          placeholder="0.00"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                      <small class="form-text text-muted">
+                        El chofer cobrará este monto al entregar el paquete
+                      </small>
+                    </div>
+                  </div>
+
+                  <!-- NUEVO: Checkbox Firma Digital -->
+                  <div id="seccionFirmaDigital" style="display: none; margin-top: 15px;">
+                    <div style="
+                      background-color: #e8f4fd;
+                      border: 1px solid #b3d9f2;
+                      border-radius: 6px;
+                      padding: 15px;
+                    ">
+                      <label style="display: flex; align-items: center; margin: 0; cursor: pointer;">
+                        <input
+                          type="checkbox"
+                          id="requiereFirma"
+                          style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;"
+                        >
+                        <div>
+                          <strong style="font-size: 1em;">🖊️ Requiere firma digital del destinatario</strong>
+                          <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                            El chofer solicitará la firma del receptor al momento de la entrega
+                          </div>
+                        </div>
+                      </label>
+                    </div>
                   </div>
 
                 </form>
@@ -366,6 +717,11 @@
           class="px-4 py-2 font-medium border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100">
           Historial
         </button>
+        <button id="tabEvidencias" onclick="cambiarTab('evidencias')"
+          class="px-4 py-2 font-medium border-b-2 border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 flex items-center gap-2">
+          📋 Evidencias
+          <span id="badgeEvidencias" class="hidden px-2 py-0.5 rounded-full text-xs font-bold" style="background-color: #FF8C00; color: white;">0</span>
+        </button>
       </div>
 
       <!-- Contenido: Detalle -->
@@ -379,6 +735,11 @@
             <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Estado</label>
             <div id="modalEstado" class="mt-1">-</div>
           </div>
+        </div>
+
+        <div>
+          <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Tipo de Envío</label>
+          <div id="modalTipo" class="mt-1">-</div>
         </div>
 
         <div>
@@ -420,6 +781,41 @@
           <p id="modalReferencia" class="text-slate-900 dark:text-slate-100 text-sm">-</p>
         </div>
 
+        <!-- Cobro en Destino -->
+        <div id="modalCobroDestinoContainer" class="hidden border-l-4 border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
+          <div class="flex items-start gap-3">
+            <div class="text-2xl">💵</div>
+            <div class="flex-1">
+              <h5 class="text-lg font-semibold text-amber-800 dark:text-amber-300 mb-2">Cobro en Destino</h5>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-sm font-medium text-amber-700 dark:text-amber-400">Monto a cobrar:</label>
+                  <p id="modalCobroMonto" class="text-xl font-bold text-amber-900 dark:text-amber-200">-</p>
+                </div>
+                <div>
+                  <label class="text-sm font-medium text-amber-700 dark:text-amber-400">Estado:</label>
+                  <div id="modalCobroEstado" class="mt-1">-</div>
+                </div>
+              </div>
+              <div id="modalCobroDetalles" class="mt-3 pt-3 border-t border-amber-200 dark:border-amber-700 hidden">
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <label class="font-medium text-amber-700 dark:text-amber-400">Fecha de cobro:</label>
+                    <p id="modalCobroFecha" class="text-amber-900 dark:text-amber-200">-</p>
+                  </div>
+                  <div>
+                    <label class="font-medium text-amber-700 dark:text-amber-400">Método de pago:</label>
+                    <p id="modalCobroMetodo" class="text-amber-900 dark:text-amber-200">-</p>
+                  </div>
+                </div>
+              </div>
+              <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                ⚠️ El chofer debe cobrar este monto al entregar el paquete
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div>
           <label class="text-sm font-medium text-slate-600 dark:text-slate-400">Fecha de creación</label>
           <p id="modalFecha" class="text-slate-900 dark:text-slate-100">-</p>
@@ -449,6 +845,11 @@
         </div>
       </div>
 
+      <!-- Contenido: Evidencias -->
+      <div id="contenidoEvidencias" class="hidden">
+        <div id="evidenciasContainer"></div>
+      </div>
+
       <!-- Footer -->
       <div class="mt-6 flex justify-end">
         <button onclick="cerrarModalDetalle()"
@@ -457,6 +858,40 @@
         </button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Modal fullscreen para mostrar foto/firma -->
+  <div id="modalFotoEvidencia" class="fixed inset-0 bg-black/95 hidden items-center justify-center z-[100]" style="z-index: 10000;">
+    <div class="w-full h-full flex flex-col p-5">
+      <!-- Header -->
+      <div class="flex justify-between items-center mb-5">
+        <h3 id="modalFotoTitulo" class="text-white text-xl font-semibold flex items-center gap-2">
+          <span id="modalFotoIcono">📷</span>
+          <span id="modalFotoTexto">Evidencia</span>
+        </h3>
+        <button onclick="cerrarModalFoto()" class="text-white border-2 border-white rounded-full w-11 h-11 flex items-center justify-center text-2xl hover:bg-white hover:text-black transition-all">
+          ✕
+        </button>
+      </div>
+
+      <!-- Imagen -->
+      <div class="flex-1 flex items-center justify-center">
+        <div class="bg-white rounded-xl p-4 max-w-[90%] max-h-[80vh] overflow-auto">
+          <div id="modalFotoLoader" class="text-center p-20">
+            <div class="text-5xl mb-5 animate-pulse">⏳</div>
+            <div class="text-xl text-slate-600">Cargando...</div>
+          </div>
+          <img id="modalFotoImagen" class="hidden max-w-full max-h-[75vh] object-contain rounded-lg" alt="Evidencia"/>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div id="modalFotoFooter" class="mt-5 text-center">
+        <div class="inline-block px-5 py-3 rounded-lg">
+          <!-- Se llenará dinámicamente -->
+        </div>
+      </div>
     </div>
   </div>
 
@@ -469,6 +904,21 @@
 
   <script>
     document.getElementById('anio').textContent = new Date().getFullYear();
+
+    // Función para obtener la ruta de inicio según el rol
+    function getHomeRoute(role) {
+      switch(role) {
+        case 'cliente':
+          return '/client-panel.html';
+        case 'admin':
+        case 'coordinador':
+          return '/index.html';
+        case 'chofer':
+          return '/mis-envios.html';
+        default:
+          return '/';
+      }
+    }
 
     // user/tema/menu
     (function initUserMenu() {
@@ -498,6 +948,31 @@
         .then((me) => {
           document.getElementById('username').textContent =
             me.name || me.username || me.email || 'Usuario';
+
+          // Configurar redirección del logo según rol
+          const userRole = me.role || 'cliente';
+          const homeRoute = getHomeRoute(userRole);
+
+          const logoLink = document.getElementById('logoLink');
+          const homeLink = document.getElementById('homeLink');
+          const menuDivider = document.getElementById('menuDivider');
+
+          // Actualizar href del logo
+          if (logoLink) {
+            logoLink.href = homeRoute;
+          }
+
+          // Para clientes: ocultar el link de inicio en el dropdown
+          // ya que están en su página de inicio
+          if (userRole === 'cliente') {
+            if (homeLink) homeLink.style.display = 'none';
+            if (menuDivider) menuDivider.style.display = 'none';
+          } else {
+            // Para otros roles, configurar el link de inicio
+            if (homeLink) {
+              homeLink.href = homeRoute;
+            }
+          }
         })
         .catch(() => {
           location.href = '/auth/login';
@@ -586,7 +1061,7 @@
         const searchParams = new URLSearchParams({ page: pagina, limit });
 
         const estadoValue = fEstado?.value;
-        if (estadoValue && estadoValue !== 'todos') {
+        if (estadoValue) {
           searchParams.set('estado', estadoValue);
         }
 
@@ -754,7 +1229,7 @@
           limit: '500'
         });
         const estadoValue = fEstado?.value;
-        if (estadoValue && estadoValue !== 'todos') {
+        if (estadoValue) {
           params.set('estado', estadoValue);
         }
 
@@ -781,7 +1256,7 @@
   <div class="modal fade" id="modalEnvioCreado" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog">
       <div class="modal-content">
-        <div class="modal-header text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <div class="modal-header text-white" style="background: linear-gradient(135deg, #FFA500 0%, #FF8C00 100%);">
           <h5 class="modal-title">
             <i class="bi bi-check-circle-fill me-2"></i>
             Envío Creado Correctamente
@@ -789,7 +1264,7 @@
         </div>
         <div class="modal-body text-center">
           <div class="mb-4">
-            <i class="bi bi-check-circle-fill" style="font-size: 4rem; color: #667eea;"></i>
+            <i class="bi bi-check-circle-fill" style="font-size: 4rem; color: #FF8C00;"></i>
           </div>
 
           <div id="envios-creados-lista">
@@ -801,24 +1276,53 @@
           </p>
         </div>
         <div class="modal-footer justify-content-center">
-          <button type="button" class="btn btn-outline-secondary" 
+          <button type="button" class="btn btn-outline-secondary"
                   id="btn-imprimir-etiquetas">
             <i class="bi bi-printer me-1"></i>
             Imprimir Etiqueta(s)
           </button>
-          <button type="button" class="btn" 
-                  style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;"
+          <button type="button" class="btn"
+                  style="background: linear-gradient(135deg, #FFA500 0%, #FF8C00 100%); color: white; border: none;"
                   onclick="crearOtroEnvio()">
             <i class="bi bi-plus-circle me-1"></i>
             Crear Otro Envío
           </button>
-          <button type="button" class="btn" 
-                  style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;"
+          <button type="button" class="btn"
+                  style="background: linear-gradient(135deg, #FFA500 0%, #FF8C00 100%); color: white; border: none;"
                   onclick="verMisEnvios()">
             <i class="bi bi-list me-1"></i>
             Ver Mis Envíos
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de opciones de impresión -->
+  <div id="modalOpcionesImpresion" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center" style="z-index: 9999;">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+      <h3 class="text-lg font-semibold mb-4 text-gray-800">🖨️ Opciones de Impresión</h3>
+
+      <label class="block text-sm font-medium mb-2 text-gray-700">Formato de etiquetas:</label>
+      <select id="formatoEtiquetas" class="w-full border border-gray-300 rounded p-2 mb-4 focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+        <option value="termica">PDF Térmica (10x15cm) - 1 por página</option>
+        <option value="a4">PDF A4 - 4 etiquetas por hoja</option>
+        <option value="zpl">Zebra ZPL (descarga archivo .zpl)</option>
+      </select>
+
+      <p class="text-sm text-gray-500 mb-4">
+        <strong>Térmica:</strong> Impresoras de etiquetas<br>
+        <strong>A4:</strong> Impresoras comunes (cortar etiquetas)<br>
+        <strong>ZPL:</strong> Impresoras Zebra (archivo raw)
+      </p>
+
+      <div class="flex gap-2 justify-end">
+        <button onclick="cerrarModalOpciones()" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 text-gray-700">
+          Cancelar
+        </button>
+        <button onclick="confirmarImpresion()" class="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600">
+          Imprimir
+        </button>
       </div>
     </div>
   </div>

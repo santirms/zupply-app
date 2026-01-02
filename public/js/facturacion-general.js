@@ -26,12 +26,43 @@ function initTopbar() {
         location.href = '/auth/login';
       });
     }
+
+    // Función para obtener la ruta de inicio según el rol
+    function getHomeRoute(role) {
+      switch(role) {
+        case 'cliente':
+          return '/client-panel.html';
+        case 'admin':
+        case 'coordinador':
+          return '/index.html';
+        case 'chofer':
+          return '/mis-envios.html';
+        default:
+          return '/';
+      }
+    }
+
     fetch('/me', { cache:'no-store' })
       .then(r => { if (!r.ok) throw new Error('unauth'); return r.json(); })
       .then(me => {
         const name = me.name || me.username || me.email || 'Usuario';
         const u = qs('#username'); if (u) u.textContent = name;
         try { localStorage.setItem('zpl_username', name); } catch {}
+
+        // Configurar redirección del logo según rol
+        const userRole = me.role || 'admin';
+        const homeRoute = getHomeRoute(userRole);
+
+        const logoLink = document.getElementById('logoLink');
+        const homeLink = document.getElementById('homeLink');
+
+        // Actualizar href del logo y link de inicio
+        if (logoLink) {
+          logoLink.href = homeRoute;
+        }
+        if (homeLink) {
+          homeLink.href = homeRoute;
+        }
       })
       .catch(()=> location.href='/auth/login');
   })();
@@ -110,6 +141,17 @@ async function filtrar() {
   const hasta = qs('#hasta').value;
   const clientesParam = getSelectedClientes(); // 'all' o 'id1,id2'
 
+  // NUEVO: Obtener estados seleccionados
+  const selEstados = qs('#filtroEstados');
+  const estadosSeleccionados = Array.from(selEstados.selectedOptions)
+    .map(o => o.value)
+    .filter(Boolean);
+
+  // Si no hay ninguno seleccionado, usar los default
+  const estadosParam = estadosSeleccionados.length > 0
+    ? estadosSeleccionados.join(',')
+    : 'asignado,en_camino,entregado';
+
   if (!desde || !hasta) {
     alert('Seleccioná rango de fechas.');
     return;
@@ -119,15 +161,15 @@ async function filtrar() {
     setBusy(true, 'Generando reporte de facturación…');
 
     // 1) Detalle para la tabla (preview envío x envío)
-    const urlDetalle = `/facturacion/detalle?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}`;
+    const urlDetalle = `/facturacion/detalle?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}&estados=${encodeURIComponent(estadosParam)}`;
     const resDet = await fetch(urlDetalle, { cache:'no-store' });
     if (!resDet.ok) throw new Error('Error generando detalle');
     const det = await resDet.json();
     envios = det.items || [];
     pintarTabla();
 
-    // 2) Resumen para el modal “Facturación”
-    const urlResumen = `/facturacion/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}`;
+    // 2) Resumen para el modal "Facturación"
+    const urlResumen = `/facturacion/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}&estados=${encodeURIComponent(estadosParam)}`;
     const resRes = await fetch(urlResumen, { cache:'no-store' });
     if (!resRes.ok) throw new Error('Error generando resumen');
     window.__FACT_RESUMEN__ = await resRes.json();

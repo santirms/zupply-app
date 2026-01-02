@@ -2,10 +2,11 @@
 const Envio = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const QRCode = require('qrcode');
-const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
+const { generarEtiquetaInformativa, resolveTracking } = require('../utils/labelService');
 const axios = require('axios');
 const { formatSubstatus } = require('../services/meliHistory');
 const logger = require('../utils/logger');
+const { getFechaArgentina } = require('../utils/timezone');
 
 // ——— CONFIG ———
 const HYDRATE_TTL_MIN = 15; // re-hidratar si pasaron > 15 min
@@ -69,7 +70,7 @@ async function ensureMeliHistory(envio) {
   const mapped = mapMeliHistory(items);
 
   envio.historial = mergeHistorial(envio.historial || [], mapped);
-  envio.meli_history_last_sync = new Date();
+  envio.meli_history_last_sync = getFechaArgentina();
   await envio.save();
 }
 
@@ -152,7 +153,8 @@ exports.obtenerShipmentsPanelCliente = async (req, res) => {
     const [envios, total] = await Promise.all([
       Envio.find(query)
         .populate('chofer', 'nombre email')
-        .select('id_venta tracking destinatario direccion partido codigo_postal estado estado_meli fecha meli_id sender_id')
+        .populate('cliente_id', 'nombre razon_social')
+        .select('id_venta tracking destinatario direccion partido codigo_postal estado estado_meli fecha meli_id sender_id cliente_id')
         .sort({ fecha: -1 })
         .skip(skip)
         .limit(limitNumber)
@@ -206,6 +208,7 @@ exports.crearEnvio = async (req, res) => {
       partido,
       destinatario,
       direccion,
+      piso_dpto,
       referencia,
       latitud: latitudOriginal,
       longitud: longitudOriginal
@@ -241,17 +244,28 @@ exports.crearEnvio = async (req, res) => {
       partido,
       destinatario,
       direccion,
+      piso_dpto: piso_dpto || null,
       referencia,
       latitud,       // 👈 coincide con el schema
       longitud,      // 👈 coincide con el schema
-      fecha: new Date()
+      fecha: getFechaArgentina(),
+      // Formato GeoJSON para el mapa
+      destino: {
+        partido: partido,
+        cp: codigo_postal,
+        loc: (latitud && longitud) ? {
+          type: 'Point',
+          coordinates: [longitud, latitud]  // [lon, lat] - orden GeoJSON
+        } : null
+      }
     });
 
     // Generar etiqueta 10x15 + QR usando id_venta (o meli_id)
-    const { url } = await buildLabelPDF(nuevo.toObject());
+    // Nota: generarEtiquetaInformativa devuelve Buffer, la URL se genera dinámicamente vía /api/envios/label/:tracking
     const tk = resolveTracking(nuevo);
     const qr_png = await QRCode.toDataURL(tk, { width: 256, margin: 0 });
-    await Envio.updateOne({ _id: nuevo._id }, { $set: { label_url: url, qr_png } });
+    const label_url = `/api/envios/label/${tk}`;
+    await Envio.updateOne({ _id: nuevo._id }, { $set: { label_url, qr_png } });
 
     const doc = await Envio.findById(nuevo._id).lean();
     res.status(201).json(doc);
@@ -326,12 +340,13 @@ exports.getEnvioByTracking = async (req, res) => {
     
     // 2) si no tiene etiqueta, generarla (si usás eso)
     if (!envio.label_url) {
-      const { buildLabelPDF, resolveTracking } = require('../utils/labelService');
+      const { generarEtiquetaInformativa, resolveTracking } = require('../utils/labelService');
       const QRCode = require('qrcode');
-      const { url } = await buildLabelPDF(envio.toObject());
+      // Nota: generarEtiquetaInformativa devuelve Buffer, la URL se genera dinámicamente vía /api/envios/label/:tracking
       const tk = resolveTracking(envio.toObject());
       const qr_png = await QRCode.toDataURL(tk, { width: 256, margin: 0 });
-      await Envio.updateOne({ _id: envio._id }, { $set: { label_url: url, qr_png } });
+      const label_url = `/api/envios/label/${tk}`;
+      await Envio.updateOne({ _id: envio._id }, { $set: { label_url, qr_png } });
     }
 
     // 3) devolver con cliente poblado (solo lo necesario)
@@ -375,21 +390,27 @@ exports.labelByTracking = async (req, res) => {
     const tracking = req.params.tracking || req.params.trackingId;
 
     // Buscamos por id_venta (tu tracking) o meli_id
-    const envio = await Envio.findOne({ id_venta: tracking }) 
-               || await Envio.findOne({ meli_id: tracking });
+    const envio = await Envio.findOne({
+      $or: [
+        { id_venta: tracking },
+        { meli_id: tracking },
+        { tracking: tracking }
+      ]
+    }).populate('cliente_id');
 
-    if (!envio) return res.status(404).send('No encontrado');
+    if (!envio) return res.status(404).send('Envío no encontrado');
 
-    // Si ya hay PDF generado, redirigimos
-    if (envio.label_url) return res.redirect(envio.label_url);
+    // Usar nueva etiqueta informativa
+    const { generarEtiquetaInformativa } = require('../utils/labelService');
+    const pdfBuffer = await generarEtiquetaInformativa(envio.toObject(), envio.cliente_id);
 
-    // Si no hay, lo generamos y redirigimos
-    const { url } = await buildLabelPDF(envio.toObject());
-    await Envio.updateOne({ _id: envio._id }, { $set: { label_url: url } });
-    return res.redirect(url);
-  } catch (e) {
-    console.error('labelByTracking error:', e);
-    return res.status(500).send('Error al generar/servir etiqueta');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${envio.id_venta}.pdf"`);
+    res.send(pdfBuffer);
+
+  } catch (err) {
+    console.error('Error generando etiqueta:', err);
+    res.status(500).send('Error al generar etiqueta');
   }
 };
 
@@ -427,9 +448,33 @@ exports.actualizarEnvio = async (req, res) => {
       const longitudResult = coords?.lon ?? coords?.lng ?? longitudInput ?? toNumberOrNull(envioActual.longitud);
       updates.latitud  = latitudResult ?? null;
       updates.longitud = longitudResult ?? null;
+
+      // Actualizar destino.loc en formato GeoJSON
+      updates.destino = {
+        partido: partidoFinal,
+        cp: codigoPostalFinal,
+        loc: (latitudResult && longitudResult) ? {
+          type: 'Point',
+          coordinates: [longitudResult, latitudResult]
+        } : null
+      };
     } else {
       if (latitudInput !== null) updates.latitud = latitudInput;
       if (longitudInput !== null) updates.longitud = longitudInput;
+
+      // Si se actualizan coordenadas manualmente, actualizar también destino.loc
+      if (latitudInput !== null || longitudInput !== null) {
+        const lat = latitudInput ?? toNumberOrNull(envioActual.latitud);
+        const lon = longitudInput ?? toNumberOrNull(envioActual.longitud);
+        updates.destino = {
+          partido: partidoFinal,
+          cp: codigoPostalFinal,
+          loc: (lat && lon) ? {
+            type: 'Point',
+            coordinates: [lon, lat]
+          } : null
+        };
+      }
     }
     const envio = await Envio.findByIdAndUpdate(req.params.id, updates, { new: true }).lean();
     if (!envio) return res.status(404).json({ msg: 'Envío no encontrado' });
@@ -522,6 +567,12 @@ exports.crearEnviosLote = async (req, res) => {
       }
     }
 
+    // Obtener el cliente para verificar permisos
+    const cliente = await Cliente.findById(clienteId);
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
     const creados = [];
     const errores = [];
 
@@ -539,6 +590,25 @@ exports.crearEnviosLote = async (req, res) => {
 
         if (!data.codigo_postal || !/^\d{4}$/.test(data.codigo_postal)) {
           throw new Error('Código postal inválido');
+        }
+
+        // Validar tipo de envío
+        if (data.tipo && !['envio', 'retiro', 'cambio'].includes(data.tipo)) {
+          throw new Error('Tipo de envío inválido');
+        }
+
+        // Validar cobro en destino (soportar tanto formato nuevo como legacy)
+        const cobroHabilitado = data.cobroEnDestino?.habilitado || data.cobra_en_destino || false;
+        const montoCobro = data.cobroEnDestino?.monto || data.monto_a_cobrar || 0;
+
+        if (cobroHabilitado && (!montoCobro || montoCobro <= 0)) {
+          throw new Error('Debe especificar un monto válido mayor a 0 para cobro en destino');
+        }
+
+        // Validar permisos de firma digital
+        const requiereFirma = data.requiereFirma || false;
+        if (requiereFirma && !cliente.permisos?.puedeRequerirFirma) {
+          throw new Error('Este cliente no tiene permiso para solicitar firma digital');
         }
 
         const idVentaRaw = data.id_venta ? String(data.id_venta).trim() : null;
@@ -571,6 +641,7 @@ exports.crearEnviosLote = async (req, res) => {
           throw new Error(`ID de venta ${idVenta} ya existe`);
         }
 
+        const fechaArg = getFechaArgentina();
         const nuevoEnvio = new Envio({
           sender_id: codigoCliente,
           cliente_id: clienteId,
@@ -578,24 +649,66 @@ exports.crearEnviosLote = async (req, res) => {
           tracking,
           destinatario: data.destinatario,
           direccion: data.direccion,
+          piso_dpto: data.piso_dpto || null,
           partido: data.partido,
           codigo_postal: data.codigo_postal,
           telefono: data.telefono || null,
           referencia: data.referencia || null,
-          fecha: new Date(),
+          fecha: fechaArg,
           estado: 'pendiente',
           origen: 'ingreso_manual',
           requiere_sync_meli: false,
           chofer: null,
           zona: data.partido,
+          tipo: data.tipo || 'envio',
+          contenido: data.contenido || null,
+          // Nuevo formato de cobro en destino
+          cobroEnDestino: {
+            habilitado: cobroHabilitado,
+            monto: cobroHabilitado ? montoCobro : 0,
+            cobrado: false,
+            fechaCobro: null,
+            metodoPago: null
+          },
+          // Firma digital
+          requiereFirma: requiereFirma,
+          // Campos legacy para compatibilidad
+          cobra_en_destino: cobroHabilitado,
+          monto_a_cobrar: cobroHabilitado ? montoCobro : null,
+          // Formato GeoJSON para el mapa (se geocodificará después)
+          destino: {
+            partido: data.partido,
+            cp: data.codigo_postal,
+            loc: null
+          },
           historial: [{
-            at: new Date(),
+            at: fechaArg,
             estado: 'pendiente',
             source: 'cliente-web',
             actor_name: usuario.email || usuario.username || 'cliente',
             note: 'Creado desde panel de cliente'
           }]
         });
+
+        // Geocodificar
+        try {
+          const coords = await geocodeDireccion({
+            direccion: data.direccion,
+            codigo_postal: data.codigo_postal,
+            partido: data.partido
+          });
+
+          if (coords?.lat && coords?.lon) {
+            nuevoEnvio.latitud = coords.lat;
+            nuevoEnvio.longitud = coords.lon;
+            nuevoEnvio.destino.loc = {
+              type: 'Point',
+              coordinates: [coords.lon, coords.lat]
+            };
+          }
+        } catch (geoErr) {
+          console.warn('Geocode error:', geoErr.message);
+        }
 
         await nuevoEnvio.save();
         creados.push(idVenta);
@@ -675,10 +788,11 @@ exports.agregarNota = async (req, res) => {
     const actor_role = (req.user?.role || null);
     const tipo = actor_role === 'chofer' ? 'chofer' : (actor_role === 'sistema' ? 'sistema' : 'admin');
 
+    const fechaArg = getFechaArgentina();
     const nota = {
       texto: texto.trim(),
       usuario: actor_name,
-      fecha: new Date(),
+      fecha: fechaArg,
       tipo,
       actor_name,
       actor_role
@@ -690,7 +804,7 @@ exports.agregarNota = async (req, res) => {
     // también guardamos en historial para que aparezca con fecha/hora
     if (!Array.isArray(envio.historial)) envio.historial = [];
     envio.historial.push({
-      at: new Date(),
+      at: fechaArg,
       estado: 'nota',
       actor_name,
       note: texto.trim(),

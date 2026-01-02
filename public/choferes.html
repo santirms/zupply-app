@@ -15,6 +15,11 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
+    :root {
+      --z-primary: #F59E0B;
+      --z-primary-dark: #D97706;
+      --z-primary-fg: #111827;
+    }
     html.dark select, html.dark select option { background-color:#0b1020; color:#e5e7eb; }
     @media (max-width: 640px){ #btnStartScan { width:64px; height:64px; font-size:24px; } }
       /* 👉 Date, text, textarea */
@@ -57,72 +62,100 @@
   </script>
 </head>
 
-<body class="bg-slate-50 text-slate-900 dark:bg-[#0A0D16] dark:text-slate-100">
-  <!-- Topbar -->
-  <header class="sticky top-0 z-30 border-b border-black/5 dark:border-white/10 bg-white/70 dark:bg-[#0B1020]/80 backdrop-blur">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-      <a href="/index.html" class="flex items-center gap-2">
-        <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#FFB74D,#FF9800,#F57C00);">
-          <span class="text-white font-bold">Z</span>
-        </div>
-        <span class="font-semibold tracking-wide text-amber-500">zupply</span>
-      </a>
-      <span class="opacity-60">Choferes</span>
-      <div class="ml-auto flex items-center gap-2">
-        <a href="/index.html" class="px-3 py-1.5 rounded-xl text-sm border border-black/10 dark:border-white/10 hover:bg-black/[.04] dark:hover:bg-white/[.06]">🏠 Home</a>
-        <button id="themeBtn" class="px-3 py-1.5 rounded-xl text-sm border border-black/10 dark:border-white/10 hover:bg-black/[.04] dark:hover:bg-white/[.06]">Tema</button>
-      </div>
-    </div>
-  </header>
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+<div class="max-w-7xl mx-auto p-4 md:p-6">
 
-  <main class="max-w-6xl mx-auto p-4">
-    <h1 class="text-2xl font-bold mb-4 text-center">Gestión de Choferes</h1>
+<!-- TOPBAR (sticky/translúcida) -->
+<header class="sticky top-0 z-40 mb-4">
+  <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
+    <!-- Logo/Home -->
+    <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+      <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)">
+        <span class="text-white font-black">Z</span>
+      </div>
+      <span class="font-semibold tracking-wide text-amber-500">zupply</span>
+    </a>
+    <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
+    <span class="text-sm opacity-80">Panel de Choferes</span>
+
+    <!-- Usuario + Tema -->
+    <div class="ml-auto flex items-center gap-2">
+      <div class="relative" id="userMenuWrap">
+        <button id="userBtn"
+          class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+          <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
+          <span id="username" class="max-w-[160px] truncate">Usuario</span>
+          <span class="opacity-70">▾</span>
+        </button>
+
+        <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020] shadow-xl z-50">
+          <div class="p-2">
+            <a href="/index.html" class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-sm">
+              🏠 Inicio
+            </a>
+            <button onclick="cerrarSesion()" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-sm text-left">
+             ⎋  Cerrar sesión
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <button id="themeBtn"
+        class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+        Tema: auto
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+    <h1 class="text-2xl font-bold mb-6">Gestión de Choferes</h1>
 
     <!-- Tabs -->
-    <div class="flex gap-3 mb-4">
-      <button data-tab="qr"   class="tab-btn px-4 py-2 rounded bg-amber-500 text-white">Asignación por QR</button>
-      <button data-tab="mapa" class="tab-btn px-4 py-2 rounded bg-slate-200 dark:bg-slate-700">Asignación desde el mapa</button>
+    <div class="flex gap-3 mb-6">
+      <button data-tab="qr"   class="tab-btn px-4 py-2 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] text-[var(--z-primary-fg)]">Asignación por QR</button>
+      <button data-tab="mapa" class="tab-btn px-4 py-2 rounded-xl font-semibold border border-slate-300 dark:border-white/10 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700">Asignación desde el mapa</button>
     </div>
 
     <!-- TAB: QR -->
     <section id="tab-qr" class="tab">
       <div class="grid sm:grid-cols-3 gap-3 mb-3">
         <label class="text-sm">Chofer
-          <select id="choferSel" class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded px-2 py-2 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100"></select>
+          <select id="choferSel" class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100"></select>
         </label>
         <label class="text-sm">Lista (pago chofer)
-          <select id="listaSel" class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded px-2 py-2 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100"></select>
+          <select id="listaSel" class="w-full mt-1 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020] text-slate-900 dark:text-slate-100"></select>
         </label>
         <input id="inputZonaQR" type="hidden" value="">
       </div>
 
       <div class="flex items-center gap-3 mb-3">
-        <button id="btnStartScan" class="rounded bg-slate-200 dark:bg-slate-700 px-4 py-3">📷</button>
-        <input id="inpManualTrk" class="flex-1 border rounded px-3 py-2" placeholder="Pegar tracking y Enter" />
+        <button id="btnStartScan" class="rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 px-4 py-3 shadow-sm">📷</button>
+        <input id="inpManualTrk" class="flex-1 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]" placeholder="Pegar tracking y Enter" />
         <div id="countQR" class="ml-auto text-sm opacity-70"></div>
       </div>
 
       <div id="qr-reader" class="w-full max-w-xs mx-auto hidden"></div>
 
-      <div class="border rounded p-3 bg-white dark:bg-white/5">
+      <div class="border border-slate-200 dark:border-white/10 rounded-2xl p-4 bg-white dark:bg-white/5 shadow-sm">
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
-            <thead class="bg-slate-50 dark:bg-white/5">
-              <tr class="border-b border-black/10 dark:border-white/10">
-                <th class="text-left p-1 text-slate-900 dark:text-slate-100">Tracking</th>
-                <th class="text-left p-1 text-slate-900 dark:text-slate-100">Cliente</th>
-                <th class="text-left p-1 text-slate-900 dark:text-slate-100">Dirección</th>
-                <th class="text-left p-1 text-slate-900 dark:text-slate-100">CP/Partido</th>
-                <th class="text-left p-1 text-slate-900 dark:text-slate-100"></th>
+            <thead class="bg-slate-100 dark:bg-white/5">
+              <tr class="border-b border-slate-200 dark:border-white/10">
+                <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Tracking</th>
+                <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Cliente</th>
+                <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Dirección</th>
+                <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">CP/Partido</th>
+                <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300"></th>
               </tr>
             </thead>
             <tbody id="tblQR" class="bg-white dark:bg-[#0B1020]"></tbody>
           </table>
         </div>
         <div class="mt-3 flex gap-2 justify-end">
-          <a id="btnWA" class="hidden px-4 py-2 rounded bg-green-600 text-white" target="_blank" rel="noopener">WhatsApp</a>
-          <a id="btnRemito" class="hidden px-4 py-2 rounded bg-slate-700 text-white" target="_blank" rel="noopener">Ver remito</a>
-          <button id="btnAsignarQR" class="px-4 py-2 rounded bg-amber-500 hover:bg-amber-600 text-white">Asignar</button>
+          <a id="btnWA" class="hidden px-4 py-2 rounded-xl font-medium shadow-sm bg-green-600 hover:bg-green-700 text-white" target="_blank" rel="noopener">📱 WhatsApp</a>
+          <a id="btnRemito" class="hidden px-4 py-2 rounded-xl font-medium shadow-sm bg-slate-700 hover:bg-slate-800 text-white" target="_blank" rel="noopener">📄 Ver remito</a>
+          <button id="btnAsignarQR" class="px-4 py-2 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">Asignar</button>
         </div>
       </div>
     </section>
@@ -139,34 +172,37 @@
     </section>
 <!-- Botón abrir modal -->
 <div class="mt-6 flex justify-end">
-  <button id="btnOpenHist" class="px-4 py-2 rounded bg-slate-700 text-white">Historial de remitos</button>
+  <button id="btnOpenHist" class="px-4 py-2 rounded-xl font-semibold shadow-sm bg-slate-700 hover:bg-slate-800 text-white">📋 Historial de remitos</button>
 </div>
 
 <!-- Modal Historial Remitos -->
-<div id="modalRemitos" class="hidden fixed inset-0 bg-black/50 z-40 grid place-items-center">
-  <div class="bg-white dark:bg-slate-900 w-[900px] max-w-[95vw] max-h-[85vh] overflow-auto rounded shadow p-4">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="text-lg font-bold">Historial de remitos</h2>
-      <button class="text-xl" onclick="document.getElementById('modalRemitos').classList.add('hidden')">✕</button>
+<div id="modalRemitos" class="hidden fixed inset-0 bg-black/50 z-50 grid place-items-center p-4">
+  <div class="bg-white dark:bg-[#0B1020] w-[900px] max-w-[95vw] max-h-[85vh] overflow-auto rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-bold">📋 Historial de remitos</h2>
+      <button onclick="document.getElementById('modalRemitos').classList.add('hidden')" class="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 text-xl">✕</button>
     </div>
 
-    <div class="flex flex-wrap gap-2 mb-3">
-      <input id="fDesde" type="date" class="border rounded px-2 py-1">
-      <input id="fHasta" type="date" class="border rounded px-2 py-1">
-      <select id="fChofer" class="border rounded px-2 py-1"></select>
-      <button id="btnFiltrarRemitos" class="px-3 py-2 rounded bg-amber-500 text-white">Filtrar</button>
+    <div class="flex flex-wrap gap-3 mb-4">
+      <input id="fDesde" type="date" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]">
+      <input id="fHasta" type="date" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]">
+      <select id="fChofer" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]"></select>
+      <button id="btnFiltrarRemitos" class="px-4 py-2 rounded-xl font-medium shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">🔍 Filtrar</button>
     </div>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
+      💡 Por defecto se muestran los últimos 15 días. Cambiá las fechas para ver más.
+    </p>
 
     <div class="overflow-x-auto">
   <table class="w-full text-sm">
-    <thead>
-      <tr class="border-b border-black/10 dark:border-white/10">
-        <th class="text-left p-1">Fecha</th>
-        <th class="text-left p-1">Chofer</th>
-        <th class="text-left p-1">Zona</th>
-        <th class="text-left p-1">Total</th>
-        <th class="text-left p-1">PDF</th>
-        <th class="text-left p-1">Acciones</th>
+    <thead class="bg-slate-100 dark:bg-white/5">
+      <tr class="border-b border-slate-200 dark:border-white/10">
+        <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Fecha</th>
+        <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Chofer</th>
+        <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Zona</th>
+        <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Total</th>
+        <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">PDF</th>
+        <th class="text-left p-2 font-semibold text-slate-700 dark:text-slate-300">Acciones</th>
       </tr>
     </thead>
     <tbody id="tblRemitos"></tbody>
@@ -193,9 +229,16 @@
     function mostrarTab(name) {
       $$('.tab').forEach(t => t.classList.add('hidden'));
       $('#tab-' + name).classList.remove('hidden');
-      $$('.tab-btn').forEach(b => b.classList.remove('bg-amber-500','text-white'));
+      $$('.tab-btn').forEach(b => {
+        b.classList.remove('bg-[var(--z-primary)]','text-[var(--z-primary-fg)]');
+        b.classList.add('border', 'border-slate-300', 'dark:border-white/10', 'bg-slate-100', 'dark:bg-slate-800', 'hover:bg-slate-200', 'dark:hover:bg-slate-700');
+        b.classList.remove('text-white');
+      });
       const btn = $(`.tab-btn[data-tab="${name}"]`);
-      if (btn) btn.classList.add('bg-amber-500','text-white');
+      if (btn) {
+        btn.classList.remove('border', 'border-slate-300', 'dark:border-white/10', 'bg-slate-100', 'dark:bg-slate-800', 'hover:bg-slate-200', 'dark:hover:bg-slate-700');
+        btn.classList.add('bg-[var(--z-primary)]','text-[var(--z-primary-fg)]');
+      }
     }
     document.addEventListener('DOMContentLoaded', () => {
       $$('.tab-btn').forEach(b => b.addEventListener('click', () => mostrarTab(b.dataset.tab)));
@@ -488,8 +531,8 @@ async function cargarRemitos() {
       </td>
       <td class="p-1">
         <div class="flex gap-2">
-          <button class="px-2 py-1 rounded bg-amber-500 text-white" data-edit="${x._id}">Editar</button>
-          <button class="px-2 py-1 rounded bg-red-600 text-white" data-del="${x._id}">Eliminar</button>
+          <button class="px-3 py-1.5 rounded-xl bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)] font-medium shadow-sm" data-edit="${x._id}">✏️ Editar</button>
+          <button class="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-medium shadow-sm" data-del="${x._id}">🗑️ Eliminar</button>
         </div>
       </td>
     </tr>
@@ -524,7 +567,18 @@ async function cargarRemitos() {
 
 
 async function abrirHistorial() {
-  // choferes para el filtro
+  // Setear fechas por defecto: últimos 15 días
+  const hoy = new Date();
+  const hace15dias = new Date(hoy);
+  hace15dias.setDate(hoy.getDate() - 15);
+
+  const fDesde = $('#fDesde');
+  const fHasta = $('#fHasta');
+
+  if (fDesde) fDesde.valueAsDate = hace15dias;
+  if (fHasta) fHasta.valueAsDate = hoy;
+
+  // Cargar choferes para el filtro
   try {
     const res = await fetch('/api/choferes', { credentials:'include' });
     const arr = await res.json().catch(()=>[]);
@@ -532,6 +586,8 @@ async function abrirHistorial() {
     const sel = $('#fChofer');
     sel.innerHTML = `<option value="">(todos)</option>` + activos.map(c => `<option value="${c._id}">${c.nombre}</option>`).join('');
   } catch {}
+
+  // Cargar remitos con filtro de últimos 15 días
   await cargarRemitos();
   $('#modalRemitos').classList.remove('hidden');
 }
@@ -556,7 +612,7 @@ async function abrirEditorRemito(asgId) {
 async function recargarEditor() {
   const wrap = document.getElementById('editorRemito');
   wrap.classList.remove('hidden');
-  wrap.innerHTML = `<div class="p-3 rounded border bg-white dark:bg-white/5">Cargando...</div>`;
+  wrap.innerHTML = `<div class="p-6 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm">Cargando...</div>`;
 
   let det = null;
   try {
@@ -601,22 +657,22 @@ async function recargarEditor() {
   const selChoferOptions = editorState.choferes.map(c => `<option value="${c._id}">${c.nombre || '(sin nombre)'}</option>`).join('');
 
   wrap.innerHTML = `
-    <div class="p-3 rounded border bg-white dark:bg-white/5">
+    <div class="p-6 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm">
       <div class="flex items-start gap-3 flex-wrap">
         <div class="flex-1 min-w-[280px]">
           <h3 class="text-lg font-bold mb-1">Editar remito</h3>
           <div class="text-sm opacity-70">ID: ${det._id} — ${new Date(det.fecha).toLocaleString()}</div>
           <div class="text-sm opacity-70 mb-2">Chofer: ${det.chofer?.nombre || '-'}</div>
           <div class="flex items-center gap-2 mb-3">
-            ${det.remito_url ? `<a class="px-3 py-1.5 rounded bg-slate-700 text-white" href="${det.remito_url}" target="_blank" rel="noopener">Ver PDF</a>` : ''}
-            <button id="btnRefrescarEditor" class="px-3 py-1.5 rounded border">Refrescar</button>
+            ${det.remito_url ? `<a class="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-medium shadow-sm" href="${det.remito_url}" target="_blank" rel="noopener">📄 Ver PDF</a>` : ''}
+            <button id="btnRefrescarEditor" class="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">🔄 Refrescar</button>
             <div class="flex items-center gap-3 mt-2">
            <label class="inline-flex items-center gap-2 text-sm">
            <input type="checkbox" id="chkForceDelete" checked>
            Revertir envíos a "pendiente"
            </label>
-           <button id="btnEliminarRemito" class="px-3 py-1.5 rounded bg-red-700 text-white">
-           Eliminar remito
+           <button id="btnEliminarRemito" class="px-3 py-1.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-medium shadow-sm">
+           🗑️ Eliminar remito
          </button>
          </div>
           </div>
@@ -624,21 +680,21 @@ async function recargarEditor() {
         <div class="flex-1 min-w-[280px]">
           <label class="text-sm block mb-1">Mover seleccionados a:</label>
           <div class="flex gap-2">
-            <select id="selChoferDestino" class="border rounded px-2 py-2 flex-1">${selChoferOptions}</select>
-            <button id="btnMover" class="px-3 py-2 rounded bg-amber-500 text-white">Mover</button>
+            <select id="selChoferDestino" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 flex-1 bg-white dark:bg-[#0B1020]">${selChoferOptions}</select>
+            <button id="btnMover" class="px-3 py-2 rounded-xl bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)] font-medium shadow-sm">➡️ Mover</button>
           </div>
         </div>
         <div class="flex-1 min-w-[280px]">
           <label class="text-sm block mb-1">Quitar seleccionados</label>
-          <button id="btnQuitar" class="px-3 py-2 rounded bg-red-600 text-white">Quitar</button>
+          <button id="btnQuitar" class="px-3 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-medium shadow-sm">🗑️ Quitar</button>
         </div>
       </div>
 
       <div class="mt-3">
         <label class="text-sm block mb-1">Agregar trackings (separá por coma, espacio o nueva línea)</label>
         <div class="flex gap-2">
-          <textarea id="txtAgregar" class="border rounded px-2 py-2 flex-1" rows="2" placeholder="4548..., 12345..."></textarea>
-          <button id="btnAgregar" class="px-3 py-2 rounded bg-green-600 text-white">Agregar</button>
+          <textarea id="txtAgregar" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 flex-1 bg-white dark:bg-[#0B1020]" rows="2" placeholder="4548..., 12345..."></textarea>
+          <button id="btnAgregar" class="px-3 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-medium shadow-sm">➕ Agregar</button>
         </div>
       </div>
 
@@ -830,6 +886,64 @@ document.addEventListener('DOMContentLoaded', () => {
       renderListQR();
       $('#btnAsignarQR').addEventListener('click', asignarQR);
     });
+
+    // ===== Menú de usuario =====
+    async function initUserMenu() {
+      const userBtn = document.getElementById('userBtn');
+      const userMenu = document.getElementById('userMenu');
+      const usernameSpan = document.getElementById('username');
+
+      // Cargar datos del usuario
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+        if (res.ok) {
+          const user = await res.json();
+          console.log('Usuario cargado:', user); // DEBUG
+          if (usernameSpan) {
+            // Priorizar email sobre nombre
+            usernameSpan.textContent = user.email || user.name || user.nombre || 'Usuario';
+            console.log('Username actualizado a:', usernameSpan.textContent); // DEBUG
+          } else {
+            console.error('No se encontró el elemento #username');
+          }
+        } else {
+          console.error('Error en /api/me:', res.status);
+        }
+      } catch (e) {
+        console.error('Error cargando usuario:', e);
+      }
+
+      // Toggle menú
+      if (userBtn && userMenu) {
+        userBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          userMenu.classList.toggle('hidden');
+        });
+
+        // Cerrar al hacer click fuera
+        document.addEventListener('click', () => {
+          userMenu.classList.add('hidden');
+        });
+
+        userMenu.addEventListener('click', (e) => {
+          e.stopPropagation();
+        });
+      }
+    }
+
+    function cerrarSesion() {
+      if (confirm('¿Cerrar sesión?')) {
+        window.location.href = '/logout';
+      }
+    }
+
+    // Ejecutar al cargar
+    document.addEventListener('DOMContentLoaded', () => {
+      initUserMenu();
+    });
   </script>
+
+  </main>
+</div> <!-- cierre de max-w-7xl -->
 </body>
 </html>

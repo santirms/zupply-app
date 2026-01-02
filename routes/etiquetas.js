@@ -8,6 +8,7 @@ const { requireAuth, requireRole } = require('../middlewares/auth');
 
 // Si tenés una utilidad para zona por CP, importala (ajusta el path):
 const { detectarZona } = require('../utils/detectarZona');
+const { geocodeDireccion } = require('../utils/geocode');
 
 router.use(requireAuth);
 
@@ -44,15 +45,31 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
       let partido = (et.partido || '').trim();
       let zona    = (et.zona    || '').trim();
 
+      if (!partido || !zona) {
+        try {
+          const z = await detectarZona(cp); // { partido, zona }
+          if (!partido) partido = z?.partido || '';
+          if (!zona)    zona    = z?.zona    || '';
+        } catch { /* noop */ }
+      }
 
-        if (!partido || !zona) {
-      try {
-      const z = await detectarZona(cp); // { partido, zona }
-      if (!partido) partido = z?.partido || '';
-      if (!zona)    zona    = z?.zona    || '';
-      } catch { /* noop */ }
-    }
-   
+      // Geocodificar dirección
+      let coordenadas = null;
+      if (et.direccion && partido) {
+        try {
+          coordenadas = await geocodeDireccion({
+            direccion: et.direccion,
+            codigo_postal: cp,
+            partido: partido
+          });
+          if (coordenadas) {
+            console.log(`✓ Geocodificado etiqueta: ${et.direccion}, ${partido} → ${coordenadas.lat}, ${coordenadas.lon}`);
+          }
+        } catch (geoError) {
+          console.warn('⚠️ Error geocodificando etiqueta:', geoError.message);
+        }
+      }
+
       return {
         meli_id:       et.tracking_id      || '',
         sender_id:     et.sender_id        || '',
@@ -69,7 +86,18 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
         estado:        'en_planta',
         requiere_sync_meli: false,
         origen:        'etiquetas',
-        source:        'pdf' // 👈 marca origen etiquetas
+        source:        'pdf', // 👈 marca origen etiquetas
+        // Coordenadas para el mapa
+        latitud: coordenadas?.lat || null,
+        longitud: coordenadas?.lon || null,
+        destino: {
+          partido: partido,
+          cp: cp,
+          loc: coordenadas ? {
+            type: 'Point',
+            coordinates: [coordenadas.lon, coordenadas.lat]
+          } : null
+        }
       };
     }));
 

@@ -50,9 +50,67 @@ async function logout(req, res) {
 }
 
 async function me(req, res) {
-  const u = req.session?.user;
-  if (!u?.authenticated) return res.status(401).json({ error: 'No autenticado' });
-  res.json({ ok: true, user: u });
+  try {
+    console.log('=== GET /api/auth/me ===');
+    console.log('Usuario ID:', req.user._id);
+
+    // Buscar usuario en DB para obtener información actualizada
+    const usuario = await User.findById(req.user._id)
+      .select('-password_hash')
+      .lean();
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    console.log('Usuario encontrado:', usuario.email);
+    console.log('Cliente_id:', usuario.cliente_id);
+
+    // Construir respuesta base
+    const respuesta = {
+      _id: usuario._id,
+      email: usuario.email,
+      username: usuario.username,
+      role: usuario.role,
+      driver_id: usuario.driver_id || null,
+      cliente_id: usuario.cliente_id || null
+    };
+
+    // Si tiene cliente_id, buscar información del cliente y permisos
+    if (usuario.cliente_id) {
+      console.log('Buscando cliente:', usuario.cliente_id);
+
+      const Cliente = require('../models/Cliente');
+      const cliente = await Cliente.findById(usuario.cliente_id)
+        .select('nombre razon_social codigo_cliente permisos')
+        .lean();
+
+      console.log('Cliente encontrado:', cliente?.nombre);
+      console.log('Permisos:', cliente?.permisos);
+
+      if (cliente) {
+        respuesta.cliente = {
+          _id: cliente._id,
+          nombre: cliente.nombre,
+          razon_social: cliente.razon_social,
+          codigo: cliente.codigo_cliente
+        };
+
+        // IMPORTANTE: Incluir permisos
+        respuesta.permisos = cliente.permisos || {
+          puedeRequerirFirma: false
+        };
+      }
+    }
+
+    console.log('Respuesta /me:', JSON.stringify(respuesta, null, 2));
+
+    res.json(respuesta);
+
+  } catch (error) {
+    console.error('Error en GET /api/auth/me:', error);
+    res.status(500).json({ error: error.message });
+  }
 }
 
 module.exports = { login, logout, me };

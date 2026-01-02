@@ -41,9 +41,43 @@ function initTopbar(){
       try { localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username'); } catch {}
       location.href='/auth/login';
     });
+
+    // Función para obtener la ruta de inicio según el rol
+    function getHomeRoute(role) {
+      switch(role) {
+        case 'cliente':
+          return '/client-panel.html';
+        case 'admin':
+        case 'coordinador':
+          return '/index.html';
+        case 'chofer':
+          return '/mis-envios.html';
+        default:
+          return '/';
+      }
+    }
+
     fetch('/me',{cache:'no-store'})
       .then(r=>{ if(!r.ok) throw 0; return r.json(); })
-      .then(me=>{ const n=me.name||me.username||me.email||'Usuario'; const u=qs('#username'); if(u) u.textContent=n; })
+      .then(me=>{
+        const n=me.name||me.username||me.email||'Usuario';
+        const u=qs('#username'); if(u) u.textContent=n;
+
+        // Configurar redirección del logo según rol
+        const userRole = me.role || 'admin';
+        const homeRoute = getHomeRoute(userRole);
+
+        const logoLink = document.getElementById('logoLink');
+        const homeLink = document.getElementById('homeLink');
+
+        // Actualizar href del logo y link de inicio
+        if (logoLink) {
+          logoLink.href = homeRoute;
+        }
+        if (homeLink) {
+          homeLink.href = homeRoute;
+        }
+      })
       .catch(()=> location.href='/auth/login');
   })();
 
@@ -154,6 +188,27 @@ function configurarModal() {
   qs('#btnNuevo')?.addEventListener('click', () => abrirModal());
   qs('#btnCerrar')?.addEventListener('click', cerrarModal);
   qs('#btnAgregarCuenta')?.addEventListener('click', () => agregarSenderInput());
+  qs('#btnProbarToken')?.addEventListener('click', async () => {
+    const clientId = qs('input[name="id"]').value;
+    if (!clientId) {
+      alert('⚠️ Guardá el cliente primero para poder probar el token');
+      return;
+    }
+
+    const statusSpan = qs('#pingStatus');
+    if (statusSpan) statusSpan.textContent = '⏳ Probando...';
+
+    try {
+      const res = await fetchJSON(`${apiURL('/auth/meli')}/ping/${clientId}`);
+      const msg = `✅ Token válido: ${res.nickname || res.user_id || 'OK'}`;
+      if (statusSpan) statusSpan.textContent = msg;
+      setTimeout(() => { if (statusSpan) statusSpan.textContent = ''; }, 5000);
+    } catch (e) {
+      const msg = `❌ Token inválido: ${e.message}`;
+      if (statusSpan) statusSpan.textContent = msg;
+      alert('No se pudo verificar el token:\n' + e.message);
+    }
+  });
 
   qs('#formCliente')?.addEventListener('submit', guardarCliente);
 
@@ -243,10 +298,32 @@ async function abrirModal(id=null) {
     form.elements['cuit'].value             = data.cuit || '';
     form.elements['razon_social'].value     = data.razon_social || '';
     form.elements['condicion_iva'].value    = data.condicion_iva || '';
-    form.elements['horario_de_corte'].value = data.horario_de_corte || '';
     form.elements['lista_precios'].value    = data.lista_precios?._id || '';
     const chkAI = qs('#chkAutoIngesta'); if (chkAI) chkAI.checked = !!data.auto_ingesta;
-    (data.sender_id || []).forEach(sid => agregarSenderInput(sid));
+    const chkFirma = qs('#chkPuedeRequerirFirma'); if (chkFirma) chkFirma.checked = !!(data.permisos?.puedeRequerirFirma);
+    const senderIds = data.sender_id || [];
+    if (senderIds.length > 0) {
+      senderIds.forEach(sid => agregarSenderInput(sid));
+    } else {
+      // Si no tiene cuentas, mostrar un campo vacío para que pueda agregar
+      agregarSenderInput();
+    }
+
+    // Cargar configuración de facturación
+    if (data.facturacion) {
+      const f = data.facturacion;
+      const inp_lv = form.querySelector('[name="horario_corte_lunes_viernes"]');
+      const inp_s  = form.querySelector('[name="horario_corte_sabado"]');
+      const inp_d  = form.querySelector('[name="horario_corte_domingo"]');
+      const sel_tp = form.querySelector('[name="tipo_periodo"]');
+      const txt_nf = form.querySelector('[name="notas_facturacion"]');
+
+      if (inp_lv) inp_lv.value = f.horario_corte_lunes_viernes || '13:00';
+      if (inp_s)  inp_s.value  = f.horario_corte_sabado || '12:00';
+      if (inp_d && f.horario_corte_domingo) inp_d.value = f.horario_corte_domingo;
+      if (sel_tp) sel_tp.value = f.tipo_periodo || 'semanal';
+      if (txt_nf && f.notas_facturacion) txt_nf.value = f.notas_facturacion;
+    }
   } catch (e) {
     console.error('Error al obtener cliente:', e);
   }
@@ -259,23 +336,35 @@ async function guardarCliente(ev) {
 
   const nombre           = form.querySelector('input[name="nombre"]').value.trim();
   const condicion_iva    = form.querySelector('select[name="condicion_iva"]').value;
-  const horario_de_corte = form.querySelector('input[name="horario_de_corte"]').value;
   const lista_precios    = form.querySelector('select[name="lista_precios"]').value;
 
-  if (!nombre || !condicion_iva || !horario_de_corte || !lista_precios) {
-    return alert('Completá Nombre, IVA, Horario de Corte y Lista de Precios.');
+  if (!nombre || !condicion_iva || !lista_precios) {
+    return alert('Completá Nombre, IVA y Lista de Precios.');
   }
 
   const cuit         = form.querySelector('input[name="cuit"]').value.trim();
   const razon_social = form.querySelector('input[name="razon_social"]').value.trim();
   const sids = qsa('#cuentasContainer input[name="sender_id"]').map(i => i.value.trim()).filter(Boolean);
+  const chkFirma = qs('#chkPuedeRequerirFirma');
 
   const body = {
     nombre, sender_id: sids, lista_precios,
     cuit: cuit || undefined, razon_social: razon_social || undefined,
-    condicion_iva, horario_de_corte
+    condicion_iva,
+    permisos: {
+      puedeRequerirFirma: chkFirma ? chkFirma.checked : false
+    },
+    // Configuración de facturación
+    facturacion: {
+      horario_corte_lunes_viernes: form.querySelector('[name="horario_corte_lunes_viernes"]').value || '13:00',
+      horario_corte_sabado: form.querySelector('[name="horario_corte_sabado"]').value || '12:00',
+      horario_corte_domingo: form.querySelector('[name="horario_corte_domingo"]').value || null,
+      tipo_periodo: form.querySelector('[name="tipo_periodo"]').value || 'semanal',
+      notas_facturacion: form.querySelector('[name="notas_facturacion"]').value || ''
+    }
   };
-  const chkAI = qs('#chkAutoIngesta'); if (chkAI && id) body.auto_ingesta = chkAI.checked;
+  const chkAI = qs('#chkAutoIngesta');
+  if (chkAI) body.auto_ingesta = chkAI.checked;
   if (id) {
     const codigo = form.querySelector('input[name="codigo_cliente"]').value.trim();
     if (codigo) body.codigo_cliente = codigo;

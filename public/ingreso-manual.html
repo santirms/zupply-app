@@ -44,7 +44,7 @@
     <!-- TOPBAR -->
     <header class="sticky top-0 z-40 mb-4">
       <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
-        <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+        <a href="#" id="logoLink" class="flex items-center gap-3" title="Inicio">
           <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)">
             <span class="text-white font-black">Z</span>
           </div>
@@ -63,8 +63,8 @@
               <span class="opacity-70">▾</span>
             </button>
             <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
-              <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
-              <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <a href="#" id="homeLink" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
+              <div id="menuDivider" class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
               <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
             </div>
           </div>
@@ -213,6 +213,6 @@
     </div>
   </div>
 
-  <script src="/js/ingreso-manual.js?v=2" defer></script>
+  <script src="/js/ingreso-manual.js" defer></script>
 </body>
 </html>

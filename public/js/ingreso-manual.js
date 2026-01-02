@@ -25,11 +25,42 @@ const TELEFONO_MAX = 13;
       try{ localStorage.removeItem('zpl_auth'); localStorage.removeItem('zpl_username'); }catch{}
       location.href='/auth/login';
     });
+
+    // Función para obtener la ruta de inicio según el rol
+    function getHomeRoute(role) {
+      switch(role) {
+        case 'cliente':
+          return '/client-panel.html';
+        case 'admin':
+        case 'coordinador':
+          return '/index.html';
+        case 'chofer':
+          return '/mis-envios.html';
+        default:
+          return '/';
+      }
+    }
+
     fetch('/me',{cache:'no-store'})
       .then(r=>{ if(!r.ok) throw 0; return r.json(); })
       .then(me=>{
         const n=me.name||me.username||me.email||'Usuario';
         const u=qs('#username'); if(u) u.textContent=n;
+
+        // Configurar redirección del logo según rol
+        const userRole = me.role || 'admin';
+        const homeRoute = getHomeRoute(userRole);
+
+        const logoLink = document.getElementById('logoLink');
+        const homeLink = document.getElementById('homeLink');
+
+        // Actualizar href del logo y link de inicio
+        if (logoLink) {
+          logoLink.href = homeRoute;
+        }
+        if (homeLink) {
+          homeLink.href = homeRoute;
+        }
       })
       .catch(()=> location.href='/auth/login');
   })();
@@ -71,6 +102,7 @@ async function cargarClientes() {
     sel.addEventListener('change', ()=>{
       const cl = clientes.find(x=>x._id===sel.value);
       qs('#codigo_interno').value = cl?.codigo_cliente || '';
+      actualizarPermisosFirma(cl);
     });
     sel.dispatchEvent(new Event('change'));
   }catch(e){
@@ -79,8 +111,36 @@ async function cargarClientes() {
   }
 }
 
+function actualizarPermisosFirma(cliente) {
+  const puedeRequerirFirma = cliente?.permisos?.puedeRequerirFirma || false;
+  const checkboxes = qsa('input[name="requiere_firma"]');
+
+  checkboxes.forEach(chk => {
+    const container = chk.closest('label').parentElement;
+    const existingMessage = container.querySelector('.mensaje-sin-permiso');
+
+    if (puedeRequerirFirma) {
+      // El cliente tiene permiso: mostrar checkbox y ocultar mensaje
+      chk.closest('label').style.display = 'flex';
+      if (existingMessage) existingMessage.remove();
+    } else {
+      // El cliente no tiene permiso: ocultar checkbox y mostrar mensaje
+      chk.checked = false;
+      chk.closest('label').style.display = 'none';
+
+      if (!existingMessage) {
+        const msg = document.createElement('small');
+        msg.className = 'mensaje-sin-permiso text-xs text-slate-500 dark:text-slate-400 block p-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5';
+        msg.textContent = 'ℹ️ Este cliente no tiene habilitada la función de firma digital';
+        container.appendChild(msg);
+      }
+    }
+  });
+}
+
 function paqueteMarkup(){
-  return `
+  const randomId = Math.random().toString(36).substr(2, 9);
+  const html = `
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <label class="block text-sm">Destinatario
         <input name="destinatario" required class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
@@ -96,7 +156,16 @@ function paqueteMarkup(){
         </small>
       </label>
       <label class="block text-sm">Dirección
-        <input name="direccion" required class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
+        <input name="direccion" required
+               placeholder="Calle y número (ej: Aguirre 202)"
+               class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
+        <small class="mt-1 block text-xs text-slate-500 dark:text-slate-400">Solo calle y número, sin piso/dpto</small>
+      </label>
+
+      <label class="block text-sm">Piso / Dpto / Timbre <span class="text-slate-400 text-xs">(opcional)</span>
+        <input name="piso_dpto"
+               placeholder="Ej: Piso 3, Dpto 11, Timbre 5"
+               class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
       </label>
 
       <label class="block text-sm">Código Postal
@@ -108,6 +177,37 @@ function paqueteMarkup(){
         <input name="partido" readonly
                class="mt-1 w-full p-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5"/>
       </label>
+
+      <!-- Tipo de envío -->
+      <label class="block text-sm">Tipo de envío
+        <select name="tipo" class="select-dark mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent">
+          <option value="envio">📦 Envío</option>
+          <option value="retiro">🔄 Retiro</option>
+          <option value="cambio">↔️ Cambio</option>
+        </select>
+      </label>
+
+      <!-- Contenido (opcional) -->
+      <label class="block text-sm">Descripción del contenido <span class="text-slate-400 text-xs">(opcional)</span>
+        <input type="text" name="contenido" maxlength="500"
+               placeholder="Ej: Notebook HP, 2 cajas"
+               class="mt-1 w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
+        <small class="mt-1 block text-xs text-slate-500 dark:text-slate-400">Visible en la etiqueta</small>
+      </label>
+
+      <!-- Requiere Firma -->
+      <div class="block text-sm">
+        <label class="flex items-start gap-2 cursor-pointer p-3 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+          <input type="checkbox" name="requiere_firma"
+                 class="mt-0.5 w-5 h-5 accent-amber-600 flex-shrink-0">
+          <div class="flex-1">
+            <span class="font-medium">🖊️ Este envío requiere firma del destinatario</span>
+            <small class="block text-xs text-slate-500 dark:text-slate-400 mt-1">
+              El chofer deberá solicitar firma y DNI al entregar
+            </small>
+          </div>
+        </label>
+      </div>
 
       <div class="flex items-center gap-2 mt-1">
         <input id="chk" type="checkbox" name="manual_precio" onchange="togglePrecioManual(this)"
@@ -126,6 +226,23 @@ function paqueteMarkup(){
       </label>
     </div>
 
+    <!-- Monto a cobrar -->
+    <div class="mt-4 border rounded-xl p-4 bg-slate-50 dark:bg-slate-800/50">
+      <div class="flex items-center mb-2">
+ <input type="checkbox" name="cobra_en_destino" id="cobraCheck_${randomId}">
+        <label for="cobraCheck_${randomId}" class="text-sm font-medium">
+          💰 Cobrar monto en destino
+        </label>
+      </div>
+
+      <div id="montoContainer_${randomId}" style="display: none;" class="mt-3">
+        <label class="block text-sm mb-1">Monto a cobrar ($)</label>
+        <input type="number" name="monto_a_cobrar" min="0" step="0.01"
+               placeholder="50000.00"
+               class="w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent"/>
+      </div>
+    </div>
+
     <div class="mt-3 flex justify-between">
       <div class="text-xs opacity-60">Se valida el CP→Partido automáticamente</div>
       <button type="button" onclick="this.closest('.paquete-group').remove()"
@@ -133,7 +250,19 @@ function paqueteMarkup(){
         Eliminar paquete
       </button>
     </div>
-  `;
+
+    <script>
+      window.toggleMonto_${randomId} = function(checkbox) {
+        const container = document.getElementById('montoContainer_${randomId}');
+        container.style.display = checkbox.checked ? 'block' : 'none';
+      };
+       </script>
+       `;
+
+  return {
+    html: html,
+    randomId: randomId
+  };
 }
 
 function setTelefonoVisualState(input, state) {
@@ -209,9 +338,29 @@ function validarTelefonoInput(input, index) {
 function agregarPaquete() {
   const div = document.createElement('div');
   div.className = 'paquete-group rounded-2xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-white/5';
-  div.innerHTML = paqueteMarkup();
+
+  const markup = paqueteMarkup(); // Ahora devuelve {html, randomId}
+  div.innerHTML = markup.html;
   qs('#paquetes').appendChild(div);
+
+  // Usar el randomId que devolvió la función
+  const checkbox = div.querySelector(`#cobraCheck_${markup.randomId}`);
+  const container = div.querySelector(`#montoContainer_${markup.randomId}`);
+
+  if (checkbox && container) {
+    checkbox.addEventListener('change', function() {
+      container.style.display = this.checked ? 'block' : 'none';
+    });
+  }
+
   initTelefonoInput(div.querySelector("input[name='telefono']"));
+
+  // Aplicar permisos de firma al nuevo paquete
+  const clienteId = qs('#cliente')?.value;
+  if (clienteId) {
+    const cliente = clientes.find(x => x._id === clienteId);
+    actualizarPermisosFirma(cliente);
+  }
 }
 
 function togglePrecioManual(cb) {
@@ -248,18 +397,31 @@ async function guardar() {
     const telefono = validarTelefonoInput(div.querySelector("[name='telefono']"), i);
     if (telefono === false) return;
 
+    const tipo = div.querySelector("[name='tipo']")?.value || 'envio';
+    const contenido = div.querySelector("[name='contenido']")?.value.trim() || null;
+    const cobraEnDestino = div.querySelector("[name='cobra_en_destino']")?.checked || false;
+    const montoACobrar = cobraEnDestino ? parseFloat(div.querySelector("[name='monto_a_cobrar']")?.value) || null : null;
+    const requiereFirma = div.querySelector("[name='requiere_firma']")?.checked || false;
+
+
     paquetes.push({
       cliente_id:    clienteId,
       sender_id:     codigoInt,
       destinatario:  div.querySelector("[name='destinatario']").value.trim(),
       direccion:     div.querySelector("[name='direccion']").value.trim(),
+      piso_dpto:     div.querySelector("[name='piso_dpto']")?.value.trim() || null,
       codigo_postal: div.querySelector("[name='codigo_postal']").value.trim(),
       partido:       div.querySelector("[name='partido']").value.trim(),
       telefono:      telefono ?? null,
       id_venta:      idVenta,
       referencia,
       manual_precio: manual,
-      precio:        manual? precioManual : undefined
+      precio:        manual? precioManual : undefined,
+      tipo:          tipo,
+      contenido:     contenido,
+      cobra_en_destino: cobraEnDestino,
+      monto_a_cobrar:   montoACobrar,
+      requiereFirma:    requiereFirma
     });
   }
 
@@ -447,80 +609,62 @@ function cerrarModalLista() {
   }
 }
 
-function imprimirTodasEtiquetas() {
+async function imprimirTodasEtiquetas() {
   const envios = Array.isArray(window.enviosParaImprimir) ? window.enviosParaImprimir : [];
   if (!envios.length) {
     alert('No hay envíos para imprimir');
     return;
   }
 
-  const etiquetasHTML = envios.map(envio => {
-    const tracking = envio.tracking || envio.id_venta || '';
-    const linkSeguimiento = tracking ? `https://app.zupply.tech/track/${tracking}` : '';
+  try {
+    // Mostrar indicador de carga
+    const loadingMsg = document.createElement('div');
+    loadingMsg.id = 'loading-etiquetas';
+    loadingMsg.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 10px; z-index: 9999;';
+    loadingMsg.textContent = `Generando ${envios.length} etiquetas...`;
+    document.body.appendChild(loadingMsg);
 
-    return `
-      <div class="etiqueta-page" style="page-break-after: always; width: 10cm; height: 15cm; padding: 1cm; border: 1px solid #ccc; margin-bottom: 1cm;">
-        <div style="text-align: center; font-family: Arial, sans-serif;">
-          <h2 style="margin: 0; font-size: 18px; font-weight: bold;">ZUPPLY</h2>
-          <p style="margin: 5px 0; font-size: 12px;">zupply.tech</p>
+    // Extraer IDs de los envíos
+    const envioIds = envios.map(e => e._id).filter(Boolean);
 
-          <div style="margin: 20px 0;">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${linkSeguimiento}"
-              alt="QR" style="width: 200px; height: 200px;">
-          </div>
+    if (!envioIds.length) {
+      throw new Error('No se encontraron IDs válidos de envíos');
+    }
 
-          <div style="text-align: left; margin-top: 20px;">
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Tracking:</strong> ${tracking}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Destinatario:</strong> ${envio.destinatario || ''}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>Dirección:</strong> ${envio.direccion || ''}</p>
-            <p style="margin: 5px 0; font-size: 14px;"><strong>CP:</strong> ${envio.codigo_postal || ''} - ${envio.partido || ''}</p>
-            ${envio.telefono ? `<p style="margin: 5px 0; font-size: 14px;"><strong>Tel:</strong> ${envio.telefono}</p>` : ''}
-            ${envio.referencia ? `<p style="margin: 5px 0; font-size: 12px; color: #666;"><strong>Ref:</strong> ${envio.referencia}</p>` : ''}
-          </div>
+    // Llamar al endpoint de etiquetas en lote
+    const response = await fetch('/api/envios/etiquetas-lote', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ envioIds })
+    });
 
-          <div style="margin-top: 20px; padding-top: 10px; border-top: 1px solid #ccc;">
-            <p style="font-size: 10px; color: #666;">Seguimiento: ${linkSeguimiento}</p>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Error al generar etiquetas');
+    }
 
-  const ventanaImpresion = window.open('', '_blank');
-  if (!ventanaImpresion) {
-    alert('No se pudo abrir la ventana de impresión. Revisa el bloqueador de ventanas emergentes.');
-    return;
+    // Obtener el PDF como blob
+    const blob = await response.blob();
+
+    // Crear URL del blob y abrirlo en nueva pestaña
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+
+    // Limpiar la URL después de un tiempo
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+  } catch (error) {
+    console.error('Error imprimiendo etiquetas:', error);
+    alert(`Error al generar etiquetas: ${error.message}`);
+  } finally {
+    // Quitar indicador de carga
+    const loadingMsg = document.getElementById('loading-etiquetas');
+    if (loadingMsg) {
+      loadingMsg.remove();
+    }
   }
-
-  ventanaImpresion.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Etiquetas - Zupply</title>
-      <style>
-        @media print {
-          body { margin: 0; padding: 0; }
-          .etiqueta-page {
-            page-break-after: always;
-            margin: 0;
-          }
-        }
-        body {
-          font-family: Arial, sans-serif;
-        }
-      </style>
-    </head>
-    <body>
-      ${etiquetasHTML}
-      <script>
-        window.onload = function() {
-          window.print();
-        }
-      </script>
-    </body>
-    </html>
-  `);
-  ventanaImpresion.document.close();
 }
 
 function imprimirEtiquetaIndividual(envioId) {
@@ -548,11 +692,20 @@ function generarMensajeWhatsApp(envio = {}) {
   const tracking = envio.tracking || envio.id_venta || '';
   const linkSeguimiento = tracking ? `https://app.zupply.tech/track/${tracking}` : '';
 
-  const lineas = [
-    `Hola ${destinatario}!`,
-    '',
-    'Tu envío está en camino 📦'
-  ];
+  // Obtener nombre del cliente (vendedor)
+  const nombreCliente = envio.cliente_id?.nombre ||
+                        envio.cliente_id?.razon_social ||
+                        envio.sender_id ||
+                        '';
+
+  const lineas = [`Hola ${destinatario}!`];
+
+  // Si hay cliente, incluirlo
+  if (nombreCliente) {
+    lineas.push('', `Tu envío de ${nombreCliente} está en camino 📦`);
+  } else {
+    lineas.push('', 'Tu envío está en camino 📦');
+  }
 
   if (linkSeguimiento) {
     lineas.push('', 'Seguí tu pedido en este link:', linkSeguimiento);

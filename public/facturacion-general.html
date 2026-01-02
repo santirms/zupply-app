@@ -45,7 +45,7 @@
     <header class="sticky top-0 z-40 mb-4">
       <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
         <!-- Home / Logo -->
-        <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+        <a href="#" id="logoLink" class="flex items-center gap-3" title="Inicio">
           <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)">
             <span class="text-white font-black">Z</span>
           </div>
@@ -66,8 +66,8 @@
               <span class="opacity-70">▾</span>
             </button>
             <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
-              <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
-              <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <a href="#" id="homeLink" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
+              <div id="menuDivider" class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
               <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
             </div>
           </div>
@@ -96,6 +96,23 @@
 </select>
 <p class="text-xs opacity-70 mt-1">Tip: Ctrl/Cmd + click para selección múltiple.</p>
         </div>
+
+        <div>
+          <label class="block text-sm font-medium">Estados a incluir</label>
+          <select id="filtroEstados" multiple size="5"
+            class="mt-1 block w-56 p-2 rounded-xl border border-slate-300 dark:border-white/10
+                   bg-white dark:bg-transparent text-slate-900 dark:text-slate-100 dark:[color-scheme:dark]">
+            <option value="en_planta">En planta</option>
+            <option value="asignado" selected>Asignado</option>
+            <option value="en_camino" selected>En camino</option>
+            <option value="entregado" selected>Entregado</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="comprador_ausente">Comprador ausente</option>
+            <option value="inaccesible">Inaccesible</option>
+          </select>
+          <p class="text-xs opacity-70 mt-1">Por defecto: Asignado + En camino + Entregado</p>
+        </div>
+
         <div>
           <label class="block text-sm font-medium">Desde</label>
           <input type="date" id="desde"

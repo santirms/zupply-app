@@ -31,17 +31,82 @@
       --z-primary-dark: #D97706;  /* hover */
       --z-primary-fg: #111827;    /* texto sobre ámbar */
     }
+
+    /* Ocultar body hasta verificar acceso */
+    body {
+      display: none !important;
+    }
+    body.acceso-verificado {
+      display: block !important;
+    }
   </style>
 </head>
 
 <body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+  <!-- Script de redirección según rol -->
+  <script>
+    // Timeout de seguridad: si después de 3 segundos no se verificó, redirigir
+    setTimeout(() => {
+      if (!document.body.classList.contains('acceso-verificado')) {
+        console.warn('Timeout de verificación, redirigiendo a login');
+        window.location.replace('/auth/login');
+      }
+    }, 3000);
+
+    (async function verificarAcceso() {
+      try {
+        const response = await fetch('/api/auth/me', {
+          credentials: 'same-origin',
+          cache: 'no-store'
+        });
+
+        if (!response.ok) {
+          // Token/sesión inválida
+          console.log('No autenticado, redirigiendo a login...');
+          window.location.replace('/auth/login');
+          return;
+        }
+
+        const usuario = await response.json();
+
+        // Redirigir según rol
+        if (usuario.role === 'cliente') {
+          console.log('Usuario tipo cliente, redirigiendo a panel de cliente...');
+          window.location.replace('/client-panel.html');
+          return;
+        }
+
+        if (usuario.role === 'chofer') {
+          console.log('Usuario tipo chofer, redirigiendo a mis envíos...');
+          window.location.replace('/mis-envios.html');
+          return;
+        }
+
+        // Admin o coordinador: mostrar contenido
+        if (usuario.role === 'admin' || usuario.role === 'coordinador') {
+          console.log('Acceso autorizado al dashboard para:', usuario.role);
+          document.body.classList.add('acceso-verificado');
+          return;
+        }
+
+        // Rol desconocido
+        console.warn('Rol desconocido:', usuario.role);
+        window.location.replace('/auth/login');
+
+      } catch (error) {
+        console.error('Error verificando acceso:', error);
+        window.location.replace('/auth/login');
+      }
+    })();
+  </script>
+
   <div class="max-w-7xl mx-auto p-6">
 
     <!-- TOPBAR -->
     <header class="sticky top-0 z-40 mb-6">
       <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
         <!-- Logo / Home -->
-        <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+        <a href="#" id="logoLink" class="flex items-center gap-3" title="Inicio">
           <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)">
             <span class="text-white font-black">Z</span>
           </div>
@@ -66,8 +131,8 @@
               <span class="opacity-70">▾</span>
             </button>
             <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
-              <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
-              <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <a href="#" id="homeLink" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Inicio</a>
+              <div id="menuDivider" class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
               <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
             </div>
           </div>
@@ -674,6 +739,21 @@
       });
     })();
 
+    // Función para obtener la ruta de inicio según el rol
+    function getHomeRoute(role) {
+      switch(role) {
+        case 'cliente':
+          return '/client-panel.html';
+        case 'admin':
+        case 'coordinador':
+          return '/index.html';
+        case 'chofer':
+          return '/mis-envios.html';
+        default:
+          return '/';
+      }
+    }
+
     // ====== Visibilidad por rol + nombre de usuario ======
     fetch('/me', { cache:'no-store' })
       .then(r => {
@@ -685,6 +765,21 @@
         const name = me.name || me.username || me.email || 'Usuario';
         document.getElementById('username').textContent = name;
         try { localStorage.setItem('zpl_username', name); } catch {}
+
+        // Configurar redirección del logo según rol
+        const userRole = me.role || 'admin';
+        const homeRoute = getHomeRoute(userRole);
+
+        const logoLink = document.getElementById('logoLink');
+        const homeLink = document.getElementById('homeLink');
+
+        // Actualizar href del logo y link de inicio
+        if (logoLink) {
+          logoLink.href = homeRoute;
+        }
+        if (homeLink) {
+          homeLink.href = homeRoute;
+        }
 
         // Mostrar/ocultar módulos por rol
         document.querySelectorAll('[data-allow]').forEach(el=>{

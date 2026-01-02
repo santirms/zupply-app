@@ -5,6 +5,36 @@ const fs = require('fs');
 const path = require('path');
 const dayjs = require('dayjs');
 
+// Helper para formatear teléfono: 5491123334455 → 11 2333 4455
+function formatearTelefono(tel) {
+  if (!tel) return '';
+
+  // Limpiar el número (quitar espacios, guiones, paréntesis, +)
+  let numero = String(tel).replace(/[\s\-\(\)\+]/g, '');
+
+  // Quitar prefijo 549 si existe
+  if (numero.startsWith('549')) {
+    numero = numero.substring(3);
+  }
+  // Quitar prefijo 54 si existe (fallback)
+  else if (numero.startsWith('54')) {
+    numero = numero.substring(2);
+  }
+  // Quitar prefijo 9 si existe
+  else if (numero.startsWith('9') && numero.length >= 10) {
+    numero = numero.substring(1);
+  }
+
+  // Formatear: 1123334455 → 11 2333 4455
+  if (numero.length === 10) {
+    // Formato: AA BBBB CCCC
+    return `${numero.substring(0, 2)} ${numero.substring(2, 6)} ${numero.substring(6)}`;
+  }
+
+  // Si no es de 10 dígitos, devolver sin formato
+  return numero;
+}
+
 const LABEL_SIZE = [283.46, 425.2]; // 10x15 cm
 
 function resolveTracking(envio) {
@@ -55,5 +85,272 @@ async function buildLabelPDF(envio) {
   return { path: outPath, url: `/labels/${filename}`, tracking };
 }
 
-module.exports = { buildLabelPDF, resolveTracking };
+async function generarEtiquetaInformativa(envio, cliente) {
+  // Buscar localidad desde la tabla de partidos si no viene en el envío
+  let localidad = envio.localidad || null;
+
+  if (!localidad && envio.codigo_postal) {
+    try {
+      const Partido = require('../models/partidos');
+      const partidoDoc = await Partido.findOne({
+        $or: [
+          { codigo_postal: envio.codigo_postal },
+          { codigos_postales: envio.codigo_postal }
+        ]
+      }).lean();
+
+      if (partidoDoc?.localidad) {
+        localidad = partidoDoc.localidad;
+      }
+    } catch (err) {
+      console.warn('No se pudo obtener localidad:', err.message);
+    }
+  }
+
+  const doc = new PDFDocument({
+    size: [283.46, 425.2], // 10x15 cm (100x150mm)
+    margins: { top: 20, bottom: 20, left: 20, right: 20 }
+  });
+
+  const buffers = [];
+  doc.on('data', buffers.push.bind(buffers));
+
+  // ===== ENCABEZADO =====
+
+  // Badge del tipo (grande y destacado)
+  const tipoBadges = {
+    'envio': { texto: 'E', color: '#10b981' },
+    'retiro': { texto: 'R', color: '#3b82f6' },
+    'cambio': { texto: 'C', color: '#f59e0b' }
+  };
+
+  console.log('Debug tipo badge:', {
+  tipo: envio.tipo,
+  badge: tipoBadges[envio.tipo]
+  });
+  const badge = tipoBadges[envio.tipo] || tipoBadges['envio'];
+
+  doc.fontSize(48)
+     .fillColor(badge.color)
+     .font('Helvetica-Bold')
+     .text(badge.texto, 20, 20, { width: 60, align: 'center' });
+
+  // Datos de la logística
+  doc.fontSize(10)
+     .fillColor('#000000')
+     .font('Helvetica-Bold')
+     .text('TRANSTECH LOGÍSTICA', 90, 25);
+
+  doc.fontSize(8)
+     .font('Helvetica')
+     .text('Av. Eva Perón 3777 (CP1834)', 90, 40)
+     .text('WhatsApp: +54 9 11 6445-8579', 90, 52);
+
+  // Línea separadora
+  doc.moveTo(20, 75).lineTo(263, 75).stroke();
+
+  // ===== CUERPO =====
+
+  let y = 85;
+
+  // QR Code (izquierda)
+  const tracking = envio.tracking || envio.id_venta || envio.meli_id;
+
+  const qrData = envio.id_venta;  // Solo el ID
+  
+  const qrImage = await QRCode.toBuffer(qrData, {
+    width: 100,
+    margin: 1
+  });
+
+  doc.image(qrImage, 30, y, { width: 80, height: 80 });
+
+  // ID y Fecha (derecha del QR)
+  doc.fontSize(10)
+     .font('Helvetica-Bold')
+     .text(`ID: ${envio.id_venta}`, 120, y);
+
+  const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
+  .replace('.', '')
+  .replace(/(\w)(\w+)/, (_, first, rest) => first.toUpperCase() + rest);
+
+  doc.fontSize(12)
+     .font('Helvetica')
+     .text(`Fecha: ${fecha}`, 120, y + 15);
+
+  y += 95;
+
+  // Cliente (si existe)
+  if (cliente) {
+    const nombreCliente = cliente.nombre ||
+                          cliente.razon_social ||
+                          'N/A';
+    doc.fontSize(9)
+       .font('Helvetica-Bold')
+       .fillColor('#6366f1')  // Color distintivo (índigo)
+       .text(`Cliente: ${nombreCliente}`, 20, y);
+    doc.fillColor('#000000');  // Volver a negro
+    y += 18;
+  }
+
+  // Destinatario
+  doc.fontSize(9)
+     .font('Helvetica-Bold')
+     .text('DESTINATARIO', 20, y);
+
+  y += 15;
+
+  doc.fontSize(10)
+     .font('Helvetica-Bold')
+     .text(envio.destinatario || 'N/A', 20, y);
+
+  y += 15;
+
+  // Dirección principal
+  doc.fontSize(9)
+     .font('Helvetica')
+     .text(envio.direccion || 'N/A', 20, y, { width: 240 });
+
+  // Piso/Dpto (si existe)
+  if (envio.piso_dpto) {
+    y += 12;
+    doc.fontSize(8)
+       .text(envio.piso_dpto, 20, y, { width: 240 });
+  }
+
+  y += 20;
+
+  // Armar texto: Localidad, Partido (CP xxxx)
+  const ubicacionParts = [];
+  if (localidad) ubicacionParts.push(localidad);
+  if (envio.partido) ubicacionParts.push(envio.partido);
+  const ubicacion = ubicacionParts.join(', ');
+  const textoCompleto = `${ubicacion || 'N/A'} (CP ${envio.codigo_postal || 'N/A'})`;
+  doc.text(textoCompleto, 20, y);
+
+  if (envio.telefono) {
+    y += 15;
+    doc.text(`Cel: ${formatearTelefono(envio.telefono)}`, 20, y);
+  }
+
+  // Referencia (contenido del paquete, instrucciones, etc)
+  if (envio.referencia) {
+    y += 15;
+    doc.fontSize(8)
+       .font('Helvetica-Bold')
+       .text('Ref: ', 20, y);
+
+    // Texto de referencia (puede ser largo, usar wrap)
+    const refText = String(envio.referencia).substring(0, 80);
+    doc.font('Helvetica')
+       .text(refText, 42, y, { width: 200 });
+  }
+
+  // Contenido (si existe)
+  if (envio.contenido) {
+    y += 20;
+    doc.fontSize(8)
+       .font('Helvetica-Bold')
+       .text('CONTENIDO:', 20, y);
+
+    y += 12;
+    doc.font('Helvetica')
+       .text(envio.contenido, 20, y, { width: 240 });
+  }
+
+// Monto a cobrar (si aplica)
+if (envio.cobra_en_destino && envio.monto_a_cobrar) {
+  y += 20;
+  doc.fontSize(12)
+     .fillColor('#dc2626')
+     .font('Helvetica-Bold')
+     .text(`COBRA: $${envio.monto_a_cobrar.toLocaleString('es-AR')}`, 20, y);
+  
+  doc.fillColor('#000000');
+  y += 25;
+}
+
+// Badge para CAMBIO
+if (envio.tipo === 'cambio') {
+  y += 15;
+  
+  doc.rect(20, y, 240, 30)
+     .lineWidth(3)
+     .stroke('#000000');
+  
+  doc.fontSize(12)
+     .fillColor('#000000')
+     .font('Helvetica-Bold')
+     .text('!! CAMBIO - Retirar producto !!', 30, y + 10);
+  
+  y += 45;  // Espacio después del recuadro
+}
+
+// Badge para RETIRO
+if (envio.tipo === 'retiro') {
+  y += 15;
+  
+  doc.rect(20, y, 240, 30)
+     .lineWidth(3)
+     .stroke('#000000');
+  
+  doc.fontSize(12)
+     .fillColor('#000000')
+     .font('Helvetica-Bold')
+     .text('!! RETIRO - Retirar producto !!', 30, y + 10);
+  
+  y += 45;
+}
+  
+// ===== PIE =====
+const footerY = 340;
+
+// Línea separadora
+doc.moveTo(20, footerY).lineTo(263, footerY).stroke();
+
+// Info de Zupply (izquierda)
+doc.fontSize(8)
+   .font('Helvetica-Bold')
+   .fillColor('#6366f1')
+   .text('Creado con Zupply', 20, footerY + 10);
+
+doc.fontSize(7)
+   .font('Helvetica')
+   .fillColor('#666666')
+   .text('Software de última milla', 20, footerY + 23);  // footerY + 23
+
+doc.fontSize(6)
+   .fillColor('#000000')
+   .text('www.zupply.tech | hola@zupply.tech', 20, footerY + 35);
+
+// Disclaimer (debajo de todo)
+doc.fontSize(5)
+   .fillColor('#999999')
+   .text('Zupply solo provee el software, la operadora es responsable del servicio.', 
+         20, footerY + 48, { width: 190, align: 'left' });  // footerY + 48
+
+// QR Linktree (derecha)
+const linktreeQR = await QRCode.toBuffer('https://linktr.ee/zupply_tech', {
+  width: 60,
+  margin: 0
+});
+
+doc.image(linktreeQR, 210, footerY + 5, {  // X: de 220 a 210 (más a la izq)
+  width: 50,
+  height: 50
+});
+
+// Ajustar texto debajo
+doc.fontSize(5)
+   .fillColor('#666666')
+   .text('Contacto', 210, footerY + 57, { width: 50, align: 'center' });
+
+doc.end();
+
+  return new Promise((resolve) => {
+    doc.on('end', () => resolve(Buffer.concat(buffers)));
+  });
+}
+
+module.exports = { buildLabelPDF, resolveTracking, generarEtiquetaInformativa };
 

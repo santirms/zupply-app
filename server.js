@@ -196,6 +196,7 @@ app.use('/api/partidos',         require('./routes/partidos'));
 app.use('/api/clientes',         require('./routes/clientes'));
 app.use('/api/users',            require('./routes/users'));
 app.use('/api/kpis',             require('./routes/kpis'));
+app.use('/api/reportes',         require('./routes/reportes'));
 app.use('/api/client-panel',     require('./routes/client-panel'));
 
 // PANEL GENERAL DE ENVÍOS (coordinador solo lectura; ver routes/envios.js)
@@ -214,6 +215,7 @@ app.use('/api/mis-envios',       require('./routes/mis-envios'));
 // Otros módulos que ya tenías (si deben estar protegidos, dejalos después del guard)
 app.use('/api/asignaciones',     require('./routes/asignaciones'));
 app.use('/api/detectar-zona',    require('./routes/detectarZona'));
+app.use('/api/auth',             require('./routes/auth'));
 app.use('/api/auth/meli',        require('./routes/meli'));
 app.use('/auth/meli',            require('./routes/meli'));
 

@@ -92,6 +92,11 @@ const envioSchema = new Schema({
     }
   },
   direccion:      { type: String, required: true },
+  piso_dpto: {
+    type: String,
+    default: null,
+    trim: true
+  },
   referencia:     { type: String },
 
   // Monto final calculado según lista de precios y `zona_precio`
@@ -145,7 +150,112 @@ const envioSchema = new Schema({
     type: String,
     enum: ['mercadolibre', 'ingreso_manual', 'etiquetas', 'otro'],
     default: 'mercadolibre'
-  }
+  },
+
+  // Tipo de envío (envío/retiro/cambio)
+  tipo: {
+    type: String,
+    enum: ['envio', 'retiro', 'cambio'],
+    default: 'envio'
+  },
+
+  // Descripción del contenido
+  contenido: {
+    type: String,
+    maxlength: 500,
+    default: null
+  },
+
+  // Cobro en destino (estructura completa)
+  cobroEnDestino: {
+    habilitado: {
+      type: Boolean,
+      default: false
+    },
+    monto: {
+      type: Number,
+      min: 0,
+      default: 0
+    },
+    cobrado: {
+      type: Boolean,
+      default: false
+    },
+    fechaCobro: {
+      type: Date,
+      default: null
+    },
+    metodoPago: {
+      type: String,
+      enum: ['efectivo', 'transferencia', null],
+      default: null
+    }
+  },
+
+  // Campos legacy para compatibilidad (deprecated)
+  cobra_en_destino: {
+    type: Boolean,
+    default: false
+  },
+  monto_a_cobrar: {
+    type: Number,
+    min: 0,
+    default: null
+  },
+
+  // Confirmación de entrega con firma digital
+  confirmacionEntrega: {
+    confirmada: { type: Boolean, default: false },
+    tipoReceptor: {
+      type: String,
+      enum: ['destinatario', 'porteria', 'familiar', 'otro'],
+      default: 'destinatario'
+    },
+    nombreReceptor: String,
+    dniReceptor: String,
+    aclaracionReceptor: String,
+    // Campos legacy (mantener compatibilidad)
+    nombreDestinatario: String,
+    dniDestinatario: String,
+    firmaS3Url: String,
+    firmaS3Key: String,
+    fotoDNIS3Key: String,
+    fechaEntrega: Date,
+    horaEntrega: String,
+    geolocalizacion: {
+      lat: Number,
+      lng: Number
+    }
+  },
+
+  // Flag para indicar si el envío requiere firma digital
+  requiereFirma: {
+    type: Boolean,
+    default: false
+  },
+
+  // Intentos fallidos de entrega con evidencia fotográfica
+  intentosFallidos: [{
+    fecha: { type: Date, default: Date.now },
+    motivo: {
+      type: String,
+      enum: [
+        'ausente',
+        'inaccesible',
+        'direccion_incorrecta',
+        'negativa_recibir',
+        'otro'
+      ]
+    },
+    descripcion: String,
+    fotoS3Url: String,
+    fotoS3Key: String,
+    chofer: { type: Schema.Types.ObjectId, ref: 'Usuario' },
+    geolocalizacion: {
+      lat: Number,
+      lng: Number
+    }
+  }]
   }, { timestamps: false });
 
 const NotaSchema = new Schema({

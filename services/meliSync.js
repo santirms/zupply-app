@@ -4,6 +4,7 @@ const Cliente = require('../models/Cliente');
 const Envio   = require('../models/Envio');
 const { getValidToken } = require('../utils/meliUtils');
 const { mapMeliToInterno } = require('../utils/meliStatus');
+const { ensureMeliHistory } = require('./meliHistory');
 const logger = require('../utils/logger');
 
 async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
@@ -17,13 +18,30 @@ async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
   const idsVinc = clientesVinc.map(c => c._id);
 
   // 2) Filtrar envíos: solo de clientes vinculados + no terminales
+  const hace48Horas = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
   const pendientes = await Envio.find({
     meli_id: { $ne: null },
     cliente_id: { $in: idsVinc },
     $or: [
-      { estado: { $nin: ['entregado', 'cancelado'] } },
-      { 'estado_meli.status': { $nin: ['delivered', 'cancelled'] } },
-      { estado: { $exists: false } }, // por las dudas
+      // No terminales
+      {
+        $and: [
+          { estado: { $nin: ['entregado', 'cancelado'] } },
+          { 'estado_meli.status': { $nin: ['delivered', 'cancelled'] } }
+        ]
+      },
+      // Delivered reciente SIN delivered en historial
+      {
+        $and: [
+          { 'estado_meli.status': 'delivered' },
+          { 'estado_meli.updatedAt': { $gte: hace48Horas } },
+          // NO tiene delivered en el historial
+          { 'historial.estado_meli.status': { $ne: 'delivered' } }
+        ]
+      },
+      // Sin estado (legacy)
+      { estado: { $exists: false } }
     ]
   })
   .limit(limit);
@@ -124,6 +142,16 @@ async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
           }
         }
       );
+
+      // AGREGAR: Hidratar historial desde MeLi
+      try {
+        await ensureMeliHistory(e, { force: false });
+      } catch (histErr) {
+        logger.warn('[meliSync] ensureMeliHistory falló', {
+          meli_id: e.meli_id,
+          error: histErr.message
+        });
+      }
 
       ok++;
     } catch (err) {

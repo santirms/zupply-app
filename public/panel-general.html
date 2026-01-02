@@ -67,6 +67,11 @@
   /* Dropdown de Partidos en dark */
   #panelPartidos{ backdrop-filter:saturate(120%) blur(6px); }
 </style>
+
+<!-- Modal de Confirmación de Entrega -->
+<script src="/js/confirmar-entrega-modal.js"></script>
+<!-- Modal de Intento Fallido con Evidencia -->
+<script src="/js/registrar-intento-fallido-modal.js"></script>
 </head>
 
 <body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
@@ -76,7 +81,7 @@
   <header class="sticky top-0 z-40 mb-4">
     <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
       <!-- Logo/Home -->
-      <a href="/index.html" class="flex items-center gap-3" title="Inicio">
+      <a href="#" id="logoLink" class="flex items-center gap-3" title="Inicio">
         <div class="h-8 w-8 grid place-items-center rounded" style="background:linear-gradient(135deg,#F6B64A,#F59E0B,#D97706)"><span class="text-white font-black">Z</span></div>
         <img src="/assets/logo-zupply.svg" alt="Zupply" class="h-5 hidden sm:block" onerror="this.remove()">
         <span class="sm:hidden font-semibold tracking-wide text-amber-500">zupply</span>
@@ -95,8 +100,8 @@
             <span class="opacity-70">▾</span>
           </button>
           <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
-            <a href="/index.html" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
-            <div class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+            <a href="#" id="homeLink" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Inicio</a>
+            <div id="menuDivider" class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
             <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
           </div>
         </div>
@@ -180,6 +185,7 @@
         class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 dark:bg-[#0B1020] dark:border-white/10 dark:text-slate-100">
         <option value="">— Todos los estados —</option>
         <option value="pendiente">Pendiente</option>
+        <option value="en_planta">En planta</option>
         <option value="asignado">Asignado</option>
         <option value="en_camino">En camino</option>
 
@@ -196,6 +202,15 @@
         <option value="cancelado">Cancelado</option>
       </select>
 
+      <select id="filtroOrigen"
+        class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020] dark:text-slate-100">
+        <option value="">— Todos —</option>
+        <option value="mercadolibre"> MercadoLibre Flex</option>
+        <option value="etiquetas"> Etiquetas PDF</option>
+        <option value="ingreso_manual"> Ingreso Manual</option>
+        <option value="tiendanube"> TiendaNube</option>
+      </select>
+
       <select id="filtroChofer"
         class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 dark:bg-[#0B1020] dark:border-white/10 dark:text-slate-100">
         <option value="">— Todos los choferes —</option>
@@ -210,6 +225,18 @@
                dark:border-white/10 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/15">
         Limpiar
       </button>
+      <button onclick="abrirModalReportes()"
+        class="px-4 py-2 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">
+        📊 Reportes
+      </button>
+    </div>
+
+    <!-- Búsqueda por dirección (línea completa) -->
+    <div class="mt-3">
+      <input id="filtroDireccion" type="text"
+        placeholder="🔍 Buscar por dirección (ej: san martin, rivadavia, etc)"
+        class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-[#0B1020] dark:text-slate-100"
+        onkeydown="if(event.key==='Enter') aplicarFiltro()">
     </div>
   </div>
 
@@ -257,6 +284,11 @@
         <button id="tabBtnHist"
           class="px-3 py-2 rounded-t border-b-2 border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100"
           onclick="switchTab('historial')">Historial</button>
+        <button id="tabBtnEvidencias"
+          class="px-3 py-2 rounded-t border-b-2 border-transparent text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100"
+          onclick="switchTab('evidencias')">
+          <span id="tabEvidenciasLabel">Evidencias</span>
+        </button>
       </nav>
     </div>
 
@@ -270,6 +302,13 @@
     <div id="tabHistorial" class="hidden">
       <div id="contenidoHistorial" class="space-y-2">
         <div class="text-sm text-slate-500">Cargando historial…</div>
+      </div>
+    </div>
+
+    <!-- Evidencias -->
+    <div id="tabEvidencias" class="hidden">
+      <div id="contenidoEvidencias" class="p-6">
+        <div class="text-sm text-slate-500">Cargando evidencias…</div>
       </div>
     </div>
   </div>
@@ -331,6 +370,171 @@
   </div>
 </div>
 
+<!-- Modal Visualizador de Evidencias -->
+<div id="modalFotoEvidencia" class="fixed inset-0 hidden bg-black/95 z-[10001] items-center justify-center p-5" onclick="cerrarModalFotoEvidencia()">
+  <div style="width: 100%; max-width: 1000px; display: flex; flex-direction: column; align-items: center;">
+    <!-- Header -->
+    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <div>
+        <h4 id="modalFotoTitulo" style="color: white; margin: 0; font-weight: 600; font-size: 1.25rem;"></h4>
+        <small id="modalFotoSubtitulo" style="color: #adb5bd; font-size: 0.875rem;"></small>
+      </div>
+      <button onclick="cerrarModalFotoEvidencia()" class="px-3 py-3 bg-white text-slate-900 rounded-full hover:bg-slate-100" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; font-size: 1.25rem;">✕</button>
+    </div>
+
+    <!-- Imagen -->
+    <div style="max-width: 95%; max-height: 80vh; background-color: white; border-radius: 8px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);" onclick="event.stopPropagation()">
+      <div id="modalFotoLoading" style="padding: 80px; text-align: center;">
+        <div class="spinner-border" role="status" style="width: 3rem; height: 3rem; border-width: 0.25rem;"></div>
+        <div style="margin-top: 16px; color: #6c757d;">Cargando imagen...</div>
+      </div>
+      <img id="modalFotoImg" alt="Evidencia" style="max-width: 100%; max-height: 75vh; object-fit: contain; display: none; margin: 0 auto;" />
+    </div>
+
+    <!-- Footer -->
+    <div id="modalFotoFooter" style="margin-top: 16px; padding: 12px 20px; background-color: rgba(40, 167, 69, 0.2); border: 1px solid rgba(40, 167, 69, 0.4); border-radius: 6px; color: #d4edda; font-size: 0.9em; text-align: center; display: none;">
+      Comprobante con validez legal de entrega
+    </div>
+  </div>
+</div>
+
+<!-- Modal Reportes -->
+<div id="modal-reportes" class="fixed inset-0 hidden z-50 bg-black/50 items-center justify-center">
+  <div class="bg-white dark:bg-[#0B1020] rounded-2xl border border-slate-200 dark:border-white/10 w-full max-w-2xl mx-4 p-6 max-h-[90vh] overflow-y-auto">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <h3 class="text-xl font-bold">Generar Reporte</h3>
+      <button onclick="cerrarModalReportes()"
+        class="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">
+        ✕
+      </button>
+    </div>
+
+    <!-- Presets rápidos -->
+    <div class="mb-6">
+      <p class="text-sm font-medium mb-3">Presets rápidos:</p>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <button onclick="generarReportePreset('incidencias')"
+          class="px-4 py-3 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-red-50 dark:hover:bg-red-900/20 text-left">
+          <div class="font-semibold">🔴 Incidencias</div>
+          <div class="text-xs opacity-70 mt-1">Ausente, inaccesible, demorado</div>
+        </button>
+
+        <button onclick="generarReportePreset('pendientes')"
+          class="px-4 py-3 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 text-left">
+          <div class="font-semibold">📦 Pendientes 3+ días</div>
+          <div class="text-xs opacity-70 mt-1">Sin asignar hace tiempo</div>
+        </button>
+
+        <button onclick="generarReportePreset('en_planta')"
+          class="px-4 py-3 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-left">
+          <div class="font-semibold">🏭 En planta estancados</div>
+          <div class="text-xs opacity-70 mt-1">3+ días sin despachar</div>
+        </button>
+      </div>
+    </div>
+
+    <div class="border-t border-slate-200 dark:border-white/10 my-6"></div>
+
+    <!-- Personalización -->
+    <div class="space-y-4">
+      <p class="text-sm font-medium">O personalizar:</p>
+
+      <!-- Cliente(s) -->
+      <div>
+        <label class="block text-sm font-medium mb-1">Cliente(s)</label>
+        <select id="reporteClientes" multiple
+          class="w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent dark:[color-scheme:dark]">
+          <option value="">Todos</option>
+        </select>
+        <p class="text-xs opacity-70 mt-1">Ctrl/Cmd + click para selección múltiple</p>
+      </div>
+
+      <!-- Estados -->
+      <div>
+        <label class="block text-sm font-medium mb-1">Estados</label>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="reporte-estado" value="comprador_ausente" class="rounded">
+            <span>Comprador ausente</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="reporte-estado" value="inaccesible" class="rounded">
+            <span>Inaccesible</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="reporte-estado" value="demorado" class="rounded">
+            <span>Demorado</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="reporte-estado" value="pendiente" class="rounded">
+            <span>Pendiente</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="reporte-estado" value="en_planta" class="rounded">
+            <span>En planta</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="reporte-estado" value="reprogramado" class="rounded">
+            <span>Reprogramado</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Fechas -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Desde</label>
+          <input type="date" id="reporteDesde"
+            class="w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Hasta</label>
+          <input type="date" id="reporteHasta"
+            class="w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent">
+        </div>
+      </div>
+
+      <!-- Opciones adicionales -->
+      <div>
+        <label class="block text-sm font-medium mb-2">Incluir en el reporte:</label>
+        <div class="space-y-2 text-sm">
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="incluirHistorial" checked class="rounded">
+            <span>Historial de estados</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="incluirIntentos" checked class="rounded">
+            <span>Intentos fallidos</span>
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" id="incluirCoordenadas" class="rounded">
+            <span>Coordenadas GPS</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botones de acción -->
+    <div class="flex flex-wrap gap-3 mt-6">
+      <button onclick="generarReportePersonalizado('preview')"
+        class="flex-1 px-4 py-2 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 font-medium">
+        📊 Vista previa
+      </button>
+      <button onclick="generarReportePersonalizado('xls')"
+        class="flex-1 px-4 py-2 rounded-xl bg-green-500 hover:bg-green-600 text-white font-medium">
+        ⬇️ Descargar XLS
+      </button>
+      <button onclick="generarReportePersonalizado('pdf')"
+        class="flex-1 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium">
+        📄 Descargar PDF
+      </button>
+    </div>
+
+  </div>
+</div>
+
 <script>
 /* ======== Header: usuario + tema ======== */
 document.getElementById('anio')?.remove(); // no se usa acá
@@ -347,12 +551,42 @@ document.getElementById('anio')?.remove(); // no se usa acá
     location.href = '/auth/login';
   });
 
+  // Función para obtener la ruta de inicio según el rol
+  function getHomeRoute(role) {
+    switch(role) {
+      case 'cliente':
+        return '/client-panel.html';
+      case 'admin':
+      case 'coordinador':
+        return '/index.html';
+      case 'chofer':
+        return '/mis-envios.html';
+      default:
+        return '/';
+    }
+  }
+
   fetch('/me', { cache:'no-store' })
     .then(r => { if (!r.ok) throw new Error('unauth'); return r.json(); })
     .then(me => {
       const name = me.name || me.username || me.email || 'Usuario';
       document.getElementById('username').textContent = name;
       try { localStorage.setItem('zpl_username', name); } catch {}
+
+      // Configurar redirección del logo según rol
+      const userRole = me.role || 'admin';
+      const homeRoute = getHomeRoute(userRole);
+
+      const logoLink = document.getElementById('logoLink');
+      const homeLink = document.getElementById('homeLink');
+
+      // Actualizar href del logo y link de inicio
+      if (logoLink) {
+        logoLink.href = homeRoute;
+      }
+      if (homeLink) {
+        homeLink.href = homeRoute;
+      }
     })
     .catch(()=> location.href='/auth/login');
 })();
@@ -406,13 +640,15 @@ const nombreClienteEnvio = (envio = {}) => {
 };
 window.nombreClienteEnvio = nombreClienteEnvio;
 
-function buildQueryParams({ tracking, id_venta, cliente, desde, hasta, estado, partidos, chofer, cursor, incidencias, limit=100 }) {
+function buildQueryParams({ tracking, id_venta, cliente, direccion, desde, hasta, estado, origen, partidos, chofer, cursor, incidencias, limit=100 }) {
   const p = new URLSearchParams();
   if (tracking) p.set('tracking', tracking);
   if (id_venta) p.set('id_venta', id_venta);
   if (cliente)  p.set('cliente', cliente);
+  if (direccion) p.set('direccion', direccion);
   if (!tracking) { if (desde) p.set('desde', desde); if (hasta) p.set('hasta', hasta); }
   if (estado) p.set('estado', estado);
+  if (origen) p.set('origen', origen);
   if (chofer) p.set('chofer', chofer);
   if (incidencias) p.set('incidencias', incidencias);
   if (Array.isArray(partidos) && partidos.length) p.set('partidos', partidos.join(','));
@@ -681,16 +917,19 @@ async function aplicarFiltro(){
   const cliRaw=(document.getElementById('filtroCliente')?.value||'');
   const trackingRaw=(document.getElementById('filtroTracking')?.value||'');
   const idVentaRaw=(document.getElementById('filtroIdVenta')?.value||'');
+  const direccionRaw=(document.getElementById('filtroDireccion')?.value||'');
   const desde=(document.getElementById('filtroDesde')?.value||'');
   const hasta=(document.getElementById('filtroHasta')?.value||'');
   const estadoSel=(document.getElementById('filtroEstado')?.value||'').toLowerCase();
+  const origenSel=(document.getElementById('filtroOrigen')?.value||'');
   const choferSel=(document.getElementById('filtroChofer')?.value||'');
   const tracking=trackingRaw.trim(); const id_venta=idVentaRaw.trim(); const estado=estadoSel||'';
+  const direccion=direccionRaw.trim();
   const partidos=[]; document.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]:checked').forEach(cb=>partidos.push(cb.getAttribute('data-nombre')));
   const all=document.getElementById('chk_all_partidos'); if(all && all.checked) partidos.length=0;
 
   try{
-    filtrosActivos={ cliente:cliRaw.trim()||undefined, tracking:tracking||undefined, id_venta:id_venta||undefined, desde:desde||undefined, hasta:hasta||undefined, estado:estado||undefined, chofer:choferSel||undefined, partidos:partidos, limit:100 };
+    filtrosActivos={ cliente:cliRaw.trim()||undefined, tracking:tracking||undefined, id_venta:id_venta||undefined, direccion:direccion||undefined, desde:desde||undefined, hasta:hasta||undefined, estado:estado||undefined, origen:origenSel||undefined, chofer:choferSel||undefined, partidos:partidos, limit:100 };
 
     // Si el usuario seleccionó un estado manualmente, desactivar filtro de incidencias
     const estadoSeleccionado = document.getElementById('filtroEstado')?.value || '';
@@ -716,9 +955,11 @@ async function limpiarFiltros(){
   document.getElementById('filtroCliente').value='';
   document.getElementById('filtroTracking').value='';
   document.getElementById('filtroIdVenta').value='';
+  document.getElementById('filtroDireccion').value='';
   document.getElementById('filtroDesde').value='';
   document.getElementById('filtroHasta').value='';
   document.getElementById('filtroEstado').value='';
+  document.getElementById('filtroOrigen').value='';
   const choferSel=document.getElementById('filtroChofer'); if(choferSel) choferSel.value='';
   seleccionPartidos.clear(); const all=document.getElementById('chk_all_partidos'); if(all) all.checked=true;
   document.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]').forEach(cb=>cb.checked=false);
@@ -828,7 +1069,9 @@ async function mostrarDetalle(envioId){
     const clienteNombre = clienteNombreRaw === '—' ? '— sin nombre —' : clienteNombreRaw;
     const partido=data.partido?.trim?.()||'-'; const zonaFact=data.zona?.trim?.()||'-';
     const s=uiStatus(data); const hist=data.timeline||data.historial||data.eventos||[];
-    renderHistorial(hist); switchTab('detalle');
+    renderHistorial(hist, data);
+    renderEvidencias(data);
+    switchTab('detalle');
     const cd=document.getElementById('contenidoDetalle');
     cd.innerHTML=`
       <p><strong>Cliente:</strong> ${clienteNombre}</p>
@@ -894,8 +1137,36 @@ document.getElementById('btnConfirmEliminar').addEventListener('click', async ()
 });
 
 // Notas
-let envioNotasId=null; const IS_ADMIN=(window.USER_ROLE==='admin');
-function abrirModalNotas(id){ envioNotasId=id; const m=document.getElementById('modalNotas'); m.classList.remove('hidden'); m.classList.add('flex'); document.body.classList.add('overflow-hidden'); document.getElementById('notaTexto').value=''; cargarNotas(); }
+let envioNotasId=null;
+const IS_ADMIN = (window.USER_ROLE === 'admin');
+const PUEDE_AGREGAR_NOTAS = (window.USER_ROLE === 'admin' || window.USER_ROLE === 'coordinador');
+function abrirModalNotas(id){
+  envioNotasId=id;
+  const m=document.getElementById('modalNotas');
+  m.classList.remove('hidden');
+  m.classList.add('flex');
+  document.body.classList.add('overflow-hidden');
+  document.getElementById('notaTexto').value='';
+  cargarNotas();
+
+  // Habilitar/deshabilitar formulario según permisos
+  const textarea = document.getElementById('notaTexto');
+  const btnGuardar = document.getElementById('btnGuardarNota');
+
+  if (textarea && btnGuardar) {
+    if (!PUEDE_AGREGAR_NOTAS) {
+      textarea.disabled = true;
+      textarea.placeholder = 'No tenés permisos para agregar notas';
+      btnGuardar.disabled = true;
+      btnGuardar.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+      textarea.disabled = false;
+      textarea.placeholder = 'Escribir nota...';
+      btnGuardar.disabled = false;
+      btnGuardar.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+  }
+}
 function cerrarModalNotas(){ envioNotasId=null; const m=document.getElementById('modalNotas'); m.classList.add('hidden'); m.classList.remove('flex'); document.body.classList.remove('overflow-hidden'); }
 document.getElementById('modalNotas').addEventListener('click',(e)=>{ if(e.target===e.currentTarget) cerrarModalNotas(); });
 document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') cerrarModalNotas(); });
@@ -948,33 +1219,158 @@ window.aplicarFiltro=aplicarFiltro; window.limpiarFiltros=limpiarFiltros;
 window.mostrarDetalle=mostrarDetalle; window.abrirModalEliminar=abrirModalEliminar;
 window.cerrarModalEliminar=cerrarModalEliminar; window.cerrarModalDetalle=cerrarModalDetalle;
 
+// ===== CARGA MANUAL DE EVIDENCIAS (ADMIN/COORDINADOR) =====
+let modalIntentoFallidoManual = null;
+let modalEntregaManual = null;
+let envioActualParaEvidencias = null;
+
+async function abrirModalIntentoFallidoManual(envioId) {
+  try {
+    // Cargar envío completo
+    const response = await fetch(`/api/envios/${envioId}`, {
+      credentials: 'same-origin'
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error al cargar envío: ${response.status}`);
+    }
+
+    const envio = await response.json();
+    envioActualParaEvidencias = envio;
+
+    // Inicializar modal si no existe
+    if (!modalIntentoFallidoManual) {
+      modalIntentoFallidoManual = new RegistrarIntentoFallidoModal();
+    }
+
+    // Abrir modal
+    modalIntentoFallidoManual.open(
+      envio,
+      // onConfirm
+      () => {
+        console.log('Intento fallido registrado manualmente');
+        // Recargar evidencias
+        setTimeout(async () => {
+          const respuesta = await fetch(`/api/envios/${envioId}`);
+          const envioActualizado = await respuesta.json();
+          renderEvidencias(envioActualizado);
+          renderHistorial(envioActualizado.historial, envioActualizado);
+          // Recargar lista principal
+          cargarPrimerPagina();
+        }, 1000);
+      },
+      // onClose
+      () => {
+        console.log('Modal intento fallido cerrado');
+      }
+    );
+  } catch (error) {
+    console.error('Error al abrir modal de intento fallido:', error);
+    alert('Error al cargar los datos del envío. Por favor, intente nuevamente.');
+  }
+}
+
+async function abrirModalEntregaManual(envioId) {
+  try {
+    // Cargar envío completo
+    const response = await fetch(`/api/envios/${envioId}`, {
+      credentials: 'same-origin'
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error al cargar envío: ${response.status}`);
+    }
+
+    const envio = await response.json();
+    envioActualParaEvidencias = envio;
+
+    // Inicializar modal si no existe
+    if (!modalEntregaManual) {
+      modalEntregaManual = new ConfirmarEntregaModal();
+    }
+
+    // Abrir modal
+    modalEntregaManual.open(
+      envio,
+      // onConfirm
+      (envioActualizado) => {
+        console.log('Entrega confirmada manualmente:', envioActualizado);
+        // Recargar evidencias
+        setTimeout(async () => {
+          const respuesta = await fetch(`/api/envios/${envioId}`);
+          const envioNuevo = await respuesta.json();
+          renderEvidencias(envioNuevo);
+          renderHistorial(envioNuevo.historial, envioNuevo);
+          // Recargar lista principal
+          cargarPrimerPagina();
+        }, 1000);
+      },
+      // onClose
+      () => {
+        console.log('Modal entrega cerrado');
+      }
+    );
+  } catch (error) {
+    console.error('Error al abrir modal de entrega:', error);
+    alert('Error al cargar los datos del envío. Por favor, intente nuevamente.');
+  }
+}
+
+window.abrirModalIntentoFallidoManual = abrirModalIntentoFallidoManual;
+window.abrirModalEntregaManual = abrirModalEntregaManual;
+
 function switchTab(which){
   const det=document.getElementById('tabDetalle');
   const his=document.getElementById('tabHistorial');
+  const evi=document.getElementById('tabEvidencias');
   const bDet=document.getElementById('tabBtnDetalle');
   const bHis=document.getElementById('tabBtnHist');
-  const activate=(btn)=>{ btn.classList.remove('text-slate-600','border-transparent'); btn.classList.add('text-amber-600','dark:text-amber-400','border-amber-500/80','font-medium'); };
+  const bEvi=document.getElementById('tabBtnEvidencias');
+  const activate=(btn)=>{ btn.classList.remove('text-slate-600','dark:text-slate-300','border-transparent'); btn.classList.add('text-amber-600','dark:text-amber-400','border-amber-500/80','font-medium'); };
   const deactivate=(btn)=>{ btn.classList.add('text-slate-600','dark:text-slate-300','border-transparent'); btn.classList.remove('text-amber-600','dark:text-amber-400','border-amber-500/80','font-medium'); };
-  if(which==='detalle'){ det.classList.remove('hidden'); his.classList.add('hidden'); activate(bDet); deactivate(bHis); }
-  else { det.classList.add('hidden'); his.classList.remove('hidden'); activate(bHis); deactivate(bDet); }
+
+  if(which==='detalle'){
+    det.classList.remove('hidden');
+    his.classList.add('hidden');
+    evi.classList.add('hidden');
+    activate(bDet);
+    deactivate(bHis);
+    deactivate(bEvi);
+  }
+  else if(which==='historial') {
+    det.classList.add('hidden');
+    his.classList.remove('hidden');
+    evi.classList.add('hidden');
+    activate(bHis);
+    deactivate(bDet);
+    deactivate(bEvi);
+  }
+  else if(which==='evidencias') {
+    det.classList.add('hidden');
+    his.classList.add('hidden');
+    evi.classList.remove('hidden');
+    activate(bEvi);
+    deactivate(bDet);
+    deactivate(bHis);
+  }
 }
 
-function renderHistorial(histArray=[]) {
+function renderHistorial(histArray=[], envio=null) {
   const cont = document.getElementById('contenidoHistorial');
   if (!Array.isArray(histArray) || !histArray.length) {
     cont.innerHTML = `<p class="text-sm text-slate-500">Sin eventos por ahora.</p>`;
     return;
   }
 
-  const rows = histArray.slice().sort((a,b)=> 
+  const rows = histArray.slice().sort((a,b)=>
     new Date(b.at||b.fecha||b.updatedAt||0)-new Date(a.at||a.fecha||a.updatedAt||0)
   ).map(h => {
-    const fechaStr = h.at ? new Date(h.at).toLocaleString('es-AR') : 
+    const fechaStr = h.at ? new Date(h.at).toLocaleString('es-AR') :
                      h.updatedAt ? new Date(h.updatedAt).toLocaleString('es-AR') : '-';
-    
-    let badge = ''; 
+
+    let badge = '';
     let detalleNota = '';
-    
+
     if ((h.estado && h.estado.toLowerCase() === 'nota') || h.note) {
       badge = `<span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full border bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300">Nota</span>`;
       const safe = (h.note||'').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -985,15 +1381,15 @@ function renderHistorial(histArray=[]) {
         estado: h.estado,
         estado_meli: h.estado_meli || {}
       };
-      
+
       const { key, label } = uiStatus(tempEnvio);
-      
+
       // Extraer substatus crudo de MeLi
       const subRaw = (h.estado_meli?.substatus || '').toLowerCase().trim();
-      
+
       // Badge principal
       badge = estadoBadge(key, label);
-      
+
       // AGREGAR chip de substatus si es relevante
       if (subRaw) {
         // Mapeo de substatuses a español
@@ -1007,13 +1403,13 @@ function renderHistorial(histArray=[]) {
           'not_visited': '⚠️ inaccesible',
           'bad_address': '📍 dir. errónea'
           };
-        
+
         const subDetalle = MAP_SUBSTATUS[subRaw];
-        
+
         if (subDetalle) {
           // Color contextual según tipo
           let chipClass = 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300';
-          
+
           if (subRaw.includes('absent') || subRaw.includes('not_visited') || subRaw.includes('bad_address')) {
             chipClass = 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300';
           } else if (subRaw.includes('rescheduled')) {
@@ -1023,14 +1419,35 @@ function renderHistorial(histArray=[]) {
           } else if (subRaw.includes('delivery') || subRaw.includes('soon')) {
             chipClass = 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300';
           }
-          
+
           badge += `<span class="ml-2 text-[11px] px-2 py-0.5 rounded-full border ${chipClass}">${subDetalle}</span>`;
         }
       }
+
+      // Si es un evento de entrega, agregar detalles del receptor
+      if (key === 'entregado' && envio?.confirmacionEntrega) {
+        const conf = envio.confirmacionEntrega;
+        let detalleEntrega = '<div class="mt-1 text-xs text-slate-700 dark:text-slate-300">';
+
+        if (conf.nombreReceptor) {
+          detalleEntrega += `<div><strong>Recibió:</strong> ${conf.nombreReceptor}`;
+          if (conf.tipoReceptor) {
+            detalleEntrega += ` <span style="color:#666;font-size:0.9em">(${conf.tipoReceptor})</span>`;
+          }
+          detalleEntrega += '</div>';
+        }
+
+        if (conf.dniReceptor) {
+          detalleEntrega += `<div><strong>DNI:</strong> ${conf.dniReceptor}</div>`;
+        }
+
+        detalleEntrega += '</div>';
+        detalleNota = detalleEntrega;
+      }
     }
-    
+
     const usuario = h.actor_name || h.usuario || '—';
-    
+
     return `<tr class="border-b border-slate-200 dark:border-white/10">
       <td class="px-3 py-2 whitespace-nowrap text-xs text-slate-900 dark:text-slate-100">${fechaStr}</td>
       <td class="px-3 py-2">${badge}${detalleNota}</td>
@@ -1050,6 +1467,489 @@ function renderHistorial(histArray=[]) {
   </table></div>`;
 }
 
+// ========== EVIDENCIAS ==========
+
+function renderEvidencias(envio) {
+  const cont = document.getElementById('contenidoEvidencias');
+  if (!envio) {
+    cont.innerHTML = '<div class="text-sm text-slate-500">No se pudo cargar las evidencias.</div>';
+    return;
+  }
+
+  // NUEVO: Verificar permisos para botones de carga manual
+  const PUEDE_SUBIR_EVIDENCIAS = (window.USER_ROLE === 'admin' || window.USER_ROLE === 'coordinador');
+
+  const intentosFallidos = envio.intentosFallidos || [];
+  const confirmacion = envio.confirmacionEntrega;
+  const tieneEvidencias = intentosFallidos.length > 0 || (confirmacion && confirmacion.confirmada);
+
+  // Actualizar badge del tab
+  const badgeCount = intentosFallidos.length + (confirmacion?.confirmada ? 1 : 0);
+  const labelElem = document.getElementById('tabEvidenciasLabel');
+  if (labelElem) {
+    if (badgeCount > 0) {
+      labelElem.innerHTML = `Evidencias <span class="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-amber-600 rounded-full">${badgeCount}</span>`;
+    } else {
+      labelElem.textContent = 'Evidencias';
+    }
+  }
+
+  if (!tieneEvidencias) {
+    let botonesHtml = '';
+
+    if (PUEDE_SUBIR_EVIDENCIAS) {
+      botonesHtml = `
+        <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            onclick="abrirModalIntentoFallidoManual('${envio._id}')"
+            class="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-medium shadow-sm flex items-center gap-2 justify-center">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            Registrar Intento Fallido
+          </button>
+
+          <button
+            onclick="abrirModalEntregaManual('${envio._id}')"
+            class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium shadow-sm flex items-center gap-2 justify-center">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Confirmar Entrega
+          </button>
+        </div>
+      `;
+    }
+
+    cont.innerHTML = `
+      <div style="text-align: center; padding: 60px 20px; color: #6c757d;">
+        <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;">📋</div>
+        <h5 style="color: #495057; margin-bottom: 8px; font-size: 1.1rem; font-weight: 600;">Sin evidencias registradas</h5>
+        <p style="color: #6c757d; margin-bottom: 16px;">Este envío no tiene intentos fallidos ni firma digital.</p>
+        ${botonesHtml}
+      </div>
+    `;
+    return;
+  }
+
+  let html = '';
+
+  // INTENTOS FALLIDOS
+  if (intentosFallidos.length > 0) {
+    html += `
+      <div style="margin-bottom: ${confirmacion?.confirmada ? '32px' : '0'};">
+        <!-- Header de sección -->
+        <div style="margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #ffc107;">
+          <h5 style="margin: 0; color: #856404; font-weight: 600; font-size: 1.1em;">Intentos de Entrega Fallidos</h5>
+          <small style="color: #6c757d;">${intentosFallidos.length} registro${intentosFallidos.length > 1 ? 's' : ''}</small>
+        </div>
+
+        <!-- Lista de intentos -->
+        <div class="intentos-list">
+    `;
+
+    intentosFallidos.forEach((intento, index) => {
+      const fecha = new Date(intento.fecha);
+      html += `
+        <div style="background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; padding: 20px; margin-bottom: ${index < intentosFallidos.length - 1 ? '16px' : '0'};">
+          <!-- Badge de número -->
+          <div style="display: inline-block; background-color: #856404; color: white; padding: 4px 12px; border-radius: 4px; font-size: 0.8em; font-weight: 600; margin-bottom: 16px; letter-spacing: 0.5px;">
+            INTENTO ${index + 1}
+          </div>
+
+          <!-- Grid de información -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 16px;">
+            <div>
+              <label style="display: block; font-size: 0.75em; font-weight: 600; color: #856404; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Fecha y Hora</label>
+              <div style="font-weight: 500; font-size: 0.95em;">
+                ${fecha.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </div>
+              <div style="font-size: 0.9em; color: #6c757d;">
+                ${fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })} hs
+              </div>
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 0.75em; font-weight: 600; color: #856404; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Motivo</label>
+              <div style="font-weight: 500; font-size: 0.95em;">
+                ${intento.motivo === 'ausente' ? 'Comprador Ausente' :
+                  intento.motivo === 'inaccesible' ? 'Dirección Inaccesible' :
+                  intento.motivo === 'rechazado' ? 'Paquete Rechazado' :
+                  `<span style="text-transform: capitalize;">${intento.motivo}</span>`}
+              </div>
+            </div>
+
+            ${intento.chofer ? `
+            <div>
+              <label style="display: block; font-size: 0.75em; font-weight: 600; color: #856404; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Chofer</label>
+              <div style="font-weight: 500; font-size: 0.95em;">${intento.chofer.nombre || 'No especificado'}</div>
+            </div>
+            ` : ''}
+          </div>
+
+          ${intento.descripcion ? `
+          <div style="background-color: rgba(255,255,255,0.7); border: 1px solid rgba(133,100,4,0.2); border-radius: 4px; padding: 12px; margin-bottom: 16px;">
+            <label style="display: block; font-size: 0.75em; font-weight: 600; color: #856404; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Descripción</label>
+            <div style="font-size: 0.9em; line-height: 1.5; color: #495057;">${intento.descripcion}</div>
+          </div>
+          ` : ''}
+
+          <!-- Botones de acción -->
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            ${intento.geolocalizacion ? `
+            <a href="https://www.google.com/maps?q=${intento.geolocalizacion.lat},${intento.geolocalizacion.lng}"
+               target="_blank" rel="noopener noreferrer"
+               class="px-3 py-1.5 text-sm border border-slate-300 dark:border-white/10 rounded-lg hover:bg-slate-50 dark:hover:bg-white/10"
+               style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                <circle cx="12" cy="10" r="3"></circle>
+              </svg>
+              Ver Ubicación
+            </a>
+            ` : ''}
+
+            ${intento.fotoS3Key ? `
+            <button onclick="handleVerFotoEvidencia('${envio._id}', '${intento.fotoS3Key}', 'intento')"
+                    class="px-3 py-1.5 text-sm bg-amber-500 hover:bg-amber-600 text-white rounded-lg"
+                    style="display: inline-flex; align-items: center; gap: 6px; border: none; cursor: pointer;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+              Ver Evidencia Fotográfica
+            </button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    });
+
+    html += '</div></div>';
+  }
+
+  // COMPROBANTE DE ENTREGA
+  if (confirmacion && confirmacion.confirmada) {
+    const fechaEntrega = confirmacion.fechaEntrega ? new Date(confirmacion.fechaEntrega) : null;
+    html += `
+      <div>
+        <!-- Header de sección -->
+        <div style="margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #28a745;">
+          <h5 style="margin: 0; color: #155724; font-weight: 600; font-size: 1.1em;">✅ Comprobante de Entrega</h5>
+          <small style="color: #6c757d;">
+            ${confirmacion.firmaS3Key ? 'Firmado digitalmente por el receptor' : 'Entrega confirmada'}
+          </small>
+        </div>
+
+        <!-- Card de confirmación -->
+        <div style="background-color: #d4edda; border: 1px solid #28a745; border-radius: 6px; padding: 20px;">
+          <!-- Grid de información -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 16px;">
+            <div>
+              <label style="display: block; font-size: 0.75em; font-weight: 600; color: #155724; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">👤 Receptor</label>
+              <div style="font-weight: 500; font-size: 0.95em;">${confirmacion.nombreReceptor || 'N/A'}</div>
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 0.75em; font-weight: 600; color: #155724; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">🆔 DNI</label>
+              <div style="font-weight: 500; font-size: 0.95em;">${confirmacion.dniReceptor || 'N/A'}</div>
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 0.75em; font-weight: 600; color: #155724; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">📋 Tipo de Receptor</label>
+              <div style="font-weight: 500; font-size: 0.95em;">
+                ${confirmacion.tipoReceptor === 'destinatario' ? '👤 Destinatario' :
+                  confirmacion.tipoReceptor === 'porteria' ? '🏢 Portería' :
+                  confirmacion.tipoReceptor === 'familiar' ? '👥 Familiar' :
+                  confirmacion.tipoReceptor === 'otro' ? '📝 Otro' : confirmacion.tipoReceptor}
+              </div>
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 0.75em; font-weight: 600; color: #155724; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">📅 Fecha y Hora</label>
+              <div style="font-weight: 500; font-size: 0.95em;">
+                ${fechaEntrega ? fechaEntrega.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+              </div>
+              <div style="font-size: 0.9em; color: #155724;">
+                ${confirmacion.horaEntrega || (fechaEntrega ? fechaEntrega.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs' : 'N/A')}
+              </div>
+            </div>
+          </div>
+
+          ${confirmacion.aclaracionReceptor ? `
+          <div style="background-color: rgba(255,255,255,0.7); border: 1px solid rgba(21,87,36,0.2); border-radius: 4px; padding: 12px; margin-bottom: 16px;">
+            <label style="display: block; font-size: 0.75em; font-weight: 600; color: #155724; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Aclaración</label>
+            <div style="font-size: 0.9em; line-height: 1.5; color: #495057;">${confirmacion.aclaracionReceptor}</div>
+          </div>
+          ` : ''}
+
+          ${envio.cobroEnDestino?.habilitado ? `
+          <div style="background-color: rgba(255,193,7,0.3); border: 1px solid #ffc107; border-radius: 4px; padding: 12px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <label style="display: block; font-size: 0.75em; font-weight: 600; color: #856404; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Cobro en Destino</label>
+                <div style="font-size: 1.1em; font-weight: 600;">
+                  $${envio.cobroEnDestino.monto?.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style="font-size: 0.85em; color: #856404; margin-top: 4px;">
+                  Método: ${envio.cobroEnDestino.metodoPago === 'efectivo' ? 'Efectivo' : 'Transferencia'}
+                </div>
+              </div>
+              <div>
+                <span style="padding: 6px 12px; border-radius: 4px; font-size: 0.85em; font-weight: 600; background-color: ${envio.cobroEnDestino.cobrado ? '#28a745' : '#ffc107'}; color: ${envio.cobroEnDestino.cobrado ? 'white' : '#856404'};">
+                  ${envio.cobroEnDestino.cobrado ? 'COBRADO' : 'PENDIENTE'}
+                </span>
+              </div>
+            </div>
+          </div>
+          ` : ''}
+
+          <!-- Botones de acción -->
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            ${confirmacion.geolocalizacion ? `
+            <a href="https://www.google.com/maps?q=${confirmacion.geolocalizacion.lat},${confirmacion.geolocalizacion.lng}"
+               target="_blank" rel="noopener noreferrer"
+               style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: white; border: 2px solid #28a745; color: #28a745; border-radius: 6px; font-weight: 600; text-decoration: none; font-size: 14px;">
+              🗺️ Ver Ubicación
+            </a>
+            ` : ''}
+
+            ${confirmacion.firmaS3Key ? `
+            <button onclick="handleVerFirmaDigital('${envio._id}', '${confirmacion.firmaS3Key}')"
+                    style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">
+              🖊️ Ver Firma Digital
+            </button>
+            ` : ''}
+
+            ${confirmacion.fotoDNIS3Key ? `
+            <button onclick="handleVerFotoDNI('${envio._id}', '${confirmacion.fotoDNIS3Key}')"
+                    style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;">
+              📷 Ver Foto DNI
+            </button>
+            ` : ''}
+          </div>
+
+          <!-- Nota legal -->
+          <div style="margin-top: 12px; padding: 8px; background-color: rgba(255,255,255,0.5); border-radius: 4px; font-size: 0.8em; color: #155724; text-align: center; font-style: italic;">
+            Comprobante con validez legal de entrega
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  cont.innerHTML = html;
+
+  // NUEVO: Agregar botones de carga manual al final si tiene permisos
+  if (PUEDE_SUBIR_EVIDENCIAS) {
+    const botonesManual = document.createElement('div');
+    botonesManual.className = 'mt-6 pt-6 border-t border-slate-200 dark:border-white/10';
+    botonesManual.innerHTML = `
+      <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">Cargar evidencias manualmente:</p>
+      <div class="flex flex-col sm:flex-row gap-3">
+        <button
+          onclick="abrirModalIntentoFallidoManual('${envio._id}')"
+          class="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-medium shadow-sm flex items-center gap-2 justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          Registrar Intento Fallido
+        </button>
+
+        <button
+          onclick="abrirModalEntregaManual('${envio._id}')"
+          class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-medium shadow-sm flex items-center gap-2 justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Confirmar Entrega
+        </button>
+      </div>
+    `;
+    cont.appendChild(botonesManual);
+  }
+}
+
+async function handleVerFotoEvidencia(envioId, fotoS3Key, tipo) {
+  const modal = document.getElementById('modalFotoEvidencia');
+  const titulo = document.getElementById('modalFotoTitulo');
+  const subtitulo = document.getElementById('modalFotoSubtitulo');
+  const loading = document.getElementById('modalFotoLoading');
+  const img = document.getElementById('modalFotoImg');
+  const footer = document.getElementById('modalFotoFooter');
+
+  // Configurar título
+  titulo.textContent = 'Evidencia Fotográfica';
+
+  // Obtener ID de venta del envío actual
+  try {
+    const res = await fetch(`/api/envios/${envioId}`, { cache: 'no-store' });
+    const envio = await res.json();
+    subtitulo.textContent = `ID: ${envio.id_venta || envio._id}`;
+  } catch (e) {
+    subtitulo.textContent = `ID: ${envioId}`;
+  }
+
+  // Mostrar modal con loading
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  loading.style.display = 'block';
+  img.style.display = 'none';
+  footer.style.display = 'none';
+
+  // Cargar imagen
+  try {
+    const response = await fetch(
+      `/api/envios/${envioId}/foto-evidencia?key=${encodeURIComponent(fotoS3Key)}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      img.src = data.url;
+      img.onload = () => {
+        loading.style.display = 'none';
+        img.style.display = 'block';
+      };
+    } else {
+      alert('No se pudo cargar la foto');
+      cerrarModalFotoEvidencia();
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Error al cargar la foto de evidencia');
+    cerrarModalFotoEvidencia();
+  }
+}
+
+async function handleVerFirmaDigital(envioId, firmaS3Key) {
+  const modal = document.getElementById('modalFotoEvidencia');
+  const titulo = document.getElementById('modalFotoTitulo');
+  const subtitulo = document.getElementById('modalFotoSubtitulo');
+  const loading = document.getElementById('modalFotoLoading');
+  const img = document.getElementById('modalFotoImg');
+  const footer = document.getElementById('modalFotoFooter');
+
+  // Configurar título
+  titulo.textContent = 'Firma Digital del Receptor';
+
+  // Obtener ID de venta del envío actual
+  try {
+    const res = await fetch(`/api/envios/${envioId}`, { cache: 'no-store' });
+    const envio = await res.json();
+    subtitulo.textContent = `ID: ${envio.id_venta || envio._id}`;
+  } catch (e) {
+    subtitulo.textContent = `ID: ${envioId}`;
+  }
+
+  // Mostrar modal con loading
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  loading.style.display = 'block';
+  img.style.display = 'none';
+  footer.style.display = 'block';
+
+  // Cargar imagen
+  try {
+    const response = await fetch(
+      `/api/envios/${envioId}/firma?key=${encodeURIComponent(firmaS3Key)}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      img.src = data.url;
+      img.onload = () => {
+        loading.style.display = 'none';
+        img.style.display = 'block';
+      };
+    } else {
+      alert('No se pudo cargar la firma');
+      cerrarModalFotoEvidencia();
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Error al cargar la firma digital');
+    cerrarModalFotoEvidencia();
+  }
+}
+
+async function handleVerFotoDNI(envioId, fotoDNIS3Key) {
+  const modal = document.getElementById('modalFotoEvidencia');
+  const titulo = document.getElementById('modalFotoTitulo');
+  const subtitulo = document.getElementById('modalFotoSubtitulo');
+  const loading = document.getElementById('modalFotoLoading');
+  const img = document.getElementById('modalFotoImg');
+  const footer = document.getElementById('modalFotoFooter');
+
+  // Configurar título
+  titulo.textContent = 'Foto del DNI del Receptor';
+
+  // Obtener ID de venta del envío actual
+  try {
+    const res = await fetch(`/api/envios/${envioId}`, { cache: 'no-store' });
+    const envio = await res.json();
+    subtitulo.textContent = `ID: ${envio.id_venta || envio._id}`;
+  } catch (e) {
+    subtitulo.textContent = `ID: ${envioId}`;
+  }
+
+  // Mostrar modal con loading
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  loading.style.display = 'block';
+  img.style.display = 'none';
+  footer.style.display = 'block';
+
+  // Cargar imagen
+  try {
+    const response = await fetch(
+      `/api/envios/${envioId}/foto-dni?key=${encodeURIComponent(fotoDNIS3Key)}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      img.src = data.url;
+      img.onload = () => {
+        loading.style.display = 'none';
+        img.style.display = 'block';
+      };
+    } else {
+      alert('No se pudo cargar la foto del DNI');
+      cerrarModalFotoEvidencia();
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Error al cargar la foto del DNI');
+    cerrarModalFotoEvidencia();
+  }
+}
+
+function cerrarModalFotoEvidencia() {
+  const modal = document.getElementById('modalFotoEvidencia');
+  const img = document.getElementById('modalFotoImg');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  img.src = '';
+}
+
+window.handleVerFotoEvidencia = handleVerFotoEvidencia;
+window.handleVerFirmaDigital = handleVerFirmaDigital;
+window.cerrarModalFotoEvidencia = cerrarModalFotoEvidencia;
 
 // ========== CAMBIO DE ESTADO MANUAL ==========
 
@@ -1119,7 +2019,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     window._filtroIncidencias = true;
   }
 
-  ['filtroCliente','filtroTracking','filtroIdVenta','filtroDesde','filtroHasta'].forEach(id=>{
+  ['filtroCliente','filtroTracking','filtroIdVenta','filtroDireccion','filtroDesde','filtroHasta'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.addEventListener('keydown',e=>{ if(e.key==='Enter') aplicarFiltro(); });
   });
   document.getElementById('modalDetalle').addEventListener('click',(e)=>{ if(e.target===e.currentTarget) cerrarModalDetalle(); });
@@ -1212,6 +2112,157 @@ function filtrarPorIncidencias() {
 
 window.filtrarPorEstado = filtrarPorEstado;
 window.filtrarPorIncidencias = filtrarPorIncidencias;
+
+// ===== MODAL REPORTES =====
+function abrirModalReportes() {
+  const modal = document.getElementById('modal-reportes');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  // Cargar clientes en el select
+  cargarClientesReportes();
+
+  // Setear fechas por defecto (última semana)
+  const hoy = new Date();
+  const hace7dias = new Date(hoy);
+  hace7dias.setDate(hoy.getDate() - 7);
+
+  document.getElementById('reporteDesde').valueAsDate = hace7dias;
+  document.getElementById('reporteHasta').valueAsDate = hoy;
+}
+
+function cerrarModalReportes() {
+  const modal = document.getElementById('modal-reportes');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+async function cargarClientesReportes() {
+  try {
+    const res = await fetch('/clientes');
+    const clientes = await res.json();
+
+    const select = document.getElementById('reporteClientes');
+    select.innerHTML = '<option value="">Todos</option>';
+
+    clientes.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c._id;
+      opt.textContent = c.nombre;
+      select.appendChild(opt);
+    });
+  } catch (err) {
+    console.error('Error cargando clientes:', err);
+  }
+}
+
+async function generarReportePreset(tipo) {
+  let estados = [];
+  let diasAtras = 7;
+
+  switch(tipo) {
+    case 'incidencias':
+      estados = ['comprador_ausente', 'inaccesible', 'demorado', 'reprogramado'];
+      break;
+    case 'pendientes':
+      estados = ['pendiente'];
+      diasAtras = 3;
+      break;
+    case 'en_planta':
+      estados = ['en_planta'];
+      diasAtras = 3;
+      break;
+  }
+
+  const hasta = new Date();
+  const desde = new Date(hasta);
+  desde.setDate(hasta.getDate() - diasAtras);
+
+  await generarReporte({
+    clientes: '',
+    estados: estados.join(','),
+    desde: desde.toISOString().split('T')[0],
+    hasta: hasta.toISOString().split('T')[0],
+    formato: 'xls'
+  });
+}
+
+async function generarReportePersonalizado(formato) {
+  // Obtener clientes seleccionados
+  const selectClientes = document.getElementById('reporteClientes');
+  const clientesSeleccionados = Array.from(selectClientes.selectedOptions)
+    .map(o => o.value)
+    .filter(v => v !== '');
+
+  // Obtener estados seleccionados
+  const estadosCheckboxes = document.querySelectorAll('input[name="reporte-estado"]:checked');
+  const estadosSeleccionados = Array.from(estadosCheckboxes).map(cb => cb.value);
+
+  // Obtener fechas
+  const desde = document.getElementById('reporteDesde').value;
+  const hasta = document.getElementById('reporteHasta').value;
+
+  // Validaciones
+  if (!desde || !hasta) {
+    alert('Por favor seleccioná un rango de fechas');
+    return;
+  }
+
+  if (estadosSeleccionados.length === 0) {
+    alert('Por favor seleccioná al menos un estado');
+    return;
+  }
+
+  await generarReporte({
+    clientes: clientesSeleccionados.join(',') || 'all',
+    estados: estadosSeleccionados.join(','),
+    desde,
+    hasta,
+    formato,
+    incluirHistorial: document.getElementById('incluirHistorial').checked,
+    incluirIntentos: document.getElementById('incluirIntentos').checked,
+    incluirCoordenadas: document.getElementById('incluirCoordenadas').checked
+  });
+}
+
+async function generarReporte(params) {
+  try {
+    // Construir URL del endpoint
+    const url = `/api/reportes/generar?${new URLSearchParams(params).toString()}`;
+
+    if (params.formato === 'preview') {
+      // Abrir vista previa en la misma página
+      const res = await fetch(url);
+      const data = await res.json();
+      mostrarVistaPrevia(data);
+    } else {
+      // Descargar archivo
+      window.open(url, '_blank');
+      cerrarModalReportes();
+    }
+  } catch (err) {
+    console.error('Error generando reporte:', err);
+    alert('No se pudo generar el reporte');
+  }
+}
+
+function mostrarVistaPrevia(data) {
+  // TODO: Implementar vista previa en tabla
+  console.log('Vista previa:', data);
+  alert(`Reporte generado: ${data.items?.length || 0} envíos encontrados`);
+}
+
+// Cerrar modal al hacer click fuera
+document.getElementById('modal-reportes')?.addEventListener('click', (e) => {
+  if (e.target.id === 'modal-reportes') {
+    cerrarModalReportes();
+  }
+});
+
+window.abrirModalReportes = abrirModalReportes;
+window.cerrarModalReportes = cerrarModalReportes;
+window.generarReportePreset = generarReportePreset;
+window.generarReportePersonalizado = generarReportePersonalizado;
 </script>
 <!-- ================== FIN DE TU SCRIPT ================== -->
 
