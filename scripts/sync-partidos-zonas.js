@@ -2,19 +2,19 @@
 const mongoose = require('mongoose');
 
 // Connection strings desde variables de entorno
-const PROD_URI = process.env.PROD_MONGODB_URI;
-const STAGING_URI = process.env.MONGODB_URI;
+const PROD_URI = process.env.PROD_MONGO_URI;
+const STAGING_URI = process.env.MONGO_URI;
 
 async function syncCollections() {
   // Validar que existan las variables de entorno
   if (!PROD_URI) {
-    console.error('❌ Error: PROD_MONGODB_URI no está configurada');
+    console.error('❌ Error: PROD_MONGO_URI no está configurada');
     console.log('💡 Agregar en Render → Environment: PROD_MONGODB_URI=mongodb+srv://...');
     process.exit(1);
   }
   
   if (!STAGING_URI) {
-    console.error('❌ Error: MONGODB_URI no está configurada');
+    console.error('❌ Error: MONGO_URI no está configurada');
     process.exit(1);
   }
 
