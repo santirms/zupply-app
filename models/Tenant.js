@@ -13,7 +13,7 @@ const tenantSchema = new mongoose.Schema({
     unique: true,
     lowercase: true,
     trim: true,
-    match: /^[a-z0-9-]+$/  // Solo letras minúsculas, números y guiones
+    match: /^[a-z0-9-]+$/
   },
   customDomain: {
     type: String,
@@ -59,7 +59,6 @@ const tenantSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-// Índices para performance
 tenantSchema.index({ subdomain: 1 }, { unique: true });
 tenantSchema.index({ isActive: 1 });
 
