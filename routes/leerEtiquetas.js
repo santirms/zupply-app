@@ -39,7 +39,12 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
     for (let i = 0; i < etiquetasValidas.length; i++) {
       const bloque = etiquetasValidas[i];
       console.log(`\n--- Procesando etiqueta ${i + 1}/${etiquetasValidas.length} ---`);
-
+   if (i === etiquetasValidas.length - 1) {
+    console.log('📝 ÚLTIMA ETIQUETA - Texto completo:');
+    console.log('─'.repeat(80));
+    console.log(bloque);
+    console.log('─'.repeat(80));
+  }
       try {
         const tracking =
           extraer(bloque, /Tracking:\s*([^\n\r]+)/i) ||
