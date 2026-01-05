@@ -38,7 +38,19 @@ console.log(`📦 ${bloques.length} etiquetas detectadas`);
       console.log('❌ Error: No se recibieron etiquetas');
       return res.status(400).json({ error: 'No se recibieron etiquetas.' });
     }
-
+    
+for (let i = 0; i < etiquetasValidas.length; i++) {
+  const bloque = etiquetasValidas[i];
+  console.log(`\n--- Procesando etiqueta ${i + 1}/${etiquetasValidas.length} ---`);
+  
+  // ===== AGREGAR ESTAS LÍNEAS AQUÍ =====
+  if (i === etiquetasValidas.length - 1) {
+    console.log('📝 ÚLTIMA ETIQUETA - Texto completo:');
+    console.log('─'.repeat(80));
+    console.log(bloque);
+    console.log('─'.repeat(80));
+  }
+  
     const now = new Date();
 
     const docsPrep = await Promise.all(etiquetas.map(async et => {
