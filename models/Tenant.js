@@ -4,14 +4,16 @@ const mongoose = require('mongoose');
 const tenantSchema = new mongoose.Schema({
   companyName: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
   subdomain: {
     type: String,
     required: true,
     unique: true,
     lowercase: true,
-    trim: true
+    trim: true,
+    match: /^[a-z0-9-]+$/  // Solo letras minúsculas, números y guiones
   },
   customDomain: {
     type: String,
@@ -22,18 +24,10 @@ const tenantSchema = new mongoose.Schema({
     default: true
   },
   mlIntegration: {
-    userId: {
-      type: String
-    },
-    accessToken: {
-      type: String
-    },
-    refreshToken: {
-      type: String
-    },
-    connectedAt: {
-      type: Date
-    }
+    userId: String,
+    accessToken: String,
+    refreshToken: String,
+    connectedAt: Date
   },
   plan: {
     type: String,
@@ -49,9 +43,7 @@ const tenantSchema = new mongoose.Schema({
       type: String,
       default: '#FF6B35'
     },
-    logo: {
-      type: String
-    },
+    logo: String,
     companyInfo: {
       email: {
         type: String,
@@ -62,15 +54,13 @@ const tenantSchema = new mongoose.Schema({
         type: String,
         trim: true
       },
-      address: {
-        type: String
-      }
+      address: String
     }
   }
 }, { timestamps: true });
 
-// Índice único en subdomain (ya definido con unique: true en el campo)
-// Índice en isActive para queries rápidas
+// Índices para performance
+tenantSchema.index({ subdomain: 1 }, { unique: true });
 tenantSchema.index({ isActive: 1 });
 
 module.exports = mongoose.model('Tenant', tenantSchema);
