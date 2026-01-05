@@ -2,7 +2,7 @@
 const mongoose = require('mongoose');
 
 const tenantSchema = new mongoose.Schema({
-  nombre: {
+  companyName: {
     type: String,
     required: true,
     trim: true
@@ -11,28 +11,55 @@ const tenantSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    trim: true,
     lowercase: true,
-    index: true
+    trim: true,
+    match: /^[a-z0-9-]+$/
+  },
+  customDomain: {
+    type: String,
+    trim: true
   },
   isActive: {
     type: Boolean,
-    default: true,
-    index: true
+    default: true
   },
-  cliente_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Cliente'
+  mlIntegration: {
+    userId: String,
+    accessToken: String,
+    refreshToken: String,
+    connectedAt: Date
   },
-  configuracion: {
-    zona_horaria: {
+  plan: {
+    type: String,
+    enum: ['basic', 'pro', 'enterprise'],
+    default: 'basic'
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  settings: {
+    brandColor: {
       type: String,
-      default: 'America/Argentina/Buenos_Aires'
+      default: '#FF6B35'
+    },
+    logo: String,
+    companyInfo: {
+      email: {
+        type: String,
+        trim: true,
+        lowercase: true
+      },
+      phone: {
+        type: String,
+        trim: true
+      },
+      address: String
     }
   }
 }, { timestamps: true });
 
-// Índice compuesto para búsquedas rápidas por subdomain activo
-tenantSchema.index({ subdomain: 1, isActive: 1 });
+tenantSchema.index({ subdomain: 1 }, { unique: true });
+tenantSchema.index({ isActive: 1 });
 
-module.exports = mongoose.models.Tenant || mongoose.model('Tenant', tenantSchema);
+module.exports = mongoose.model('Tenant', tenantSchema);
