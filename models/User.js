@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../middlewares/tenantPlugin');
 
 const UserSchema = new mongoose.Schema({
   tenantId: { type: String, required: true, index: true }, // Multi-tenancy support
@@ -14,7 +15,10 @@ const UserSchema = new mongoose.Schema({
   must_change_password: { type: Boolean, default: false }, // para forzar cambio en primer login
   last_login: { type: Date }
 }, { timestamps: true });
- 
+
+// Aplicar plugin de multi-tenant
+UserSchema.plugin(tenantPlugin);
+
 // índices (parciales, sin $nin/$ne)
 // Email único por tenant
 UserSchema.index(
@@ -31,6 +35,9 @@ UserSchema.index(
   { driver_id: 1 },
   { unique: true, partialFilterExpression: { driver_id: { $exists: true } } }
 );
+
+// Índice compuesto único para tenantId + email (multi-tenant)
+UserSchema.index({ tenantId: 1, email: 1 }, { unique: true });
 
 UserSchema.pre('validate', function(next) {
   if (this.email === ''  || this.email == null)   this.email = undefined;
