@@ -968,8 +968,8 @@ class ConfirmarEntregaModal {
           <div class="relative border-2 border-slate-300 rounded-lg overflow-hidden bg-slate-50">
             <canvas
               id="signatureCanvas"
-              class="w-full touch-none"
-              style="height: 250px;"
+              class="w-full"
+              style="height: 250px; cursor: crosshair;"
             ></canvas>
             <div id="signaturePlaceholder" class="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-400 text-sm">
               Firme aquí con su dedo o mouse
@@ -988,6 +988,16 @@ class ConfirmarEntregaModal {
             ← Atrás
           </button>
           <div class="flex gap-2">
+            ${!this.isMobile ? `
+              <button
+                id="btnOmitirFirma"
+                type="button"
+                class="px-4 py-2 border border-amber-500 text-amber-600 rounded-lg font-medium hover:bg-amber-50"
+                title="Guardar sin firma (solo desde PC)"
+              >
+                Omitir Firma
+              </button>
+            ` : ''}
             <button
               id="btnLimpiarFirma"
               type="button"
@@ -1031,6 +1041,16 @@ class ConfirmarEntregaModal {
     document.getElementById('btnGuardar').addEventListener('click', () => {
       this.handleGuardarConFirma();
     });
+
+    // Botón omitir firma (solo en PC)
+    const btnOmitir = document.getElementById('btnOmitirFirma');
+    if (btnOmitir) {
+      btnOmitir.addEventListener('click', () => {
+        if (confirm('¿Confirmar entrega sin firma digital?')) {
+          this.handleGuardarSinFirma();
+        }
+      });
+    }
   }
 
   /**
@@ -1058,6 +1078,47 @@ class ConfirmarEntregaModal {
       minWidth: 1,
       maxWidth: 3
     });
+
+    // ===== AGREGAR SOPORTE DE MOUSE =====
+    let isDrawing = false;
+
+    canvas.addEventListener('mousedown', (e) => {
+      isDrawing = true;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      this.signaturePad._strokeBegin({
+        clientX: e.clientX,
+        clientY: e.clientY,
+        preventDefault: () => {}
+      });
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!isDrawing) return;
+
+      this.signaturePad._strokeUpdate({
+        clientX: e.clientX,
+        clientY: e.clientY,
+        preventDefault: () => {}
+      });
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      if (isDrawing) {
+        this.signaturePad._strokeEnd({});
+        isDrawing = false;
+      }
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      if (isDrawing) {
+        this.signaturePad._strokeEnd({});
+        isDrawing = false;
+      }
+    });
+    // ===== FIN SOPORTE DE MOUSE =====
 
     // Ocultar placeholder cuando empiece a firmar
     this.signaturePad.addEventListener('beginStroke', () => {
