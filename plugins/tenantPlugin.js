@@ -1,50 +1,23 @@
-// plugins/tenantPlugin.js
 const mongoose = require('mongoose');
 
 /**
- * Plugin para multi-tenancy
- * Agrega el campo tenantId a todos los schemas y asegura
- * que las consultas estén limitadas al tenant correcto
- */
-module.exports = function tenantPlugin(schema, options) {
-  // Agregar campo tenantId al schema
-  schema.add({
-    tenantId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Cliente',
-      required: true,
-      index: true
-    }
-  });
-
-  // Agregar índice compuesto con createdAt si no existe
-  // (se puede sobrescribir en el modelo individual)
-  if (!options || !options.skipDefaultIndex) {
-    schema.index({ tenantId: 1, createdAt: -1 });
-  }
-};
  * Plugin de Mongoose para multi-tenancy
- *
- * Agrega funcionalidad de multi-tenancy a cualquier schema de Mongoose:
- * - Campo tenantId (ObjectId, required, indexed)
- * - Filtrado automático por tenantId en consultas
- * - Validación de tenantId antes de guardar
- *
- * @param {mongoose.Schema} schema - El schema de Mongoose a modificar
- * @param {Object} options - Opciones del plugin (opcional)
+ * Agrega el campo tenantId y filtrado automático
  */
 function tenantPlugin(schema, options = {}) {
-  // 1. Agregar campo tenantId al schema
-  schema.add({
-    tenantId: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true,
-      index: true,
-      ref: 'Tenant' // Opcional: referencia al modelo Tenant si existe
-    }
-  });
+  // Agregar campo tenantId solo si no existe
+  if (!schema.path('tenantId')) {
+    schema.add({
+      tenantId: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: true,
+        index: true,
+        ref: 'Tenant'
+      }
+    });
+  }
 
-  // 2. Hook pre('save') - Validar que tenantId existe antes de guardar
+  // Hook pre-save: validar tenantId
   schema.pre('save', function(next) {
     if (!this.tenantId) {
       const error = new Error('tenantId es requerido');
@@ -54,68 +27,28 @@ function tenantPlugin(schema, options = {}) {
     next();
   });
 
-  // 3. Hook pre('find') - Filtrar automáticamente por tenantId
-  schema.pre('find', function() {
-    // Solo aplicar el filtro si no se ha especificado explícitamente tenantId
-    // y si existe un tenantId en el contexto (por ejemplo, de un middleware)
-    if (this.getQuery().tenantId === undefined && this.options.tenantId) {
-      this.where({ tenantId: this.options.tenantId });
-    }
+  // Hooks de consulta: filtrar por tenantId si está en options
+  const queryHooks = [
+    'find',
+    'findOne', 
+    'findOneAndUpdate',
+    'findOneAndDelete',
+    'findOneAndRemove',
+    'updateOne',
+    'updateMany',
+    'deleteOne',
+    'deleteMany'
+  ];
+
+  queryHooks.forEach(hook => {
+    schema.pre(hook, function() {
+      if (this.getQuery().tenantId === undefined && this.options.tenantId) {
+        this.where({ tenantId: this.options.tenantId });
+      }
+    });
   });
 
-  // 4. Hook pre('findOne') - Filtrar automáticamente por tenantId
-  schema.pre('findOne', function() {
-    // Solo aplicar el filtro si no se ha especificado explícitamente tenantId
-    // y si existe un tenantId en el contexto (por ejemplo, de un middleware)
-    if (this.getQuery().tenantId === undefined && this.options.tenantId) {
-      this.where({ tenantId: this.options.tenantId });
-    }
-  });
-
-  // 5. Hooks adicionales para otras operaciones de consulta (opcional pero recomendado)
-  schema.pre('findOneAndUpdate', function() {
-    if (this.getQuery().tenantId === undefined && this.options.tenantId) {
-      this.where({ tenantId: this.options.tenantId });
-    }
-  });
-
-  schema.pre('findOneAndDelete', function() {
-    if (this.getQuery().tenantId === undefined && this.options.tenantId) {
-      this.where({ tenantId: this.options.tenantId });
-    }
-  });
-
-  schema.pre('findOneAndRemove', function() {
-    if (this.getQuery().tenantId === undefined && this.options.tenantId) {
-      this.where({ tenantId: this.options.tenantId });
-    }
-  });
-
-  schema.pre('updateOne', function() {
-    if (this.getQuery().tenantId === undefined && this.options.tenantId) {
-      this.where({ tenantId: this.options.tenantId });
-    }
-  });
-
-  schema.pre('updateMany', function() {
-    if (this.getQuery().tenantId === undefined && this.options.tenantId) {
-      this.where({ tenantId: this.options.tenantId });
-    }
-  });
-
-  schema.pre('deleteOne', function() {
-    if (this.getQuery().tenantId === undefined && this.options.tenantId) {
-      this.where({ tenantId: this.options.tenantId });
-    }
-  });
-
-  schema.pre('deleteMany', function() {
-    if (this.getQuery().tenantId === undefined && this.options.tenantId) {
-      this.where({ tenantId: this.options.tenantId });
-    }
-  });
-
-  // 6. Método estático para establecer el tenantId en el contexto de consulta
+  // Método estático para establecer tenantId en contexto
   schema.statics.forTenant = function(tenantId) {
     return this.setOptions({ tenantId });
   };
