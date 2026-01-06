@@ -12,24 +12,27 @@ const UserSchema = new mongoose.Schema({
   cliente_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente', default: null },
   is_active: { type: Boolean, default: true },
   must_change_password: { type: Boolean, default: false }, // para forzar cambio en primer login
-  last_login: { type: Date }
+  last_login: { type: Date },
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true }
 }, { timestamps: true });
+ 
+// índices (parciales, sin $nin/$ne) - únicos por tenant
 
 // Aplicar plugin de multi-tenant
 UserSchema.plugin(tenantPlugin);
 
 // índices (parciales, sin $nin/$ne)
 UserSchema.index(
-  { email: 1 },
+  { email: 1, tenantId: 1 },
   { unique: true, partialFilterExpression: { email: { $exists: true } } }
 );
 UserSchema.index(
-  { username: 1 },
+  { username: 1, tenantId: 1 },
   { unique: true, partialFilterExpression: { username: { $exists: true } } }
 );
-// opcional: 1 usuario por chofer
+// opcional: 1 usuario por chofer por tenant
 UserSchema.index(
-  { driver_id: 1 },
+  { driver_id: 1, tenantId: 1 },
   { unique: true, partialFilterExpression: { driver_id: { $exists: true } } }
 );
 
