@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
+  tenantId: { type: String, required: true, index: true }, // Multi-tenancy support
   email:   { type: String, trim: true, lowercase: true, unique: false }, // no obligatoria para chofer
   username:{ type: String, trim: true, lowercase: true, unique: false }, // login por nombre para chofer
   phone:   { type: String, trim: true },                                  // útil para chofer
@@ -15,12 +16,14 @@ const UserSchema = new mongoose.Schema({
 }, { timestamps: true });
  
 // índices (parciales, sin $nin/$ne)
+// Email único por tenant
 UserSchema.index(
-  { email: 1 },
+  { tenantId: 1, email: 1 },
   { unique: true, partialFilterExpression: { email: { $exists: true } } }
 );
+// Username único por tenant
 UserSchema.index(
-  { username: 1 },
+  { tenantId: 1, username: 1 },
   { unique: true, partialFilterExpression: { username: { $exists: true } } }
 );
 // opcional: 1 usuario por chofer
