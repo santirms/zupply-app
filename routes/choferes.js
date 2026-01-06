@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { requireAuth, requireRole } = require('../middlewares/auth');
-const identifyTenant = require('../middleware/identifyTenant');
+const identifyTenant = require('../middlewares/identifyTenant');
 const ctrl   = require('../controllers/choferController');
 
 router.use(requireAuth);
