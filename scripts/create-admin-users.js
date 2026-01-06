@@ -7,7 +7,7 @@ require('dotenv').config();
 
 async function createAdminUsers() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(process.env.MONGO_URI);
     console.log('✅ Conectado a MongoDB\n');
 
     // Tenant Demo
