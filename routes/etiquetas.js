@@ -2,52 +2,37 @@ const express = require('express');
 const router  = express.Router();
 const Envio   = require('../models/Envio');
 const Cliente = require('../models/Cliente');
-const Zona    = require('../models/Zona');
 
 const { requireAuth, requireRole } = require('../middlewares/auth');
-
-// Si tenés una utilidad para zona por CP, importala (ajusta el path):
 const { detectarZona } = require('../utils/detectarZona');
 const { geocodeDireccion } = require('../utils/geocode');
 
 router.use(requireAuth);
 
-// 🟢 ADMIN y COORDINADOR pueden subir etiquetas
+// POST /etiquetas/cargar-masivo
+// Recibe etiquetas parseadas desde el frontend (después de leer el PDF)
 router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, res) => {
   try {
-    console.log('📦 Carga masiva - Body recibido:', { 
+    console.log('📦 Carga masiva - Body recibido:', {
       tiene_etiquetas: !!req.body.etiquetas,
       tiene_envios: !!req.body.envios,
       cantidad: (req.body.etiquetas || req.body.envios || []).length
     });
-    const { text: textoCompleto, numpages } = data;
 
-console.log(`📄 PDF procesado: ${numpages} páginas, ${textoCompleto.length} caracteres`);
-
-// ===== AGREGAR ESTAS LÍNEAS AQUÍ =====
-console.log('📝 Texto extraído del PDF:');
-console.log('─'.repeat(80));
-console.log(textoCompleto);
-console.log('─'.repeat(80));
-// ===== FIN DE LAS LÍNEAS A AGREGAR =====
-
-const bloques = textoCompleto.split(/(?=Envio:)/);
-console.log(`📦 ${bloques.length} etiquetas detectadas`);
     const etiquetas = req.body.etiquetas || req.body.envios;
+
     if (!Array.isArray(etiquetas) || etiquetas.length === 0) {
       console.log('❌ Error: No se recibieron etiquetas');
       return res.status(400).json({ error: 'No se recibieron etiquetas.' });
     }
-    
-for (let i = 0; i < etiquetasValidas.length; i++) {
-  const bloque = etiquetasValidas[i];
-  console.log(`\n--- Procesando etiqueta ${i + 1}/${etiquetasValidas.length} ---`);
-  
+
     const now = new Date();
 
     const docsPrep = await Promise.all(etiquetas.map(async et => {
+      // Buscar cliente por sender_id
       const cl = await Cliente.findOne({ sender_id: et.sender_id });
 
+      // Calcular fecha de etiqueta
       let fechaEtiqueta = now;
       if (et.fecha) {
         const parsed = new Date(et.fecha);
@@ -68,9 +53,10 @@ for (let i = 0; i < etiquetasValidas.length; i++) {
       let partido = (et.partido || '').trim();
       let zona    = (et.zona    || '').trim();
 
+      // Detectar zona si no viene en la etiqueta
       if (!partido || !zona) {
         try {
-          const z = await detectarZona(cp); // { partido, zona }
+          const z = await detectarZona(cp);
           if (!partido) partido = z?.partido || '';
           if (!zona)    zona    = z?.zona    || '';
         } catch { /* noop */ }
@@ -86,33 +72,32 @@ for (let i = 0; i < etiquetasValidas.length; i++) {
             partido: partido
           });
           if (coordenadas) {
-            console.log(`✓ Geocodificado etiqueta: ${et.direccion}, ${partido} → ${coordenadas.lat}, ${coordenadas.lon}`);
+            console.log(`✓ Geocodificado: ${et.direccion}, ${partido} → ${coordenadas.lat}, ${coordenadas.lon}`);
           }
         } catch (geoError) {
-          console.warn('⚠️ Error geocodificando etiqueta:', geoError.message);
+          console.warn('⚠️ Error geocodificando:', geoError.message);
         }
       }
 
       return {
-        meli_id:       et.tracking_id      || '',
-        sender_id:     et.sender_id        || '',
-        cliente_id:    cl?._id             || null,
+        meli_id:       et.tracking_id || '',
+        sender_id:     et.sender_id   || '',
+        cliente_id:    cl?._id        || null,
         codigo_postal: cp,
         partido,
         zona,
-        destinatario:  et.destinatario     || '',
-        direccion:     et.direccion        || '',
-        referencia:    et.referencia       || '',
+        destinatario:  et.destinatario || '',
+        direccion:     et.direccion    || '',
+        referencia:    et.referencia   || '',
         fecha:         fechaEtiqueta,
         id_venta:      et.id_venta || et.order_id || et.tracking_id || '',
         precio:        0,
         estado:        'en_planta',
         requiere_sync_meli: false,
         origen:        'etiquetas',
-        source:        'pdf', // 👈 marca origen etiquetas
-        // Coordenadas para el mapa
-        latitud: coordenadas?.lat || null,
-        longitud: coordenadas?.lon || null,
+        source:        'pdf',
+        latitud:       coordenadas?.lat || null,
+        longitud:      coordenadas?.lon || null,
         destino: {
           partido: partido,
           cp: cp,
@@ -125,11 +110,20 @@ for (let i = 0; i < etiquetasValidas.length; i++) {
     }));
 
     const toInsert = docsPrep.filter(d => d.cliente_id);
+
     if (!toInsert.length) {
       return res.status(400).json({ error: 'Ninguna etiqueta tenía cliente válido.' });
     }
+
     const inserted = await Envio.insertMany(toInsert);
-    return res.json({ intentados: etiquetas.length, insertados: inserted.length });
+
+    console.log(`✅ Insertados ${inserted.length} envíos de ${etiquetas.length} etiquetas`);
+
+    return res.json({
+      intentados: etiquetas.length,
+      insertados: inserted.length
+    });
+
   } catch (err) {
     console.error('Error POST /etiquetas/cargar-masivo:', err);
     return res.status(500).json({ error: 'Error en carga masiva' });
