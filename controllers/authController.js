@@ -10,9 +10,13 @@ async function login(req, res, next) {
     const id = String(identifier).trim().toLowerCase();
     const isEmail = id.includes('@');
 
-    const query = isEmail
+    // Filtrar por tenant Y el identificador del usuario
+    const baseQuery = isEmail
       ? { email: id }
       : { $or: [ { username: id }, { phone: identifier }, { phone: identifier.replace(/\D/g,'') } ] };
+
+    // IMPORTANTE: agregar tenantId para asegurar que el usuario solo puede loguearse en SU tenant
+    const query = { ...baseQuery, tenantId: req.tenantId };
 
     // OJO: password_hash tiene select:false en el schema
     const user = await User.findOne(query)
@@ -26,6 +30,7 @@ async function login(req, res, next) {
 
     req.session.user = {
         _id: user._id,
+        tenantId: user.tenantId, // Multi-tenancy: guardar tenantId en sesión
         email: user.email,
         username: user.username,
         role: user.role,
@@ -53,9 +58,11 @@ async function me(req, res) {
   try {
     console.log('=== GET /api/auth/me ===');
     console.log('Usuario ID:', req.user._id);
+    console.log('TenantId:', req.user.tenantId);
 
     // Buscar usuario en DB para obtener información actualizada
-    const usuario = await User.findById(req.user._id)
+    // IMPORTANTE: Filtrar por _id Y tenantId para seguridad multi-tenant
+    const usuario = await User.findOne({ _id: req.user._id, tenantId: req.user.tenantId })
       .select('-password_hash')
       .lean();
 
