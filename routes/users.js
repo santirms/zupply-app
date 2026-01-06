@@ -2,6 +2,7 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const { requireAuth, requireRole } = require('../middlewares/auth');
+const identifyTenant = require('../middleware/identifyTenant');
 const ctrl = require('../controllers/usersController');
 const User = require('../models/User');
 const Chofer = require('../models/Chofer');
@@ -9,6 +10,9 @@ const slugify = require('../utils/slugify');
 
 // Todas las rutas de /api/users requieren estar logueado
 router.use(requireAuth);
+
+// Identificar tenant por subdomain
+router.use(identifyTenant);
 
 // ── ADMIN-ONLY ────────────────────────────────────────────────
 // Crear usuario cliente (fuerza role='cliente' en el controller)
@@ -22,9 +26,9 @@ router.patch('/:id', requireRole('admin'), ctrl.actualizar);
 
 // ── LECTURA ──────────────────────────────────────────────────
 // Listar: admin o coordinador (ajustá si querés que sea solo admin)
-router.get('/', requireRole('admin','coordinador'), async (_req, res) => {
+router.get('/', requireRole('admin','coordinador'), async (req, res) => {
   try {
-    const users = await User.find()
+    const users = await User.find({ tenantId: req.tenantId })
       .select('-password_hash')
       .populate('driver_id', 'nombre telefono activo')
       .sort({ createdAt: -1 });
@@ -80,7 +84,7 @@ router.put('/:id', requireAuth, requireRole('admin'), async (req, res) => {
     const { id } = req.params;
     const { username, email, role, activo, password, chofer_nombre, chofer_telefono } = req.body || {};
 
-    const userActual = await User.findById(id).populate('driver_id');
+    const userActual = await User.findOne({ _id: id, tenantId: req.tenantId }).populate('driver_id');
 
     if (!userActual) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -146,8 +150,8 @@ router.put('/:id', requireAuth, requireRole('admin'), async (req, res) => {
       }
     }
 
-    const user = await User.findByIdAndUpdate(
-      id,
+    const user = await User.findOneAndUpdate(
+      { _id: id, tenantId: req.tenantId },
       { $set: updateData },
       { new: true, runValidators: true }
     )
@@ -172,7 +176,7 @@ router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
 
     console.log(`🗑️ Intentando eliminar usuario: ${id}`);
 
-    const user = await User.findById(id);
+    const user = await User.findOne({ _id: id, tenantId: req.tenantId });
     if (!user) {
       console.warn(`❌ Usuario no encontrado: ${id}`);
       return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -181,7 +185,7 @@ router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
     console.log(`📋 Usuario encontrado: ${user.username || user.email} (${user.role})`);
 
     if (user.role === 'admin') {
-      const adminCount = await User.countDocuments({ role: 'admin', is_active: { $ne: false } });
+      const adminCount = await User.countDocuments({ role: 'admin', is_active: { $ne: false }, tenantId: req.tenantId });
       if (adminCount <= 1) {
         console.warn('❌ No se puede eliminar el último admin');
         return res.status(400).json({ error: 'No se puede eliminar el último administrador' });
@@ -198,7 +202,7 @@ router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
       }
     }
 
-    await User.findByIdAndDelete(id);
+    await User.findOneAndDelete({ _id: id, tenantId: req.tenantId });
     console.log(`✓ Usuario eliminado: ${user.username || user.email || id}`);
 
     res.json({
@@ -216,7 +220,7 @@ router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
 router.patch('/:id/toggle-activo', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const user = await User.findById(id);
+    const user = await User.findOne({ _id: id, tenantId: req.tenantId });
 
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado' });

@@ -51,9 +51,9 @@ const toPublicUser = (user = {}) => ({
 
 const isNonEmptyString = v => typeof v === 'string' && v.trim().length > 0;
 
-exports.listar = async (_req, res, next) => {
+exports.listar = async (req, res, next) => {
   try {
-    const users = await User.find()
+    const users = await User.find({ tenantId: req.tenantId })
       .select('-password_hash')
       .populate('driver_id', 'nombre telefono activo')
       .sort({ createdAt: -1 })
@@ -98,11 +98,11 @@ exports.crear = async (req, res, next) => {
       }
     }
 
-    // username único si viene
+    // username único dentro del tenant si viene
     if (username) {
       username = slugify(username);
       let u = username, i = 1;
-      while (await User.findOne({ username: u })) u = `${username}${++i}`;
+      while (await User.findOne({ username: u, tenantId: req.tenantId })) u = `${username}${++i}`;
       username = u;
     }
 
@@ -121,7 +121,8 @@ exports.crear = async (req, res, next) => {
       must_change_password: !password,
       // ⬇ guarda el scope del cliente
       sender_ids: role === 'cliente' ? sender_ids : undefined,
-      cliente_id: role === 'cliente' ? (cliente_id || null) : undefined
+      cliente_id: role === 'cliente' ? (cliente_id || null) : undefined,
+      tenantId: req.tenantId
     });
 
     res.status(201).json({
@@ -148,7 +149,7 @@ exports.actualizar = async (req, res, next) => {
       chofer_telefono
     } = req.body || {};
 
-    const userActual = await User.findById(req.params.id).populate('driver_id');
+    const userActual = await User.findOne({ _id: req.params.id, tenantId: req.tenantId }).populate('driver_id');
     if (!userActual) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
@@ -209,8 +210,11 @@ exports.actualizar = async (req, res, next) => {
       if (typeof sender_ids !== 'undefined') upd.sender_ids = uniq(merged);
     }
 
-    const updated = await User.findByIdAndUpdate(req.params.id, upd, { new: true })
-      .populate('driver_id', 'nombre telefono activo');
+    const updated = await User.findOneAndUpdate(
+      { _id: req.params.id, tenantId: req.tenantId },
+      upd,
+      { new: true }
+    ).populate('driver_id', 'nombre telefono activo');
     res.json({ ok: true, user: updated ? toPublicUser(updated) : null });
   } catch (e) { next(e); }
 };
@@ -225,19 +229,19 @@ exports.crearCliente = async (req, res, next) => {
 
 exports.eliminar = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await User.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
     if (user.role === 'admin') {
-      const adminCount = await User.countDocuments({ role: 'admin' });
+      const adminCount = await User.countDocuments({ role: 'admin', tenantId: req.tenantId });
       if (adminCount <= 1) {
         return res.status(400).json({ error: 'No se puede eliminar el último administrador' });
       }
     }
 
-    await User.findByIdAndDelete(req.params.id);
+    await User.findOneAndDelete({ _id: req.params.id, tenantId: req.tenantId });
     res.json({ ok: true });
   } catch (e) { next(e); }
 };
