@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../middlewares/tenantPlugin');
 
 const UserSchema = new mongoose.Schema({
+  tenantId: { type: String, required: true, index: true }, // Multi-tenancy support
   email:   { type: String, trim: true, lowercase: true, unique: false }, // no obligatoria para chofer
   username:{ type: String, trim: true, lowercase: true, unique: false }, // login por nombre para chofer
   phone:   { type: String, trim: true },                                  // útil para chofer
@@ -13,14 +15,19 @@ const UserSchema = new mongoose.Schema({
   must_change_password: { type: Boolean, default: false }, // para forzar cambio en primer login
   last_login: { type: Date }
 }, { timestamps: true });
- 
+
+// Aplicar plugin de multi-tenant
+UserSchema.plugin(tenantPlugin);
+
 // índices (parciales, sin $nin/$ne)
+// Email único por tenant
 UserSchema.index(
-  { email: 1 },
+  { tenantId: 1, email: 1 },
   { unique: true, partialFilterExpression: { email: { $exists: true } } }
 );
+// Username único por tenant
 UserSchema.index(
-  { username: 1 },
+  { tenantId: 1, username: 1 },
   { unique: true, partialFilterExpression: { username: { $exists: true } } }
 );
 // opcional: 1 usuario por chofer
@@ -28,6 +35,9 @@ UserSchema.index(
   { driver_id: 1 },
   { unique: true, partialFilterExpression: { driver_id: { $exists: true } } }
 );
+
+// Índice compuesto único para tenantId + email (multi-tenant)
+UserSchema.index({ tenantId: 1, email: 1 }, { unique: true });
 
 UserSchema.pre('validate', function(next) {
   if (this.email === ''  || this.email == null)   this.email = undefined;

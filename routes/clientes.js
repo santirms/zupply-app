@@ -5,14 +5,14 @@ const Cliente = require('../models/Cliente');
 
 // GET todos
 router.get('/', async (req, res) => {
-  const clientes = await Cliente.find().populate('lista_precios');
+  const clientes = await Cliente.find({ tenantId: req.user.tenantId }).populate('lista_precios');
   res.json(clientes);
 });
 
 // GET uno
 router.get('/:id', async (req, res) => {
   try {
-    const c = await Cliente.findById(req.params.id).populate('lista_precios');
+    const c = await Cliente.findOne({ _id: req.params.id, tenantId: req.user.tenantId }).populate('lista_precios');
     if (!c) return res.status(404).json({ error: 'No existe ese cliente' });
     res.json(c);
   } catch (e) {
@@ -24,8 +24,8 @@ router.get('/:id', async (req, res) => {
 router.patch('/:id/auto-ingesta', async (req, res) => {
   try {
     const { enabled } = req.body; // true/false
-    const upd = await Cliente.findByIdAndUpdate(
-      req.params.id,
+    const upd = await Cliente.findOneAndUpdate(
+      { _id: req.params.id, tenantId: req.user.tenantId },
       { auto_ingesta: !!enabled },
       { new: true }
     );
@@ -58,7 +58,8 @@ router.post('/', async (req, res) => {
       horario_de_corte: req.body.horario_de_corte,
       link_vinculacion: req.body.link_vinculacion,
       permisos:         req.body.permisos || {},
-      facturacion:      req.body.facturacion || {}
+      facturacion:      req.body.facturacion || {},
+      tenantId:         req.user.tenantId
     };
 
     const nuevo = new Cliente(datos);
@@ -94,11 +95,12 @@ router.put('/:id', async (req, res) => {
       facturacion:      req.body.facturacion || {}
     };
 
-    const upd = await Cliente.findByIdAndUpdate(
-      req.params.id,
+    const upd = await Cliente.findOneAndUpdate(
+      { _id: req.params.id, tenantId: req.user.tenantId },
       datos,
       { new: true, runValidators: true }
     );
+    if (!upd) return res.status(404).json({ error: 'Cliente no encontrado' });
     res.json(upd);
   } catch (err) {
     console.error('Error actualizando cliente:', err);
@@ -107,13 +109,19 @@ router.put('/:id', async (req, res) => {
 });
 
 // GET /api/clientes/:id/meli-link
-router.get('/:id/meli-link', (req, res) => {
+router.get('/:id/meli-link', async (req, res) => {
   try {
     const { id }        = req.params;
     const { sender_id } = req.query;
 
     if (!sender_id) {
       return res.status(400).json({ error: 'Falta sender_id' });
+    }
+
+    // Verificar que el cliente pertenece al tenant del usuario
+    const cliente = await Cliente.findOne({ _id: id, tenantId: req.user.tenantId });
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
     }
 
     const stateRaw  = `${id}|${sender_id}`;
