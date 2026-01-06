@@ -5,7 +5,7 @@ const Cliente = require('../models/Cliente');
 const Zona    = require('../models/Zona');
 
 const { requireAuth, requireRole } = require('../middlewares/auth');
-const identifyTenant = require('../middleware/identifyTenant');
+const identifyTenant = require('../middlewares/identifyTenant');
 
 // Si tenés una utilidad para zona por CP, importala (ajusta el path):
 const { detectarZona } = require('../utils/detectarZona');
