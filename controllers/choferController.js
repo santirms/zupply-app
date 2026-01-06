@@ -6,9 +6,12 @@ const Chofer = require('../models/Chofer');
 const User   = require('../models/User');
 
 /* ====== YA TENÍAS: listar choferes ====== */
-exports.listarChoferes = async (_req, res) => {
+exports.listarChoferes = async (req, res) => {
   try {
-    const filtro = { $or: [{ activo: { $exists: false } }, { activo: true }] };
+    const filtro = {
+      tenantId: req.tenantId,
+      $or: [{ activo: { $exists: false } }, { activo: true }]
+    };
     const choferes = await Chofer.find(filtro)
       .select('nombre username activo')
       .sort({ nombre: 1 })
@@ -29,7 +32,7 @@ exports.crearChofer = async (req, res) => {
     }
 
     // 1) Crear Chofer (en sesión)
-    const [{ _id: choferId }] = await Chofer.create([{ nombre, telefono }], { session });
+    const [{ _id: choferId }] = await Chofer.create([{ ...req.body, tenantId: req.tenantId }], { session });
 
     // 2) username único slugificado
     const base = slugify(nombre);
