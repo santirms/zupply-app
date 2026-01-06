@@ -24,10 +24,10 @@ async function createAdminUsers() {
         const hashedPassword = await bcrypt.hash('Demo123!', 10);
         await User.create({
           email: 'admin@demo.zupply.tech',
-          password: hashedPassword,
+          password_hash: hashedPassword,  // ✅
           role: 'admin',
           tenantId: demoTenant._id
-        });
+      });
         console.log('✅ Usuario admin DEMO creado');
         console.log('   Email: admin@demo.zupply.tech');
         console.log('   Password: Demo123!');
