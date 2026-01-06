@@ -51,7 +51,7 @@ async function createAdminUsers() {
         const hashedPassword = await bcrypt.hash('Test123!', 10);
         await User.create({
           email: 'admin@test.zupply.tech',
-          password: hashedPassword,
+          password_hash: hashedPassword,  // ✅
           role: 'admin',
           tenantId: testTenant._id
         });
