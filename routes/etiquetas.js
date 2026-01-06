@@ -38,7 +38,11 @@ console.log(`📦 ${bloques.length} etiquetas detectadas`);
       console.log('❌ Error: No se recibieron etiquetas');
       return res.status(400).json({ error: 'No se recibieron etiquetas.' });
     }
-
+    
+for (let i = 0; i < etiquetasValidas.length; i++) {
+  const bloque = etiquetasValidas[i];
+  console.log(`\n--- Procesando etiqueta ${i + 1}/${etiquetasValidas.length} ---`);
+  
     const now = new Date();
 
     const docsPrep = await Promise.all(etiquetas.map(async et => {
