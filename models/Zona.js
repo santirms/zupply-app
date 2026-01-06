@@ -3,7 +3,8 @@ const tenantPlugin = require('../plugins/tenantPlugin');
 
 const zonaSchema = new mongoose.Schema({
   nombre: { type: String, required: true },
-  partidos: [{ type: String, required: true }]
+  partidos: [{ type: String, required: true }],
+  tenantId: { type: String, required: true, index: true }
 });
 
 zonaSchema.plugin(tenantPlugin);
