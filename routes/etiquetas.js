@@ -5,44 +5,23 @@ const Cliente = require('../models/Cliente');
 const Zona    = require('../models/Zona');
 
 const { requireAuth, requireRole } = require('../middlewares/auth');
+const identifyTenant = require('../middleware/identifyTenant');
 
 // Si tenés una utilidad para zona por CP, importala (ajusta el path):
 const { detectarZona } = require('../utils/detectarZona');
 const { geocodeDireccion } = require('../utils/geocode');
 
 router.use(requireAuth);
+router.use(identifyTenant);
 
 // 🟢 ADMIN y COORDINADOR pueden subir etiquetas
 router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, res) => {
   try {
-    console.log('📦 Carga masiva - Body recibido:', { 
-      tiene_etiquetas: !!req.body.etiquetas,
-      tiene_envios: !!req.body.envios,
-      cantidad: (req.body.etiquetas || req.body.envios || []).length
-    });
-    const { text: textoCompleto, numpages } = data;
-
-console.log(`📄 PDF procesado: ${numpages} páginas, ${textoCompleto.length} caracteres`);
-
-// ===== AGREGAR ESTAS LÍNEAS AQUÍ =====
-console.log('📝 Texto extraído del PDF:');
-console.log('─'.repeat(80));
-console.log(textoCompleto);
-console.log('─'.repeat(80));
-// ===== FIN DE LAS LÍNEAS A AGREGAR =====
-
-const bloques = textoCompleto.split(/(?=Envio:)/);
-console.log(`📦 ${bloques.length} etiquetas detectadas`);
     const etiquetas = req.body.etiquetas || req.body.envios;
     if (!Array.isArray(etiquetas) || etiquetas.length === 0) {
-      console.log('❌ Error: No se recibieron etiquetas');
       return res.status(400).json({ error: 'No se recibieron etiquetas.' });
     }
-    
-for (let i = 0; i < etiquetasValidas.length; i++) {
-  const bloque = etiquetasValidas[i];
-  console.log(`\n--- Procesando etiqueta ${i + 1}/${etiquetasValidas.length} ---`);
-  
+
     const now = new Date();
 
     const docsPrep = await Promise.all(etiquetas.map(async et => {
@@ -120,7 +99,8 @@ for (let i = 0; i < etiquetasValidas.length; i++) {
             type: 'Point',
             coordinates: [coordenadas.lon, coordenadas.lat]
           } : null
-        }
+        },
+        tenantId: req.tenantId
       };
     }));
 
