@@ -47,8 +47,13 @@ const ctrl   = require('../controllers/envioController');
    onlyManualOrEtiqueta
  } = require('../middlewares/auth');
 
+const identifyTenant = require('../middleware/identifyTenant');
+
 // ⬇️ TODO EL PANEL GENERAL REQUIERE LOGIN
 router.use(requireAuth);
+
+// ⬇️ IDENTIFICAR TENANT
+router.use(identifyTenant);
 
 // ⬇️ COORDINADOR = SOLO LECTURA EN ESTE PANEL
 router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE'], {
@@ -315,6 +320,9 @@ router.get('/', async (req, res) => {
     const limit  = Math.min(parseInt(req.query.limit || '100', 10), 200);
     const filtro = buildFiltroList(req); // sigue armando condiciones por 'fecha', sender_id, estado, etc.
 
+    // Filtro por tenant
+    filtro.tenantId = req.tenantId;
+
     // ---- Filtro por NOMBRE de cliente (y sender_id textual) ----
     if (req.query.cliente) {
       const needle = String(req.query.cliente).trim();
@@ -322,7 +330,7 @@ router.get('/', async (req, res) => {
         const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const rx  = new RegExp(esc, 'i');
 
-        const clientes = await Cliente.find({ nombre: rx }).select('_id codigo_cliente sender_id').lean();
+        const clientes = await Cliente.find({ nombre: rx, tenantId: req.tenantId }).select('_id codigo_cliente sender_id').lean();
         const ids = clientes.map(c => c._id);
 
         const or = [{ sender_id: rx }];
@@ -448,7 +456,7 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
       return res.status(400).json({ error: 'No hay paquetes para guardar.' });
     }
     const clienteId = paquetes[0].clienteId || paquetes[0].cliente_id;
-    const cliente   = await Cliente.findById(clienteId);
+    const cliente   = await Cliente.findOne({ _id: clienteId, tenantId: req.tenantId });
     if (!cliente) {
       return res.status(400).json({ error: 'Cliente no encontrado.' });
     }
@@ -480,6 +488,7 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
       }
 
       return {
+        tenantId:      req.tenantId,
         cliente_id:    cliente._id,
         sender_id:     cliente.codigo_cliente,
         destinatario:  p.destinatario      || '',
@@ -541,7 +550,7 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
 
     const docsPrep = await Promise.all(etiquetas.map(async et => {
       // 1) Buscamos cliente
-      const cl = await Cliente.findOne({ sender_id: et.sender_id });
+      const cl = await Cliente.findOne({ sender_id: et.sender_id, tenantId: req.tenantId });
 
       // 2) Calculamos fecha combinando día/mes del PDF y año/hora actual (timezone Argentina)
       const now = getFechaArgentina();
@@ -592,6 +601,7 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
       }
 
       return {
+        tenantId:      req.tenantId,
         meli_id:       et.tracking_id      || '',
         sender_id:     et.sender_id        || '',
         cliente_id:    cl?._id             || null,
@@ -649,7 +659,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
 
     const results = [];
     for (const p of paquetes) {
-      const cl = await Cliente.findById(p.cliente_id).populate('lista_precios');
+      const cl = await Cliente.findOne({ _id: p.cliente_id, tenantId: req.tenantId }).populate('lista_precios');
       if (!cl) throw new Error('Cliente no encontrado');
 
       // Validar permisos de firma digital
@@ -698,6 +708,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
       const montoACobrar = cobraEnDestino ? (parseFloat(p.monto_a_cobrar) || 0) : 0;
 
       const envio = await Envio.create({
+        tenantId:      req.tenantId,
         cliente_id:    cl._id,
         sender_id:     cl.codigo_cliente,
         destinatario:  p.destinatario,
@@ -816,12 +827,13 @@ router.post('/etiquetas-lote', requireAuth, async (req, res) => {
 
       // Intentar buscar por _id de MongoDB primero
       if (mongoose.Types.ObjectId.isValid(envioId)) {
-        envio = await Envio.findById(envioId).populate('cliente_id');
+        envio = await Envio.findOne({ _id: envioId, tenantId: req.tenantId }).populate('cliente_id');
       }
 
       // Si no se encontró, buscar por tracking/id_venta
       if (!envio) {
         envio = await Envio.findOne({
+          tenantId: req.tenantId,
           $or: [
             { id_venta: envioId },
             { tracking: envioId },
@@ -873,7 +885,7 @@ async function generarEtiquetasTermicas(envios) {
   // Popular cliente_id para todas las etiquetas
   for (let i = 0; i < envios.length; i++) {
     if (envios[i].cliente_id && typeof envios[i].cliente_id === 'string') {
-      envios[i] = await Envio.findById(envios[i]._id)
+      envios[i] = await Envio.findOne({ _id: envios[i]._id, tenantId: envios[i].tenantId })
         .populate('cliente_id', 'nombre razon_social')
         .lean();
     }
@@ -903,7 +915,7 @@ async function generarEtiquetasA4(envios) {
   // Popular cliente_id para todas las etiquetas
   for (let i = 0; i < envios.length; i++) {
     if (envios[i].cliente_id && typeof envios[i].cliente_id === 'string') {
-      envios[i] = await Envio.findById(envios[i]._id)
+      envios[i] = await Envio.findOne({ _id: envios[i]._id, tenantId: envios[i].tenantId })
         .populate('cliente_id', 'nombre razon_social')
         .lean();
     }
@@ -993,12 +1005,13 @@ router.get('/etiquetas-zpl', requireAuth, async (req, res) => {
 
       // Intentar buscar por _id de MongoDB primero
       if (mongoose.Types.ObjectId.isValid(envioId)) {
-        envio = await Envio.findById(envioId);
+        envio = await Envio.findOne({ _id: envioId, tenantId: req.tenantId });
       }
 
       // Si no se encontró, buscar por tracking/id_venta
       if (!envio) {
         envio = await Envio.findOne({
+          tenantId: req.tenantId,
           $or: [
             { id_venta: envioId },
             { tracking: envioId },
@@ -1234,7 +1247,7 @@ router.post('/confirmar-entrega', requireAuth, upload.fields([
     }
 
     // Buscar el envío
-    const envio = await Envio.findById(envioId);
+    const envio = await Envio.findOne({ _id: envioId, tenantId: req.tenantId });
     if (!envio) {
       return res.status(404).json({ error: 'Envío no encontrado' });
     }
@@ -1410,7 +1423,7 @@ router.get('/:id/foto-evidencia', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Key de S3 es requerido' });
     }
 
-    const envio = await Envio.findById(id);
+    const envio = await Envio.findOne({ _id: id, tenantId: req.tenantId });
     if (!envio) {
       return res.status(404).json({ error: 'Envío no encontrado' });
     }
@@ -1462,7 +1475,7 @@ router.get('/:envioId/firma', requireAuth, async (req, res) => {
     // Si se proporciona una key en query, usarla directamente
     if (key) {
       // Buscar el envío
-      const envio = await Envio.findById(envioId);
+      const envio = await Envio.findOne({ _id: envioId, tenantId: req.tenantId });
       if (!envio) {
         return res.status(404).json({ error: 'Envío no encontrado' });
       }
@@ -1481,7 +1494,7 @@ router.get('/:envioId/firma', requireAuth, async (req, res) => {
 
     // Comportamiento original (sin key en query)
     // Buscar el envío
-    const envio = await Envio.findById(envioId);
+    const envio = await Envio.findOne({ _id: envioId, tenantId: req.tenantId });
     if (!envio) {
       return res.status(404).json({ error: 'Envío no encontrado' });
     }
@@ -1522,7 +1535,7 @@ router.get('/:id/foto-dni', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Key es requerido' });
     }
 
-    const envio = await Envio.findById(req.params.id);
+    const envio = await Envio.findOne({ _id: req.params.id, tenantId: req.tenantId });
 
     if (!envio) {
       return res.status(404).json({ error: 'Envío no encontrado' });
@@ -1573,7 +1586,7 @@ router.get('/del-dia', async (req, res) => {
       hasta = new Date(hoy13); hasta.setDate(hasta.getDate()+1);
     }
 
-    const enviosDelDia = await Envio.find({ fecha: { $gte: desde, $lt: hasta } });
+    const enviosDelDia = await Envio.find({ fecha: { $gte: desde, $lt: hasta }, tenantId: req.tenantId });
     res.json({ total: enviosDelDia.length, envios: enviosDelDia });
   } catch (err) {
     console.error('Error al obtener envíos del día:', err.message);
@@ -1624,8 +1637,8 @@ async function ensureCoords(envio) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return envio;
 
     // Actualizamos por _id y devolvemos el documento actualizado
-    const actualizado = await Envio.findByIdAndUpdate(
-      envio._id,
+    const actualizado = await Envio.findOneAndUpdate(
+      { _id: envio._id, tenantId: envio.tenantId },
       { $set: { latitud: lat, longitud: lon } },
       { new: true }
     );
@@ -1695,7 +1708,7 @@ router.get('/mis', requireAuth, requireRole('chofer'), async (req, res, next) =>
     const desde = req.query.desde || req.query.from || '';
     const hasta = req.query.hasta || req.query.to   || '';
 
-    const base = { $or: [{ chofer: choferId }, { chofer_id: choferId }] };
+    const base = { tenantId: req.tenantId, $or: [{ chofer: choferId }, { chofer_id: choferId }] };
 
     if (desde || hasta) {
       const start = desde ? new Date(desde) : null;
@@ -1742,15 +1755,15 @@ router.get('/:id', async (req, res) => {
       'id_venta', 'order_id', 'venta_id', 'meli_id', 'shipment_id'
     ];
     let query = isObjectId
-      ? { _id: rawId }
-      : { $or: altFields.map((field) => ({ [field]: rawId })) };
+      ? { _id: rawId, tenantId: req.tenantId }
+      : { tenantId: req.tenantId, $or: altFields.map((field) => ({ [field]: rawId })) };
 
     let envioDoc = await Envio.findOne(query)
       .populate('cliente_id', 'nombre email razon_social sender_id')
       .populate('chofer', 'nombre telefono');
 
     if (!envioDoc && isObjectId) {
-      query = { $or: altFields.map((field) => ({ [field]: rawId })) };
+      query = { tenantId: req.tenantId, $or: altFields.map((field) => ({ [field]: rawId })) };
       envioDoc = await Envio.findOne(query)
         .populate('cliente_id', 'nombre email razon_social sender_id')
         .populate('chofer', 'nombre telefono');
@@ -1806,7 +1819,7 @@ router.get('/:id', async (req, res) => {
 // PATCH /envios/:id/geocode  (forzar desde el front)
 router.patch('/:id/geocode', async (req, res) => {
   try {
-    const envio = await Envio.findById(req.params.id);
+    const envio = await Envio.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
     await ensureCoords(envio);
     if (!envio.latitud || !envio.longitud) {
@@ -1869,7 +1882,7 @@ router.patch('/:id/asignar', async (req, res) => {
       update.$set.chofer = choferPayload;
     }
 
-    const envio = await Envio.findByIdAndUpdate(id, update, { new: true });
+    const envio = await Envio.findOneAndUpdate({ _id: id, tenantId: req.tenantId }, update, { new: true });
     if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
 
     res.json({ ok: true, envio });
@@ -1886,10 +1899,13 @@ router.patch('/:id/entregar',
   async (req,res,next)=>{
     try {
       const fechaArg = getFechaArgentina();
-      await Envio.findByIdAndUpdate(req.params.id, {
-        $set: { estado:'entregado', deliveredAt: fechaArg },
-        $push: { historial: { at: fechaArg, estado:'entregado', source:'chofer:panel' } }
-      });
+      await Envio.findOneAndUpdate(
+        { _id: req.params.id, tenantId: req.tenantId },
+        {
+          $set: { estado:'entregado', deliveredAt: fechaArg },
+          $push: { historial: { at: fechaArg, estado:'entregado', source:'chofer:panel' } }
+        }
+      );
       res.json({ ok:true });
     } catch(e){ next(e); }
   }
@@ -1902,9 +1918,12 @@ router.post('/:id/nota',
     try {
       const note = String(req.body.note||'').trim();
       if (!note) return res.status(400).json({ error:'Nota vacía' });
-      await Envio.findByIdAndUpdate(req.params.id, {
-        $push: { historial: { at: getFechaArgentina(), estado:'nota', source:'chofer:panel', note } }
-      });
+      await Envio.findOneAndUpdate(
+        { _id: req.params.id, tenantId: req.tenantId },
+        {
+          $push: { historial: { at: getFechaArgentina(), estado:'nota', source:'chofer:panel', note } }
+        }
+      );
       res.json({ ok:true });
     } catch(e){ next(e); }
   }
@@ -1914,7 +1933,7 @@ router.post('/:id/nota',
 router.delete('/:id', async (req, res) => {
   try {
     const id = req.params.id;
-    const deleted = await Envio.findByIdAndDelete(id);
+    const deleted = await Envio.findOneAndDelete({ _id: id, tenantId: req.tenantId });
     if (!deleted) return res.status(404).json({ error: 'Envío no encontrado' });
     return res.json({ ok: true, id });
   } catch (err) {
@@ -1936,7 +1955,7 @@ router.patch('/:id/cambiar-estado', requireAuth, requireRole('admin','coordinado
     const { nuevo_estado, nota } = req.body;
 
     // Buscar envío
-    const envio = await Envio.findById(id);
+    const envio = await Envio.findOne({ _id: id, tenantId: req.tenantId });
     if (!envio) {
       return res.status(404).json({ error: 'Envío no encontrado' });
     }
@@ -2039,7 +2058,7 @@ router.post('/registrar-intento-fallido', requireAuth, upload.single('fotoEviden
     }
 
     // Buscar envío
-    const envio = await Envio.findById(envioId);
+    const envio = await Envio.findOne({ _id: envioId, tenantId: req.tenantId });
     if (!envio) {
       return res.status(404).json({ error: 'Envío no encontrado' });
     }
