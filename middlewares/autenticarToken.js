@@ -12,6 +12,7 @@ function autenticarToken(req, res, next) {
   // Establecer req.user para compatibilidad
   req.user = {
     _id: u._id,
+    tenantId: u.tenantId, // Multi-tenancy support
     email: u.email,
     username: u.username,
     role: u.role,
