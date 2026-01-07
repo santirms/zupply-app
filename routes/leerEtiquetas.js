@@ -99,7 +99,7 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
           tracking_id: tracking,
           sender_id: extraer(bloque, /Sender ID:\s*(\d+)/i) || 
            extraer(bloque, /#(\d+)/)
-           senderIdGlobal, 
+           senderIdGlobal,
           fecha: extraer(bloque, /Entrega:\s*([^\n\r]+)/i),
           codigo_postal,
           partido,
