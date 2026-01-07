@@ -2,17 +2,21 @@
 const express = require('express');
 const router  = express.Router();
 const Cliente = require('../models/Cliente');
+const identifyTenant = require('../middlewares/identifyTenant');
+
+// Aplicar middleware a todas las rutas
+router.use(identifyTenant);
 
 // GET todos
 router.get('/', async (req, res) => {
-  const clientes = await Cliente.find({ tenantId: req.user.tenantId }).populate('lista_precios');
+  const clientes = await Cliente.find({ tenantId: req.tenantId }).populate('lista_precios');
   res.json(clientes);
 });
 
 // GET uno
 router.get('/:id', async (req, res) => {
   try {
-    const c = await Cliente.findOne({ _id: req.params.id, tenantId: req.user.tenantId }).populate('lista_precios');
+    const c = await Cliente.findOne({ _id: req.params.id, tenantId: req.tenantId }).populate('lista_precios');
     if (!c) return res.status(404).json({ error: 'No existe ese cliente' });
     res.json(c);
   } catch (e) {
@@ -23,9 +27,9 @@ router.get('/:id', async (req, res) => {
 // PATCH /api/clientes/:id/auto-ingesta
 router.patch('/:id/auto-ingesta', async (req, res) => {
   try {
-    const { enabled } = req.body; // true/false
+    const { enabled } = req.body;
     const upd = await Cliente.findOneAndUpdate(
-      { _id: req.params.id, tenantId: req.user.tenantId },
+      { _id: req.params.id, tenantId: req.tenantId },
       { auto_ingesta: !!enabled },
       { new: true }
     );
@@ -37,12 +41,9 @@ router.patch('/:id/auto-ingesta', async (req, res) => {
   }
 });
 
-
-// Crear
-// routes/clientes.js
+// POST crear cliente
 router.post('/', async (req, res) => {
   try {
-    // 1) limpiar sender_id
     const sids = Array.isArray(req.body.sender_id)
       ? req.body.sender_id.filter(v => !!v)
       : [];
@@ -59,7 +60,7 @@ router.post('/', async (req, res) => {
       link_vinculacion: req.body.link_vinculacion,
       permisos:         req.body.permisos || {},
       facturacion:      req.body.facturacion || {},
-      tenantId:         req.user.tenantId
+      tenantId:         req.tenantId
     };
 
     const nuevo = new Cliente(datos);
@@ -75,6 +76,7 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PUT actualizar cliente
 router.put('/:id', async (req, res) => {
   try {
     const sids = Array.isArray(req.body.sender_id)
@@ -96,7 +98,7 @@ router.put('/:id', async (req, res) => {
     };
 
     const upd = await Cliente.findOneAndUpdate(
-      { _id: req.params.id, tenantId: req.user.tenantId },
+      { _id: req.params.id, tenantId: req.tenantId },
       datos,
       { new: true, runValidators: true }
     );
@@ -108,7 +110,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// GET /api/clientes/:id/meli-link
+// GET meli-link
 router.get('/:id/meli-link', async (req, res) => {
   try {
     const { id }        = req.params;
@@ -118,8 +120,7 @@ router.get('/:id/meli-link', async (req, res) => {
       return res.status(400).json({ error: 'Falta sender_id' });
     }
 
-    // Verificar que el cliente pertenece al tenant del usuario
-    const cliente = await Cliente.findOne({ _id: id, tenantId: req.user.tenantId });
+    const cliente = await Cliente.findOne({ _id: id, tenantId: req.tenantId });
     if (!cliente) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
@@ -128,7 +129,6 @@ router.get('/:id/meli-link', async (req, res) => {
     const state     = encodeURIComponent(stateRaw);
     const redirect  = process.env.MERCADOLIBRE_REDIRECT_URI;
 
-    // DEBUG rápido (podés quitarlo luego)
     console.log('ML LINK -> redirect_uri:', redirect);
     console.log('ML LINK -> state:', stateRaw);
 
@@ -136,7 +136,6 @@ router.get('/:id/meli-link', async (req, res) => {
       return res.status(500).json({ error: 'MERCADOLIBRE_REDIRECT_URI no seteado' });
     }
 
-    // Usa el host global
     const url =
       `https://auth.mercadolibre.com/authorization` +
       `?response_type=code` +
@@ -152,4 +151,3 @@ router.get('/:id/meli-link', async (req, res) => {
 });
 
 module.exports = router;
-
