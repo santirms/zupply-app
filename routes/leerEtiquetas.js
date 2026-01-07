@@ -21,6 +21,10 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
 
     console.log(`📄 PDF procesado: ${numpages} páginas, ${textoCompleto.length} caracteres`);
 
+    // Extraer sender_id global del header (aparece al inicio)
+    const senderIdGlobal = textoCompleto.match(/#(\d+)/)?.[1] || null;
+    console.log(`📋 Sender ID global detectado: ${senderIdGlobal}`);
+    
     const bloques = textoCompleto
       .split(/(?=Envio:)/)
       .filter(b => b.includes('Envio:')); // Filtrar TODOS los bloques que no tengan "Envio:"
@@ -94,7 +98,8 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
         resultados.push({
           tracking_id: tracking,
           sender_id: extraer(bloque, /Sender ID:\s*(\d+)/i) || 
-           extraer(bloque, /#(\d+)/),
+           extraer(bloque, /#(\d+)/)
+           senderIdGlobal, 
           fecha: extraer(bloque, /Entrega:\s*([^\n\r]+)/i),
           codigo_postal,
           partido,
