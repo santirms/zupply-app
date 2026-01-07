@@ -21,8 +21,10 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
 
     console.log(`📄 PDF procesado: ${numpages} páginas, ${textoCompleto.length} caracteres`);
 
-    const bloques = textoCompleto.split(/(?=Envio:)/);
-    console.log(`📦 ${bloques.length} etiquetas detectadas`);
+    const bloques = textoCompleto
+      .split(/(?=Envio:)/)
+      .filter(b => b.includes('Envio:')); // Filtrar TODOS los bloques que no tengan "Envio:"
+     console.log(`📦 ${bloques.length} etiquetas detectadas`);
 
     const etiquetasValidas = bloques.filter(bloque => bloque.trim().length > 0);
     console.log(`✓ ${etiquetasValidas.length} etiquetas válidas para procesar`);
