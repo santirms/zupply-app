@@ -32,9 +32,19 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
     const errores = [];
 
     const extraer = (texto, regex) => {
-      const match = texto.match(regex);
-      return match ? match[1].trim() : null;
-    };
+    const match = texto.match(regex);
+    if (!match) return null;
+  
+    // Limpiar saltos de línea y espacios extra
+    let resultado = match[1].trim();
+  
+    // Si es un número (tracking, envio, sender_id, cp), quitar saltos de línea
+    if (/^\d+[\s\n\r]*\d*/.test(resultado)) {
+      resultado = resultado.replace(/[\s\n\r]+/g, '');
+    }
+  
+     return resultado;
+   };
 
     for (let i = 0; i < etiquetasValidas.length; i++) {
       const bloque = etiquetasValidas[i];
@@ -47,8 +57,8 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
   }
       try {
         const tracking =
-          extraer(bloque, /Tracking:\s*([^\n\r]+)/i) ||
-          extraer(bloque, /Envio:\s*([^\n\r]+)/i);
+        extraer(bloque, /Tracking:\s*([\d\s\n\r]+)/i) ||
+        extraer(bloque, /Envio:\s*([\d\s\n\r]+)/i);
 
         if (!tracking) {
           console.warn(`⚠️ Etiqueta ${i + 1}: Sin tracking ni número de envío, saltando`);
@@ -81,7 +91,8 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
 
         resultados.push({
           tracking_id: tracking,
-          sender_id: extraer(bloque, /#(\d+)/),
+          sender_id: extraer(bloque, /Sender ID:\s*([\d\s\n\r]+)/i) || 
+                     extraer(bloque, /#([\d\s\n\r]+)/),
           fecha: extraer(bloque, /Entrega:\s*([^\n\r]+)/i),
           codigo_postal,
           partido,
