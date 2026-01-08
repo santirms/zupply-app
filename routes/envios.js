@@ -519,7 +519,7 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
             type: 'Point',
             coordinates: [coordenadas.lon, coordenadas.lat]
           } : null
-        }
+        },
          tenantId:      req.tenantId,
       };
     }));
@@ -620,7 +620,7 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
             type: 'Point',
             coordinates: [coordenadas.lon, coordenadas.lat]
           } : null
-        }
+        },
         tenantId:      req.tenantId,
       };
     }));
@@ -743,7 +743,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
             type: 'Point',
             coordinates: [coordenadas.lon, coordenadas.lat]
           } : null
-        }
+        },
         tenantId:      req.tenantId,
       });
 
