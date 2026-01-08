@@ -2,6 +2,10 @@
 const express = require('express');
 const router  = express.Router();
 const Envio   = require('../models/Envio');
+const identifyTenant = require('../middlewares/identifyTenant');
+
+// Aplicar middleware a todas las rutas
+router.use(identifyTenant);
 
 // ==== Helpers de fechas (AR -03:00) ====
 function atLocal(dayISO, hhmm = '00:00') {
@@ -45,7 +49,6 @@ function windowFromReset(hhmm = '23:30') {
   const now = new Date();
   const tISO = todayISO();
   const yISO = yesterdayISO();
-
   const resetToday  = atLocal(tISO, hhmm);
   const start = (now >= resetToday) ? resetToday : atLocal(yISO, hhmm);
   return { start, end: now };
@@ -55,44 +58,48 @@ function windowFromReset(hhmm = '23:30') {
 router.get('/home', async (req, res) => {
   try {
     const now = new Date();
-
     // 7 días atrás (para pendientes/incidencias)
     const start7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
+    
     // Entregados de "hoy calendario" (00:00 → 24:00)
     const tISO = todayISO();
     const startDia = atLocal(tISO, '00:00');
-    const endDia   = atLocal(tISO, '23:59'); // inclusive; si preferís [00:00, mañana 00:00) usá endNext
-
+    const endDia   = atLocal(tISO, '23:59');
+    
     // 7 días atrás (para EN RUTA)
     const start7d_ruta = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-    // === Consultas (countDocuments) ===
+    
+    // === Consultas (countDocuments) con tenantId ===
     const [pendientes, en_ruta, entregados, incidencias] = await Promise.all([
-    // pendientes: estado=pendiente, últimas 48h
-    Envio.countDocuments({
-    estado: 'pendiente',
-    fecha: { $gte: start7d }
-  }),
-
-  // en ruta: estado=en_camino, últimas 36h (independiente del reset)
-  Envio.countDocuments({
-    estado: 'en_camino',
-    fecha: { $gte: start7d_ruta }
-  }),
-
-  // entregados: hoy (00:00 → 23:59)
-Envio.countDocuments({
-  estado: 'entregado',
-  fecha: { $gte: startDia, $lte: endDia }
-}),
-
-  // incidencias: 48h con estados específicos
-  Envio.countDocuments({
-    estado: { $in: ['reprogramado', 'comprador_ausente', 'demorado'] },
-    fecha: { $gte: start7d }
-  })
-]);
+      // pendientes: estado=pendiente, últimas 48h
+      Envio.countDocuments({
+        estado: 'pendiente',
+        fecha: { $gte: start7d },
+        tenantId: req.tenantId
+      }),
+      
+      // en ruta: estado=en_camino, últimas 36h
+      Envio.countDocuments({
+        estado: 'en_camino',
+        fecha: { $gte: start7d_ruta },
+        tenantId: req.tenantId
+      }),
+      
+      // entregados: hoy (00:00 → 23:59)
+      Envio.countDocuments({
+        estado: 'entregado',
+        fecha: { $gte: startDia, $lte: endDia },
+        tenantId: req.tenantId
+      }),
+      
+      // incidencias: 48h con estados específicos
+      Envio.countDocuments({
+        estado: { $in: ['reprogramado', 'comprador_ausente', 'demorado'] },
+        fecha: { $gte: start7d },
+        tenantId: req.tenantId
+      })
+    ]);
+    
     return res.json({ pendientes, en_ruta, entregados, incidencias });
   } catch (e) {
     console.error('KPIs /home error:', e);
