@@ -1,5 +1,4 @@
 // models/Envio.js
-// models/Envio.js
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 const tenantPlugin = require('../plugins/tenantPlugin');
