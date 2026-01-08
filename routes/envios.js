@@ -13,6 +13,7 @@ const { ensureMeliHistory: ensureMeliHistorySrv, formatSubstatus } = require('..
 const logger = require('../utils/logger');
 const { getFechaArgentina, getHoraArgentina, getFechaHoraArgentina } = require('../utils/timezone');
 const { PDFDocument } = require('pdf-lib');
+const identifyTenant = require('../middlewares/identifyTenant');  
 
 // Configuración de AWS SDK v3 para S3
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
@@ -49,6 +50,7 @@ const ctrl   = require('../controllers/envioController');
 
 // ⬇️ TODO EL PANEL GENERAL REQUIERE LOGIN
 router.use(requireAuth);
+router.use(identifyTenant);
 
 // ⬇️ COORDINADOR = SOLO LECTURA EN ESTE PANEL
 router.use(restrictMethodsForRoles('coordinador', ['POST','PUT','PATCH','DELETE'], {
@@ -368,7 +370,7 @@ router.get('/', async (req, res) => {
     // --- Cursor consistente basado en 'ts' (fecha || createdAt) ---
     // Usamos 'ts' dentro del pipeline, así soporta docs viejos que no tengan 'fecha'
     const sort = { ts: -1, _id: -1 };
-    const matchFilter = { ...filtro };
+    const matchFilter = { ...filtro, tenantId: req.tenantId };
 
     if (req.query.cursor && !req.query.tracking) {
       const [tsIso, idStr] = String(req.query.cursor).split('|');
@@ -391,7 +393,7 @@ router.get('/', async (req, res) => {
       { $addFields: { ts: { $ifNull: ['$fecha', '$createdAt'] } } },
 
       // Si alguno no tiene 'ts', lo excluimos para que el cursor sea estable
-      { $match: { ...matchFilter, ts: { $ne: null } } },
+      { $match: { ...matchFilter, ts: { $ne: null }, tenantId: req.tenantId } },
 
       { $sort: sort },
       { $limit: limit },
@@ -518,6 +520,7 @@ router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, r
             coordinates: [coordenadas.lon, coordenadas.lat]
           } : null
         }
+         tenantId:      req.tenantId,
       };
     }));
 
@@ -618,6 +621,7 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
             coordinates: [coordenadas.lon, coordenadas.lat]
           } : null
         }
+        tenantId:      req.tenantId,
       };
     }));
 
@@ -740,6 +744,7 @@ router.post('/manual', requireRole('admin','coordinador'), async (req, res) => {
             coordinates: [coordenadas.lon, coordenadas.lat]
           } : null
         }
+        tenantId:      req.tenantId,
       });
 
       // Generar etiqueta 10x15 + QR usando id_venta
@@ -1742,9 +1747,13 @@ router.get('/:id', async (req, res) => {
       'id_venta', 'order_id', 'venta_id', 'meli_id', 'shipment_id'
     ];
     let query = isObjectId
-      ? { _id: rawId }
-      : { $or: altFields.map((field) => ({ [field]: rawId })) };
-
+     ? { _id: rawId, tenantId: req.tenantId }
+      : {
+      $and: [
+        { $or: altFields.map((field) => ({ [field]: rawId })) },
+        { tenantId: req.tenantId }
+        ]
+      };
     let envioDoc = await Envio.findOne(query)
       .populate('cliente_id', 'nombre email razon_social sender_id')
       .populate('chofer', 'nombre telefono');
@@ -1806,7 +1815,7 @@ router.get('/:id', async (req, res) => {
 // PATCH /envios/:id/geocode  (forzar desde el front)
 router.patch('/:id/geocode', async (req, res) => {
   try {
-    const envio = await Envio.findById(req.params.id);
+    const envio = await Envio.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
     await ensureCoords(envio);
     if (!envio.latitud || !envio.longitud) {
@@ -1869,7 +1878,7 @@ router.patch('/:id/asignar', async (req, res) => {
       update.$set.chofer = choferPayload;
     }
 
-    const envio = await Envio.findByIdAndUpdate(id, update, { new: true });
+    const envio = await Envio.findByIdAndUpdate({ _id: id, tenantId: req.tenantId }, id, update, { new: true });
     if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
 
     res.json({ ok: true, envio });
@@ -1914,7 +1923,7 @@ router.post('/:id/nota',
 router.delete('/:id', async (req, res) => {
   try {
     const id = req.params.id;
-    const deleted = await Envio.findByIdAndDelete(id);
+    const deleted = await Envio.findOneAndDelete({ _id: id, tenantId: req.tenantId });
     if (!deleted) return res.status(404).json({ error: 'Envío no encontrado' });
     return res.json({ ok: true, id });
   } catch (err) {
@@ -1936,7 +1945,7 @@ router.patch('/:id/cambiar-estado', requireAuth, requireRole('admin','coordinado
     const { nuevo_estado, nota } = req.body;
 
     // Buscar envío
-    const envio = await Envio.findById(id);
+    const envio = await Envio.findOne({ _id: id, tenantId: req.tenantId });
     if (!envio) {
       return res.status(404).json({ error: 'Envío no encontrado' });
     }
