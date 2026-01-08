@@ -1,5 +1,6 @@
 // models/Cliente.js
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 const clienteSchema = new mongoose.Schema({
   nombre:          { type: String, required: true },
@@ -21,7 +22,6 @@ const clienteSchema = new mongoose.Schema({
   },
   horario_de_corte:{ type: String, required: false },
   link_vinculacion:{ type: String },
-
   // ===== CONFIGURACIÓN DE FACTURACIÓN =====
   facturacion: {
     // Horarios de corte
@@ -37,24 +37,20 @@ const clienteSchema = new mongoose.Schema({
       type: String,
       default: null  // null = no trabaja domingos
     },
-
     // Tipo de período
     tipo_periodo: {
       type: String,
       enum: ['semanal', 'quincenal', 'mensual'],
       default: 'semanal'
     },
-
     // Zona horaria
     zona_horaria: {
       type: String,
       default: 'America/Argentina/Buenos_Aires'
     },
-
     // Notas (límites diarios, excepciones ML, etc.)
     notas_facturacion: String
   },
-
   permisos: {
     puedeRequerirFirma: {
       type: Boolean,
@@ -64,11 +60,17 @@ const clienteSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// Aplicar plugin multi-tenant
+clienteSchema.plugin(tenantPlugin);
+
+// Índices
+clienteSchema.index({ tenantId: 1, nombre: 1 });
+clienteSchema.index({ tenantId: 1, codigo_cliente: 1 });
+
 clienteSchema.pre('validate', async function(next) {
   if (!this.codigo_cliente) {
     const parts = this.nombre.trim().split(/\s+/);
     let base;
-
     if (parts.length > 1) {
       // iniciales de hasta 4 palabras
       base = parts.slice(0,4).map(w => w[0]).join('').toUpperCase();
@@ -80,11 +82,10 @@ clienteSchema.pre('validate', async function(next) {
     while (base.length < 4) {
       base += Math.random().toString(36).substr(2,1).toUpperCase();
     }
-
-    // asegurar unicidad
+    // asegurar unicidad (IMPORTANTE: buscar solo en el tenant actual)
     let suffix = 0, codigo = base;
     const Cliente = mongoose.model('Cliente');
-    while (await Cliente.findOne({ codigo_cliente: codigo })) {
+    while (await Cliente.findOne({ codigo_cliente: codigo, tenantId: this.tenantId })) {
       suffix++;
       codigo = `${base}${suffix}`;
     }
@@ -93,7 +94,4 @@ clienteSchema.pre('validate', async function(next) {
   next();
 });
 
-module.exports = mongoose.models.Cliente ||
-  mongoose.model('Cliente', clienteSchema);
-
-
+module.exports = mongoose.model('Cliente', clienteSchema);
