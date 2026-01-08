@@ -327,5 +327,12 @@ envioSchema.index({ 'destino.partido': 1, createdAt: -1 });
 // Para mapa (destino.loc = { type: 'Point', coordinates: [lng, lat] })
 envioSchema.index({ 'destino.loc': '2dsphere' });
 
+// Aplicar plugin multi-tenant
+envioSchema.plugin(tenantPlugin);
+
+// Índices con tenantId
+envioSchema.index({ tenantId: 1, createdAt: -1 });
+envioSchema.index({ tenantId: 1, estado: 1 });
+envioSchema.index({ tenantId: 1, id_venta: 1 });
 
 module.exports = mongoose.models.Envio || mongoose.model('Envio', envioSchema);
