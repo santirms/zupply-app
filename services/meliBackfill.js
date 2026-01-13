@@ -7,7 +7,7 @@ const { ingestShipment } = require('./meliIngest');
  * Trae órdenes recientes y devuelve IDs de shipments asociados (únicos).
  * Usa /orders/search y toma shipping.id de cada orden.
  */
-async function listRecentShipmentIds({ user_id, days = 7 }) {
+async function listRecentShipmentIds({ user_id, days = 7, mlToken }) {
   // desde hace N días a ahora (ISO)
   const to   = new Date();
   const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
