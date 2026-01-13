@@ -31,7 +31,7 @@ async function listRecentShipmentIds({ user_id, days = 7 }) {
   while (true) {
     params.set('offset', String(offset));
     const url = `${base}?${params.toString()}`;
-    const data = await mlGet(url, { user_id });
+    const data = await mlGet(url, { user_id, mlToken });
 
     const results = Array.isArray(data?.results) ? data.results : [];
     for (const o of results) {
@@ -65,7 +65,7 @@ async function backfillCliente({ cliente, days = 7, delayMs = 120, tenantId, mlT
   let created = 0, updated = 0, skipped = 0, errors = 0;
   for (const shipmentId of shipmentIds) {
     try {
-      const res = await ingestShipment({ shipmentId, cliente });
+      const res = await ingestShipment({ shipmentId, cliente, tenantId, mlToken });
       // Podés hacer que ingestShipment devuelva un flag { created:true/false }
       if (res?.created === true) created++;
       else if (res?.updated === true) updated++;
