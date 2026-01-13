@@ -60,7 +60,7 @@ async function backfillCliente({ cliente, days = 7, delayMs = 120, tenantId, mlT
     });
     return { total: 0, created: 0, updated: 0, skipped: 0, errors: 0, reason: 'no_user' };
   }
-  const shipmentIds = await listRecentShipmentIds({ user_id: cliente.user_id, days });
+  const shipmentIds = await listRecentShipmentIds({ user_id: cliente.user_id, days, mlToken });
 
   let created = 0, updated = 0, skipped = 0, errors = 0;
   for (const shipmentId of shipmentIds) {
