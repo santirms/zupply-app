@@ -22,8 +22,9 @@ async function precioPorZona(cliente, zonaNombre) {
 }
 
 // ---------- fetch ML ----------
-async function fetchShipment(shipmentId, user_id) {
-  const access_token = await getValidToken(user_id);
+// ← MODIFICADO: Aceptar mlToken
+async function fetchShipment(shipmentId, user_id, mlToken) {
+  const access_token = mlToken || await getValidToken(user_id);
   const url = `/shipments/${shipmentId}`;
   const startTime = Date.now();
 
@@ -51,8 +52,9 @@ async function fetchShipment(shipmentId, user_id) {
   }
 }
 
-async function fetchShipmentHistory(shipmentId, user_id) {
-  const access_token = await getValidToken(user_id);
+// ← MODIFICADO: Aceptar mlToken
+async function fetchShipmentHistory(shipmentId, user_id, mlToken) {
+  const access_token = mlToken || await getValidToken(user_id);
   const url = `/shipments/${shipmentId}/history`;
   const startTime = Date.now();
 
@@ -67,7 +69,6 @@ async function fetchShipmentHistory(shipmentId, user_id) {
       duration_ms: Date.now() - startTime
     });
 
-    // Puede venir como array o como {results:[...]}
     return Array.isArray(data) ? data : (data?.results || []);
   } catch (error) {
     logger.api(
@@ -81,9 +82,10 @@ async function fetchShipmentHistory(shipmentId, user_id) {
   }
 }
 
-async function fetchPackIdFromOrder(orderId, user_id) {
+// ← MODIFICADO: Aceptar mlToken
+async function fetchPackIdFromOrder(orderId, user_id, mlToken) {
   if (!orderId) return null;
-  const access_token = await getValidToken(user_id);
+  const access_token = mlToken || await getValidToken(user_id);
   const url = `/orders/${orderId}`;
   const startTime = Date.now();
 
@@ -124,12 +126,11 @@ function esFlexDeVerdad(sh) {
 }
 
 function mapHistory(items = []) {
-  // items: [{date, status, substatus, ...}]
   return items.map(e => {
     const status = (e.status || '').toLowerCase();
     const sub    = (e.substatus || '').toLowerCase() || null;
     return {
-      at: new Date(e.date),                  // <-- HORA REAL de MeLi
+      at: new Date(e.date),
       estado: mapMeliToInterno(status, sub),
       estado_meli: { status, substatus: sub },
       source: 'meli-history',
@@ -152,19 +153,20 @@ function mergeHistorial(existing = [], incoming = []) {
   return out;
 }
 
-/**
- * Ingesta/actualización idempotente de un shipment de MeLi.
- * - Trae /shipments y /shipments/history
- * - Actualiza estado visible con el ULTIMO evento real
- * - Guarda historial con hora real de ML y mergea sin duplicar
- * - Completa id_venta (pack_id > order_id) si falta
- */
-async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor_name = null }) {
+// ← MODIFICADO: Firma con tenantId y mlToken
+async function ingestShipment({ 
+  shipmentId, 
+  cliente, 
+  tenantId,    // ← NUEVO
+  mlToken,     // ← NUEVO
+  source = 'meli:cron', 
+  actor_name = null 
+}) {
   // 1) MeLi: shipment + history
-  const sh = await fetchShipment(shipmentId, cliente.user_id);
+  const sh = await fetchShipment(shipmentId, cliente.user_id, mlToken);
   if (!esFlexDeVerdad(sh)) return { skipped: true, reason: 'non_flex', shipmentId };
 
-  const histRaw = await fetchShipmentHistory(sh.id, cliente.user_id);
+  const histRaw = await fetchShipmentHistory(sh.id, cliente.user_id, mlToken);
   const histMap = mapHistory(histRaw);
 
   // 2) Datos de dirección/cliente
@@ -175,7 +177,7 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
   const address = [street, number].filter(Boolean).join(' ').trim();
   const ref     = sh?.receiver_address?.comment || '';
 
-  // ========== EXTRAER COORDENADAS DE MERCADOLIBRE ==========
+  // Coordenadas de ML
   let latitud = null;
   let longitud = null;
   let geocode_source = null;
@@ -199,16 +201,9 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
         longitud = lonNum;
         geocode_source = 'mercadolibre';
         logger.debug('Coords de MeLi', { shipment_id: sh.id, latitud, longitud });
-      } else {
-        logger.warn('Coords inválidas/fuera de Argentina', {
-          shipment_id: sh.id,
-          lat: latNum,
-          lon: lonNum
-        });
       }
     }
   }
-  // ========== FIN EXTRACCIÓN ==========
 
   // 3) Partido / Zona / Precio
   const { partido = '', zona: zonaNom = '' } = await detectarZona(cp) || {};
@@ -216,10 +211,13 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
 
   // 4) order/pack para id_venta
   const order_id = sh?.order_id || (Array.isArray(sh?.orders) ? sh.orders[0]?.id : null) || null;
-  let pack_id = null; try { pack_id = await fetchPackIdFromOrder(order_id, cliente.user_id); } catch {}
+  let pack_id = null;
+  try { 
+    pack_id = await fetchPackIdFromOrder(order_id, cliente.user_id, mlToken); 
+  } catch {}
   const id_venta = pack_id || order_id || null;
 
-  // 5) Último evento real (o fallback a shipment.last_updated)
+  // 5) Último evento real
   const last = histMap.slice().sort((a,b)=> new Date(b.at) - new Date(a.at))[0] || {
     at: new Date(sh.last_updated || sh.date_created || Date.now()),
     estado: mapMeliToInterno(sh.status, sh.substatus),
@@ -235,34 +233,36 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
     ? mergeHistorial(existing.historial, histMap)
     : histMap;
 
-  // 7) Upsert con hora real en estado_meli.updatedAt
- const update = {
-  $setOnInsert: { fecha: new Date(sh.date_created || Date.now()) },
-  $set: {
-    meli_id:       String(sh.id),
-    sender_id:     String(cliente.codigo_cliente || cliente.sender_id?.[0] || cliente.user_id),
-    cliente_id:    cliente._id,
-    codigo_postal: cp,
-    partido,
-    zona:          zonaNom,
-    destinatario:  dest,
-    direccion:     address,
-    referencia:    ref,
-    precio,
-    id_venta,
-    order_id,
-    pack_id,
-    // Estado "actual" (lo afinamos luego con ensureMeliHistory)
-    estado: mapMeliToInterno(sh.status, sh.substatus),
-    estado_meli: {
-      status:    sh.status || null,
-      substatus: sh.substatus || null,
-      updatedAt: new Date()   // luego se corrige con la hora real de MeLi
+  // 7) Upsert con tenantId
+  const update = {
+    $setOnInsert: { 
+      fecha: new Date(sh.date_created || Date.now()),
+      tenantId: tenantId  // ← AGREGAR
     },
-    ml_status: sh.status || null,
-    ml_substatus: sh.substatus || null
-  }
-};
+    $set: {
+      meli_id:       String(sh.id),
+      sender_id:     String(cliente.codigo_cliente || cliente.sender_id?.[0] || cliente.user_id),
+      cliente_id:    cliente._id,
+      codigo_postal: cp,
+      partido,
+      zona:          zonaNom,
+      destinatario:  dest,
+      direccion:     address,
+      referencia:    ref,
+      precio,
+      id_venta,
+      order_id,
+      pack_id,
+      estado: mapMeliToInterno(sh.status, sh.substatus),
+      estado_meli: {
+        status:    sh.status || null,
+        substatus: sh.substatus || null,
+        updatedAt: new Date()
+      },
+      ml_status: sh.status || null,
+      ml_substatus: sh.substatus || null
+    }
+  };
 
   if (latitud !== null && longitud !== null) {
     const shouldUpdateCoords =
@@ -274,14 +274,8 @@ async function ingestShipment({ shipmentId, cliente, source = 'meli:cron', actor
       update.$set.latitud = latitud;
       update.$set.longitud = longitud;
       update.$set.geocode_source = geocode_source;
-      logger.debug('Guardando coordenadas de MeLi (ingest)', {
-        shipment_id: sh.id,
-        latitud,
-        longitud
-      });
     }
   }
-
 
   const updated = await Envio.findOneAndUpdate(
     { meli_id: String(sh.id) },
