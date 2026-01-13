@@ -172,7 +172,7 @@ async function main() {
       fail++;
       continue;
     }
-      await ensureMeliHistory(e, { force, rebuild });
+      await ensureMeliHistory(e, { force, rebuild, mlToken: tenant.mlIntegration.accessToken });
 
       const refreshed = await Envio.findById(e._id, { historial: 1, estado_meli: 1, meli_id: 1 }).lean();
       const hist = Array.isArray(refreshed?.historial) ? refreshed.historial : [];
