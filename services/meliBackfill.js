@@ -53,7 +53,7 @@ async function listRecentShipmentIds({ user_id, days = 7 }) {
  * Ingesta masiva para un cliente (por user_id) de los últimos N días.
  * Crea/actualiza usando ingestShipment.
  */
-async function backfillCliente({ cliente, days = 7, delayMs = 120 }) {
+async function backfillCliente({ cliente, days = 7, delayMs = 120, tenantId, mlToken }) {
   if (!cliente?.user_id) {
     logger.warn('Backfill skipped: client without user_id', {
       cliente_id: cliente?._id?.toString?.()
