@@ -1073,15 +1073,41 @@ async function mostrarDetalle(envioId){
     renderEvidencias(data);
     switchTab('detalle');
     const cd=document.getElementById('contenidoDetalle');
+
+    // Preparar info de cobro en destino
+    let cobroHtml = '';
+    if (data.cobroEnDestino?.habilitado) {
+      const monto = data.cobroEnDestino.monto || 0;
+      const cobrado = data.cobroEnDestino.cobrado;
+      const metodoPago = data.cobroEnDestino.metodoPago;
+
+      let estadoCobro = '';
+      if (cobrado) {
+        const metodoTexto = metodoPago === 'efectivo' ? 'Efectivo' :
+                           metodoPago === 'transferencia' ? 'Transferencia' : 'Otro';
+        estadoCobro = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+          ✓ Cobrado (${metodoTexto})
+        </span>`;
+      } else {
+        estadoCobro = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+          ⏳ Pendiente
+        </span>`;
+      }
+
+      cobroHtml = `<p><strong>Cobro en destino:</strong> $${monto.toLocaleString('es-AR')} ${estadoCobro}</p>`;
+    }
+
     cd.innerHTML=`
       <p><strong>Cliente:</strong> ${clienteNombre}</p>
+      <p><strong>Destinatario:</strong> ${data.destinatario || '-'}</p>
       <p><strong>Dirección:</strong> ${data.direccion || '-'}</p>
       <p><strong>Tracking (ML):</strong> ${data.meli_id || '-'}</p>
       <p><strong>ID de venta:</strong> ${data.id_venta || '-'}</p>
       <p><strong>Estado:</strong> ${renderEstadoChip(data)}</p>
       <p><strong>CP:</strong> ${data.codigo_postal || '-'}</p>
       <p><strong>Partido:</strong> ${partido}</p>
-      <p><strong>Referencia:</strong> ${data.referencia || '-'}</p>`;
+      <p><strong>Referencia:</strong> ${data.referencia || '-'}</p>
+      ${cobroHtml}`;
 
     // Mostrar intentos si existen
     const ultimoEvento = (data.historial || [])
