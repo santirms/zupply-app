@@ -8,6 +8,7 @@ const { getValidToken }   = require('../utils/meliUtils');
 const { mapMeliToInterno }= require('../utils/meliStatus');
 const detectarZona        = require('../utils/detectarZona');
 const logger              = require('../utils/logger');
+const { mlGetWithTenant } = require('../utils/meliUtils');
 
 // ---------- precio por zona ----------
 async function precioPorZona(cliente, zonaNombre) {
@@ -23,92 +24,75 @@ async function precioPorZona(cliente, zonaNombre) {
 
 // ---------- fetch ML ----------
 // ← MODIFICADO: Aceptar mlToken
-async function fetchShipment(shipmentId, user_id, mlToken) {
-  const access_token = mlToken || await getValidToken(user_id);
-  const url = `/shipments/${shipmentId}`;
+async function fetchShipment(shipmentId, user_id, mlToken, tenantId) {  // ← Agregar tenantId
+  const url = `https://api.mercadolibre.com/shipments/${shipmentId}`;
   const startTime = Date.now();
 
   try {
-    const { data, status } = await axios.get(
-      `https://api.mercadolibre.com${url}`,
-      { headers: { Authorization: `Bearer ${access_token}` } }
-    );
+    // ← Usar mlGetWithTenant si tenemos tenantId
+    const data = tenantId
+      ? await mlGetWithTenant(url, { tenantId, mlToken })
+      : await axios.get(url, { 
+          headers: { Authorization: `Bearer ${mlToken || await getValidToken(user_id)}` } 
+        }).then(r => r.data);
 
     logger.ml('Shipment fetched', shipmentId, {
-      status,
+      status: 200,
       duration_ms: Date.now() - startTime
     });
 
     return data || {};
   } catch (error) {
-    logger.api(
-      'MercadoLibre',
-      'GET',
-      url,
-      error.response?.status || 0,
-      Date.now() - startTime
-    );
+    logger.api('MercadoLibre', 'GET', url, error.response?.status || 0, Date.now() - startTime);
     throw error;
   }
 }
 
 // ← MODIFICADO: Aceptar mlToken
-async function fetchShipmentHistory(shipmentId, user_id, mlToken) {
-  const access_token = mlToken || await getValidToken(user_id);
-  const url = `/shipments/${shipmentId}/history`;
+async function fetchShipmentHistory(shipmentId, user_id, mlToken, tenantId) {  // ← Agregar tenantId
+  const url = `https://api.mercadolibre.com/shipments/${shipmentId}/history`;
   const startTime = Date.now();
 
   try {
-    const { data, status } = await axios.get(
-      `https://api.mercadolibre.com${url}`,
-      { headers: { Authorization: `Bearer ${access_token}` } }
-    );
+    const data = tenantId
+      ? await mlGetWithTenant(url, { tenantId, mlToken })
+      : await axios.get(url, { 
+          headers: { Authorization: `Bearer ${mlToken || await getValidToken(user_id)}` } 
+        }).then(r => r.data);
 
     logger.ml('Shipment history fetched', shipmentId, {
-      status,
+      status: 200,
       duration_ms: Date.now() - startTime
     });
 
     return Array.isArray(data) ? data : (data?.results || []);
   } catch (error) {
-    logger.api(
-      'MercadoLibre',
-      'GET',
-      url,
-      error.response?.status || 0,
-      Date.now() - startTime
-    );
+    logger.api('MercadoLibre', 'GET', url, error.response?.status || 0, Date.now() - startTime);
     throw error;
   }
 }
 
 // ← MODIFICADO: Aceptar mlToken
-async function fetchPackIdFromOrder(orderId, user_id, mlToken) {
+async function fetchPackIdFromOrder(orderId, user_id, mlToken, tenantId) {  // ← Agregar tenantId
   if (!orderId) return null;
-  const access_token = mlToken || await getValidToken(user_id);
-  const url = `/orders/${orderId}`;
+  const url = `https://api.mercadolibre.com/orders/${orderId}`;
   const startTime = Date.now();
 
   try {
-    const { data: order, status } = await axios.get(
-      `https://api.mercadolibre.com${url}`,
-      { headers: { Authorization: `Bearer ${access_token}` } }
-    );
+    const order = tenantId
+      ? await mlGetWithTenant(url, { tenantId, mlToken })
+      : await axios.get(url, { 
+          headers: { Authorization: `Bearer ${mlToken || await getValidToken(user_id)}` } 
+        }).then(r => r.data);
 
     logger.ml('Order fetched', orderId, {
-      status,
+      status: 200,
       duration_ms: Date.now() - startTime
     });
 
     return order?.pack_id || null;
   } catch (error) {
-    logger.api(
-      'MercadoLibre',
-      'GET',
-      url,
-      error.response?.status || 0,
-      Date.now() - startTime
-    );
+    logger.api('MercadoLibre', 'GET', url, error.response?.status || 0, Date.now() - startTime);
     throw error;
   }
 }
@@ -163,10 +147,10 @@ async function ingestShipment({
   actor_name = null 
 }) {
   // 1) MeLi: shipment + history
-  const sh = await fetchShipment(shipmentId, cliente.user_id, mlToken);
+  const sh = await fetchShipment(shipmentId, cliente.user_id, mlToken, tenantId);  // ← Agregar tenantId
   if (!esFlexDeVerdad(sh)) return { skipped: true, reason: 'non_flex', shipmentId };
 
-  const histRaw = await fetchShipmentHistory(sh.id, cliente.user_id, mlToken);
+  const histRaw = await fetchShipmentHistory(sh.id, cliente.user_id, mlToken, tenantId);  // ← Agregar tenantId
   const histMap = mapHistory(histRaw);
 
   // 2) Datos de dirección/cliente
@@ -213,7 +197,7 @@ async function ingestShipment({
   const order_id = sh?.order_id || (Array.isArray(sh?.orders) ? sh.orders[0]?.id : null) || null;
   let pack_id = null;
   try { 
-    pack_id = await fetchPackIdFromOrder(order_id, cliente.user_id, mlToken); 
+    ppack_id = await fetchPackIdFromOrder(order_id, cliente.user_id, mlToken, tenantId);  
   } catch {}
   const id_venta = pack_id || order_id || null;
 
