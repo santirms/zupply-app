@@ -161,11 +161,89 @@ async function fetchShipmentFromMeli({ tracking, id_venta, user_id, mlToken }) {
 
   throw new Error('fetchShipmentFromMeli: faltan claves tracking o id_venta');
 }
+// ← NUEVO: Refresh token para Tenant
+async function refrescarTokenTenant(tenant) {
+  const Tenant = require('../models/Tenant');
+  
+  if (!tenant.mlIntegration?.refreshToken) {
+    throw new Error('No hay refresh token disponible');
+  }
+
+  const body = new URLSearchParams({
+    grant_type: 'refresh_token',
+    client_id: process.env.MERCADOLIBRE_CLIENT_ID,
+    client_secret: process.env.MERCADOLIBRE_CLIENT_SECRET,
+    refresh_token: tenant.mlIntegration.refreshToken
+  });
+
+  const { data } = await axios.post(
+    'https://api.mercadolibre.com/oauth/token',
+    body.toString(),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+  );
+
+  const { access_token, refresh_token, expires_in } = data;
+
+  // Actualizar en DB
+  await Tenant.findByIdAndUpdate(tenant._id, {
+    'mlIntegration.accessToken': access_token,
+    'mlIntegration.refreshToken': refresh_token || tenant.mlIntegration.refreshToken,
+    'mlIntegration.expiresIn': expires_in,
+    'mlIntegration.tokenUpdatedAt': new Date()
+  });
+
+  // También actualizar Token legacy para compatibilidad
+  if (tenant.mlIntegration.userId) {
+    await Token.findOneAndUpdate(
+      { user_id: tenant.mlIntegration.userId },
+      {
+        access_token,
+        refresh_token: refresh_token || tenant.mlIntegration.refreshToken,
+        expires_in,
+        fecha_creacion: new Date(),
+        updatedAt: new Date()
+      },
+      { upsert: true }
+    );
+  }
+
+  return access_token;
+}
+// ← NUEVO: mlGet con soporte para Tenant
+async function mlGetWithTenant(url, { tenantId, mlToken }) {
+  const Tenant = require('../models/Tenant');
+  
+  try {
+    const { data } = await axios.get(url, { 
+      headers: { Authorization: `Bearer ${mlToken}` } 
+    });
+    return data;
+  } catch (err) {
+    const status = err.response?.status;
+    
+    // Si es 401 y tenemos tenantId, intentar refresh
+    if (status === 401 && tenantId) {
+      const tenant = await Tenant.findById(tenantId);
+      if (!tenant) throw err;
+      
+      const freshToken = await refrescarTokenTenant(tenant);
+      
+      // Reintentar con token fresco
+      const { data } = await axios.get(url, { 
+        headers: { Authorization: `Bearer ${freshToken}` } 
+      });
+      return data;
+    }
+    throw err;
+  }
+}
 
 module.exports = {
   getValidToken,
   getTokenBySenderId,
   mlGet,
+  mlGetWithTenant,        // ← NUEVO
+  refrescarTokenTenant,   // ← NUEVO
   obtenerDatosDeEnvio,
   obtenerCodigoPostalDeEnvio,
   parseQrPayload,
