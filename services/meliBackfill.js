@@ -1,5 +1,5 @@
 // services/meliBackfill.js
-const { mlGet } = require('../utils/meliUtils');
+const { mlGet, mlGetWithTenant } = require('../utils/meliUtils');
 const logger = require('../utils/logger');
 const { ingestShipment } = require('./meliIngest');
 
@@ -7,7 +7,6 @@ const { ingestShipment } = require('./meliIngest');
  * Trae órdenes recientes y devuelve IDs de shipments asociados (únicos).
  * Usa /orders/search y toma shipping.id de cada orden.
  */
-const { mlGet, mlGetWithTenant } = require('../utils/meliUtils');
 
 async function listRecentShipmentIds({ user_id, days = 7, mlToken, tenantId }) {
   const to   = new Date();
