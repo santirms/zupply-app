@@ -2,6 +2,7 @@
 const express = require('express');
 const router  = express.Router();
 const Cliente = require('../models/Cliente');
+const { requireAuth, requireRole } = require('../middlewares/auth');
 const identifyTenant = require('../middlewares/identifyTenant');
 
 // Aplicar middleware a todas las rutas
