@@ -150,4 +150,88 @@ router.get('/:id/meli-link', async (req, res) => {
   }
 });
 
+// DELETE /:id - Eliminar cliente (solo admin)
+router.delete('/:id', requireRole('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Verificar que el cliente existe
+    const cliente = await Cliente.findById(id);
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    const Envio = require('../models/Envio');
+    const Chofer = require('../models/Chofer');
+    
+    const hace10Dias = new Date();
+    hace10Dias.setDate(hace10Dias.getDate() - 10);
+
+    // 2. Verificar que no tenga envíos activos o recientes
+    const enviosActivos = await Envio.countDocuments({ 
+      cliente_id: id,
+      $or: [
+        // Envíos no finalizados
+        { estado: { $nin: ['entregado', 'cancelado'] } },
+        // Envíos finalizados hace menos de 10 días
+        { 
+          estado: { $in: ['entregado', 'cancelado'] },
+          updatedAt: { $gte: hace10Dias }
+        }
+      ]
+    });
+
+    if (enviosActivos > 0) {
+      return res.status(400).json({ 
+        error: `No se puede eliminar el cliente porque tiene ${enviosActivos} envío${enviosActivos > 1 ? 's' : ''} activo${enviosActivos > 1 ? 's' : ''} o reciente${enviosActivos > 1 ? 's' : ''}. Esperá a que pasen 10 días desde el último envío.`
+      });
+    }
+
+    // 3. Verificar que no tenga choferes asignados
+    const choferesCount = await Chofer.countDocuments({ cliente_id: id });
+    
+    if (choferesCount > 0) {
+      return res.status(400).json({ 
+        error: `No se puede eliminar el cliente porque tiene ${choferesCount} chofer${choferesCount > 1 ? 'es' : ''} asignado${choferesCount > 1 ? 's' : ''}. Primero debe reasignar o eliminar los choferes.`
+      });
+    }
+
+    // 4. Contar envíos viejos que se eliminarán
+    const enviosViejos = await Envio.countDocuments({
+      cliente_id: id,
+      estado: { $in: ['entregado', 'cancelado'] },
+      updatedAt: { $lt: hace10Dias }
+    });
+
+    // 5. Eliminar envíos viejos
+    if (enviosViejos > 0) {
+      const resultado = await Envio.deleteMany({
+        cliente_id: id,
+        estado: { $in: ['entregado', 'cancelado'] },
+        updatedAt: { $lt: hace10Dias }
+      });
+      console.log(`🗑️ Eliminados ${resultado.deletedCount} envíos históricos del cliente ${cliente.nombre}`);
+    }
+
+    // 6. Eliminar cliente
+    await Cliente.findByIdAndDelete(id);
+
+    console.log(`✅ Cliente eliminado: ${cliente.nombre} (${id})`);
+
+    return res.json({ 
+      ok: true, 
+      mensaje: 'Cliente eliminado exitosamente',
+      cliente: {
+        id: cliente._id,
+        nombre: cliente.nombre
+      },
+      enviosEliminados: enviosViejos
+    });
+
+  } catch (err) {
+    console.error('Error eliminando cliente:', err);
+    return res.status(500).json({ error: 'Error al eliminar el cliente' });
+  }
+});
+
 module.exports = router;
