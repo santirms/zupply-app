@@ -121,24 +121,23 @@ router.get('/:id/meli-link', async (req, res) => {
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
 
-    // ✅ FORMATO MULTI-TENANT - Solo usa tenantId
-    const state     = String(req.tenantId);
+    const stateRaw  = `${id}|${sender_id}`;
+    const state     = encodeURIComponent(stateRaw);
     const redirect  = process.env.MERCADOLIBRE_REDIRECT_URI;
 
     console.log('ML LINK -> redirect_uri:', redirect);
-    console.log('ML LINK -> state (tenantId):', state);
-    console.log('ML LINK -> tenant:', req.tenant?.companyName);
+    console.log('ML LINK -> state:', stateRaw);
 
     if (!redirect) {
       return res.status(500).json({ error: 'MERCADOLIBRE_REDIRECT_URI no seteado' });
     }
 
     const url =
-      `https://auth.mercadolibre.com.ar/authorization` +
+      `https://auth.mercadolibre.com/authorization` +
       `?response_type=code` +
       `&client_id=${process.env.MERCADOLIBRE_CLIENT_ID}` +
       `&redirect_uri=${encodeURIComponent(redirect)}` +
-      `&state=${encodeURIComponent(state)}`;
+      `&state=${state}`;
 
     return res.json({ url });
   } catch (e) {
