@@ -106,8 +106,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// GET /api/clientes/:id/meli-link
-router.get('/:id/meli-link', (req, res) => {
+// GET meli-link
+router.get('/:id/meli-link', async (req, res) => {
   try {
     const { id }        = req.params;
     const { sender_id } = req.query;
@@ -116,25 +116,29 @@ router.get('/:id/meli-link', (req, res) => {
       return res.status(400).json({ error: 'Falta sender_id' });
     }
 
-    const stateRaw  = `${id}|${sender_id}`;
-    const state     = encodeURIComponent(stateRaw);
+    const cliente = await Cliente.findOne({ _id: id, tenantId: req.tenantId });
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    // ✅ FORMATO MULTI-TENANT - Solo usa tenantId
+    const state     = String(req.tenantId);
     const redirect  = process.env.MERCADOLIBRE_REDIRECT_URI;
 
-    // DEBUG rápido (podés quitarlo luego)
     console.log('ML LINK -> redirect_uri:', redirect);
-    console.log('ML LINK -> state:', stateRaw);
+    console.log('ML LINK -> state (tenantId):', state);
+    console.log('ML LINK -> tenant:', req.tenant?.companyName);
 
     if (!redirect) {
       return res.status(500).json({ error: 'MERCADOLIBRE_REDIRECT_URI no seteado' });
     }
 
-    // Usa el host global
     const url =
-      `https://auth.mercadolibre.com/authorization` +
+      `https://auth.mercadolibre.com.ar/authorization` +
       `?response_type=code` +
       `&client_id=${process.env.MERCADOLIBRE_CLIENT_ID}` +
       `&redirect_uri=${encodeURIComponent(redirect)}` +
-      `&state=${state}`;
+      `&state=${encodeURIComponent(state)}`;
 
     return res.json({ url });
   } catch (e) {
