@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const pdfParse = require('pdf-parse');
 const fs = require('fs');
-const Partido = require('../models/partidos'); // Asegurate que el path es correcto
+const Partido = require('../models/partidos');
 
 const upload = multer({ dest: 'uploads/' });
 const fsp = fs.promises;
@@ -21,11 +21,17 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
 
     console.log(`📄 PDF procesado: ${numpages} páginas, ${textoCompleto.length} caracteres`);
 
-    const bloques = textoCompleto.split(/(?=Envio:)/);
+    // Extraer sender_id global del header (aparece al inicio)
+    const senderIdGlobal = textoCompleto.match(/#(\d+)/)?.[1] || null;
+    console.log(`📋 Sender ID global detectado: ${senderIdGlobal}`);
+    
+    const bloques = textoCompleto
+      .split(/(?=Envio:)/)
+      .filter(b => b.includes('Envio:'));
+    
     console.log(`📦 ${bloques.length} etiquetas detectadas`);
 
     const etiquetasValidas = bloques.filter(bloque => bloque.trim().length > 0);
-    console.log(`✓ ${etiquetasValidas.length} etiquetas válidas para procesar`);
 
     const resultados = [];
     let procesadas = 0;
@@ -33,25 +39,28 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
 
     const extraer = (texto, regex) => {
       const match = texto.match(regex);
-      return match ? match[1].trim() : null;
+      if (!match) return null;
+    
+      // Limpiar saltos de línea y espacios extra
+      let resultado = match[1].trim();
+    
+      // Si es un número (tracking, envio, sender_id, cp), quitar saltos de línea
+      if (/^\d+[\s\n\r]*\d*/.test(resultado)) {
+        resultado = resultado.replace(/[\s\n\r]+/g, '');
+      }
+    
+      return resultado;
     };
 
     for (let i = 0; i < etiquetasValidas.length; i++) {
       const bloque = etiquetasValidas[i];
-      console.log(`\n--- Procesando etiqueta ${i + 1}/${etiquetasValidas.length} ---`);
-   if (i === etiquetasValidas.length - 1) {
-    console.log('📝 ÚLTIMA ETIQUETA - Texto completo:');
-    console.log('─'.repeat(80));
-    console.log(bloque);
-    console.log('─'.repeat(80));
-  }
+      
       try {
         const tracking =
-          extraer(bloque, /Tracking:\s*([^\n\r]+)/i) ||
-          extraer(bloque, /Envio:\s*([^\n\r]+)/i);
+          extraer(bloque, /Tracking:\s*([\d\s\n\r]+)/i) ||
+          extraer(bloque, /Envio:\s*([\d\s\n\r]+)/i);
 
         if (!tracking) {
-          console.warn(`⚠️ Etiqueta ${i + 1}: Sin tracking ni número de envío, saltando`);
           errores.push({
             etiqueta: i + 1,
             error: 'Sin tracking ni número de envío',
@@ -75,13 +84,15 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
               localidad = cpDoc.localidad;
             }
           } catch (err) {
-            console.warn(`    ⚠️ Error buscando CP ${codigo_postal}:`, err.message);
+            console.warn(`⚠️ Error buscando CP ${codigo_postal}:`, err.message);
           }
         }
 
         resultados.push({
           tracking_id: tracking,
-          sender_id: extraer(bloque, /#(\d+)/),
+          sender_id: extraer(bloque, /Sender ID:\s*(\d+)/i) || 
+                     extraer(bloque, /#(\d+)/) ||
+                     senderIdGlobal,
           fecha: extraer(bloque, /Entrega:\s*([^\n\r]+)/i),
           codigo_postal,
           partido,
@@ -92,9 +103,8 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
         });
 
         procesadas += 1;
-        console.log(`  ✓ Etiqueta ${i + 1}/${etiquetasValidas.length} procesada`);
       } catch (pageErr) {
-        console.error(`  ❌ Error procesando etiqueta ${i + 1}:`, pageErr);
+        console.error(`❌ Error procesando etiqueta ${i + 1}:`, pageErr);
         errores.push({
           etiqueta: i + 1,
           error: pageErr.message,
@@ -103,12 +113,7 @@ router.post('/', upload.single('etiqueta'), async (req, res) => {
       }
     }
 
-    console.log(`\n═══════════════════════════════════════════════════════`);
-    console.log(`✅ Resultado final:`);
-    console.log(`   Total etiquetas: ${etiquetasValidas.length}`);
-    console.log(`   Creados: ${procesadas}`);
-    console.log(`   Errores: ${errores.length}`);
-    console.log(`═══════════════════════════════════════════════════════\n`);
+    console.log(`✅ ${procesadas} etiquetas procesadas, ${errores.length} errores`);
 
     res.json({
       etiquetas: resultados,

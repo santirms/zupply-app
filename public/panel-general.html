@@ -1073,6 +1073,7 @@ async function mostrarDetalle(envioId){
     renderEvidencias(data);
     switchTab('detalle');
     const cd=document.getElementById('contenidoDetalle');
+
     // Preparar info de cobro en destino
     let cobroHtml = '';
     if (data.cobroEnDestino?.habilitado) {
