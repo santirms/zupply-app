@@ -3,6 +3,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const Cliente = require('../models/Cliente');
 const Tenant = require('../models/Tenant');
+const Token = require('../models/Token'); // ← AGREGAR
 require('../models/Envio');
 require('../models/listaDePrecios');
 require('../models/partidos');
@@ -46,12 +47,6 @@ const { syncPendingShipments } = require('../services/meliSync');
     for (const tenant of tenants) {
       console.log(`\n[maintenance] === Procesando tenant: ${tenant.companyName} (${tenant.subdomain}) ===`);
 
-      // Verificar que tenga ML conectado
-      if (!tenant.mlIntegration?.accessToken) {
-        console.log(`[maintenance] ⚠️  Tenant ${tenant.subdomain} no tiene ML conectado, saltando...`);
-        continue;
-      }
-
       // ---------- (A) Backfill para clientes de ESTE tenant ----------
       const clientes = await Cliente.find({
         tenantId: tenant._id,
@@ -64,12 +59,21 @@ const { syncPendingShipments } = require('../services/meliSync');
 
       for (const cli of clientes) {
         try {
+          // ✅ NUEVO: Obtener el token individual del cliente
+          const clientToken = await Token.findOne({ user_id: cli.user_id });
+          
+          if (!clientToken || !clientToken.access_token) {
+            console.log(`[maintenance] ⚠️  Cliente ${cli.nombre} no tiene token válido, saltando...`);
+            globalTotals.errors++;
+            continue;
+          }
+
           const r = await backfillCliente({
             cliente: cli,
             days: BACKFILL_DAYS,
             delayMs: BACKFILL_DELAY_MS,
-            tenantId: tenant._id,  // ← PASAR tenantId
-            mlToken: tenant.mlIntegration.accessToken  // ← Token del tenant
+            tenantId: tenant._id,
+            mlToken: clientToken.access_token  // ← Token del cliente individual
           });
           
           globalTotals.totalShipments += r.total;
@@ -81,18 +85,23 @@ const { syncPendingShipments } = require('../services/meliSync');
           console.log(`[maintenance] Backfill ${cli.nombre} ->`, r);
         } catch (e) {
           globalTotals.errors++;
-          console.error('[maintenance] backfill error', cli._id?.toString(), e.response?.data || e.message);
+          console.error('[maintenance] backfill error', {
+            cliente: cli.nombre,
+            user_id: cli.user_id,
+            error: e.response?.data || e.message
+          });
         }
         
         await new Promise(r => setTimeout(r, 200));
       }
 
       // ---------- (B) Sync de estados pendientes de ESTE tenant ----------
+      // El sync ya funciona bien porque usa el token de cada cliente internamente
       const syncRes = await syncPendingShipments({
         limit: SYNC_LIMIT,
         delayMs: SYNC_DELAY_MS,
-        tenantId: tenant._id,  // ← PASAR tenantId
-        mlToken: tenant.mlIntegration.accessToken  // ← Token del tenant
+        tenantId: tenant._id
+        // ← NO pasar mlToken, syncPendingShipments lo busca por cliente
       });
       
       console.log(`[maintenance] Sync resumen ${tenant.subdomain}:`, syncRes);
