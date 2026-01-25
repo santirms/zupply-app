@@ -1,5 +1,5 @@
 // services/meliBackfill.js
-const { mlGet } = require('../utils/meliUtils');
+const { mlGet, mlGetWithTenant } = require('../utils/meliUtils');
 const logger = require('../utils/logger');
 const { ingestShipment } = require('./meliIngest');
 
@@ -7,45 +7,46 @@ const { ingestShipment } = require('./meliIngest');
  * Trae órdenes recientes y devuelve IDs de shipments asociados (únicos).
  * Usa /orders/search y toma shipping.id de cada orden.
  */
-async function listRecentShipmentIds({ user_id, days = 7 }) {
-  // desde hace N días a ahora (ISO)
+
+async function listRecentShipmentIds({ user_id, days = 7, mlToken, tenantId }) {
   const to   = new Date();
   const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-
+  
   const params = new URLSearchParams({
     seller: String(user_id),
-    // rangos de fecha de creación de la orden (formato ISO)
     'order.date_created.from': from.toISOString(),
     'order.date_created.to':   to.toISOString(),
     sort: 'date_desc',
     limit: '50',
     offset: '0'
   });
-
+  
   const base = 'https://api.mercadolibre.com/orders/search';
   let offset = 0;
   const ids = new Set();
 
-  // paginado simple
-  // NOTA: mlGet ya maneja refresh si hace falta.
   while (true) {
     params.set('offset', String(offset));
     const url = `${base}?${params.toString()}`;
-    const data = await mlGet(url, { user_id });
-
+    
+    // ← CAMBIAR: Usar mlGetWithTenant si tenemos tenantId
+    const data = tenantId 
+      ? await mlGetWithTenant(url, { tenantId, mlToken })
+      : await mlGet(url, { user_id, mlToken });
+    
     const results = Array.isArray(data?.results) ? data.results : [];
     for (const o of results) {
       const sid = o?.shipping?.id;
       if (sid) ids.add(String(sid));
     }
-
+    
     const paging = data?.paging || {};
     const total = Number(paging.total || 0);
     const lim   = Number(paging.limit || 50);
     offset += lim;
     if (offset >= total || results.length === 0) break;
   }
-
+  
   return Array.from(ids);
 }
 
@@ -53,19 +54,19 @@ async function listRecentShipmentIds({ user_id, days = 7 }) {
  * Ingesta masiva para un cliente (por user_id) de los últimos N días.
  * Crea/actualiza usando ingestShipment.
  */
-async function backfillCliente({ cliente, days = 7, delayMs = 120 }) {
+async function backfillCliente({ cliente, days = 7, delayMs = 120, tenantId, mlToken }) {
   if (!cliente?.user_id) {
     logger.warn('Backfill skipped: client without user_id', {
       cliente_id: cliente?._id?.toString?.()
     });
     return { total: 0, created: 0, updated: 0, skipped: 0, errors: 0, reason: 'no_user' };
   }
-  const shipmentIds = await listRecentShipmentIds({ user_id: cliente.user_id, days });
+  const shipmentIds = await listRecentShipmentIds({ user_id: cliente.user_id, days, mlToken, tenantId });
 
   let created = 0, updated = 0, skipped = 0, errors = 0;
   for (const shipmentId of shipmentIds) {
     try {
-      const res = await ingestShipment({ shipmentId, cliente });
+      const res = await ingestShipment({ shipmentId, cliente, tenantId, mlToken });
       // Podés hacer que ingestShipment devuelva un flag { created:true/false }
       if (res?.created === true) created++;
       else if (res?.updated === true) updated++;

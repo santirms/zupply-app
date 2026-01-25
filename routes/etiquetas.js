@@ -4,10 +4,14 @@ const Envio   = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 
 const { requireAuth, requireRole } = require('../middlewares/auth');
+const identifyTenant = require('../middlewares/identifyTenant');
+
+// Si tenés una utilidad para zona por CP, importala (ajusta el path):
 const { detectarZona } = require('../utils/detectarZona');
 const { geocodeDireccion } = require('../utils/geocode');
 
 router.use(requireAuth);
+router.use(identifyTenant);
 
 // POST /etiquetas/cargar-masivo
 // Recibe etiquetas parseadas desde el frontend (después de leer el PDF)
@@ -22,7 +26,6 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
     const etiquetas = req.body.etiquetas || req.body.envios;
     
     if (!Array.isArray(etiquetas) || etiquetas.length === 0) {
-      console.log('❌ Error: No se recibieron etiquetas');
       return res.status(400).json({ error: 'No se recibieron etiquetas.' });
     }
 
@@ -105,7 +108,8 @@ router.post('/cargar-masivo', requireRole('admin','coordinador'), async (req, re
             type: 'Point',
             coordinates: [coordenadas.lon, coordenadas.lat]
           } : null
-        }
+        },
+        tenantId: req.tenantId
       };
     }));
 

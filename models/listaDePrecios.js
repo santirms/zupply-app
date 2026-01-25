@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const tenantPlugin = require('../plugins/tenantPlugin');
 
 const listaDePreciosSchema = new mongoose.Schema({
   nombre: { type: String, required: true },
@@ -11,5 +12,10 @@ const listaDePreciosSchema = new mongoose.Schema({
   fechaCreacion: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.models.ListaDePrecios ||
-  mongoose.model('ListaDePrecios', listaDePreciosSchema);
+// Aplicar plugin multi-tenant
+listaDePreciosSchema.plugin(tenantPlugin);
+
+// Índices
+listaDePreciosSchema.index({ tenantId: 1, nombre: 1 });
+
+module.exports = mongoose.model('ListaDePrecios', listaDePreciosSchema);

@@ -162,7 +162,17 @@ async function main() {
   let ok = 0, fail = 0;
   for (const e of candidatos) {
     try {
-      await ensureMeliHistory(e, { force, rebuild });
+      // ← BUSCAR EL TENANT DEL ENVÍO
+    const Tenant = require('../models/Tenant');
+    const envioDoc = await Envio.findById(e._id).lean();
+    const tenant = await Tenant.findById(envioDoc.tenantId);
+    
+    if (!tenant?.mlIntegration?.accessToken) {
+      console.log(` ⚠️  ${e.meli_id || e._id} sin token ML, saltando...`);
+      fail++;
+      continue;
+    }
+      await ensureMeliHistory(e, { force, rebuild, mlToken: tenant.mlIntegration.accessToken });
 
       const refreshed = await Envio.findById(e._id, { historial: 1, estado_meli: 1, meli_id: 1 }).lean();
       const hist = Array.isArray(refreshed?.historial) ? refreshed.historial : [];

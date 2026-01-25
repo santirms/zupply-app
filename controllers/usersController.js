@@ -51,9 +51,9 @@ const toPublicUser = (user = {}) => ({
 
 const isNonEmptyString = v => typeof v === 'string' && v.trim().length > 0;
 
-exports.listar = async (_req, res, next) => {
+exports.listar = async (req, res, next) => {
   try {
-    const users = await User.find()
+    const users = await User.find({ tenantId: req.tenantId })
       .select('-password_hash')
       .populate('driver_id', 'nombre telefono activo')
       .sort({ createdAt: -1 })
@@ -72,18 +72,22 @@ exports.crear = async (req, res, next) => {
 
     if (!role) return res.status(400).json({ error: 'role requerido' });
 
-    // === Soporte CHOFER (como ya tenías) ===
+    // === Soporte CHOFER ===
     if (role === 'chofer' && !driver_id) {
       if (!chofer_nombre || !chofer_telefono) {
         return res.status(400).json({ error: 'chofer_nombre y chofer_telefono requeridos para crear chofer' });
       }
-      const nuevo = await Chofer.create({ nombre: chofer_nombre, telefono: chofer_telefono });
+      const nuevo = await Chofer.create({ 
+        nombre: chofer_nombre, 
+        telefono: chofer_telefono,
+        tenantId: req.tenantId  // ← AGREGAR
+      });
       driver_id = nuevo._id;
       phone = phone || String(chofer_telefono);
       username = username || slugify(chofer_nombre);
     }
 
-    // === Soporte CLIENTE (NUEVO) ===
+    // === Soporte CLIENTE ===
     if (role === 'cliente') {
       if (!email) return res.status(400).json({ error: 'email requerido para usuarios cliente' });
 
@@ -102,7 +106,7 @@ exports.crear = async (req, res, next) => {
     if (username) {
       username = slugify(username);
       let u = username, i = 1;
-      while (await User.findOne({ username: u })) u = `${username}${++i}`;
+      while (await User.findOne({ username: u, tenantId: req.tenantId })) u = `${username}${++i}`;
       username = u;
     }
 
@@ -119,6 +123,7 @@ exports.crear = async (req, res, next) => {
       password_hash,
       is_active: parseBool(activo, true),
       must_change_password: !password,
+      tenantId: req.tenantId,  // ← AGREGAR
       // ⬇ guarda el scope del cliente
       sender_ids: role === 'cliente' ? sender_ids : undefined,
       cliente_id: role === 'cliente' ? (cliente_id || null) : undefined
@@ -148,7 +153,7 @@ exports.actualizar = async (req, res, next) => {
       chofer_telefono
     } = req.body || {};
 
-    const userActual = await User.findById(req.params.id).populate('driver_id');
+    const userActual = await User.findOne({ _id: req.params.id, tenantId: req.tenantId }).populate('driver_id');
     if (!userActual) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
@@ -186,13 +191,17 @@ exports.actualizar = async (req, res, next) => {
         if (nombreTrim) updateChofer.nombre = nombreTrim;
         if (telefonoTrim) updateChofer.telefono = telefonoTrim;
         if (Object.keys(updateChofer).length) {
-          await Chofer.findByIdAndUpdate(userActual.driver_id._id, { $set: updateChofer });
+          await Chofer.findOneAndUpdate(
+            { _id: userActual.driver_id._id, tenantId: req.tenantId },
+            { $set: updateChofer }
+          );
         }
       } else if (nombreTrim && telefonoTrim) {
         const nuevoChofer = await Chofer.create({
           nombre: nombreTrim,
           telefono: telefonoTrim,
-          activo: true
+          activo: true,
+          tenantId: req.tenantId  // ← AGREGAR
         });
         upd.driver_id = nuevoChofer._id;
       }
@@ -209,8 +218,12 @@ exports.actualizar = async (req, res, next) => {
       if (typeof sender_ids !== 'undefined') upd.sender_ids = uniq(merged);
     }
 
-    const updated = await User.findByIdAndUpdate(req.params.id, upd, { new: true })
-      .populate('driver_id', 'nombre telefono activo');
+    const updated = await User.findOneAndUpdate(
+      { _id: req.params.id, tenantId: req.tenantId },
+      upd,
+      { new: true }
+    ).populate('driver_id', 'nombre telefono activo');
+    
     res.json({ ok: true, user: updated ? toPublicUser(updated) : null });
   } catch (e) { next(e); }
 };
@@ -225,19 +238,22 @@ exports.crearCliente = async (req, res, next) => {
 
 exports.eliminar = async (req, res, next) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await User.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
     if (user.role === 'admin') {
-      const adminCount = await User.countDocuments({ role: 'admin' });
+      const adminCount = await User.countDocuments({ 
+        role: 'admin',
+        tenantId: req.tenantId
+      });
       if (adminCount <= 1) {
         return res.status(400).json({ error: 'No se puede eliminar el último administrador' });
       }
     }
 
-    await User.findByIdAndDelete(req.params.id);
+    await User.findOneAndDelete({ _id: req.params.id, tenantId: req.tenantId });
     res.json({ ok: true });
   } catch (e) { next(e); }
 };

@@ -384,7 +384,74 @@ async function guardarCliente(ev) {
 }
 
 async function borrarCliente(id) {
-  if (!confirm('¿Eliminar cliente?')) return;
-  try { await fetchJSON(`${API_CLIENTES()}/${id}`, { method:'DELETE' }); cargarClientes(); }
-  catch (e) { console.error('Error borrando cliente:', e); alert('No se pudo eliminar'); }
+  try {
+    // 1. Obtener info del cliente para mostrar cuántos envíos se eliminarán
+    const cliente = await fetchJSON(`${API_CLIENTES()}/${id}`);
+    
+    // 2. Calcular cuántos envíos se eliminarán (aproximado - el backend hará el cálculo exacto)
+    const hace10Dias = new Date();
+    hace10Dias.setDate(hace10Dias.getDate() - 10);
+    
+    // Mostrar modal de confirmación
+    const mensaje = `⚠️ ATENCIÓN: Esto eliminará el cliente "${cliente.nombre}" y todos sus envíos finalizados hace más de 10 días.
+
+${cliente.enviosHistoricos ? `Se eliminarán aproximadamente ${cliente.enviosHistoricos} envíos históricos.` : 'No se eliminarán envíos recientes.'}
+
+Esta acción NO se puede deshacer.
+
+¿Estás seguro de continuar?`;
+
+    if (!confirm(mensaje)) return;
+    
+    // Confirmar por segunda vez
+    if (!confirm('⚠️ CONFIRMACIÓN FINAL: ¿Eliminar cliente y envíos históricos?')) return;
+
+    // 3. Mostrar modal de loading
+    mostrarModalLoading('Eliminando cliente y envíos históricos...');
+
+    // 4. Eliminar
+    const resultado = await fetchJSON(`${API_CLIENTES()}/${id}`, { method: 'DELETE' });
+
+    // 5. Ocultar loading
+    ocultarModalLoading();
+
+    // 6. Mostrar resultado
+    const mensajeExito = `✅ Cliente eliminado exitosamente${resultado.enviosEliminados > 0 ? `\n\n🗑️ Se eliminaron ${resultado.enviosEliminados} envíos históricos` : ''}`;
+    alert(mensajeExito);
+
+    // 7. Recargar lista
+    cargarClientes();
+
+  } catch (e) {
+    ocultarModalLoading();
+    console.error('Error borrando cliente:', e);
+    alert('❌ Error: ' + e.message);
+  }
+}
+
+// Modal de loading simple
+function mostrarModalLoading(mensaje) {
+  let modal = document.getElementById('modalLoadingEliminar');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modalLoadingEliminar';
+    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+      <div class="bg-white dark:bg-gray-800 rounded-2xl p-8 max-w-md text-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+        <p id="mensajeLoading" class="text-lg font-medium text-gray-900 dark:text-white"></p>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Por favor, no cierres esta ventana</p>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+  document.getElementById('mensajeLoading').textContent = mensaje;
+  modal.classList.remove('hidden');
+}
+
+function ocultarModalLoading() {
+  const modal = document.getElementById('modalLoadingEliminar');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
 }
