@@ -332,6 +332,14 @@ router.post('/webhook', cors(), async (req, res) => {
       });
 
       await ingestShipment({ shipmentId, cliente });
+      // ✅ AGREGAR ESTO:
+      // Asignar tenantId si el cliente tiene uno
+      if (cliente.tenantId) {
+        await Envio.updateOne(
+          { meli_id: shipmentId },
+          { $set: { tenantId: cliente.tenantId } }
+        );
+      }
 
       const token = await getValidToken(cliente.user_id);
       const envio = await Envio.findOne({ meli_id: shipmentId }).lean();
