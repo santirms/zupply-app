@@ -1,9 +1,17 @@
+// middlewares/identifyTenant.js
+
 const Tenant = require('../models/Tenant');
 
 async function identifyTenant(req, res, next) {
   try {
     const host = req.get('host') || '';
     let subdomain = host.split('.')[0];
+    
+    // Dominios neutrales (sin tenant) - permitir acceso sin tenant
+    if (host === 'tracking.zupply.tech' || subdomain === 'tracking') {
+      req.isTrackingDomain = true;
+      return next();
+    }
     
     // Fallback para localhost
     if (subdomain === 'localhost' || subdomain.includes('localhost:')) {
