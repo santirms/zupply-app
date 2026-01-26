@@ -512,7 +512,7 @@ function abrirModalLista(envios) {
     const destinatario = envio.destinatario || '';
     const direccion = envio.direccion || '';
     const telefono = typeof envio.telefono === 'string' ? envio.telefono.replace(/\D/g, '') : '';
-    const linkSeguimiento = tracking ? `https://app.zupply.tech/track/${tracking}` : '';
+    const linkSeguimiento = tracking ? `https://tracking.zupply.tech/track/${tracking}` : '';
     const qrData = linkSeguimiento ? encodeURIComponent(linkSeguimiento) : '';
 
     const acciones = [];
@@ -690,7 +690,7 @@ window.imprimirEtiquetaIndividual = imprimirEtiquetaIndividual;
 function generarMensajeWhatsApp(envio = {}) {
   const destinatario = envio.destinatario || 'Cliente';
   const tracking = envio.tracking || envio.id_venta || '';
-  const linkSeguimiento = tracking ? `https://app.zupply.tech/track/${tracking}` : '';
+  const linkSeguimiento = tracking ? `https://tracking.zupply.tech/track/${tracking}` : '';
 
   // Obtener nombre del cliente (vendedor)
   const nombreCliente = envio.cliente_id?.nombre ||
@@ -733,7 +733,7 @@ function abrirModalConfirmacion(envio) {
   document.getElementById('confDestinatario').textContent = envio.destinatario || '-';
 
   const tracking = envio.tracking || '';
-  const linkSeguimiento = tracking ? `https://app.zupply.tech/track/${tracking}` : '';
+  const linkSeguimiento = tracking ? `https://tracking.zupply.tech/track/${tracking}` : '';
   document.getElementById('confLink').value = linkSeguimiento;
 
   const btnWhatsApp = document.getElementById('btnWhatsAppModal');
