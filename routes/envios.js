@@ -799,7 +799,6 @@ router.get('/tracking/:tracking/label', labelByTracking);
  * Genera UN SOLO PDF con todas las etiquetas de los envíos solicitados
  * Formatos soportados: termica (10x15cm, 1 por página), a4 (4 por hoja)
  */
-const identifyTenant = require('../middlewares/identifyTenant');
 
 router.post('/etiquetas-lote', identifyTenant, requireAuth, async (req, res) => {
   try {
