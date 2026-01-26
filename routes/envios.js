@@ -823,7 +823,10 @@ router.post('/etiquetas-lote', identifyTenant, requireAuth, async (req, res) => 
       const tenantId = req.user?.tenantId || req.tenantId;
       // Intentar buscar por _id de MongoDB primero
       if (mongoose.Types.ObjectId.isValid(envioId)) {
-        envio = await Envio.findById(envioId).populate('cliente_id');
+       envio = await Envio.findOne({
+          _id: envioId,
+          tenantId: tenantId  // ← AGREGAR
+        }).populate('cliente_id');
       }
 
       // Si no se encontró, buscar por tracking/id_venta
