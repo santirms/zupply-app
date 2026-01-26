@@ -45,7 +45,7 @@ function generarMensajeWhatsAppTabla(envio) {
                         '';
   const destinatario = envio.destinatario || 'Cliente';
   const tracking = envio.tracking || envio.id_venta || '';
-  const linkSeguimiento = `https://app.zupply.tech/track/${tracking}`;
+  const linkSeguimiento = `https://tracking.zupply.tech/track/${tracking}`;
 
   let mensaje = `Hola ${destinatario}!\n\n`;
 
@@ -875,7 +875,7 @@ async function abrirModalDetalle(envioId) {
           'Cliente';
         const trackingParaMensaje = tracking !== '-' ? tracking : (envio.id_venta || envio._id || '');
         const linkSeguimiento = trackingParaMensaje
-          ? `https://app.zupply.tech/track/${trackingParaMensaje}`
+          ? `https://tracking.zupply.tech/track/${trackingParaMensaje}`
           : '';
 
         const lineasMensaje = [
