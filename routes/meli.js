@@ -409,30 +409,49 @@ router.post('/force-sync/:meli_id', identifyTenant, async (req, res) => {
   try {
     const tenant = req.tenant;
     const meli_id = String(req.params.meli_id);
-
-    if (!tenant.mlIntegration?.accessToken) {
-      return res.status(400).json({
-        error: 'Tenant no vinculado a MercadoLibre'
-      });
-    }
-
+    
+    // Buscar el envío
     const envio = await Envio.findOne({ meli_id, tenantId: tenant._id }).populate('cliente_id');
     if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
-
+    
     const cliente = await Cliente.findById(envio.cliente_id).populate('lista_precios');
     if (!cliente) return res.status(400).json({ error: 'Cliente no encontrado' });
-
+    
+    // ✅ OBTENER EL TOKEN DEL CLIENTE (obligatorio)
+    const Token = require('../models/Token');
+    
+    if (!cliente.user_id) {
+      return res.status(400).json({
+        error: 'Este cliente no está vinculado a MercadoLibre',
+        hint: 'El cliente debe conectar su cuenta de ML primero'
+      });
+    }
+    
+    const clientToken = await Token.findOne({ user_id: cliente.user_id });
+    
+    if (!clientToken?.access_token) {
+      return res.status(400).json({
+        error: 'No se encontró token válido de ML para este cliente',
+        hint: 'El cliente debe re-vincular su cuenta de ML'
+      });
+    }
+    
+    const mlToken = clientToken.access_token;
+    
+    // ✅ USAR EL TOKEN DEL CLIENTE
     const updated = await ingestShipment({
       shipmentId: meli_id,
       cliente,
-      tenantId: tenant._id
+      tenantId: tenant._id,
+      mlToken: mlToken
     });
-
-    const token = tenant.mlIntegration.accessToken;
-    await ensureMeliHistory(envio._id, { token, force: true });
-
+    
+    // ✅ USAR EL MISMO TOKEN PARA HISTORY
+    await ensureMeliHistory(envio._id, { token: mlToken, force: true });
+    
     const latest = await Envio.findById(envio._id).lean();
     res.json({ ok: true, envio: latest || updated });
+    
   } catch (err) {
     logger.error('force-sync error', {
       error: err.response?.data || err.message,
