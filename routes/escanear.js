@@ -6,7 +6,7 @@ const axios   = require('axios');
 const Envio   = require('../models/Envio');
 const Cliente = require('../models/Cliente');
 const Zona    = require('../models/Zona');
-
+const identifyTenant = require('../middlewares/identifyTenant');
 const detectarZona     = require('../utils/detectarZona');
 const { getValidToken } = require('../utils/meliUtils');
 const { geocodeDireccion } = require('../utils/geocode');
@@ -107,7 +107,7 @@ router.post('/manual', identifyTenant, async (req, res) => {
 });
 
 // ---------- Escaneo MeLi (QR Flex) ----------
-router.post('/meli', async (req, res) => {
+router.post('/meli', identifyTenant, async (req, res) => {
   try {
     // El QR puede venir como:
     // { id / tracking_id, sender_id, hash_code/hashnumber, ... }
@@ -191,7 +191,10 @@ router.post('/meli', async (req, res) => {
     await Envio.updateOne(
       { meli_id },
       {
-        $setOnInsert: { fecha: new Date() },
+        $setOnInsert: { 
+          fecha: new Date(),
+          tenantId: req.tenantId
+        },
         $set: {
           meli_id,
           sender_id:     cliente.codigo_cliente || sender_id, // tu "interno"
