@@ -159,17 +159,56 @@
         </div>
       </div>
     </section>
+   
+  <!-- TAB: MAPA -->
+<section id="tab-mapa" class="tab hidden">
+  <!-- Filtros y controles -->
+  <div class="grid sm:grid-cols-3 gap-3 mb-3">
+    <select id="choferSelMapa" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]">
+      <option value="">(Elegir chofer)</option>
+    </select>
+    <select id="selectListaMapa" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]">
+      <option value="">(sin lista)</option>
+    </select>
+    <select id="filtroEstadoMapa" class="border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 bg-white dark:bg-[#0B1020]">
+      <option value="todos">📦 Todos</option>
+      <option value="urgentes">🔴 Re-entregas urgentes</option>
+      <option value="planta">🟠 En planta</option>
+      <option value="colectados">🔵 Colectados (Flex)</option>
+    </select>
+  </div>
 
-    <!-- TAB: MAPA -->
-    <section id="tab-mapa" class="tab hidden">
-      <div class="grid sm:grid-cols-2 gap-3 mb-3">
-        <select id="choferSelMapa" class="border rounded px-2 py-2"></select>
-        <select id="selectListaMapa" class="border rounded px-2 py-2"></select>
-      </div>
-      <div class="rounded border border-dashed h-80 grid place-items-center text-sm opacity-70">
-        Mapa aquí (wireframe)
-      </div>
-    </section>
+  <!-- Leyenda de colores -->
+  <div class="flex flex-wrap gap-3 mb-3 text-sm">
+    <div class="flex items-center gap-2">
+      <div class="w-4 h-4 rounded-full" style="background:#E74C3C"></div>
+      <span>Re-entregas</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="w-4 h-4 rounded-full" style="background:#F39C12"></div>
+      <span>En planta</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="w-4 h-4 rounded-full" style="background:#3498DB"></div>
+      <span>Colectados</span>
+    </div>
+    <div class="ml-auto font-semibold" id="countMapa">0 envíos cargados</div>
+  </div>
+
+  <!-- Mapa Leaflet -->
+  <div id="mapaMapa" class="rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm" style="height:500px;"></div>
+
+  <!-- Controles inferiores -->
+  <div class="mt-3 flex items-center gap-3">
+    <div class="text-sm" id="countSelMapa">0 seleccionados</div>
+    <button id="btnLimpiarSelMapa" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">
+      🗑️ Limpiar selección
+    </button>
+    <button id="btnAsignarMapa" class="ml-auto px-4 py-2 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">
+      ✅ Asignar seleccionados
+    </button>
+  </div>
+</section>
 <!-- Botón abrir modal -->
 <div class="mt-6 flex justify-end">
   <button id="btnOpenHist" class="px-4 py-2 rounded-xl font-semibold shadow-sm bg-slate-700 hover:bg-slate-800 text-white">📋 Historial de remitos</button>
