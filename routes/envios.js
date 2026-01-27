@@ -2162,7 +2162,7 @@ router.post('/registrar-intento-fallido', requireAuth, upload.single('fotoEviden
  * GET /api/envios/asignables
  * Devuelve envíos listos para asignar en el mapa
  */
-router.get('/asignables', identifyTenant, async (req, res) => {
+router.get('/asignables', async (req, res) => {
   try {
     const { filtro } = req.query; // 'urgentes', 'planta', 'colectados', 'todos'
     
