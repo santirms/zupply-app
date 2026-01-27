@@ -440,6 +440,93 @@ router.get('/', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/envios/asignables
+ * Devuelve envíos listos para asignar en el mapa
+ */
+router.get('/asignables', async (req, res) => {
+  try {
+    const { filtro } = req.query; // 'urgentes', 'planta', 'colectados', 'todos'
+    
+    const estadosAsignables = [
+      'en_planta',
+      'en_camino',
+      'comprador_ausente', 
+      'reprogramado',
+      'no_visitado'
+    ];
+    
+    let estadosFiltrados = estadosAsignables;
+    
+    if (filtro === 'urgentes') {
+      estadosFiltrados = ['comprador_ausente', 'reprogramado', 'no_visitado'];
+    } else if (filtro === 'planta') {
+      estadosFiltrados = ['en_planta'];
+    } else if (filtro === 'colectados') {
+      estadosFiltrados = ['en_camino'];
+    }
+    
+    const envios = await Envio.find({
+      tenantId: req.tenantId,
+      $or: [
+        // Estados internos asignables SIN chofer
+        { 
+          estado: { $in: estadosFiltrados },
+          $or: [
+            { chofer: null },
+            { chofer: { $exists: false } }
+          ]
+        },
+        // O estado de ML "shipped" sin chofer
+        { 
+          'estado_meli.status': 'shipped',
+          $or: [
+            { chofer: null },
+            { chofer: { $exists: false } }
+          ]
+        }
+      ],
+      // Coordenadas válidas
+      latitud: { $ne: null },
+      longitud: { $ne: null }
+    })
+    .populate('cliente_id', 'nombre')
+    .select('id_venta meli_id destinatario direccion codigo_postal partido estado estado_meli latitud longitud cliente_id')
+    .lean();
+    
+    // Agregar color según prioridad
+    const conColor = envios.map(e => ({
+      ...e,
+      color: getColorPorEstado(e)
+    }));
+    
+    res.json(conColor);
+    
+  } catch (err) {
+    console.error('[GET /asignables] Error:', err);
+    res.status(500).json({ error: 'Error obteniendo envíos asignables' });
+  }
+});
+
+function getColorPorEstado(envio) {
+  // Re-entregas → rojo
+  if (['comprador_ausente', 'reprogramado', 'no_visitado'].includes(envio.estado)) {
+    return '#E74C3C';
+  }
+  
+  // En planta → naranja
+  if (envio.estado === 'en_planta') {
+    return '#F39C12';
+  }
+  
+  // En camino (colectado) → azul
+  if (envio.estado === 'en_camino' || envio.estado_meli?.status === 'shipped') {
+    return '#3498DB';
+  }
+  
+  // Default
+  return '#95A5A6';
+}
 
 // POST /guardar-masivo
 router.post('/guardar-masivo', requireRole('admin','coordinador'), async (req, res) => {
@@ -2158,92 +2245,5 @@ router.post('/registrar-intento-fallido', requireAuth, upload.single('fotoEviden
   }
 });
 
-/**
- * GET /api/envios/asignables
- * Devuelve envíos listos para asignar en el mapa
- */
-router.get('/asignables', async (req, res) => {
-  try {
-    const { filtro } = req.query; // 'urgentes', 'planta', 'colectados', 'todos'
-    
-    const estadosAsignables = [
-      'en_planta',
-      'en_camino',
-      'comprador_ausente', 
-      'reprogramado',
-      'no_visitado'
-    ];
-    
-    let estadosFiltrados = estadosAsignables;
-    
-    if (filtro === 'urgentes') {
-      estadosFiltrados = ['comprador_ausente', 'reprogramado', 'no_visitado'];
-    } else if (filtro === 'planta') {
-      estadosFiltrados = ['en_planta'];
-    } else if (filtro === 'colectados') {
-      estadosFiltrados = ['en_camino'];
-    }
-    
-    const envios = await Envio.find({
-      tenantId: req.tenantId,
-      $or: [
-        // Estados internos asignables SIN chofer
-        { 
-          estado: { $in: estadosFiltrados },
-          $or: [
-            { chofer: null },
-            { chofer: { $exists: false } }
-          ]
-        },
-        // O estado de ML "shipped" sin chofer
-        { 
-          'estado_meli.status': 'shipped',
-          $or: [
-            { chofer: null },
-            { chofer: { $exists: false } }
-          ]
-        }
-      ],
-      // Coordenadas válidas
-      latitud: { $ne: null },
-      longitud: { $ne: null }
-    })
-    .populate('cliente_id', 'nombre')
-    .select('id_venta meli_id destinatario direccion codigo_postal partido estado estado_meli latitud longitud cliente_id')
-    .lean();
-    
-    // Agregar color según prioridad
-    const conColor = envios.map(e => ({
-      ...e,
-      color: getColorPorEstado(e)
-    }));
-    
-    res.json(conColor);
-    
-  } catch (err) {
-    console.error('[GET /asignables] Error:', err);
-    res.status(500).json({ error: 'Error obteniendo envíos asignables' });
-  }
-});
-
-function getColorPorEstado(envio) {
-  // Re-entregas → rojo
-  if (['comprador_ausente', 'reprogramado', 'no_visitado'].includes(envio.estado)) {
-    return '#E74C3C';
-  }
-  
-  // En planta → naranja
-  if (envio.estado === 'en_planta') {
-    return '#F39C12';
-  }
-  
-  // En camino (colectado) → azul
-  if (envio.estado === 'en_camino' || envio.estado_meli?.status === 'shipped') {
-    return '#3498DB';
-  }
-  
-  // Default
-  return '#95A5A6';
-}
 
 module.exports = router;
