@@ -264,21 +264,37 @@
     const CLIENTES_MAP = new Map();
     const stateQR = { items: [], seen: new Set() };
 
+    const stateMapa = {
+  map: null,
+  markers: [],
+  envios: [],
+  selected: new Set()
+};
+
     // ===== Tabs
-    function mostrarTab(name) {
-      $$('.tab').forEach(t => t.classList.add('hidden'));
-      $('#tab-' + name).classList.remove('hidden');
-      $$('.tab-btn').forEach(b => {
-        b.classList.remove('bg-[var(--z-primary)]','text-[var(--z-primary-fg)]');
-        b.classList.add('border', 'border-slate-300', 'dark:border-white/10', 'bg-slate-100', 'dark:bg-slate-800', 'hover:bg-slate-200', 'dark:hover:bg-slate-700');
-        b.classList.remove('text-white');
-      });
-      const btn = $(`.tab-btn[data-tab="${name}"]`);
-      if (btn) {
-        btn.classList.remove('border', 'border-slate-300', 'dark:border-white/10', 'bg-slate-100', 'dark:bg-slate-800', 'hover:bg-slate-200', 'dark:hover:bg-slate-700');
-        btn.classList.add('bg-[var(--z-primary)]','text-[var(--z-primary-fg)]');
-      }
-    }
+   function mostrarTab(name) {
+  $$('.tab').forEach(t => t.classList.add('hidden'));
+  $('#tab-' + name).classList.remove('hidden');
+  $$('.tab-btn').forEach(b => {
+    b.classList.remove('bg-[var(--z-primary)]','text-[var(--z-primary-fg)]');
+    b.classList.add('border', 'border-slate-300', 'dark:border-white/10', 'bg-slate-100', 'dark:bg-slate-800', 'hover:bg-slate-200', 'dark:hover:bg-slate-700');
+    b.classList.remove('text-white');
+  });
+  const btn = $(`.tab-btn[data-tab="${name}"]`);  // ← Faltaba el paréntesis de apertura antes del backtick
+  if (btn) {
+    btn.classList.remove('border', 'border-slate-300', 'dark:border-white/10', 'bg-slate-100', 'dark:bg-slate-800', 'hover:bg-slate-200', 'dark:hover:bg-slate-700');
+    btn.classList.add('bg-[var(--z-primary)]','text-[var(--z-primary-fg)]');
+  }
+  
+  // Inicializar mapa cuando se abre la tab
+  if (name === 'mapa') {
+    setTimeout(() => {
+      initMapa();
+      const filtro = $('#filtroEstadoMapa')?.value || 'todos';
+      cargarEnviosMapa(filtro);
+    }, 100);
+  }
+}
     document.addEventListener('DOMContentLoaded', () => {
       $$('.tab-btn').forEach(b => b.addEventListener('click', () => mostrarTab(b.dataset.tab)));
     });
@@ -917,6 +933,173 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btnFiltrarRemitos')?.addEventListener('click', cargarRemitos);
 });
 
+// ===== MAPA =====
+async function initMapa() {
+  // Solo inicializar una vez
+  if (stateMapa.map) return;
+
+  const mapDiv = document.getElementById('mapaMapa');
+  if (!mapDiv) return;
+
+  // Crear mapa centrado en Buenos Aires
+  stateMapa.map = L.map('mapaMapa').setView([-34.6037, -58.3816], 11);
+
+  // Agregar tiles (OpenStreetMap)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 18
+  }).addTo(stateMapa.map);
+
+  console.log('✅ Mapa inicializado');
+}
+
+async function cargarEnviosMapa(filtro = 'todos') {
+  try {
+    const url = `/api/envios/asignables?filtro=${filtro}`;
+    const res = await fetch(url, { credentials: 'include' });
+    
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const envios = await res.json();
+    stateMapa.envios = envios;
+    
+    // Limpiar marcadores anteriores
+    stateMapa.markers.forEach(m => m.remove());
+    stateMapa.markers = [];
+    stateMapa.selected.clear();
+
+    // Crear marcadores
+    envios.forEach(envio => {
+      const marker = L.circleMarker([envio.latitud, envio.longitud], {
+        radius: 8,
+        fillColor: envio.color,
+        color: '#fff',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.8
+      });
+
+      // Popup con info
+      const tracking = envio.id_venta || envio.meli_id;
+      marker.bindPopup(`
+        <div style="min-width:200px">
+          <strong>${tracking}</strong><br>
+          ${envio.destinatario}<br>
+          ${envio.direccion}<br>
+          ${envio.codigo_postal} - ${envio.partido}<br>
+          Estado: <strong>${envio.estado}</strong>
+        </div>
+      `);
+
+      // Click para seleccionar
+      marker.on('click', () => {
+        const id = envio._id;
+        if (stateMapa.selected.has(id)) {
+          stateMapa.selected.delete(id);
+          marker.setStyle({ weight: 2 });
+        } else {
+          stateMapa.selected.add(id);
+          marker.setStyle({ weight: 4, color: '#000' });
+        }
+        actualizarContadorMapa();
+      });
+
+      marker.addTo(stateMapa.map);
+      stateMapa.markers.push(marker);
+    });
+
+    // Ajustar vista
+    if (envios.length > 0) {
+      const bounds = L.latLngBounds(envios.map(e => [e.latitud, e.longitud]));
+      stateMapa.map.fitBounds(bounds, { padding: [50, 50] });
+    }
+
+    // Actualizar contador
+    document.getElementById('countMapa').textContent = `${envios.length} envíos cargados`;
+    actualizarContadorMapa();
+
+    console.log(`✅ ${envios.length} envíos cargados en mapa`);
+    
+  } catch (err) {
+    console.error('Error cargando envíos:', err);
+    alert('Error al cargar envíos del mapa');
+  }
+}
+
+function actualizarContadorMapa() {
+  const count = stateMapa.selected.size;
+  document.getElementById('countSelMapa').textContent = `${count} seleccionado${count !== 1 ? 's' : ''}`;
+}
+
+function limpiarSeleccionMapa() {
+  stateMapa.selected.clear();
+  stateMapa.markers.forEach(m => {
+    m.setStyle({ weight: 2, color: '#fff' });
+  });
+  actualizarContadorMapa();
+}
+
+async function asignarMapa() {
+  const chofer_id = document.getElementById('choferSelMapa')?.value || '';
+  const lista_chofer_id = document.getElementById('selectListaMapa')?.value || null;
+  const lista_nombre = document.getElementById('selectListaMapa')?.selectedOptions?.[0]?.text?.trim() || '';
+  
+  const envio_ids = Array.from(stateMapa.selected);
+  
+  if (!chofer_id) {
+    return alert('Elegí un chofer');
+  }
+  
+  if (!envio_ids.length) {
+    return alert('Seleccioná al menos un envío en el mapa');
+  }
+  
+  if (!confirm(`¿Asignar ${envio_ids.length} envío${envio_ids.length !== 1 ? 's' : ''} a ${document.getElementById('choferSelMapa').selectedOptions[0]?.text}?`)) {
+    return;
+  }
+  
+  try {
+    const res = await fetch('/api/asignaciones/mapa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        chofer_id,
+        lista_chofer_id,
+        lista_nombre,
+        envio_ids
+      })
+    });
+    
+    const data = await res.json();
+    
+    if (!res.ok || !data || data.ok !== true) {
+      throw new Error(data?.error || `HTTP ${res.status}`);
+    }
+    
+    alert(`✅ ${data.total} envío${data.total !== 1 ? 's' : ''} asignado${data.total !== 1 ? 's' : ''}`);
+    
+    // Mostrar enlaces si están disponibles
+    if (data.remito_url) {
+      window.open(data.remito_url, '_blank');
+    }
+    
+    if (data.whatsapp_url) {
+      window.open(data.whatsapp_url, '_blank');
+    }
+    
+    // Recargar mapa
+    const filtro = document.getElementById('filtroEstadoMapa')?.value || 'todos';
+    await cargarEnviosMapa(filtro);
+    
+  } catch (err) {
+    console.error('Error asignando desde mapa:', err);
+    alert('Error al asignar: ' + err.message);
+  }
+} 
+    
     // ===== Init
     document.addEventListener('DOMContentLoaded', () => {
       mostrarTab('qr');
@@ -924,8 +1107,15 @@ document.addEventListener('DOMContentLoaded', () => {
       initQrScanner();
       renderListQR();
       $('#btnAsignarQR').addEventListener('click', asignarQR);
+      // ✅ AGREGAR ESTO:
+      // Eventos del mapa
+      $('#filtroEstadoMapa')?.addEventListener('change', (e) => {
+      cargarEnviosMapa(e.target.value);
     });
-
+      $('#btnLimpiarSelMapa')?.addEventListener('click', limpiarSeleccionMapa);
+      $('#btnAsignarMapa')?.addEventListener('click', asignarMapa);
+  });
+   
     // ===== Menú de usuario =====
     async function initUserMenu() {
       const userBtn = document.getElementById('userBtn');
