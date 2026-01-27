@@ -12,7 +12,7 @@ const { getValidToken } = require('../utils/meliUtils');
 const { geocodeDireccion } = require('../utils/geocode');
 
 // ---------- Escaneo MANUAL (por lector/teclado) ----------
-router.post('/manual', async (req, res) => {
+router.post('/manual', identifyTenant, async (req, res) => {
   try {
     const {
       cliente_id,               // opcional (si sabés el cliente)
@@ -70,6 +70,7 @@ router.post('/manual', async (req, res) => {
     }
 
     const envio = await Envio.create({
+      tenantId: req.tenantId,
       meli_id:       null,
       sender_id:     cliente?.codigo_cliente || sender_id || '',
       cliente_id:    cliente?._id || null,
