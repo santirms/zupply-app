@@ -187,7 +187,7 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
     }
 
     if (mlSubstatus === 'rescheduled_by_meli') {
-      return buildEstadoResult('reprogramado', mlStatus, mlSubstatus);
+      return buildEstadoResult('demorado', mlStatus, mlSubstatus);
     }
     
     // ========== DEMORAS ==========
