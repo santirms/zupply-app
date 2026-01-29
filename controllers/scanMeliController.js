@@ -340,6 +340,7 @@ exports.scanAndUpsert = async (req, res) => {
       );
 
       const envioData = {
+        tenantId: req.tenantId,
         sender_id: pickFirstString(senderIdFromQr, clienteSender, clienteDoc?.codigo_cliente),
         id_venta: pickFirstString(idVentaFromQr),
         meli_id,
