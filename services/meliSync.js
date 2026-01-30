@@ -9,10 +9,11 @@ const logger = require('../utils/logger');
 
 async function syncPendingShipments({ limit = 200, delayMs = 120, tenantId = null } = {}) {
   // 1) Traigo los clientes que TIENEN user_id (vinculados a MeLi)
+  const query = { user_id: { $exists: true, $ne: null } };
+  if (tenantId) query.tenantId = tenantId;
+  
   const clientesVinc = await Cliente.find(
-    { user_id: { $exists: true, $ne: null } 
-    ...(tenantId && { tenantId: tenantId }) 
-    },
+    query, 
     { _id: 1, user_id: 1, nombre: 1, codigo_cliente: 1, sender_id: 1 }
   );
 
@@ -22,10 +23,9 @@ async function syncPendingShipments({ limit = 200, delayMs = 120, tenantId = nul
   // 2) Filtrar envíos: solo de clientes vinculados + no terminales
   const hace48Horas = new Date(Date.now() - 48 * 60 * 60 * 1000);
 
-  const pendientes = await Envio.find({
-    meli_id: { $ne: null },
-    cliente_id: { $in: idsVinc },
-    ...(tenantId && { tenantId: tenantId }),
+   const envioQuery = {
+   meli_id: { $ne: null },
+   cliente_id: { $in: idsVinc },
     $or: [
       // No terminales
       {
@@ -40,6 +40,7 @@ async function syncPendingShipments({ limit = 200, delayMs = 120, tenantId = nul
           }
         ]
       },
+      
       // Delivered reciente SIN delivered en historial
       {
         $and: [
@@ -53,7 +54,11 @@ async function syncPendingShipments({ limit = 200, delayMs = 120, tenantId = nul
       { estado: { $exists: false } }
     ]
   })
-  .limit(limit);
+  if (tenantId) envioQuery.tenantId = tenantId;
+
+  const pendientes = await Envio.find(envioQuery)
+    .limit(limit);
+  
 
   let ok = 0, fail = 0, skipped_no_user = 0, skipped_no_meli_id = 0, errors_api = 0;
 
