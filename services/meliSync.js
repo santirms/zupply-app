@@ -28,7 +28,13 @@ async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
       {
         $and: [
           { estado: { $nin: ['entregado', 'cancelado'] } },
-          { 'estado_meli.status': { $nin: ['delivered', 'cancelled'] } }
+          { 
+            $or: [
+             { 'estado_meli.status': { $nin: ['delivered', 'cancelled'] } },
+             { 'estado_meli.status': null },
+             { 'estado_meli.status': { $exists: false } }
+           ]
+          }
         ]
       },
       // Delivered reciente SIN delivered en historial
