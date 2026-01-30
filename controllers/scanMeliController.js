@@ -355,6 +355,7 @@ exports.scanAndUpsert = async (req, res) => {
           status: null,
           substatus: null,
         },
+        requiere_sync_meli: true,
         ml_status: null,
         ml_substatus: null,
         latitud: null,
