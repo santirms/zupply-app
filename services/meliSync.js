@@ -7,10 +7,12 @@ const { mapMeliToInterno } = require('../utils/meliStatus');
 const { ensureMeliHistory } = require('./meliHistory');
 const logger = require('../utils/logger');
 
-async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
+async function syncPendingShipments({ limit = 200, delayMs = 120, tenantId = null } = {}) {
   // 1) Traigo los clientes que TIENEN user_id (vinculados a MeLi)
   const clientesVinc = await Cliente.find(
-    { user_id: { $exists: true, $ne: null } },
+    { user_id: { $exists: true, $ne: null } 
+    ...(tenantId && { tenantId: tenantId }) 
+    },
     { _id: 1, user_id: 1, nombre: 1, codigo_cliente: 1, sender_id: 1 }
   );
 
@@ -23,6 +25,7 @@ async function syncPendingShipments({ limit = 200, delayMs = 120 } = {}) {
   const pendientes = await Envio.find({
     meli_id: { $ne: null },
     cliente_id: { $in: idsVinc },
+    ...(tenantId && { tenantId: tenantId }),
     $or: [
       // No terminales
       {
