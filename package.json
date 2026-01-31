@@ -7,8 +7,8 @@
     "seed:admin": "node scripts/seedAdmin.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.592.0",
-    "@aws-sdk/s3-request-presigner": "^3.624.0",
+    "@aws-sdk/client-s3": "^3.893.0",
+    "@aws-sdk/s3-request-presigner": "^3.893.0",
     "axios": "^1.10.0",
     "bcryptjs": "^2.4.3",
     "connect-mongo": "^5.1.0",
@@ -26,7 +26,7 @@
     "pdfkit": "^0.15.0",
     "qrcode": "^1.5.0",
     "signature_pad": "^5.1.1",
-    "winston": "^3.11.0",
+    "winston": "^3.19.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
