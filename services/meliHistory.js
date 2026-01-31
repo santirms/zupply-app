@@ -169,11 +169,11 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
     }
 
     if (mlSubstatus === 'bad_address') {
-      return buildEstadoResult('inaccesible', mlStatus, mlSubstatus);
+      return buildEstadoResult('direccion_erronea', mlStatus, mlSubstatus);
     }
 
     if (mlSubstatus === 'not_visited') {
-      return buildEstadoResult('inaccesible', mlStatus, mlSubstatus);
+      return buildEstadoResult('no_visitado', mlStatus, mlSubstatus);
     }
 
     if (mlSubstatus === 'agency_closed') {
@@ -183,7 +183,7 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
     // ========== REPROGRAMACIONES ==========
     
     if (mlSubstatus === 'buyer_rescheduled') {
-      return buildEstadoResult('reprogramado', mlStatus, mlSubstatus);
+      return buildEstadoResult('reprogramado_comprador', mlStatus, mlSubstatus);
     }
 
     if (mlSubstatus === 'rescheduled_by_meli') {
@@ -200,6 +200,9 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
     
     if (mlSubstatus === 'refused_delivery') {
       return buildEstadoResult('rechazado', mlStatus, mlSubstatus);
+    }
+    if (mlSubstatus === 'returned') {
+      return buildEstadoResult('rechazado_comprador', mlStatus, mlSubstatus);
     }
 
     if (mlSubstatus === 'returning_to_sender') {
