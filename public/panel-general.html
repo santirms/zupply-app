@@ -1412,47 +1412,9 @@ function renderHistorial(histArray=[], envio=null) {
       };
 
       const { key, label } = uiStatus(tempEnvio);
-
-      // Extraer substatus crudo de MeLi
-      const subRaw = (h.estado_meli?.substatus || '').toLowerCase().trim();
-
       // Badge principal
       badge = estadoBadge(key, label);
-
-      // AGREGAR chip de substatus si es relevante
-      if (subRaw) {
-        // Mapeo de substatuses a español
-        const MAP_SUBSTATUS = {
-          'out_for_delivery': '📦 salió a reparto',
-          'arriving_soon': '⏰ llega pronto',
-          'delayed': '⏱️ demorado',
-          'rescheduled_by_buyer': '👤 reprog. comprador',
-          'rescheduled_by_meli': '🔄 reprog. MeLi',
-          'receiver_absent': '🚫 ausente',
-          'not_visited': '⚠️ inaccesible',
-          'bad_address': '📍 dir. errónea'
-          };
-
-        const subDetalle = MAP_SUBSTATUS[subRaw];
-
-        if (subDetalle) {
-          // Color contextual según tipo
-          let chipClass = 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300';
-
-          if (subRaw.includes('absent') || subRaw.includes('not_visited') || subRaw.includes('bad_address')) {
-            chipClass = 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300';
-          } else if (subRaw.includes('rescheduled')) {
-            chipClass = 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300';
-          } else if (subRaw.includes('delay')) {
-            chipClass = 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300';
-          } else if (subRaw.includes('delivery') || subRaw.includes('soon')) {
-            chipClass = 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300';
-          }
-
-          badge += `<span class="ml-2 text-[11px] px-2 py-0.5 rounded-full border ${chipClass}">${subDetalle}</span>`;
-        }
-      }
-
+      
       // Si es un evento de entrega, agregar detalles del receptor
       if (key === 'entregado' && envio?.confirmacionEntrega) {
         const conf = envio.confirmacionEntrega;
