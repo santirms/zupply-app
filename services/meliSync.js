@@ -53,7 +53,7 @@ async function syncPendingShipments({ limit = 200, delayMs = 120, tenantId = nul
       // Sin estado (legacy)
       { estado: { $exists: false } }
     ]
-  })
+  }
   if (tenantId) envioQuery.tenantId = tenantId;
 
   const pendientes = await Envio.find(envioQuery)
