@@ -1,22 +1,13 @@
+// Usar el mapeo completo y actualizado de meliHistory
+const { mapearEstadoML } = require('../services/meliHistory');
+
 function mapMeliToInterno(status, substatus) {
-  const s   = (status    || '').toLowerCase();
-  const sub = (substatus || '').toLowerCase();
-
-  // Substatus mandan si existen:
-  if (sub.includes('resched')) return 'reprogramado'; // buyer_rescheduled / rescheduled / delivery_rescheduled
-  if (sub.includes('delay'))   return 'demorado';     // delayed / with_delay / etc.
-
-  // Status “puros”:
-  if (s === 'delivered')      return 'entregado';
-  if (s === 'cancelled')      return 'cancelado';
-  if (s === 'shipped')        return 'en_camino';
-  if (s === 'ready_to_ship' ||
-      s === 'handling'   ||
-      s === 'pending')        return 'pendiente';
-  if (s === 'not_delivered')  return 'no_entregado';
-
-  return 'pendiente';
+  // Usar el mapeo completo y correcto
+  const result = mapearEstadoML(status, substatus);
+  return result.estado;
 }
 
-const TERMINALES = new Set(['delivered','cancelled']);
+// Estados finales/terminales (incluye returned)
+const TERMINALES = new Set(['delivered', 'cancelled', 'returned']);
+
 module.exports = { mapMeliToInterno, TERMINALES };
