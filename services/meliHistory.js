@@ -251,8 +251,13 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
 
   // not_delivered → no_entregado (si no matcheó ningún substatus específico)
   if (mlStatus === 'not_delivered') {
-    return buildEstadoResult('no_entregado', mlStatus, mlSubstatus);
+  // Si tiene substatus=returned, es rechazo del comprador (estado final)
+  if (mlSubstatus === 'returned') {
+    return buildEstadoResult('rechazado_comprador', mlStatus, mlSubstatus);
   }
+  // Sino, es no_entregado genérico
+  return buildEstadoResult('no_entregado', mlStatus, mlSubstatus);
+}
 
   // Fallback
   return buildEstadoResult('pendiente', mlStatus, mlSubstatus);
