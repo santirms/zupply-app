@@ -269,7 +269,8 @@ function esBarridoGenerico(envio, nuevoEstado, hora, minutos) {
 
   const estadosEspecificos = new Set([
     'comprador_ausente',
-    'inaccesible',
+    'no_visitado',
+    'direccion_erronea',
     'demorado'
   ]);
 
