@@ -719,7 +719,7 @@ let markersRack = [];
 async function inicializarMapaRack() {
   // Inicializar mapa solo una vez
   if (!mapaRackInstance) {
-    mapaRackInstance = L.map('mapaRackContainer').setView([-34.6037, -58.3816], 11); // Buenos Aires
+    mapaRackInstance = L.map('mapaRackContainer').setView([-34.6037, -58.3816], 11);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
@@ -732,60 +732,74 @@ async function inicializarMapaRack() {
   markersRack = [];
 
   // Cargar envíos con coordenadas
-try {
-  // Obtener TODOS los envíos pendientes y en camino con coordenadas
-  const res = await fetch('/api/envios');
-  
-  if (!res.ok) throw new Error('Error cargando envíos');
-  
-  const envios = await res.json();
-  
-  // Filtrar solo los que tienen coordenadas
-  const conCoords = envios.filter(e => e.latitud && e.longitud);
-  
-  console.log(`📍 Envíos con coordenadas: ${conCoords.length} de ${envios.length}`);
-  
-  // Clasificar por estado
-  const pendientes = conCoords.filter(e => e.estado === 'pendiente' || e.estado === 'en_planta');
-  const enCamino = conCoords.filter(e => e.estado === 'en_camino');
-  const entregados = conCoords.filter(e => e.estado === 'entregado');
-  const incidencias = conCoords.filter(e => 
-    ['comprador_ausente', 'no_visitado', 'direccion_erronea', 'demorado', 'reprogramado', 'reprogramado_comprador'].includes(e.estado)
-  );
-  
-  // Crear marcadores por categoría
-  const categorias = [
-    { envios: pendientes, color: '#94a3b8', label: 'Pendientes' },      // gris
-    { envios: enCamino, color: '#F59E0B', label: 'En camino' },        // naranja
-    { envios: entregados, color: '#10B981', label: 'Entregados' },     // verde
-    { envios: incidencias, color: '#EF4444', label: 'Incidencias' }    // rojo
-  ];
-  
-  categorias.forEach(({ envios, color, label }) => {
-    envios.forEach(envio => {
-      const marker = L.circleMarker([envio.latitud, envio.longitud], {
-        radius: 6,
-        fillColor: color,
-        color: '#fff',
-        weight: 1,
-        opacity: 1,
-        fillOpacity: 0.7
-      }).addTo(mapaRackInstance);
-      
-      // Popup con info del envío
-      marker.bindPopup(`
-        <div class="text-sm">
-          <strong>${envio.meli_id || envio.id_venta || 'S/N'}</strong><br>
-          <span class="text-xs opacity-75">${envio.destinatario || ''}</span><br>
-          <span class="text-xs">${envio.direccion || ''}</span><br>
-          <span class="text-xs"><strong>Estado:</strong> ${envio.estado}</span><br>
-          <span class="text-xs"><strong>Zona:</strong> ${envio.zona || envio.partido || 'N/A'}</span>
-        </div>
-      `);
-      
-      markersRack.push(marker);
+  try {
+    const res = await fetch('/api/envios');
+    
+    if (!res.ok) throw new Error('Error cargando envíos');
+    
+    const envios = await res.json();
+    const conCoords = envios.filter(e => e.latitud && e.longitud);
+    
+    console.log(`📍 Envíos con coordenadas: ${conCoords.length} de ${envios.length}`);
+    
+    // Clasificar por estado
+    const pendientes = conCoords.filter(e => e.estado === 'pendiente' || e.estado === 'en_planta');
+    const enCamino = conCoords.filter(e => e.estado === 'en_camino');
+    const entregados = conCoords.filter(e => e.estado === 'entregado');
+    const incidencias = conCoords.filter(e => 
+      ['comprador_ausente', 'no_visitado', 'direccion_erronea', 'demorado', 'reprogramado', 'reprogramado_comprador'].includes(e.estado)
+    );
+    
+    // Crear marcadores por categoría
+    const categorias = [
+      { envios: pendientes, color: '#94a3b8', label: 'Pendientes' },
+      { envios: enCamino, color: '#F59E0B', label: 'En camino' },
+      { envios: entregados, color: '#10B981', label: 'Entregados' },
+      { envios: incidencias, color: '#EF4444', label: 'Incidencias' }
+    ];
+    
+    categorias.forEach(({ envios, color, label }) => {
+      envios.forEach(envio => {
+        const marker = L.circleMarker([envio.latitud, envio.longitud], {
+          radius: 6,
+          fillColor: color,
+          color: '#fff',
+          weight: 1,
+          opacity: 1,
+          fillOpacity: 0.7
+        }).addTo(mapaRackInstance);
+        
+        marker.bindPopup(`
+          <div class="text-sm">
+            <strong>${envio.meli_id || envio.id_venta || 'S/N'}</strong><br>
+            <span class="text-xs opacity-75">${envio.destinatario || ''}</span><br>
+            <span class="text-xs">${envio.direccion || ''}</span><br>
+            <span class="text-xs"><strong>Estado:</strong> ${envio.estado}</span><br>
+            <span class="text-xs"><strong>Zona:</strong> ${envio.zona || envio.partido || 'N/A'}</span>
+          </div>
+        `);
+        
+        markersRack.push(marker);
+      });
     });
-  });
+
+    // Ajustar vista si hay marcadores
+    if (markersRack.length > 0) {
+      const group = L.featureGroup(markersRack);
+      mapaRackInstance.fitBounds(group.getBounds().pad(0.1));
+    }
+    
+  } catch (err) {
+    console.error('Error inicializando mapa:', err);
+  }
+  
+  // Forzar redibujado del mapa
+  setTimeout(() => {
+    if (mapaRackInstance) {
+      mapaRackInstance.invalidateSize();
+    }
+  }, 100);
+}
     
   function escapeSelector(value) {
     const str = String(value ?? '');
