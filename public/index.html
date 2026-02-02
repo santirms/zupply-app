@@ -11,7 +11,9 @@
     window.tailwind.config = { darkMode: "class" };
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
-
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
   <!-- Set inicial de tema: por defecto “system” (no forzamos dark/light) -->
   <script>
     (function () {
@@ -210,6 +212,9 @@
 
       <div id="kpis-rack" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
         <!-- Se llena dinámicamente -->
+      </div>
+      <div id="mapa-rack" class="hidden">
+      <div id="mapaRackContainer" class="h-[600px] rounded-xl border border-slate-200 dark:border-white/10"></div>
       </div>
     </div>
   </section>
