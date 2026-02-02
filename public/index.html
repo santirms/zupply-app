@@ -735,7 +735,10 @@ async function inicializarMapaRack() {
   try {
     const res = await fetch('/api/envios');
     
-    if (!res.ok) throw new Error('Error cargando envíos');
+    if (!res.ok) {
+  console.error('❌ Error en fetch:', res.status);
+  throw new Error('Error cargando envíos');
+}
     
     const envios = await res.json();
     const conCoords = envios.filter(e => e.latitud && e.longitud);
