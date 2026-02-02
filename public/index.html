@@ -746,17 +746,19 @@ try {
     console.log('📦 Tipo de data:', typeof data, Array.isArray(data));
     
     // Extraer el array de envíos según la estructura
-    let envios;
-    if (Array.isArray(data)) {
-      envios = data;
-    } else if (data.envios && Array.isArray(data.envios)) {
-      envios = data.envios;
-    } else if (data.data && Array.isArray(data.data)) {
-      envios = data.data;
-    } else {
-      console.error('❌ Estructura inesperada:', data);
-      envios = [];
-    }
+   let envios;
+   if (Array.isArray(data)) {
+   envios = data;
+   } else if (data.rows && Array.isArray(data.rows)) {
+   envios = data.rows;  // ✅ ESTE ES EL CORRECTO
+   } else if (data.envios && Array.isArray(data.envios)) {
+   envios = data.envios;
+   } else if (data.data && Array.isArray(data.data)) {
+   envios = data.data;
+   } else {
+   console.error('❌ Estructura inesperada:', data);
+   envios = [];
+   }
     
     console.log('📦 Total envíos extraídos:', envios.length);
     
