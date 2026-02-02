@@ -732,18 +732,35 @@ async function inicializarMapaRack() {
   markersRack = [];
 
   // Cargar envíos con coordenadas
-  try {
+try {
+    console.log('🔄 Cargando envíos...');
     const res = await fetch('/api/envios');
     
     if (!res.ok) {
-  console.error('❌ Error en fetch:', res.status);
-  throw new Error('Error cargando envíos');
-}
+      console.error('❌ Error en fetch:', res.status);
+      throw new Error('Error cargando envíos');
+    }
     
-    const envios = await res.json();
+    const data = await res.json();
+    console.log('📦 Respuesta completa del API:', data);
+    console.log('📦 Tipo de data:', typeof data, Array.isArray(data));
+    
+    // Extraer el array de envíos según la estructura
+    let envios;
+    if (Array.isArray(data)) {
+      envios = data;
+    } else if (data.envios && Array.isArray(data.envios)) {
+      envios = data.envios;
+    } else if (data.data && Array.isArray(data.data)) {
+      envios = data.data;
+    } else {
+      console.error('❌ Estructura inesperada:', data);
+      envios = [];
+    }
+    
+    console.log('📦 Total envíos extraídos:', envios.length);
+    
     const conCoords = envios.filter(e => e.latitud && e.longitud);
-    
-    console.log(`📍 Envíos con coordenadas: ${conCoords.length} de ${envios.length}`);
     
     // Clasificar por estado
     const pendientes = conCoords.filter(e => e.estado === 'pendiente' || e.estado === 'en_planta');
