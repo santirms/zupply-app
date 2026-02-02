@@ -397,26 +397,44 @@
   let vistaRackActual = 'pendiente'; // 'pendiente' o 'en_camino'
 
   function cambiarVistaRack(vista) {
-    vistaRackActual = vista;
+  vistaRackActual = vista;
 
-    // Actualizar estilos de botones
-    const btnPend = document.getElementById('btnVistaPendientes');
-    const btnRuta = document.getElementById('btnVistaEnCamino');
+  // Actualizar estilos de botones
+  const btnPend = document.getElementById('btnVistaPendientes');
+  const btnRuta = document.getElementById('btnVistaEnCamino');
+  const btnMapa = document.getElementById('btnVistaMapa');
 
-    if (!btnPend || !btnRuta) return;
+  if (!btnPend || !btnRuta || !btnMapa) return;
 
-    if (vista === 'pendiente') {
-      btnPend.classList.add('bg-white', 'dark:bg-white/10', 'shadow');
-      btnRuta.classList.remove('bg-white', 'dark:bg-white/10', 'shadow');
-    } else {
-      btnRuta.classList.add('bg-white', 'dark:bg-white/10', 'shadow');
-      btnPend.classList.remove('bg-white', 'dark:bg-white/10', 'shadow');
-    }
+  // Resetear todos los botones
+  [btnPend, btnRuta, btnMapa].forEach(btn => {
+    btn.classList.remove('bg-white', 'dark:bg-white/10', 'shadow');
+  });
 
+  // Activar el botón correspondiente
+  if (vista === 'pendiente') {
+    btnPend.classList.add('bg-white', 'dark:bg-white/10', 'shadow');
+  } else if (vista === 'en_camino') {
+    btnRuta.classList.add('bg-white', 'dark:bg-white/10', 'shadow');
+  } else if (vista === 'mapa') {
+    btnMapa.classList.add('bg-white', 'dark:bg-white/10', 'shadow');
+  }
+
+  // Mostrar/ocultar contenidos
+  const kpisRack = document.getElementById('kpis-rack');
+  const mapaRack = document.getElementById('mapa-rack');
+
+  if (vista === 'mapa') {
+    kpisRack.classList.add('hidden');
+    mapaRack.classList.remove('hidden');
+    inicializarMapaRack();
+  } else {
+    kpisRack.classList.remove('hidden');
+    mapaRack.classList.add('hidden');
     actualizarColoresKPIs();
-    // Refrescar todas las cajas con el nuevo estado
     actualizarKPIsRack();
   }
+}
 
   function recalcularPartidosAsignados() {
     partidosAsignados = new Set(zonasRack.flatMap(z => z.partidos || []));
