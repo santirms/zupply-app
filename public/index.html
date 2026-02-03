@@ -214,7 +214,7 @@
         <!-- Se llena dinámicamente -->
       </div>
       <div id="mapa-rack" class="hidden">
-      <div id="mapaRackContainer" class="h-[600px] rounded-xl border border-slate-200 dark:border-white/10"></div>
+      <div id="mapaRackContainer" class="h-[400px] rounded-xl border border-slate-200 dark:border-white/10"></div>
       </div>
     </div>
   </section>
@@ -765,7 +765,7 @@ try {
     categorias.forEach(({ envios, color, label }) => {
       envios.forEach(envio => {
         const marker = L.circleMarker([envio.latitud, envio.longitud], {
-          radius: 6,
+          radius: 8,
           fillColor: color,
           color: '#fff',
           weight: 1,
