@@ -138,33 +138,26 @@ async function syncPendingShipments({ limit = 200, delayMs = 120, tenantId = nul
         throw error;
       }
 
-      const estado_meli = {
-        status:    sh?.status || null,
-        substatus: sh?.substatus || null,
-        updatedAt: new Date()
-      };
-      const estado_interno = mapMeliToInterno(sh?.status, sh?.substatus);
-
-      await Envio.updateOne(
-        { _id: e._id },
-        {
-          $set: {
-            estado_meli,
-            estado: estado_interno,
-            ml_status: sh?.status || null,
-            ml_substatus: sh?.substatus || null
-          }
-        }
-      );
-
-      // AGREGAR: Hidratar historial desde MeLi
+      // Solo ensureMeliHistory escribe estado (evita escritura doble)
       try {
-        await ensureMeliHistory(e, { force: false });
+        await ensureMeliHistory(e, { force: true });
       } catch (histErr) {
         logger.warn('[meliSync] ensureMeliHistory falló', {
           meli_id: e.meli_id,
           error: histErr.message
         });
+        // Fallback: escribir estado básico solo si history falló
+        await Envio.updateOne(
+          { _id: e._id },
+          {
+            $set: {
+              estado_meli: { status: sh?.status || null, substatus: sh?.substatus || null, updatedAt: new Date() },
+              estado: mapMeliToInterno(sh?.status, sh?.substatus),
+              ml_status: sh?.status || null,
+              ml_substatus: sh?.substatus || null
+            }
+          }
+        );
       }
 
       ok++;
