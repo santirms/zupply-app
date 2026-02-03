@@ -88,7 +88,7 @@ router.get('/home', async (req, res) => {
       // entregados: hoy (00:00 → 23:59)
       Envio.countDocuments({
         estado: 'entregado',
-        fecha: { $gte: startDia, $lte: endDia },
+        'estado_meli.updatedAt': { $gte: startDia, $lte: endDia },
         tenantId: req.tenantId
       }),
       
