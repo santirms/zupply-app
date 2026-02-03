@@ -324,7 +324,7 @@ async function ensureMeliHistory(envioDoc) {
         // Activos (cualquier fecha)
         { estado: { $in: ['pendiente', 'en_camino', 'en_planta', 'asignado', 'llega_pronto', 'ingresado_por_scan'] } },
         // Incidencias (cualquier fecha)
-        { estado: { $in: ['comprador_ausente', 'no_visitado', 'direccion_erronea', 'demorado', 'reprogramado', 'reprogramado_comprador', 'rechazado_comprador'] } },
+        { estado: { $in: ['comprador_ausente', 'no_visitado', 'direccion_erronea', 'demorado', 'reprogramado', 'reprogramado_comprador', 'rechazado_comprador'] }, fecha: { $gte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) } },
         // Entregados solo de hoy
         { estado: 'entregado', fecha: { $gte: hoy } }
       ]
