@@ -734,7 +734,7 @@ async function inicializarMapaRack() {
   // Cargar envíos con coordenadas
 try {
     console.log('🔄 Cargando envíos...');
-    const res = await fetch('/api/envios');
+    const res = await fetch('/api/envios/mapa');
     
     if (!res.ok) {
       console.error('❌ Error en fetch:', res.status);
@@ -742,8 +742,10 @@ try {
     }
     
     const data = await res.json();
-    console.log('📦 Respuesta completa del API:', data);
-    console.log('📦 Tipo de data:', typeof data, Array.isArray(data));
+    console.log('📦 Respuesta del API mapa:', data);
+
+    const envios = Array.isArray(data) ? data : [];
+    console.log('📦 Total envíos:', envios.length);
     
     // Extraer el array de envíos según la estructura
    let envios;
