@@ -176,10 +176,7 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
       return buildEstadoResult('no_visitado', mlStatus, mlSubstatus);
     }
 
-    if (mlSubstatus === 'agency_closed') {
-      return buildEstadoResult('sucursal_cerrada', mlStatus, mlSubstatus);
-    }
-    
+      
     // ========== REPROGRAMACIONES ==========
     
     if (mlSubstatus === 'buyer_rescheduled') {
@@ -205,10 +202,7 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
       return buildEstadoResult('rechazado_comprador', mlStatus, mlSubstatus);
     }
 
-    if (mlSubstatus === 'returning_to_sender') {
-      return buildEstadoResult('devolucion', mlStatus, mlSubstatus);
-    }
-           
+               
     // ========== PROXIMIDAD ==========
     
     if (mlSubstatus === 'soon_deliver') {
@@ -263,24 +257,26 @@ function mapearEstadoML(mlStatus, mlSubstatus = null) {
   return buildEstadoResult('pendiente', mlStatus, mlSubstatus);
 }
 
-function esBarridoGenerico(envio, nuevoEstado, hora, minutos) {
+function esBarridoGenerico(envio, nuevoEstado) {
   if (!envio || !nuevoEstado) return false;
-
-  const esHoraBarrido = hora === 23 && minutos >= 0 && minutos <= 30;
-  if (!esHoraBarrido) return false;
 
   const mlSubstatusNuevo = (nuevoEstado.ml_substatus || nuevoEstado.substatus || '').toLowerCase();
   if (mlSubstatusNuevo !== 'rescheduled_by_meli') return false;
 
+  // Estados específicos con incidencia que deben preservarse sobre rescheduled_by_meli
   const estadosEspecificos = new Set([
-    'comprador_ausente',
-    'no_visitado',
-    'direccion_erronea',
-    'demorado'
+    'comprador_ausente',      // receiver_absent
+    'no_visitado',            // not_visited
+    'direccion_erronea',      // bad_address
+    'reprogramado_comprador'  // buyer_rescheduled
   ]);
 
   const estadoActual = (envio.estado || '').toLowerCase();
-  if (!estadosEspecificos.has(estadoActual)) return false;
+  
+  // Si el estado actual es específico → preservar (return true = es barrido genérico)
+  // Si no → actualizar normalmente a 'demorado'
+  return estadosEspecificos.has(estadoActual);
+}
 
   const ultimaActualizacionRaw =
     envio.estado_meli?.updatedAt ||
@@ -1160,7 +1156,6 @@ try {
     'receiver_absent',      // Comprador ausente
     'not_visited',          // Inaccesible/avería
     'bad_address',          // Dirección errónea
-    'agency_closed',        // Agencia cerrada
     'rescheduled_by_buyer', // Reprogramado por comprador
     'out_for_delivery',     // Salió a reparto
     'arriving_soon'         // Llega pronto
@@ -1274,7 +1269,7 @@ try {
 
   const horaActual = ahora.getHours();
   const minutosActuales = ahora.getMinutes();
-  const esBarrido = esBarridoGenerico(envio, estadoMapeado, horaActual, minutosActuales);
+  const esBarrido = esBarridoGenerico(envio, estadoMapeado);
 
   if (esBarrido) {
     logger.warn('[meliHistory] Barrido genérico detectado', {
@@ -1289,16 +1284,32 @@ try {
     estadoFinal = envio.estado || estadoFinal;
   }
 
-  if (huboAusenteFinal && /resched.*meli/.test((substatusFinal || '').toLowerCase())) {
-    logger.info('[meliHistory] Preservando comprador_ausente', {
-      envio_id: envio.meli_id || envio._id,
-      razon: 'hubo receiver_absent previo'
-    });
-    estadoFinal = 'comprador_ausente';
-  }
+  // Estados terminales: NUNCA sobreescribir
+  const ESTADOS_TERMINALES = new Set(['entregado', 'cancelado', 'rechazado_comprador']);
+  const estadoFinalNorm = (estadoFinal || '').toLowerCase();
 
-  if (envio.comprador_ausente_confirmado && estadoFinal !== 'entregado' && estadoFinal !== 'cancelado') {
-    estadoFinal = 'comprador_ausente';
+  if (!ESTADOS_TERMINALES.has(estadoFinalNorm)) {
+    // Solo preservar ausente si el estado actual NO es terminal
+    if (huboAusenteFinal && /resched.*meli/.test((substatusFinal || '').toLowerCase())) {
+      logger.info('[meliHistory] Preservando comprador_ausente', {
+        envio_id: envio.meli_id || envio._id,
+        razon: 'hubo receiver_absent previo'
+      });
+      estadoFinal = 'comprador_ausente';
+    }
+
+    if (envio.comprador_ausente_confirmado) {
+      estadoFinal = 'comprador_ausente';
+    }
+  } else {
+    // Si llegó a terminal, limpiar el flag permanente
+    if (envio.comprador_ausente_confirmado) {
+      update.$set.comprador_ausente_confirmado = false;
+      logger.info('[meliHistory] Limpiando comprador_ausente_confirmado', {
+        envio_id: envio.meli_id || envio._id,
+        estado_final: estadoFinal
+      });
+    }
   }
 
   update.$set.estado = estadoFinal;
