@@ -296,7 +296,7 @@ function esBarridoGenerico(envio, nuevoEstado) {
     (Date.now() - ultimaActualizacion.getTime()) / (1000 * 60 * 60);
 
   return horasDesdeUltimaActualizacion < 4;
-}
+
 
 // ---------------------------- helpers ----------------------------
 // --- Tracking: mapea checkpoints a nuestro esquema ---
