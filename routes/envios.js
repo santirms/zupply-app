@@ -145,14 +145,49 @@ function buildFiltroList(req) {
   if (incidencias === 'true') {
     f.$or = [
       // Incidencias en estado principal
-      { estado: { $in: ['reprogramado', 'comprador_ausente', 'demorado', 'no_entregado', 'inaccesible', 'direccion_erronea'] } },
-
+      { estado: { $in: [
+        'reprogramado', 
+        'reprogramado_comprador',
+        'comprador_ausente', 
+        'demorado', 
+        'no_entregado', 
+        'no_visitado',
+        'inaccesible', 
+        'direccion_erronea'
+      ] } },
       // Incidencias en substatuses de ML
-      { 'estado_meli.substatus': { $in: ['receiver_absent', 'not_delivered', 'to_be_agreed', 'returned_to_sender'] } },
-      { 'substatus': { $in: ['receiver_absent', 'not_delivered', 'to_be_agreed', 'returned_to_sender'] } },
-      { 'ml_substatus': { $in: ['receiver_absent', 'not_delivered', 'to_be_agreed', 'returned_to_sender'] } }
+      { 'estado_meli.substatus': { $in: [
+        'receiver_absent', 
+        'not_delivered', 
+        'not_visited',
+        'bad_address',
+        'buyer_rescheduled',
+        'rescheduled_by_meli',
+        'to_be_agreed', 
+        'returned_to_sender'
+      ] } },
+      { 'substatus': { $in: [
+        'receiver_absent', 
+        'not_delivered', 
+        'not_visited',
+        'bad_address',
+        'buyer_rescheduled',
+        'rescheduled_by_meli',
+        'to_be_agreed', 
+        'returned_to_sender'
+      ] } },
+      { 'ml_substatus': { $in: [
+        'receiver_absent', 
+        'not_delivered', 
+        'not_visited',
+        'bad_address',
+        'buyer_rescheduled',
+        'rescheduled_by_meli',
+        'to_be_agreed', 
+        'returned_to_sender'
+      ] } }
     ];
-  } else if (estado) {
+  }else if (estado) {
     // Mapeo de estados internos a condiciones que incluyen ML
     const estadoMap = {
       'comprador_ausente': {
