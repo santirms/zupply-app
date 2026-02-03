@@ -1096,20 +1096,43 @@ try {
   let stFinal   = deliveredEvt ? 'delivered' : stBase;
   let subFinal  = deliveredEvt ? (deliveredEvt?.estado_meli?.substatus || '') : subBase;
 
-  // Buscar ausencia en historial nuevo
-  const huboAusente = all.some(h => {
+  // Buscar el ÚLTIMO evento de ausencia en el historial
+  const eventosAusente = all.filter(h => {
     const sub = (h?.estado_meli?.substatus || '').toLowerCase();
     return /(receiver|buyer|client|addressee)[_\s-]?absent/.test(sub);
-  });
+  }).sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
 
-  // Buscar ausencia en historial que ya está en BD
-  const huboAusenteEnBD = currentArr.some(h => {
-    const sub = (h?.estado_meli?.substatus || '').toLowerCase();
-    return /(receiver|buyer|client|addressee)[_\s-]?absent/.test(sub);
-  });
+  const ultimoAusente = eventosAusente[0];
 
-  // Combinar todas las detecciones
-  const huboAusenteFinal = huboAusente || huboAusenteEnBD || envio.comprador_ausente_confirmado;
+  // Verificar si hubo eventos POSTERIORES al ausente que indiquen nuevo intento
+  let huboAusenteFinal = false;
+  
+  if (ultimoAusente) {
+    const fechaAusente = new Date(ultimoAusente.at || 0);
+    
+    // Buscar eventos posteriores que indiquen reintento (out_for_delivery, shipped, etc)
+    const huboReintentoPost = all.some(h => {
+      const fechaEvento = new Date(h.at || 0);
+      if (fechaEvento <= fechaAusente) return false; // Solo eventos posteriores
+      
+      const sub = (h?.estado_meli?.substatus || '').toLowerCase();
+      const status = (h?.estado_meli?.status || h?.estado || '').toLowerCase();
+      
+      // Si hay out_for_delivery o shipped posterior → hubo reintento
+      return sub === 'out_for_delivery' || status === 'shipped';
+    });
+    
+    // Solo preservar ausente si NO hubo reintento posterior
+    huboAusenteFinal = !huboReintentoPost;
+    
+    logger.debug('[meliHistory] Análisis ausencia', {
+      envio_id: envio.meli_id || envio._id,
+      hubo_ausente: true,
+      fecha_ausente: fechaAusente,
+      hubo_reintento_posterior: huboReintentoPost,
+      preservar_ausente: huboAusenteFinal
+    });
+  }
 
   // Debug logging
   logger.info('[meliHistory] Detección de ausencia', {
