@@ -310,6 +310,34 @@ async function ensureMeliHistory(envioDoc) {
   envioDoc.meli_history_last_sync = new Date();
   await envioDoc.save();
 }
+ // GET /envios/mapa - Envíos activos con coordenadas para el mapa del dashboard
+ router.get('/mapa', async (req, res) => {
+  try {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const envios = await Envio.find({
+      tenantId: req.tenantId,
+      latitud: { $exists: true, $ne: null },
+      longitud: { $exists: true, $ne: null },
+      $or: [
+        // Activos (cualquier fecha)
+        { estado: { $in: ['pendiente', 'en_camino', 'en_planta', 'asignado', 'llega_pronto', 'ingresado_por_scan'] } },
+        // Incidencias (cualquier fecha)
+        { estado: { $in: ['comprador_ausente', 'no_visitado', 'direccion_erronea', 'demorado', 'reprogramado', 'reprogramado_comprador', 'rechazado_comprador'] } },
+        // Entregados solo de hoy
+        { estado: 'entregado', fecha: { $gte: hoy } }
+      ]
+    })
+    .select('meli_id id_venta estado latitud longitud partido direccion destinatario fecha')
+    .lean();
+
+    res.json(envios);
+  } catch (err) {
+    console.error('Error /envios/mapa:', err);
+    res.status(500).json({ error: 'Error cargando envíos para mapa' });
+  }
+});
 
 // GET /envios  (LISTADO LIVIANO + 36h por defecto)
 router.get('/', async (req, res) => {
