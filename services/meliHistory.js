@@ -278,26 +278,6 @@ function esBarridoGenerico(envio, nuevoEstado) {
   return estadosEspecificos.has(estadoActual);
 }
 
-  const ultimaActualizacionRaw =
-    envio.estado_meli?.updatedAt ||
-    envio.updated_at ||
-    envio.updatedAt ||
-    (Array.isArray(envio.historial_estados) && envio.historial_estados[0]?.fecha) ||
-    envio.created_at ||
-    envio.createdAt ||
-    envio.fecha;
-
-  if (!ultimaActualizacionRaw) return false;
-
-  const ultimaActualizacion = new Date(ultimaActualizacionRaw);
-  if (isNaN(+ultimaActualizacion)) return false;
-
-  const horasDesdeUltimaActualizacion =
-    (Date.now() - ultimaActualizacion.getTime()) / (1000 * 60 * 60);
-
-  return horasDesdeUltimaActualizacion < 4;
-
-
 // ---------------------------- helpers ----------------------------
 // --- Tracking: mapea checkpoints a nuestro esquema ---
 function mapFromTracking(tk) {
