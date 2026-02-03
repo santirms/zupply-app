@@ -744,7 +744,7 @@ try {
     const data = await res.json();
   
     const envios = Array.isArray(data) ? data : [];
-    
+    const conCoords = envios.filter(e => e.latitud && e.longitud);
     
     // Clasificar por estado
     const pendientes = conCoords.filter(e => e.estado === 'pendiente' || e.estado === 'en_planta');
