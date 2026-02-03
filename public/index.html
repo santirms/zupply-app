@@ -742,41 +742,9 @@ try {
     }
     
     const data = await res.json();
-    console.log('📦 Respuesta del API mapa:', data);
-
+  
     const envios = Array.isArray(data) ? data : [];
-    console.log('📦 Total envíos:', envios.length);
     
-    // Extraer el array de envíos según la estructura
-   let envios;
-   if (Array.isArray(data)) {
-   envios = data;
-   } else if (data.rows && Array.isArray(data.rows)) {
-   envios = data.rows;  // ✅ ESTE ES EL CORRECTO
-   } else if (data.envios && Array.isArray(data.envios)) {
-   envios = data.envios;
-   } else if (data.data && Array.isArray(data.data)) {
-   envios = data.data;
-   } else {
-   console.error('❌ Estructura inesperada:', data);
-   envios = [];
-   }
-    
-    console.log('📦 Total envíos extraídos:', envios.length);
-
-  // Ver ejemplos de envíos
-  if (envios.length > 0) {
-  console.log('📦 Ejemplo envío 1:', envios[0]);
-  console.log('📦 ¿Tiene latitud?', envios[0].latitud, '¿Tiene longitud?', envios[0].longitud);
- }
-
-  const conCoords = envios.filter(e => e.latitud && e.longitud);
-  console.log(`📍 Envíos con coordenadas: ${conCoords.length} de ${envios.length}`);
-
-// Ver ejemplos de envíos CON coordenadas
-if (conCoords.length > 0) {
-  console.log('📍 Ejemplo con coords:', conCoords[0]);
-}
     
     // Clasificar por estado
     const pendientes = conCoords.filter(e => e.estado === 'pendiente' || e.estado === 'en_planta');
