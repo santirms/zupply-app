@@ -751,6 +751,15 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     : (envioOrId?.toObject ? envioOrId.toObject() : envioOrId);
 
   if (!envio?.meli_id) { dlog('skip sin meli_id', envio?._id?.toString?.()); return; }
+  
+  // LOG TEMPORAL para debug
+  logger.info('[meliHistory] Iniciando sync', {
+    envio_id: envio._id?.toString?.(),
+    meli_id: envio.meli_id,
+    estado_actual: envio.estado,
+    force,
+    rebuild
+  });
 
   const last  = envio.meli_history_last_sync ? +new Date(envio.meli_history_last_sync) : 0;
   const fresh = Date.now() - last < HYDRATE_TTL_MIN * 60 * 1000;
