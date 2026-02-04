@@ -1405,58 +1405,29 @@ function renderHistorial(histArray=[], envio=null) {
       const safe = (h.note||'').toString().replace(/</g,'&lt;').replace(/>/g,'&gt;');
       detalleNota = `<div class="mt-1 text-xs italic text-slate-600 dark:text-slate-300 whitespace-pre-wrap">${safe}</div>`;
     } else {
-      // Mapear el estado del evento histórico
-      let key, label;
+      // Usar el estado ya mapeado del evento (viene de meliHistory)
+      let key = h.estado || 'pendiente';
+      let label = getNombreEstado(key);
       
-      if (h.estado_meli?.status) {
-        // Usar el substatus ML para determinar el estado correcto
-        const mlStatus = h.estado_meli.status;
-        const mlSubstatus = h.estado_meli.substatus || '';
-        
-        // Mapeo específico de substatuses
-        if (mlSubstatus === 'receiver_absent') {
+      // Si el evento tiene substatus ML específico, usarlo para refinar
+      const mlSub = h.estado_meli?.substatus;
+      if (mlSub) {
+        if (mlSub === 'receiver_absent') {
           key = 'comprador_ausente';
           label = 'Comprador ausente';
-        } else if (mlSubstatus === 'buyer_rescheduled') {
+        } else if (mlSub === 'buyer_rescheduled') {
           key = 'reprogramado_comprador';
           label = 'Reprogramado por comprador';
-        } else if (mlSubstatus === 'not_visited') {
+        } else if (mlSub === 'not_visited') {
           key = 'no_visitado';
           label = 'No visitado';
-        } else if (mlSubstatus === 'bad_address') {
+        } else if (mlSub === 'bad_address') {
           key = 'direccion_erronea';
           label = 'Dirección errónea';
-        } else if (mlSubstatus === 'rescheduled_by_meli') {
+        } else if (mlSub === 'rescheduled_by_meli') {
           key = 'demorado';
           label = 'Demorado';
-        } else if (mlSubstatus === 'out_for_delivery') {
-          key = 'en_camino';
-          label = 'En camino';
-        } else if (mlStatus === 'delivered') {
-          key = 'entregado';
-          label = 'Entregado';
-        } else if (mlStatus === 'cancelled') {
-          key = 'cancelado';
-          label = 'Cancelado';
-        } else if (mlStatus === 'shipped') {
-          key = 'en_camino';
-          label = 'En camino';
-        } else if (mlStatus === 'ready_to_ship') {
-          key = 'pendiente';
-          label = 'Pendiente';
-        } else {
-          // Fallback: usar el estado del evento
-          const tempEnvio = { estado: h.estado, estado_meli: h.estado_meli };
-          const mapped = uiStatus(tempEnvio);
-          key = mapped.key;
-          label = mapped.label;
         }
-      } else {
-        // Sin estado_meli, usar el estado directo
-        const tempEnvio = { estado: h.estado, estado_meli: h.estado_meli || {} };
-        const mapped = uiStatus(tempEnvio);
-        key = mapped.key;
-        label = mapped.label;
       }
       
       // Badge principal
