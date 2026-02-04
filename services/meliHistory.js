@@ -301,9 +301,12 @@ function mapFromTracking(tk) {
     const metadata = buildMetadataFromEvent(rawEvent);
     const ubicacion = normalizeLocation(rawEvent.location || rawEvent.address || rawEvent.place);
 
+    // Mapear a estado interno
+    const estadoMapeado = mapearEstadoML(status, substatus);
+    
     const entry = {
       at: dt,
-      estado: status,
+      estado: estadoMapeado.estado,
       estado_meli: { status, substatus: substatus || '' },
       actor_name: 'MeLi',
       source: `meli-history:tracking:${sourceKey}`
@@ -645,9 +648,12 @@ function buildHistoryFromShipment(sh) {
     const subTexto = sanitizeStr(extra.substatus_texto || substatus);
     const descripcion = buildDescripcion(status, subTexto || substatus, detalle);
 
+    // Mapear a estado interno
+    const estadoMapeado = mapearEstadoML(status, substatus);
+    
     const entry = {
       at: dt,
-      estado: status,
+      estado: estadoMapeado.estado,
       estado_meli: { status, substatus: substatus || '' },
       actor_name: 'MeLi',
       source: `meli-history:shipment:${sourceKey}`,
