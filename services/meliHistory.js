@@ -536,9 +536,11 @@ function mapHistory(items = []) {
     const metadata = buildMetadataFromEvent(e);
     const ubicacion = normalizeLocation(e?.location || e?.address || e?.place || e?.agency_address);
 
+    const estadoMapeado = mapearEstadoML(e?.status, sub);
+    
     const entry = {
       at,
-      estado: e?.status || '',
+      estado: estadoMapeado.estado,  // ← Estado interno mapeado
       estado_meli: { status: e?.status || '', substatus: sub },
       actor_name: 'MeLi',
       source: 'meli-history',
