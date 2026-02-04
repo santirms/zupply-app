@@ -1959,7 +1959,16 @@ router.get('/:id', async (req, res) => {
 
     // timeline para el front (mergea historial+eventos)
     plain.timeline = buildTimeline(plain);
-    return res.json(plain);
+    
+    // 🔍 DEBUG TEMPORAL
+    console.log('[GET /:id] Timeline generado:', {
+      envio_id: plain._id?.toString?.(),
+      historial_length: plain.historial?.length || 0,
+      timeline_length: plain.timeline?.length || 0,
+      primer_evento: plain.timeline?.[0]
+    });
+    
+    return res.json(plain);;
   } catch (err) {
     console.error('Error al obtener envío:', err.message);
     console.error('Stack:', err.stack);
