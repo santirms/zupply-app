@@ -782,6 +782,17 @@ function renderEstadoChip(envio) {
   html += estadoBadge(estado, getNombreEstado(estado));
 
   if (mostrarSubstatus) {
+    // Mapear substatus ML a texto legible
+    const substatusMap = {
+      'receiver_absent': 'Comprador ausente',
+      'buyer_rescheduled': 'Reprogramado por comprador',
+      'not_visited': 'No visitado',
+      'bad_address': 'Dirección errónea',
+      'rescheduled_by_meli': 'Demorado',
+      'out_for_delivery': 'En reparto',
+      'delayed': 'Demorado'
+    };
+    const subTexto = substatusMap[mlSubstatus] || String(mlSubstatus).replace(/_/g, ' ');
     html += substatusChip(String(mlSubstatus).replace(/_/g, ' '));
   }
 
