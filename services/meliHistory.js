@@ -1156,8 +1156,6 @@ try {
     envio_id: envio.meli_id || envio._id,
     subFinal: subFinal,
     statusFinal: stFinal,
-    huboAusente_nuevo: huboAusente,
-    huboAusente_BD: huboAusenteEnBD,
     flag_confirmado: envio.comprador_ausente_confirmado,
     huboAusenteFinal: huboAusenteFinal,
     historial_nuevo_length: all.length,
