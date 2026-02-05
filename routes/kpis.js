@@ -85,15 +85,25 @@ router.get('/home', async (req, res) => {
         tenantId: req.tenantId
       }),
       
-      // entregados: hoy (00:00 → 23:59)
+      // entregados: con delivered en historial hoy O estado_meli.updatedAt hoy + estado=entregado
       Envio.countDocuments({
-        estado: 'entregado',
-        historial: {
-          $elemMatch: {
-            'estado_meli.status': 'delivered',
-            at: { $gte: startDia, $lte: endDia }
+        $or: [
+          // Con historial
+          {
+            estado: 'entregado',
+            historial: {
+              $elemMatch: {
+                'estado_meli.status': 'delivered',
+                at: { $gte: startDia, $lte: endDia }
+              }
+            }
+          },
+          // Sin historial (fallback)
+          {
+            estado: 'entregado',
+            'estado_meli.updatedAt': { $gte: startDia, $lte: endDia }
           }
-        },
+        ],
         tenantId: req.tenantId
       }),
       
