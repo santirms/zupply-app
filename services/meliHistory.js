@@ -1289,7 +1289,7 @@ try {
 
   const horaActual = ahora.getHours();
   const minutosActuales = ahora.getMinutes();
-  const esBarrido = esBarridoGenerico(envio, estadoMapeado);
+  const esBarrido = esBarridoGenerico(current, estadoMapeado);
 
   if (esBarrido) {
     logger.warn('[meliHistory] Barrido genérico detectado', {
