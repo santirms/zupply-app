@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Verificar si node_modules existe, sino instalar
+if [ ! -d "node_modules" ]; then
+  echo "[hydrate-window] node_modules no existe, ejecutando npm install..."
+  npm install --production
+fi
+
 # Hora local Buenos Aires
 export TZ=America/Argentina/Buenos_Aires
 
