@@ -1389,7 +1389,14 @@ try {
   }
 
   update.$set.historial_estados = historialEstados;
-
+// LOG TEMPORAL
+  logger.info('[meliHistory] Update final', {
+    envio_id: envio._id?.toString?.(),
+    tiene_set_historial: !!update.$set?.historial,
+    tiene_push_historial: !!update.$push?.historial,
+    rebuild
+  });
+  
   await Envio.updateOne({ _id: envio._id }, update);
 }
 
