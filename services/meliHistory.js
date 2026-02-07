@@ -1056,7 +1056,7 @@ if (sh && sh.status) {
         const estadoMapeadoSynth = mapearEstadoML(status, '');
         return {
           at: new Date(e.at),
-          estado: status,
+          estado: estadoMapeadoSynth.estado,
           estado_meli: { status, substatus: '' },
           actor_name: 'MeLi',
           source: e.source || 'meli-history:synth'
