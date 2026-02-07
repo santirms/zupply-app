@@ -998,6 +998,7 @@ if (sh && sh.status) {
       );
 
       // armamos el evento en el mismo formato que mapHistory()
+      const estadoMapeadoTerminal = mapearEstadoML(sh.status, sh.substatus);
       mapped.push({
         at: new Date(when || Date.now()),
         estado: sh.status, // dejamos el status ML crudo para consistencia con mapHistory
@@ -1024,6 +1025,8 @@ if (sh && sh.status) {
         else if (t === 'en_camino') status = 'shipped';
         else if (t === 'ausente') status = 'not_delivered';
         else if (t === 'cancelado') status = 'cancelled';
+        
+        const estadoMapeadoSynth = mapearEstadoML(status, '');
         return {
           at: new Date(e.at),
           estado: status,
