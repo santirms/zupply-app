@@ -1077,6 +1077,14 @@ try {
     }
 
     update.$set.historial = deduped;
+    // LOG TEMPORAL
+    logger.info('[meliHistory] Rebuild historial', {
+      envio_id: envio._id?.toString?.(),
+      mapped_length: mapped?.length || 0,
+      mapped_estados: mapped?.slice(0, 3).map(h => h.estado),
+      deduped_length: deduped?.length || 0,
+      deduped_estados: deduped?.slice(0, 3).map(h => h.estado)
+    });
   } else {
     // incremental
     const seen = new Set(currentArr.map(keyOf));
