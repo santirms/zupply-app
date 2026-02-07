@@ -872,6 +872,12 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
   // History remoto
   let raw = await getHistory(access, shipmentId);
   let mapped = mapHistory(raw);
+  // LOG TEMPORAL
+  logger.info('[mapped] Después de mapHistory', {
+   envio_id: envio._id?.toString?.(),
+   length: mapped.length,
+   estados: mapped.map(h => h.estado)
+  });
 
   // AGREGAR: Rellenar substatus faltante con el substatus actual del shipment
   if (sh && sh.substatus && mapped.length > 0) {
@@ -1015,6 +1021,12 @@ if (sh && sh.status) {
         actor_name: 'MeLi',
         source: 'meli-history:shipment:terminal'
       });
+      // LOG TEMPORAL
+      logger.info('[mapped] Después de mapHistory', {
+       envio_id: envio._id?.toString?.(),
+      length: mapped.length,
+      estados: mapped.map(h => h.estado)
+     });
     }
   }
 }
