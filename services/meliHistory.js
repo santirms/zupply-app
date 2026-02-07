@@ -1072,6 +1072,13 @@ try {
 } catch (e) {
   dlog('tracking merge error', e?.message || e);
 }
+// LOG TEMPORAL
+logger.info('[mapped] Después de todos los fallbacks', {
+  envio_id: envio._id?.toString?.(),
+  mapped_length: mapped.length,
+  mapped_sources: mapped.map(h => h.source),
+  mapped_estados: mapped.map(h => h.estado)
+});
   // Mezcla con historial actual y dedupe
   const current = (await Envio.findById(envio._id).select('historial estado estado_meli').lean()) || {};
   const currentArr = Array.isArray(current.historial) ? current.historial : [];
