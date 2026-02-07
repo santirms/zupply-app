@@ -1030,7 +1030,13 @@ if (sh && sh.status) {
     }
   }
 }
-
+  
+// LOG TEMPORAL
+      logger.info('[mapped] Después de synthesize', {
+        envio_id: envio._id?.toString?.(),
+        length: mapped.length,
+        estados: mapped.map(h => h.estado)
+          
   // Fallback si está vacío
   if (!mapped.length && sh) {
     const ventaIso = envio?.fecha ? new Date(envio.fecha).toISOString() : null; // ajustá si tu campo difiere
@@ -1057,6 +1063,12 @@ if (sh && sh.status) {
         };
       });
       mapped = mappedSynth;
+
+      // LOG TEMPORAL
+      logger.info('[mapped] Después de synthesize', {
+        envio_id: envio._id?.toString?.(),
+        length: mapped.length,
+        estados: mapped.map(h => h.estado)
     }
   }
 
