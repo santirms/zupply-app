@@ -515,6 +515,15 @@ function keyOf(h) {
 // Mapea el /history crudo de MeLi a nuestro formato
 function mapHistory(items = []) {
   const out = [];
+  // LOG TEMPORAL
+  logger.info('[mapHistory] Inicio', {
+    items_length: items?.length || 0,
+    primer_item: items?.[0] ? {
+      status: items[0].status,
+      substatus: items[0].substatus
+    } : null
+  });
+  
   for (const e of (Array.isArray(items) ? items : [])) {
     const st  = (e?.status || '').toLowerCase();
     let sub   = (e?.substatus || '').toLowerCase();
