@@ -1080,6 +1080,12 @@ try {
 
   if (rebuild) {
     // 1) conservar NO-MeLi
+    // LOG TEMPORAL
+  logger.info('[rebuild] Filtrando eventos', {
+  envio_id: envio._id?.toString?.(),
+  currentArr_length: currentArr.length,
+  sources: currentArr.map(h => h.source)
+  });
     const nonMeli = currentArr.filter(h =>
       h?.actor_name !== 'MeLi' &&
       h?.source !== 'meli-history' &&
