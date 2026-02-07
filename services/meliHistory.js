@@ -1036,7 +1036,7 @@ if (sh && sh.status) {
         envio_id: envio._id?.toString?.(),
         length: mapped.length,
         estados: mapped.map(h => h.estado)
-          
+      });
   // Fallback si está vacío
   if (!mapped.length && sh) {
     const ventaIso = envio?.fecha ? new Date(envio.fecha).toISOString() : null; // ajustá si tu campo difiere
@@ -1069,6 +1069,7 @@ if (sh && sh.status) {
         envio_id: envio._id?.toString?.(),
         length: mapped.length,
         estados: mapped.map(h => h.estado)
+       });
     }
   }
 
