@@ -541,6 +541,17 @@ function mapHistory(items = []) {
 
     const estadoMapeado = mapearEstadoML(e?.status, sub);
     
+    // LOG TEMPORAL
+    if (e?.status === 'ready_to_ship') {
+      logger.info('[mapHistory] Mapeando ready_to_ship', {
+        status: e?.status,
+        substatus: sub,
+        estadoMapeado_tipo: typeof estadoMapeado,
+        estadoMapeado_keys: Object.keys(estadoMapeado || {}),
+        estadoMapeado_estado: estadoMapeado?.estado
+      });
+    }
+    
     const entry = {
       at,
       estado: estadoMapeado.estado,  // ← Estado interno mapeado
