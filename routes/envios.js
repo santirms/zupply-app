@@ -1942,7 +1942,7 @@ router.get('/:id', async (req, res) => {
     envioDoc = await ensureCoords(envioDoc);
 
     // 🔁 hidratá historial desde MeLi (usa el servicio que escribe directo en DB)
-    try { await ensureMeliHistory(envioDoc); } catch (e) { console.warn('meli-history skip:', e.message); }
+    try { await ensureMeliHistorySrv(envioDoc, { rebuild: true }); } catch (e) { console.warn('meli-history skip:', e.message); }
 
     // ⬅️ RE-LEER fresco desde DB (ya con historial guardado por el servicio)
     const plain = await Envio.findOne(query)
