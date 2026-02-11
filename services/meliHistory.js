@@ -515,15 +515,6 @@ function keyOf(h) {
 // Mapea el /history crudo de MeLi a nuestro formato
 function mapHistory(items = []) {
   const out = [];
-  // LOG TEMPORAL
-  logger.info('[mapHistory] Inicio', {
-    items_length: items?.length || 0,
-    primer_item: items?.[0] ? {
-      status: items[0].status,
-      substatus: items[0].substatus
-    } : null
-  });
-  
   for (const e of (Array.isArray(items) ? items : [])) {
     const st  = (e?.status || '').toLowerCase();
     let sub   = (e?.substatus || '').toLowerCase();
@@ -549,18 +540,7 @@ function mapHistory(items = []) {
     const ubicacion = normalizeLocation(e?.location || e?.address || e?.place || e?.agency_address);
 
     const estadoMapeado = mapearEstadoML(e?.status, sub);
-    
-    // LOG TEMPORAL
-    if (e?.status === 'ready_to_ship') {
-      logger.info('[mapHistory] Mapeando ready_to_ship', {
-        status: e?.status,
-        substatus: sub,
-        estadoMapeado_tipo: typeof estadoMapeado,
-        estadoMapeado_keys: Object.keys(estadoMapeado || {}),
-        estadoMapeado_estado: estadoMapeado?.estado
-      });
-    }
-    
+
     const entry = {
       at,
       estado: estadoMapeado.estado,  // ← Estado interno mapeado
@@ -771,15 +751,6 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     : (envioOrId?.toObject ? envioOrId.toObject() : envioOrId);
 
   if (!envio?.meli_id) { dlog('skip sin meli_id', envio?._id?.toString?.()); return; }
-  
-  // LOG TEMPORAL para debug
-  logger.info('[meliHistory] Iniciando sync', {
-    envio_id: envio._id?.toString?.(),
-    meli_id: envio.meli_id,
-    estado_actual: envio.estado,
-    force,
-    rebuild
-  });
 
   const last  = envio.meli_history_last_sync ? +new Date(envio.meli_history_last_sync) : 0;
   const fresh = Date.now() - last < HYDRATE_TTL_MIN * 60 * 1000;
@@ -872,12 +843,6 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
   // History remoto
   let raw = await getHistory(access, shipmentId);
   let mapped = mapHistory(raw);
-  // LOG TEMPORAL
-  logger.info('[mapped] Después de mapHistory', {
-   envio_id: envio._id?.toString?.(),
-   length: mapped.length,
-   estados: mapped.map(h => h.estado)
-  });
 
   // AGREGAR: Rellenar substatus faltante con el substatus actual del shipment
   if (sh && sh.substatus && mapped.length > 0) {
@@ -911,6 +876,41 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     }
   }
 
+  // AGREGAR: Rellenar substatus buyer_rescheduled faltante con el substatus actual del shipment
+  if (sh && sh.substatus === 'buyer_rescheduled' && mapped.length > 0) {
+    const yaTieneBuyerRescheduled = mapped.some(evt =>
+      evt.estado_meli?.substatus === 'buyer_rescheduled'
+    );
+
+    if (!yaTieneBuyerRescheduled) {
+      // Buscar el evento shipped más reciente sin substatus
+      for (let i = mapped.length - 1; i >= 0; i--) {
+        const evt = mapped[i];
+        if (
+          (evt.estado_meli?.status || '').toLowerCase() === 'shipped' &&
+          (!evt.estado_meli.substatus || evt.estado_meli.substatus === '')
+        ) {
+          evt.estado_meli.substatus = 'buyer_rescheduled';
+          evt.substatus_texto = 'buyer_rescheduled';
+
+          // Re-mapear el estado
+          const reMapeado = mapearEstadoML('shipped', 'buyer_rescheduled');
+          evt.estado = reMapeado.estado;
+
+          const detalle = evt.notas || evt.descripcion;
+          evt.descripcion = buildDescripcion('shipped', 'buyer_rescheduled', detalle);
+
+          logger.debug('[meliHistory] Completando substatus buyer_rescheduled faltante', {
+            envio_id: shipmentId,
+            evento_fecha: evt.at
+          });
+
+          break;
+        }
+      }
+    }
+  }
+
   // NUEVO: Preservar estados específicos antes de barrido genérico
   // Si el shipment actual tiene rescheduled_by_meli, verificar si antes tuvo estados específicos
   if (sh && sh.substatus === 'rescheduled_by_meli') {
@@ -922,7 +922,8 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
       'agency_closed',
       'delayed',
       'out_for_delivery',
-      'arriving_soon'
+      'arriving_soon',
+      'buyer_rescheduled'
     ];
 
     // Buscar eventos específicos en el historial crudo de MeLi
@@ -1016,27 +1017,15 @@ if (sh && sh.status) {
       const estadoMapeadoTerminal = mapearEstadoML(sh.status, sh.substatus);
       mapped.push({
         at: new Date(when || Date.now()),
-        estado: sh.status, // dejamos el status ML crudo para consistencia con mapHistory
+        estado: estadoMapeadoTerminal.estado,
         estado_meli: { status: sh.status, substatus: sh.substatus || '' },
         actor_name: 'MeLi',
         source: 'meli-history:shipment:terminal'
       });
-      // LOG TEMPORAL
-      logger.info('[mapped] Después de mapHistory', {
-       envio_id: envio._id?.toString?.(),
-      length: mapped.length,
-      estados: mapped.map(h => h.estado)
-     });
     }
   }
 }
-  
-// LOG TEMPORAL
-      logger.info('[mapped] Después de synthesize', {
-        envio_id: envio._id?.toString?.(),
-        length: mapped.length,
-        estados: mapped.map(h => h.estado)
-      });
+
   // Fallback si está vacío
   if (!mapped.length && sh) {
     const ventaIso = envio?.fecha ? new Date(envio.fecha).toISOString() : null; // ajustá si tu campo difiere
@@ -1063,13 +1052,6 @@ if (sh && sh.status) {
         };
       });
       mapped = mappedSynth;
-
-      // LOG TEMPORAL
-      logger.info('[mapped] Después de synthesize', {
-        envio_id: envio._id?.toString?.(),
-        length: mapped.length,
-        estados: mapped.map(h => h.estado)
-       });
     }
   }
 
@@ -1097,13 +1079,6 @@ try {
 } catch (e) {
   dlog('tracking merge error', e?.message || e);
 }
-// LOG TEMPORAL
-logger.info('[mapped] Después de todos los fallbacks', {
-  envio_id: envio._id?.toString?.(),
-  mapped_length: mapped.length,
-  mapped_sources: mapped.map(h => h.source),
-  mapped_estados: mapped.map(h => h.estado)
-});
   // Mezcla con historial actual y dedupe
   const current = (await Envio.findById(envio._id).select('historial estado estado_meli').lean()) || {};
   const currentArr = Array.isArray(current.historial) ? current.historial : [];
@@ -1112,12 +1087,6 @@ logger.info('[mapped] Después de todos los fallbacks', {
 
   if (rebuild) {
     // 1) conservar NO-MeLi
-    // LOG TEMPORAL
-  logger.info('[rebuild] Filtrando eventos', {
-  envio_id: envio._id?.toString?.(),
-  currentArr_length: currentArr.length,
-  sources: currentArr.map(h => h.source)
-  });
     const nonMeli = currentArr.filter(h =>
       h?.actor_name !== 'MeLi' &&
       h?.source !== 'meli-history' &&
@@ -1138,14 +1107,6 @@ logger.info('[mapped] Después de todos los fallbacks', {
     }
 
     update.$set.historial = deduped;
-    // LOG TEMPORAL
-    logger.info('[meliHistory] Rebuild historial', {
-      envio_id: envio._id?.toString?.(),
-      mapped_length: mapped?.length || 0,
-      mapped_estados: mapped?.slice(0, 3).map(h => h.estado),
-      deduped_length: deduped?.length || 0,
-      deduped_estados: deduped?.slice(0, 3).map(h => h.estado)
-    });
   } else {
     // incremental
     const seen = new Set(currentArr.map(keyOf));
@@ -1244,6 +1205,7 @@ logger.info('[mapped] Después de todos los fallbacks', {
     'not_visited',          // Inaccesible/avería
     'bad_address',          // Dirección errónea
     'rescheduled_by_buyer', // Reprogramado por comprador
+    'buyer_rescheduled',    // Reprogramado por comprador (alias)
     'out_for_delivery',     // Salió a reparto
     'arriving_soon'         // Llega pronto
   ]);
@@ -1458,14 +1420,8 @@ logger.info('[mapped] Después de todos los fallbacks', {
   }
 
   update.$set.historial_estados = historialEstados;
-// LOG TEMPORAL
-  logger.info('[meliHistory] Update final', {
-    envio_id: envio._id?.toString?.(),
-    tiene_set_historial: !!update.$set?.historial,
-    tiene_push_historial: !!update.$push?.historial,
-    rebuild
-  });
-  
+
+
   await Envio.updateOne({ _id: envio._id }, update);
 }
 

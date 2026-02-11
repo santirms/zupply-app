@@ -817,7 +817,19 @@ function getNombreEstado(estado) {
     'rechazado_comprador': 'Rechazado por comprador',
     'devolucion': 'Devolución',
     'no_entregado': 'No entregado',
-    'cancelado': 'Cancelado'
+    'cancelado': 'Cancelado',
+    'asignado': 'Asignado',
+    'listo_retiro': 'Listo para retirar',
+    'ingresado_por_scan': 'Ingresado',
+    'rechazado': 'Rechazado',
+    'inaccesible': 'Inaccesible',
+    'reprogramado': 'Reprogramado',
+    'delivered': 'Entregado',
+    'shipped': 'En camino',
+    'not_delivered': 'No entregado',
+    'cancelled': 'Cancelado',
+    'handling': 'En planta',
+    'ready_to_ship': 'Pendiente'
   };
 
   if (!estado) return 'Pendiente';
@@ -1417,7 +1429,19 @@ function renderHistorial(histArray=[], envio=null) {
       detalleNota = `<div class="mt-1 text-xs italic text-slate-600 dark:text-slate-300 whitespace-pre-wrap">${safe}</div>`;
     } else {
       // Usar el estado ya mapeado del evento (viene de meliHistory)
-      let key = h.estado || 'pendiente';
+      const NORMALIZE_FRONTEND = {
+        'delivered': 'entregado',
+        'shipped': 'en_camino',
+        'not_delivered': 'no_entregado',
+        'cancelled': 'cancelado',
+        'canceled': 'cancelado',
+        'handling': 'en_planta',
+        'ready_to_ship': 'pendiente',
+        'ready_to_pick': 'listo_retiro',
+        'pending': 'pendiente',
+        'ingresado_por_scan': 'en_planta',
+      };
+      let key = NORMALIZE_FRONTEND[(h.estado || '').toLowerCase()] || h.estado || 'pendiente';
       let label = getNombreEstado(key);
       
       // Si el evento tiene substatus ML específico, usarlo para refinar
