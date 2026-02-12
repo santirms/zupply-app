@@ -877,6 +877,33 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
       }
     }
   }
+  // AGREGAR: Rellenar substatus buyer_rescheduled faltante
+  if (sh && sh.substatus === 'buyer_rescheduled' && mapped.length > 0) {
+    const yaTieneBuyerRescheduled = mapped.some(evt =>
+      evt.estado_meli?.substatus === 'buyer_rescheduled'
+    );
+    if (!yaTieneBuyerRescheduled) {
+      for (let i = mapped.length - 1; i >= 0; i--) {
+        const evt = mapped[i];
+        if (
+          (evt.estado_meli?.status || '').toLowerCase() === 'shipped' &&
+          (!evt.estado_meli.substatus || evt.estado_meli.substatus === '')
+        ) {
+          evt.estado_meli.substatus = 'buyer_rescheduled';
+          evt.substatus_texto = 'buyer_rescheduled';
+          const reMapeado = mapearEstadoML('shipped', 'buyer_rescheduled');
+          evt.estado = reMapeado.estado;
+          const detalle = evt.notas || evt.descripcion;
+          evt.descripcion = buildDescripcion('shipped', 'buyer_rescheduled', detalle);
+          logger.debug('[meliHistory] Completando substatus buyer_rescheduled faltante', {
+            envio_id: shipmentId,
+            evento_fecha: evt.at
+          });
+          break;
+        }
+      }
+    }
+  }
 
   // NUEVO: Preservar estados específicos antes de barrido genérico
   // Si el shipment actual tiene rescheduled_by_meli, verificar si antes tuvo estados específicos
@@ -889,7 +916,8 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
       'agency_closed',
       'delayed',
       'out_for_delivery',
-      'arriving_soon'
+      'arriving_soon',
+      'buyer_rescheduled'
     ];
 
     // Buscar eventos específicos en el historial crudo de MeLi
@@ -983,7 +1011,7 @@ if (sh && sh.status) {
       const estadoMapeadoTerminal = mapearEstadoML(sh.status, sh.substatus);
       mapped.push({
         at: new Date(when || Date.now()),
-        estado: sh.status, // dejamos el status ML crudo para consistencia con mapHistory
+        estado: estadoMapeadoTerminal.estado,
         estado_meli: { status: sh.status, substatus: sh.substatus || '' },
         actor_name: 'MeLi',
         source: 'meli-history:shipment:terminal'
@@ -1173,6 +1201,7 @@ try {
     'not_visited',          // Inaccesible/avería
     'bad_address',          // Dirección errónea
     'rescheduled_by_buyer', // Reprogramado por comprador
+    'buyer_rescheduled',
     'out_for_delivery',     // Salió a reparto
     'arriving_soon'         // Llega pronto
   ]);
