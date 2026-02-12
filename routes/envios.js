@@ -1818,7 +1818,7 @@ function buildTimeline(envio) {
     for (const h of envio.historial) {
       t.push({
         at: h.at || h.fecha || envio.fecha,
-        NORMALIZE_ESTADO[(h.estado || h.status || '').toLowerCase()] || h.estado || h.status || '',
+        estado: NORMALIZE_ESTADO[(h.estado || h.status || '').toLowerCase()] || h.estado || h.status || '',
         estado_meli: h.estado_meli || null,         // 👈 PRESERVAR
         descripcion: h.descripcion || h.desc || '',
         source: h.source || 'sistema',
@@ -1830,7 +1830,7 @@ function buildTimeline(envio) {
     for (const h of envio.eventos) {
       t.push({
         at: h.at || h.date || h.fecha || envio.fecha,
-        NORMALIZE_ESTADO[(h.estado || h.status || h.title || '').toLowerCase()] || h.estado || h.status || h.title || '',
+        estado: NORMALIZE_ESTADO[(h.estado || h.status || h.title || '').toLowerCase()] || h.estado || h.status || h.title || '',
         estado_meli: h.estado_meli ||                // 👈 si viene armado
                      ((h.status || h.substatus)      //    o lo armamos liviano
                        ? { status: h.status || null, substatus: h.substatus || '' }
