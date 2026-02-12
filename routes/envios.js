@@ -1801,12 +1801,24 @@ async function ensureCoords(envio) {
 
 // Une historial interno + eventos de MELI y los ordena
 function buildTimeline(envio) {
+  const NORMALIZE_ESTADO = {
+    'delivered': 'entregado',
+    'shipped': 'en_camino',
+    'not_delivered': 'no_entregado',
+    'cancelled': 'cancelado',
+    'canceled': 'cancelado',
+    'handling': 'en_planta',
+    'ready_to_ship': 'pendiente',
+    'ready_to_pick': 'listo_retiro',
+    'pending': 'pendiente',
+    'ingresado_por_scan': 'en_planta',
+  };
   const t = [];
   if (Array.isArray(envio.historial)) {
     for (const h of envio.historial) {
       t.push({
         at: h.at || h.fecha || envio.fecha,
-        estado: h.estado || h.status || '',
+        NORMALIZE_ESTADO[(h.estado || h.status || '').toLowerCase()] || h.estado || h.status || '',
         estado_meli: h.estado_meli || null,         // 👈 PRESERVAR
         descripcion: h.descripcion || h.desc || '',
         source: h.source || 'sistema',
@@ -1818,7 +1830,7 @@ function buildTimeline(envio) {
     for (const h of envio.eventos) {
       t.push({
         at: h.at || h.date || h.fecha || envio.fecha,
-        estado: h.estado || h.status || h.title || '',
+        NORMALIZE_ESTADO[(h.estado || h.status || h.title || '').toLowerCase()] || h.estado || h.status || h.title || '',
         estado_meli: h.estado_meli ||                // 👈 si viene armado
                      ((h.status || h.substatus)      //    o lo armamos liviano
                        ? { status: h.status || null, substatus: h.substatus || '' }
