@@ -935,6 +935,33 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
       }
     }
   }
+  // AGREGAR: Rellenar substatus buyer_rescheduled faltante
+  if (sh && sh.substatus === 'buyer_rescheduled' && mapped.length > 0) {
+    const yaTieneBuyerRescheduled = mapped.some(evt =>
+      evt.estado_meli?.substatus === 'buyer_rescheduled'
+    );
+    if (!yaTieneBuyerRescheduled) {
+      for (let i = mapped.length - 1; i >= 0; i--) {
+        const evt = mapped[i];
+        if (
+          (evt.estado_meli?.status || '').toLowerCase() === 'shipped' &&
+          (!evt.estado_meli.substatus || evt.estado_meli.substatus === '')
+        ) {
+          evt.estado_meli.substatus = 'buyer_rescheduled';
+          evt.substatus_texto = 'buyer_rescheduled';
+          const reMapeado = mapearEstadoML('shipped', 'buyer_rescheduled');
+          evt.estado = reMapeado.estado;
+          const detalle = evt.notas || evt.descripcion;
+          evt.descripcion = buildDescripcion('shipped', 'buyer_rescheduled', detalle);
+          logger.debug('[meliHistory] Completando substatus buyer_rescheduled faltante', {
+            envio_id: shipmentId,
+            evento_fecha: evt.at
+          });
+          break;
+        }
+      }
+    }
+  }
 
   // AGREGAR: Rellenar substatus buyer_rescheduled faltante con el substatus actual del shipment
   if (sh && sh.substatus === 'buyer_rescheduled' && mapped.length > 0) {
@@ -1205,7 +1232,6 @@ try {
       const k = keyOf(h);
       if (!seen.has(k)) { seen.add(k); deduped.push(h); }
     }
-
     update.$set.historial = deduped;
   } else {
     // incremental
