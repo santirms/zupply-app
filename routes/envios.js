@@ -1849,11 +1849,31 @@ function buildTimeline(envio) {
         estado_meli: null,
         note: n.texto || '',
         source: 'nota',
-        actor_name: n.actor_name || ''   // 👈 esto alimenta la columna “Usuario”
+        actor_name: n.actor_name || ''   // 👈 esto alimenta la columna "Usuario"
       });
     }
   }
   t.sort((a,b) => new Date(a.at) - new Date(b.at));
+
+  // Safety net: si el estado actual del envío es terminal y no está en el timeline, agregarlo
+  const estadoActual = NORMALIZE_ESTADO[(envio.estado || '').toLowerCase()] || envio.estado || '';
+  const TERMINALES = new Set(['entregado', 'cancelado', 'no_entregado', 'rechazado_comprador']);
+  if (estadoActual && TERMINALES.has(estadoActual)) {
+    const yaEsta = t.some(e => e.estado === estadoActual);
+    if (!yaEsta) {
+      const fechaTerminal = envio.estado_meli?.updatedAt || envio.updatedAt || envio.fecha || new Date();
+      t.push({
+        at: fechaTerminal,
+        estado: estadoActual,
+        estado_meli: envio.estado_meli || null,
+        descripcion: '',
+        source: 'sistema',
+        actor_name: 'MeLi'
+      });
+      t.sort((a,b) => new Date(a.at) - new Date(b.at));
+    }
+  }
+
   return t;
 }
 

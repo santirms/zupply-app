@@ -431,6 +431,66 @@ function procesarHistorialML(shipment) {
   return historialProcesado.reverse();
 }
 
+// Construye historial_estados desde el historial completo (mergeado de todas las fuentes)
+// Esto es más confiable que procesarHistorialML(sh) porque 'all' incluye:
+// - Eventos de /shipments/{id}/history
+// - Eventos de /shipments/{id}/tracking
+// - Eventos sintetizados desde shipment dates
+// - Eventos locales (scan, asignación, chofer, etc.)
+function buildHistorialEstadosFromAll(all) {
+  if (!Array.isArray(all) || !all.length) return [];
+
+  const sorted = all
+    .filter(h => h && (h.at || h.fecha || h.updatedAt))
+    .map(h => ({
+      ...h,
+      _fecha: new Date(h.at || h.fecha || h.updatedAt)
+    }))
+    .filter(h => !isNaN(+h._fecha))
+    .sort((a, b) => a._fecha - b._fecha);
+
+  const historialEstados = [];
+  let estadoAnterior = null;
+
+  for (const h of sorted) {
+    // Skipear notas, no son cambios de estado
+    if ((h.estado || '').toLowerCase() === 'nota') continue;
+
+    // Determinar estado interno
+    let estado = h.estado;
+    let mlStatus = h.estado_meli?.status || null;
+    let mlSubstatus = h.estado_meli?.substatus || null;
+
+    // Si el evento tiene estado_meli, re-mapear para consistencia
+    if (mlStatus) {
+      const mapped = mapearEstadoML(mlStatus, mlSubstatus);
+      if (mapped?.estado) {
+        estado = mapped.estado;
+        mlStatus = mapped.ml_status;
+        mlSubstatus = mapped.ml_substatus;
+      }
+    }
+
+    if (!estado) continue;
+
+    // Solo agregar si cambió el estado (evitar duplicados consecutivos)
+    if (estado !== estadoAnterior) {
+      historialEstados.push({
+        estado,
+        substatus: mlSubstatus ?? null,
+        substatus_display: mlSubstatus ? formatSubstatus(mlSubstatus) : null,
+        ml_status: mlStatus,
+        ml_substatus: mlSubstatus,
+        fecha: h._fecha,
+        es_barrido_generico: false
+      });
+      estadoAnterior = estado;
+    }
+  }
+
+  return historialEstados.reverse();
+}
+
 
 function sortByAt(arr) {
   return (Array.isArray(arr) ? arr : [])
@@ -998,22 +1058,30 @@ if (sh && sh.status) {
   const term = new Set(['delivered', 'cancelled', 'not_delivered']);
   const shStatus = String(sh.status).toLowerCase();
   if (term.has(shStatus)) {
-    const lastMappedStatus = (mapped[mapped.length - 1]?.estado_meli?.status || '')
-      .toString()
-      .toLowerCase();
+    // Verificar si algún evento ya tiene este estado terminal (no solo el último)
+    const yaExisteTerminal = mapped.some(h =>
+      (h?.estado_meli?.status || '').toString().toLowerCase() === shStatus
+    );
 
-    if (lastMappedStatus !== shStatus) {
-      // elegimos la mejor fecha disponible para ese estado final
-      const when = pickDate(
-        sh.date_delivered,
-        sh.status_history?.date_updated,
-        sh.last_updated,
-        sh.date_last_updated,
-        sh.date_updated,
-        sh.date_created
-      );
+    if (!yaExisteTerminal) {
+      // Fecha específica por tipo de estado terminal
+      const when = shStatus === 'cancelled'
+        ? pickDate(
+            sh.date_cancelled, sh.date_canceled,
+            sh.status_history?.date_cancelled, sh.status_history?.date_updated,
+            sh.last_updated, sh.date_last_updated, sh.date_updated
+          )
+        : shStatus === 'delivered'
+        ? pickDate(
+            sh.date_delivered, sh.delivered_date, sh.date_first_delivered,
+            sh.status_history?.date_delivered, sh.status_history?.date_updated,
+            sh.last_updated, sh.date_last_updated, sh.date_updated
+          )
+        : pickDate(
+            sh.status_history?.date_updated,
+            sh.last_updated, sh.date_last_updated, sh.date_updated, sh.date_created
+          );
 
-      // armamos el evento en el mismo formato que mapHistory()
       const estadoMapeadoTerminal = mapearEstadoML(sh.status, sh.substatus);
       mapped.push({
         at: new Date(when || Date.now()),
@@ -1026,22 +1094,54 @@ if (sh && sh.status) {
   }
 }
 
-  // Fallback si está vacío
+  // Completar con fechas del shipment (siempre, no solo cuando está vacío)
+  // buildHistoryFromShipment extrae estados intermedios de sh.date_history y campos de fecha
+  if (sh) {
+    const fromShipment = buildHistoryFromShipment(sh);
+    if (fromShipment.length) {
+      if (!mapped.length) {
+        // Si mapped está vacío, usar todo lo sintetizado
+        dlog('history vacío → sintetizo desde shipment', fromShipment.length);
+        mapped = fromShipment;
+      } else {
+        // Si mapped tiene datos pero hay gaps, complementar con estados faltantes del shipment
+        const existingStatuses = new Set(mapped.map(h =>
+          `${(h.estado_meli?.status || '').toLowerCase()}|${(h.estado_meli?.substatus || '').toLowerCase()}`
+        ));
+        const toAdd = fromShipment.filter(h => {
+          const k = `${(h.estado_meli?.status || '').toLowerCase()}|${(h.estado_meli?.substatus || '').toLowerCase()}`;
+          return !existingStatuses.has(k);
+        });
+        if (toAdd.length) {
+          dlog('complementando history con shipment dates', toAdd.length);
+          mapped = [...mapped, ...toAdd].sort((a, b) => +new Date(a.at) - +new Date(b.at));
+          // Dedupe
+          const seen = new Set();
+          const deduped = [];
+          for (const h of mapped) {
+            const k = keyOf(h);
+            if (!seen.has(k)) { seen.add(k); deduped.push(h); }
+          }
+          mapped = deduped;
+        }
+      }
+    }
+  }
+
+  // Fallback final si sigue vacío: sintetizar desde shipment status actual
   if (!mapped.length && sh) {
-    const ventaIso = envio?.fecha ? new Date(envio.fecha).toISOString() : null; // ajustá si tu campo difiere
+    const ventaIso = envio?.fecha ? new Date(envio.fecha).toISOString() : null;
     const synth = synthesizeFromShipment(sh, ventaIso);
     if (synth.length) {
-      dlog('history vacío → sintetizo desde shipment con fechas reales', synth.length);
-      // convertir nuestros "tipo" a estado_meli coherente para el merge
+      dlog('history vacío → sintetizo desde status actual', synth.length);
       const mappedSynth = synth.map(e => {
-        // traducir "tipo" a status meli aproximado
         const t = (e.tipo || '').toLowerCase();
         let status = 'ready_to_ship';
         if (t === 'entregado') status = 'delivered';
         else if (t === 'en_camino') status = 'shipped';
         else if (t === 'ausente') status = 'not_delivered';
         else if (t === 'cancelado') status = 'cancelled';
-        
+
         const estadoMapeadoSynth = mapearEstadoML(status, '');
         return {
           at: new Date(e.at),
@@ -1390,7 +1490,16 @@ try {
     }
   }
 
-  const historialEstados = procesarHistorialML(sh);
+  // Construir historial_estados desde el historial COMPLETO (all), no solo desde sh.status_history.
+  // sh.status_history de ML puede venir incompleto, pero 'all' ya tiene todos los eventos
+  // mergeados de: history API + tracking + shipment dates + eventos locales.
+  const historialEstados = buildHistorialEstadosFromAll(all);
+
+  // Fallback: si all no dio nada, intentar desde sh.status_history
+  if (!historialEstados.length) {
+    const fromSh = procesarHistorialML(sh);
+    if (fromSh.length) historialEstados.push(...fromSh);
+  }
 
   if (esBarrido) {
     const substatusDisplayBarrido = estadoMapeado.substatus_display
