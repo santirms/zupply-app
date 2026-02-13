@@ -174,7 +174,6 @@ async function main() {
     }
       await ensureMeliHistory(e, { force, rebuild, token: tenant.mlIntegration.accessToken });
 
-
       const refreshed = await Envio.findById(e._id, { historial: 1, estado_meli: 1, meli_id: 1 }).lean();
       const hist = Array.isArray(refreshed?.historial) ? refreshed.historial : [];
       const meliEvts = hist.filter(h => (h?.source === 'meli-history') || (h?.actor_name === 'MeLi'));

@@ -321,32 +321,40 @@ router.post('/webhook', cors(), async (req, res) => {
       });
       // Intentar flujo legacy
       const cliente = await Cliente.findOne({ user_id }).populate('lista_precios');
-      if (!cliente || !cliente.auto_ingesta) return;
+      if (!cliente) return;
 
       const shipmentId = String(resource.split('/').pop());
-      logger.ml('Webhook received (legacy)', shipmentId, {
-        topic,
-        resource,
-        user_id,
-        request_id: req.requestId
-      });
 
-      await ingestShipment({ shipmentId, cliente });
-      // ✅ AGREGAR ESTO:
-      // Asignar tenantId si el cliente tiene uno
-      if (cliente.tenantId) {
-        await Envio.updateOne(
-          { meli_id: shipmentId },
-          { $set: { tenantId: cliente.tenantId } }
-        );
+      // Si tiene auto_ingesta, hacer ingesta completa (crear/actualizar envío)
+      if (cliente.auto_ingesta) {
+        logger.ml('Webhook received (legacy, auto_ingesta)', shipmentId, {
+          topic, resource, user_id, request_id: req.requestId
+        });
+        await ingestShipment({ shipmentId, cliente });
+        if (cliente.tenantId) {
+          await Envio.updateOne(
+            { meli_id: shipmentId },
+            { $set: { tenantId: cliente.tenantId } }
+          );
+        }
       }
 
+      // Para TODOS los clientes (scan + auto_ingesta): hidratar historial
+      // si el envío ya existe en la DB (creado por scan o por ingesta)
       const token = await getValidToken(cliente.user_id);
       const envio = await Envio.findOne({ meli_id: shipmentId }).lean();
-      if (envio) await ensureMeliHistory(envio._id, { token, force: true });
+      if (envio) {
+        logger.ml('Webhook: hydrating history (legacy)', shipmentId, {
+          auto_ingesta: !!cliente.auto_ingesta,
+          request_id: req.requestId
+        });
+        await ensureMeliHistory(envio._id, { token, force: true });
+      }
 
       logger.ml('Webhook processed (legacy)', shipmentId, {
         result: 'success',
+        auto_ingesta: !!cliente.auto_ingesta,
+        had_envio: !!envio,
         duration_ms: Date.now() - startTime,
         request_id: req.requestId
       });

@@ -431,6 +431,66 @@ function procesarHistorialML(shipment) {
   return historialProcesado.reverse();
 }
 
+// Construye historial_estados desde el historial completo (mergeado de todas las fuentes)
+// Esto es más confiable que procesarHistorialML(sh) porque 'all' incluye:
+// - Eventos de /shipments/{id}/history
+// - Eventos de /shipments/{id}/tracking
+// - Eventos sintetizados desde shipment dates
+// - Eventos locales (scan, asignación, chofer, etc.)
+function buildHistorialEstadosFromAll(all) {
+  if (!Array.isArray(all) || !all.length) return [];
+
+  const sorted = all
+    .filter(h => h && (h.at || h.fecha || h.updatedAt))
+    .map(h => ({
+      ...h,
+      _fecha: new Date(h.at || h.fecha || h.updatedAt)
+    }))
+    .filter(h => !isNaN(+h._fecha))
+    .sort((a, b) => a._fecha - b._fecha);
+
+  const historialEstados = [];
+  let estadoAnterior = null;
+
+  for (const h of sorted) {
+    // Skipear notas, no son cambios de estado
+    if ((h.estado || '').toLowerCase() === 'nota') continue;
+
+    // Determinar estado interno
+    let estado = h.estado;
+    let mlStatus = h.estado_meli?.status || null;
+    let mlSubstatus = h.estado_meli?.substatus || null;
+
+    // Si el evento tiene estado_meli, re-mapear para consistencia
+    if (mlStatus) {
+      const mapped = mapearEstadoML(mlStatus, mlSubstatus);
+      if (mapped?.estado) {
+        estado = mapped.estado;
+        mlStatus = mapped.ml_status;
+        mlSubstatus = mapped.ml_substatus;
+      }
+    }
+
+    if (!estado) continue;
+
+    // Solo agregar si cambió el estado (evitar duplicados consecutivos)
+    if (estado !== estadoAnterior) {
+      historialEstados.push({
+        estado,
+        substatus: mlSubstatus ?? null,
+        substatus_display: mlSubstatus ? formatSubstatus(mlSubstatus) : null,
+        ml_status: mlStatus,
+        ml_substatus: mlSubstatus,
+        fecha: h._fecha,
+        es_barrido_generico: false
+      });
+      estadoAnterior = estado;
+    }
+  }
+
+  return historialEstados.reverse();
+}
+
 
 function sortByAt(arr) {
   return (Array.isArray(arr) ? arr : [])
@@ -515,7 +575,6 @@ function keyOf(h) {
 // Mapea el /history crudo de MeLi a nuestro formato
 function mapHistory(items = []) {
   const out = [];
-    
   for (const e of (Array.isArray(items) ? items : [])) {
     const st  = (e?.status || '').toLowerCase();
     let sub   = (e?.substatus || '').toLowerCase();
@@ -541,8 +600,7 @@ function mapHistory(items = []) {
     const ubicacion = normalizeLocation(e?.location || e?.address || e?.place || e?.agency_address);
 
     const estadoMapeado = mapearEstadoML(e?.status, sub);
-    
-      
+
     const entry = {
       at,
       estado: estadoMapeado.estado,  // ← Estado interno mapeado
@@ -753,8 +811,8 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
     : (envioOrId?.toObject ? envioOrId.toObject() : envioOrId);
 
   if (!envio?.meli_id) { dlog('skip sin meli_id', envio?._id?.toString?.()); return; }
-  
-    const last  = envio.meli_history_last_sync ? +new Date(envio.meli_history_last_sync) : 0;
+
+  const last  = envio.meli_history_last_sync ? +new Date(envio.meli_history_last_sync) : 0;
   const fresh = Date.now() - last < HYDRATE_TTL_MIN * 60 * 1000;
   const pobre = !Array.isArray(envio.historial) || envio.historial.length < 2;
   if (!force && fresh && !pobre) { dlog('fresh & no pobre → skip'); return; }
@@ -845,7 +903,7 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
   // History remoto
   let raw = await getHistory(access, shipmentId);
   let mapped = mapHistory(raw);
-  
+
   // AGREGAR: Rellenar substatus faltante con el substatus actual del shipment
   if (sh && sh.substatus && mapped.length > 0) {
     // Para los eventos más recientes de "shipped", usar el substatus actual
@@ -899,6 +957,41 @@ async function ensureMeliHistory(envioOrId, { token, force = false, rebuild = fa
             envio_id: shipmentId,
             evento_fecha: evt.at
           });
+          break;
+        }
+      }
+    }
+  }
+
+  // AGREGAR: Rellenar substatus buyer_rescheduled faltante con el substatus actual del shipment
+  if (sh && sh.substatus === 'buyer_rescheduled' && mapped.length > 0) {
+    const yaTieneBuyerRescheduled = mapped.some(evt =>
+      evt.estado_meli?.substatus === 'buyer_rescheduled'
+    );
+
+    if (!yaTieneBuyerRescheduled) {
+      // Buscar el evento shipped más reciente sin substatus
+      for (let i = mapped.length - 1; i >= 0; i--) {
+        const evt = mapped[i];
+        if (
+          (evt.estado_meli?.status || '').toLowerCase() === 'shipped' &&
+          (!evt.estado_meli.substatus || evt.estado_meli.substatus === '')
+        ) {
+          evt.estado_meli.substatus = 'buyer_rescheduled';
+          evt.substatus_texto = 'buyer_rescheduled';
+
+          // Re-mapear el estado
+          const reMapeado = mapearEstadoML('shipped', 'buyer_rescheduled');
+          evt.estado = reMapeado.estado;
+
+          const detalle = evt.notas || evt.descripcion;
+          evt.descripcion = buildDescripcion('shipped', 'buyer_rescheduled', detalle);
+
+          logger.debug('[meliHistory] Completando substatus buyer_rescheduled faltante', {
+            envio_id: shipmentId,
+            evento_fecha: evt.at
+          });
+
           break;
         }
       }
@@ -992,22 +1085,30 @@ if (sh && sh.status) {
   const term = new Set(['delivered', 'cancelled', 'not_delivered']);
   const shStatus = String(sh.status).toLowerCase();
   if (term.has(shStatus)) {
-    const lastMappedStatus = (mapped[mapped.length - 1]?.estado_meli?.status || '')
-      .toString()
-      .toLowerCase();
+    // Verificar si algún evento ya tiene este estado terminal (no solo el último)
+    const yaExisteTerminal = mapped.some(h =>
+      (h?.estado_meli?.status || '').toString().toLowerCase() === shStatus
+    );
 
-    if (lastMappedStatus !== shStatus) {
-      // elegimos la mejor fecha disponible para ese estado final
-      const when = pickDate(
-        sh.date_delivered,
-        sh.status_history?.date_updated,
-        sh.last_updated,
-        sh.date_last_updated,
-        sh.date_updated,
-        sh.date_created
-      );
+    if (!yaExisteTerminal) {
+      // Fecha específica por tipo de estado terminal
+      const when = shStatus === 'cancelled'
+        ? pickDate(
+            sh.date_cancelled, sh.date_canceled,
+            sh.status_history?.date_cancelled, sh.status_history?.date_updated,
+            sh.last_updated, sh.date_last_updated, sh.date_updated
+          )
+        : shStatus === 'delivered'
+        ? pickDate(
+            sh.date_delivered, sh.delivered_date, sh.date_first_delivered,
+            sh.status_history?.date_delivered, sh.status_history?.date_updated,
+            sh.last_updated, sh.date_last_updated, sh.date_updated
+          )
+        : pickDate(
+            sh.status_history?.date_updated,
+            sh.last_updated, sh.date_last_updated, sh.date_updated, sh.date_created
+          );
 
-      // armamos el evento en el mismo formato que mapHistory()
       const estadoMapeadoTerminal = mapearEstadoML(sh.status, sh.substatus);
       mapped.push({
         at: new Date(when || Date.now()),
@@ -1016,26 +1117,58 @@ if (sh && sh.status) {
         actor_name: 'MeLi',
         source: 'meli-history:shipment:terminal'
       });
-     }
+    }
   }
 }
-  
-  // Fallback si está vacío
+
+  // Completar con fechas del shipment (siempre, no solo cuando está vacío)
+  // buildHistoryFromShipment extrae estados intermedios de sh.date_history y campos de fecha
+  if (sh) {
+    const fromShipment = buildHistoryFromShipment(sh);
+    if (fromShipment.length) {
+      if (!mapped.length) {
+        // Si mapped está vacío, usar todo lo sintetizado
+        dlog('history vacío → sintetizo desde shipment', fromShipment.length);
+        mapped = fromShipment;
+      } else {
+        // Si mapped tiene datos pero hay gaps, complementar con estados faltantes del shipment
+        const existingStatuses = new Set(mapped.map(h =>
+          `${(h.estado_meli?.status || '').toLowerCase()}|${(h.estado_meli?.substatus || '').toLowerCase()}`
+        ));
+        const toAdd = fromShipment.filter(h => {
+          const k = `${(h.estado_meli?.status || '').toLowerCase()}|${(h.estado_meli?.substatus || '').toLowerCase()}`;
+          return !existingStatuses.has(k);
+        });
+        if (toAdd.length) {
+          dlog('complementando history con shipment dates', toAdd.length);
+          mapped = [...mapped, ...toAdd].sort((a, b) => +new Date(a.at) - +new Date(b.at));
+          // Dedupe
+          const seen = new Set();
+          const deduped = [];
+          for (const h of mapped) {
+            const k = keyOf(h);
+            if (!seen.has(k)) { seen.add(k); deduped.push(h); }
+          }
+          mapped = deduped;
+        }
+      }
+    }
+  }
+
+  // Fallback final si sigue vacío: sintetizar desde shipment status actual
   if (!mapped.length && sh) {
-    const ventaIso = envio?.fecha ? new Date(envio.fecha).toISOString() : null; // ajustá si tu campo difiere
+    const ventaIso = envio?.fecha ? new Date(envio.fecha).toISOString() : null;
     const synth = synthesizeFromShipment(sh, ventaIso);
     if (synth.length) {
-      dlog('history vacío → sintetizo desde shipment con fechas reales', synth.length);
-      // convertir nuestros "tipo" a estado_meli coherente para el merge
+      dlog('history vacío → sintetizo desde status actual', synth.length);
       const mappedSynth = synth.map(e => {
-        // traducir "tipo" a status meli aproximado
         const t = (e.tipo || '').toLowerCase();
         let status = 'ready_to_ship';
         if (t === 'entregado') status = 'delivered';
         else if (t === 'en_camino') status = 'shipped';
         else if (t === 'ausente') status = 'not_delivered';
         else if (t === 'cancelado') status = 'cancelled';
-        
+
         const estadoMapeadoSynth = mapearEstadoML(status, '');
         return {
           at: new Date(e.at),
@@ -1046,8 +1179,6 @@ if (sh && sh.status) {
         };
       });
       mapped = mappedSynth;
-
-      
     }
   }
 
@@ -1075,7 +1206,6 @@ try {
 } catch (e) {
   dlog('tracking merge error', e?.message || e);
 }
-
   // Mezcla con historial actual y dedupe
   const current = (await Envio.findById(envio._id).select('historial estado estado_meli').lean()) || {};
   const currentArr = Array.isArray(current.historial) ? current.historial : [];
@@ -1084,7 +1214,7 @@ try {
 
   if (rebuild) {
     // 1) conservar NO-MeLi
-      const nonMeli = currentArr.filter(h =>
+    const nonMeli = currentArr.filter(h =>
       h?.actor_name !== 'MeLi' &&
       h?.source !== 'meli-history' &&
       !(String(h?.source||'').startsWith('meli-history:shipment')) &&
@@ -1103,7 +1233,7 @@ try {
       if (!seen.has(k)) { seen.add(k); deduped.push(h); }
     }
     update.$set.historial = deduped;
-   } else {
+  } else {
     // incremental
     const seen = new Set(currentArr.map(keyOf));
     const toAdd = (Array.isArray(mapped) ? mapped : []).filter(h => !seen.has(keyOf(h)));
@@ -1201,7 +1331,7 @@ try {
     'not_visited',          // Inaccesible/avería
     'bad_address',          // Dirección errónea
     'rescheduled_by_buyer', // Reprogramado por comprador
-    'buyer_rescheduled',
+    'buyer_rescheduled',    // Reprogramado por comprador (alias)
     'out_for_delivery',     // Salió a reparto
     'arriving_soon'         // Llega pronto
   ]);
@@ -1386,7 +1516,16 @@ try {
     }
   }
 
-  const historialEstados = procesarHistorialML(sh);
+  // Construir historial_estados desde el historial COMPLETO (all), no solo desde sh.status_history.
+  // sh.status_history de ML puede venir incompleto, pero 'all' ya tiene todos los eventos
+  // mergeados de: history API + tracking + shipment dates + eventos locales.
+  const historialEstados = buildHistorialEstadosFromAll(all);
+
+  // Fallback: si all no dio nada, intentar desde sh.status_history
+  if (!historialEstados.length) {
+    const fromSh = procesarHistorialML(sh);
+    if (fromSh.length) historialEstados.push(...fromSh);
+  }
 
   if (esBarrido) {
     const substatusDisplayBarrido = estadoMapeado.substatus_display
@@ -1416,7 +1555,8 @@ try {
   }
 
   update.$set.historial_estados = historialEstados;
-  
+
+
   await Envio.updateOne({ _id: envio._id }, update);
 }
 
