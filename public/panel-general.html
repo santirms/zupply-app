@@ -211,6 +211,23 @@
         <option value="tiendanube"> TiendaNube</option>
       </select>
 
+      <select id="filtroTamano"
+        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 dark:bg-[#0B1020] dark:border-white/10 dark:text-slate-100">
+        <option value="">— Tamaño —</option>
+        <option value="chico">Chico (&lt; 5000 cm³)</option>
+        <option value="mediano">Mediano (5000-20000 cm³)</option>
+        <option value="grande">Grande (&gt; 20000 cm³)</option>
+      </select>
+
+      <select id="filtroPeso"
+        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 dark:bg-[#0B1020] dark:border-white/10 dark:text-slate-100">
+        <option value="">— Peso —</option>
+        <option value="0-1000">&lt; 1 kg</option>
+        <option value="1000-5000">1-5 kg</option>
+        <option value="5000-15000">5-15 kg</option>
+        <option value="15000-999999">&gt; 15 kg</option>
+      </select>
+
       <select id="filtroChofer"
         class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 dark:bg-[#0B1020] dark:border-white/10 dark:text-slate-100">
         <option value="">— Todos los choferes —</option>
@@ -251,6 +268,7 @@
           <th class="px-4 py-2 text-left font-semibold">Fecha</th>
           <th class="px-4 py-2 text-left font-semibold">Partido</th>
           <th class="px-4 py-2 text-left font-semibold">Chofer</th>
+          <th class="px-4 py-2 text-left font-semibold">Paquete</th>
           <th class="px-4 py-2 text-left font-semibold">Estado</th>
           <th class="px-4 py-2 text-left font-semibold">Acciones</th>
         </tr>
@@ -986,6 +1004,8 @@ async function limpiarFiltros(){
   document.getElementById('filtroHasta').value='';
   document.getElementById('filtroEstado').value='';
   document.getElementById('filtroOrigen').value='';
+  const tamSel=document.getElementById('filtroTamano'); if(tamSel) tamSel.value='';
+  const pesSel=document.getElementById('filtroPeso'); if(pesSel) pesSel.value='';
   const choferSel=document.getElementById('filtroChofer'); if(choferSel) choferSel.value='';
   seleccionPartidos.clear(); const all=document.getElementById('chk_all_partidos'); if(all) all.checked=true;
   document.querySelectorAll('#panelPartidos input[type="checkbox"][data-nombre-norm]').forEach(cb=>cb.checked=false);
@@ -999,12 +1019,56 @@ async function limpiarFiltros(){
   updateCountPartidos(); await cargarPrimerPagina();
 }
 
+function clasificarTamano(volumen) {
+  if (!volumen) return null;
+  if (volumen < 5000) return { label: 'Chico', cls: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800' };
+  if (volumen <= 20000) return { label: 'Mediano', cls: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' };
+  return { label: 'Grande', cls: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800' };
+}
+
+function renderPaqueteCell(envio) {
+  const d = envio.dimensiones;
+  if (!d || (!d.peso && !d.volumen)) return '-';
+  let parts = [];
+  if (d.peso) {
+    parts.push(d.peso >= 1000 ? `${(d.peso / 1000).toFixed(1)} kg` : `${d.peso} g`);
+  }
+  const tamano = clasificarTamano(d.volumen);
+  let html = parts.join(' ');
+  if (tamano) {
+    html += ` <span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border ${tamano.cls}">${tamano.label}</span>`;
+  }
+  return html;
+}
+
+function filtrarPorDimensiones(lista) {
+  const tamanoSel = (document.getElementById('filtroTamano')?.value || '');
+  const pesoSel = (document.getElementById('filtroPeso')?.value || '');
+  if (!tamanoSel && !pesoSel) return lista;
+  return lista.filter(e => {
+    if (tamanoSel) {
+      const vol = e.dimensiones?.volumen;
+      if (!vol) return false;
+      if (tamanoSel === 'chico' && vol >= 5000) return false;
+      if (tamanoSel === 'mediano' && (vol < 5000 || vol > 20000)) return false;
+      if (tamanoSel === 'grande' && vol <= 20000) return false;
+    }
+    if (pesoSel) {
+      const peso = e.dimensiones?.peso;
+      if (!peso) return false;
+      const [min, max] = pesoSel.split('-').map(Number);
+      if (peso < min || peso > max) return false;
+    }
+    return true;
+  });
+}
+
 function renderTabla(){
   const tbody=document.getElementById('tablaEnvios'); tbody.innerHTML='';
-  const lista=enviosCargados||[];
+  const lista=filtrarPorDimensiones(enviosCargados||[]);
   if(!lista.length){
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td class="px-4 py-6 text-center opacity-70" colspan="8">No hay envíos para los filtros seleccionados</td>`;
+    tr.innerHTML=`<td class="px-4 py-6 text-center opacity-70" colspan="9">No hay envíos para los filtros seleccionados</td>`;
     tbody.appendChild(tr); return;
   }
   lista.forEach(e=>{
@@ -1070,6 +1134,7 @@ function renderTabla(){
       <td class="px-4 py-2">${fecha}</td>
       <td class="px-4 py-2" title="${zonaFact}">${partidoUI}</td>
       <td class="px-4 py-2">${e.chofer?.nombre || ''}</td>
+      <td class="px-4 py-2 whitespace-nowrap text-xs">${renderPaqueteCell(e)}</td>
       <td class="px-4 py-2">${estadoHTML}</td>
       <td class="px-4 py-2">
         <button class="text-rose-600 hover:text-rose-700" title="Eliminar" onclick="abrirModalEliminar('${e._id}')">🗑</button>
@@ -1123,6 +1188,19 @@ async function mostrarDetalle(envioId){
       cobroHtml = `<p><strong>Cobro en destino:</strong> $${monto.toLocaleString('es-AR')} ${estadoCobro}</p>`;
     }
 
+    // Preparar info de dimensiones
+    let dimHtml = '';
+    if (data.dimensiones && (data.dimensiones.alto || data.dimensiones.peso)) {
+      const d = data.dimensiones;
+      const parts = [];
+      if (d.largo && d.ancho && d.alto) parts.push(`${d.largo}\u00D7${d.ancho}\u00D7${d.alto} cm`);
+      if (d.peso) {
+        parts.push(d.peso >= 1000 ? `${(d.peso / 1000).toFixed(2)} kg` : `${d.peso} g`);
+      }
+      if (d.volumen) parts.push(`Vol: ${d.volumen.toLocaleString('es-AR')} cm\u00B3`);
+      dimHtml = `<p><strong>Paquete:</strong> ${parts.join(' | ')}</p>`;
+    }
+
     cd.innerHTML=`
       <p><strong>Cliente:</strong> ${clienteNombre}</p>
       <p><strong>Destinatario:</strong> ${data.destinatario || '-'}</p>
@@ -1133,6 +1211,7 @@ async function mostrarDetalle(envioId){
       <p><strong>CP:</strong> ${data.codigo_postal || '-'}</p>
       <p><strong>Partido:</strong> ${partido}</p>
       <p><strong>Referencia:</strong> ${data.referencia || '-'}</p>
+      ${dimHtml}
       ${cobroHtml}`;
 
     // Mostrar intentos si existen
@@ -2065,6 +2144,11 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   ['filtroCliente','filtroTracking','filtroIdVenta','filtroDireccion','filtroDesde','filtroHasta'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.addEventListener('keydown',e=>{ if(e.key==='Enter') aplicarFiltro(); });
+  });
+  // Client-side dimension filters
+  ['filtroTamano','filtroPeso'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.addEventListener('change', ()=>{ renderTabla(); renderPaginacionLikeCursor(); });
   });
   document.getElementById('modalDetalle').addEventListener('click',(e)=>{ if(e.target===e.currentTarget) cerrarModalDetalle(); });
   document.getElementById('modalEliminar').addEventListener('click',(e)=>{ if(e.target===e.currentTarget) cerrarModalEliminar(); });
