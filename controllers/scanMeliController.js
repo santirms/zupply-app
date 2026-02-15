@@ -472,6 +472,19 @@ exports.scanAndUpsert = async (req, res) => {
             }
           }
         }
+
+        // Extraer dimensiones del paquete
+        if (meliShipment.dimensions) {
+          const dim = meliShipment.dimensions;
+          envioData.dimensiones = {
+            alto: dim.height || null,
+            ancho: dim.width || null,
+            largo: dim.length || null,
+            peso: dim.weight || null,
+            volumen: (dim.height && dim.width && dim.length) ? Math.round(dim.height * dim.width * dim.length) : null,
+            source: 'meli'
+          };
+        }
       }
 
       if (!envioData.sender_id) {

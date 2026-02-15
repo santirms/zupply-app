@@ -471,6 +471,7 @@ router.get('/', async (req, res) => {
           requiere_sync_meli: 1,
           origen: 1,
           cliente_id: 1, chofer: 1,
+          dimensiones: 1,
           has_notes: { $gt: [ { $size: { $ifNull: ['$notas', []] } }, 0 ] }
         }
       }
@@ -2005,6 +2006,48 @@ router.get('/:id', async (req, res) => {
     console.error('Error al obtener envío:', err.message);
     console.error('Stack:', err.stack);
     res.status(500).json({ error: 'Error al obtener envío' });
+  }
+});
+
+// PATCH /envios/:id/dimensiones  (cargar dimensiones manualmente)
+router.patch('/:id/dimensiones', requireAuth, requireRole('admin','coordinador'), async (req, res) => {
+  try {
+    const { alto, ancho, largo, peso } = req.body;
+    const envio = await Envio.findOne({ _id: req.params.id, tenantId: req.tenantId });
+    if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
+
+    const altoNum = alto != null ? Number(alto) : null;
+    const anchoNum = ancho != null ? Number(ancho) : null;
+    const largoNum = largo != null ? Number(largo) : null;
+    const pesoNum = peso != null ? Number(peso) : null;
+
+    const volumen = (altoNum && anchoNum && largoNum)
+      ? Math.round(altoNum * anchoNum * largoNum)
+      : null;
+
+    await Envio.updateOne(
+      { _id: envio._id },
+      {
+        $set: {
+          dimensiones: {
+            alto: altoNum,
+            ancho: anchoNum,
+            largo: largoNum,
+            peso: pesoNum,
+            volumen,
+            source: 'manual'
+          }
+        }
+      }
+    );
+
+    res.json({
+      ok: true,
+      dimensiones: { alto: altoNum, ancho: anchoNum, largo: largoNum, peso: pesoNum, volumen, source: 'manual' }
+    });
+  } catch (err) {
+    console.error('Error PATCH dimensiones:', err.message);
+    res.status(500).json({ error: 'Error al guardar dimensiones' });
   }
 });
 

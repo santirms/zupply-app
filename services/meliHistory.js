@@ -1501,6 +1501,26 @@ try {
     update.$set.comprador_ausente_confirmado = true;
   }
 
+  // Guardar dimensiones del paquete si existen y no fueron cargadas manualmente
+  if (sh && sh.dimensions && (!envio.dimensiones || envio.dimensiones.source !== 'manual')) {
+    const dim = sh.dimensions;
+    const volumen = (dim.height && dim.width && dim.length)
+      ? Math.round(dim.height * dim.width * dim.length)
+      : null;
+    update.$set.dimensiones = {
+      alto: dim.height || null,
+      ancho: dim.width || null,
+      largo: dim.length || null,
+      peso: dim.weight || null,
+      volumen: volumen,
+      source: 'meli'
+    };
+    dlog('Guardando dimensiones de MeLi', {
+      shipment_id: shipmentId,
+      dimensions: { h: dim.height, w: dim.width, l: dim.length, weight: dim.weight, vol: volumen }
+    });
+  }
+
   // Guardar coordenadas de MeLi si existen y no están ya guardadas
   if (meliLat && meliLon) {
     const envioActual = await Envio.findById(envio._id).select('latitud longitud geocode_source').lean();
