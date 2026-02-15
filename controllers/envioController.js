@@ -407,6 +407,7 @@ exports.getEnvioByTracking = async (req, res) => {
       ml_status: full.ml_status || full.estado_meli?.status || null,
       ml_substatus: full.ml_substatus || full.estado_meli?.substatus || null,
       label_url: full.label_url || null,
+      dimensiones: full.dimensiones || null,
       chofer_mostrar,
       timeline
     });

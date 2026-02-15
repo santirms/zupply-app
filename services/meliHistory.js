@@ -1516,6 +1516,23 @@ try {
     }
   }
 
+  // ========== EXTRAER DIMENSIONES DEL PAQUETE ==========
+  if (sh && sh.dimensions && (!envio.dimensiones || envio.dimensiones.source !== 'manual')) {
+    const dim = sh.dimensions;
+    const volumen = (dim.height && dim.width && dim.length)
+      ? Math.round(dim.height * dim.width * dim.length)
+      : null;
+    update.$set.dimensiones = {
+      alto:    dim.height || null,
+      ancho:   dim.width  || null,
+      largo:   dim.length || null,
+      peso:    dim.weight || null,
+      volumen: volumen,
+      source:  'meli'
+    };
+  }
+  // ========== FIN EXTRACCIÓN DIMENSIONES ==========
+
   // Construir historial_estados desde el historial COMPLETO (all), no solo desde sh.status_history.
   // sh.status_history de ML puede venir incompleto, pero 'all' ya tiene todos los eventos
   // mergeados de: history API + tracking + shipment dates + eventos locales.

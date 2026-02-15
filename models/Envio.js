@@ -191,6 +191,14 @@ const envioSchema = new Schema({
     type: Boolean,
     default: false
   },
+  dimensiones: {
+    alto:    { type: Number, default: null },
+    ancho:   { type: Number, default: null },
+    largo:   { type: Number, default: null },
+    peso:    { type: Number, default: null },
+    volumen: { type: Number, default: null },
+    source:  { type: String, default: 'meli' }
+  },
   intentosFallidos: [{
     fecha: { type: Date, default: Date.now },
     motivo: {

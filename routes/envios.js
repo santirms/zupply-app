@@ -2008,6 +2008,47 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// PATCH /envios/:id/dimensiones  (cargar dimensiones manualmente)
+router.patch('/:id/dimensiones', async (req, res) => {
+  try {
+    const envio = await Envio.findOne({ _id: req.params.id, tenantId: req.tenantId });
+    if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
+
+    const { alto, ancho, largo, peso } = req.body;
+    const altoNum  = alto  != null ? Number(alto)  : null;
+    const anchoNum = ancho != null ? Number(ancho) : null;
+    const largoNum = largo != null ? Number(largo) : null;
+    const pesoNum  = peso  != null ? Number(peso)  : null;
+
+    if ([altoNum, anchoNum, largoNum].every(v => v === null) && pesoNum === null) {
+      return res.status(400).json({ error: 'Debe enviar al menos una dimensión o peso' });
+    }
+
+    const volumen = (altoNum && anchoNum && largoNum)
+      ? Math.round(altoNum * anchoNum * largoNum)
+      : null;
+
+    const dimensiones = {
+      alto:    altoNum,
+      ancho:   anchoNum,
+      largo:   largoNum,
+      peso:    pesoNum,
+      volumen: volumen,
+      source:  'manual'
+    };
+
+    await Envio.updateOne(
+      { _id: envio._id },
+      { $set: { dimensiones } }
+    );
+
+    res.json({ ok: true, dimensiones });
+  } catch (err) {
+    console.error('Error PATCH dimensiones:', err.message);
+    res.status(500).json({ error: 'Error al guardar dimensiones' });
+  }
+});
+
 // PATCH /envios/:id/geocode  (forzar desde el front)
 router.patch('/:id/geocode', async (req, res) => {
   try {
