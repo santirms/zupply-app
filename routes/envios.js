@@ -470,6 +470,7 @@ router.get('/', async (req, res) => {
           fecha: 1, createdAt: 1, ts: 1,
           requiere_sync_meli: 1,
           origen: 1,
+          dimensiones: 1,
           cliente_id: 1, chofer: 1,
           has_notes: { $gt: [ { $size: { $ifNull: ['$notas', []] } }, 0 ] }
         }
