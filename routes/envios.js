@@ -2012,7 +2012,7 @@ router.get('/:id', async (req, res) => {
 // PATCH /envios/:id/dimensiones  (cargar dimensiones manualmente)
 router.patch('/:id/dimensiones', requireAuth, requireRole('admin','coordinador'), async (req, res) => {
   try {
-    const { alto, ancho, largo, peso } = req.body;
+    const { alto, ancho, largo, peso, items_count } = req.body;
     const envio = await Envio.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!envio) return res.status(404).json({ error: 'Envío no encontrado' });
 
@@ -2020,6 +2020,7 @@ router.patch('/:id/dimensiones', requireAuth, requireRole('admin','coordinador')
     const anchoNum = ancho != null ? Number(ancho) : null;
     const largoNum = largo != null ? Number(largo) : null;
     const pesoNum = peso != null ? Number(peso) : null;
+    const itemsCountNum = items_count != null ? Number(items_count) : null;
 
     const volumen = (altoNum && anchoNum && largoNum)
       ? Math.round(altoNum * anchoNum * largoNum)
@@ -2035,6 +2036,7 @@ router.patch('/:id/dimensiones', requireAuth, requireRole('admin','coordinador')
             largo: largoNum,
             peso: pesoNum,
             volumen,
+            items_count: itemsCountNum,
             source: 'manual'
           }
         }
@@ -2043,7 +2045,7 @@ router.patch('/:id/dimensiones', requireAuth, requireRole('admin','coordinador')
 
     res.json({
       ok: true,
-      dimensiones: { alto: altoNum, ancho: anchoNum, largo: largoNum, peso: pesoNum, volumen, source: 'manual' }
+      dimensiones: { alto: altoNum, ancho: anchoNum, largo: largoNum, peso: pesoNum, volumen, items_count: itemsCountNum, source: 'manual' }
     });
   } catch (err) {
     console.error('Error PATCH dimensiones:', err.message);

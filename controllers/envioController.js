@@ -154,7 +154,7 @@ exports.obtenerShipmentsPanelCliente = async (req, res) => {
       Envio.find(query)
         .populate('chofer', 'nombre email')
         .populate('cliente_id', 'nombre razon_social')
-        .select('id_venta tracking destinatario direccion partido codigo_postal estado estado_meli fecha meli_id sender_id cliente_id')
+        .select('id_venta tracking destinatario direccion partido codigo_postal estado estado_meli fecha meli_id sender_id cliente_id dimensiones')
         .sort({ fecha: -1 })
         .skip(skip)
         .limit(limitNumber)
