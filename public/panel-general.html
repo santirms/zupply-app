@@ -214,18 +214,17 @@
       <select id="filtroTamano"
         class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 dark:bg-[#0B1020] dark:border-white/10 dark:text-slate-100">
         <option value="">— Tamaño —</option>
-        <option value="chico">Chico (&lt; 5000 cm³)</option>
-        <option value="mediano">Mediano (5000-20000 cm³)</option>
-        <option value="grande">Grande (&gt; 20000 cm³)</option>
+        <option value="chico">Chico (&lt; 10.000 cm³)</option>
+        <option value="mediano">Mediano (10.000-50.000 cm³)</option>
+        <option value="grande">Grande (&gt; 50.000 cm³)</option>
       </select>
 
       <select id="filtroPeso"
         class="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 dark:bg-[#0B1020] dark:border-white/10 dark:text-slate-100">
         <option value="">— Peso —</option>
-        <option value="0-1000">&lt; 1 kg</option>
-        <option value="1000-5000">1-5 kg</option>
-        <option value="5000-15000">5-15 kg</option>
-        <option value="15000-999999">&gt; 15 kg</option>
+        <option value="liviano">Liviano (&lt; 3 kg)</option>
+        <option value="medio">Medio (3-10 kg)</option>
+        <option value="pesado">Pesado (&gt; 10 kg)</option>
       </select>
 
       <select id="filtroChofer"
@@ -1032,24 +1031,31 @@ async function limpiarFiltros(){
 
 function clasificarTamano(volumen) {
   if (!volumen) return null;
-  if (volumen < 5000) return { label: 'Chico', cls: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800' };
-  if (volumen <= 20000) return { label: 'Mediano', cls: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' };
+  if (volumen < 10000) return { label: 'Chico', cls: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800' };
+  if (volumen <= 50000) return { label: 'Mediano', cls: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800' };
   return { label: 'Grande', cls: 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800' };
+}
+
+function formatPeso(pesoGramos) {
+  if (pesoGramos >= 1000) {
+    const kg = pesoGramos / 1000;
+    return kg % 1 === 0 ? `${kg} kg` : `${kg.toFixed(1)} kg`;
+  }
+  return `${pesoGramos} g`;
 }
 
 function renderPaqueteCell(envio) {
   const d = envio.dimensiones;
-  if (!d || (!d.peso && !d.volumen)) return '-';
-  let parts = [];
-  if (d.peso) {
-    parts.push(d.peso >= 1000 ? `${(d.peso / 1000).toFixed(1)} kg` : `${d.peso} g`);
+  if (!d || !d.peso) return '-';
+  const peso = d.peso;
+  const pesoTexto = formatPeso(peso);
+  if (peso < 3000) {
+    return `<span class="text-slate-400 dark:text-slate-500 text-xs">${pesoTexto}</span>`;
   }
-  const tamano = clasificarTamano(d.volumen);
-  let html = parts.join(' ');
-  if (tamano) {
-    html += ` <span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border ${tamano.cls}">${tamano.label}</span>`;
+  if (peso <= 10000) {
+    return `<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">\u2696\uFE0F ${pesoTexto}</span>`;
   }
-  return html;
+  return `<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800">\u2696\uFE0F ${pesoTexto}</span>`;
 }
 
 function filtrarPorDimensiones(lista) {
@@ -1060,15 +1066,16 @@ function filtrarPorDimensiones(lista) {
     if (tamanoSel) {
       const vol = e.dimensiones?.volumen;
       if (!vol) return false;
-      if (tamanoSel === 'chico' && vol >= 5000) return false;
-      if (tamanoSel === 'mediano' && (vol < 5000 || vol > 20000)) return false;
-      if (tamanoSel === 'grande' && vol <= 20000) return false;
+      if (tamanoSel === 'chico' && vol >= 10000) return false;
+      if (tamanoSel === 'mediano' && (vol < 10000 || vol > 50000)) return false;
+      if (tamanoSel === 'grande' && vol <= 50000) return false;
     }
     if (pesoSel) {
       const peso = e.dimensiones?.peso;
       if (!peso) return false;
-      const [min, max] = pesoSel.split('-').map(Number);
-      if (peso < min || peso > max) return false;
+      if (pesoSel === 'liviano' && peso >= 3000) return false;
+      if (pesoSel === 'medio' && (peso < 3000 || peso > 10000)) return false;
+      if (pesoSel === 'pesado' && peso <= 10000) return false;
     }
     return true;
   });
@@ -1207,7 +1214,12 @@ async function mostrarDetalle(envioId){
       const parts = [];
       if (d.largo && d.ancho && d.alto) parts.push(`${d.largo}\u00D7${d.ancho}\u00D7${d.alto} cm`);
       if (d.peso) {
-        parts.push(d.peso >= 1000 ? `${(d.peso / 1000).toFixed(2)} kg` : `${d.peso} g`);
+        const pesoTexto = d.peso >= 1000 ? `${(d.peso / 1000).toFixed(2)} kg` : `${d.peso} g`;
+        if (d.peso > 10000) {
+          parts.push(`<span class="text-rose-600 dark:text-rose-400 font-semibold">${pesoTexto} \u2696\uFE0F</span>`);
+        } else {
+          parts.push(pesoTexto);
+        }
       }
       if (d.items_count) parts.push(`${d.items_count} ud.`);
       if (d.volumen) parts.push(`Vol: ${d.volumen.toLocaleString('es-AR')} cm\u00B3`);
