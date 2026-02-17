@@ -725,6 +725,17 @@ async function probeQrButtons(){ const slots = Array.from(document.querySelector
 
 function initMapa(lat,lng){ const cont=document.getElementById('mapa'); if(!cont) return; cont.innerHTML=''; if(!Number.isFinite(lat)||!Number.isFinite(lng)){ cont.innerHTML='<div class="flex items-center justify-center h-full text-slate-500">Sin coordenadas</div>'; return; } if(mapaInstancia){ mapaInstancia.remove(); mapaInstancia=null; } mapaInstancia=L.map('mapa').setView([lat,lng],13); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution:'&copy; OpenStreetMap contributors' }).addTo(mapaInstancia); L.marker([lat,lng]).addTo(mapaInstancia); setTimeout(()=>mapaInstancia.invalidateSize(),0); }
 
+function renderOrigenBadge(origen){
+  const map = {
+    mercadolibre: { text:'ML', cls:'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' },
+    tiendanube:   { text:'TN', cls:'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' },
+    ingreso_manual:{ text:'Manual', cls:'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-800' },
+    etiquetas:    { text:'Etiqueta', cls:'bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-800' }
+  };
+  const o = map[origen] || map['ingreso_manual'];
+  return `<span class="inline-flex items-center text-[10px] leading-none px-1.5 py-0.5 rounded border font-medium ${o.cls}">${o.text}</span>`;
+}
+
 function estadoBadge(key,label){
   const BADGE_CLASSES = {
     // Estados manuales
@@ -1126,6 +1137,7 @@ function renderTabla(){
         <button class="text-indigo-600 dark:text-indigo-400 hover:underline" data-id="${e._id}" onclick="mostrarDetalle(this.dataset.id)" title="Ver detalle">
           ${e.meli_id || e.id_venta || '(sin id)'}
         </button>
+        ${renderOrigenBadge(e.origen)}
         ${ hasQr(e) ? qrIconButtonHtml(e._id) : `<span class="inline-block align-middle" data-qr-probe="${e._id}"></span>` }
         ${ e.meli_id ? `<button class="ml-2 text-xs border px-2 py-0.5 rounded hover:bg-slate-50 dark:hover:bg-white/10" onclick="forceSyncMeli('${e.meli_id}')" title="Actualizar estado desde MeLi">↻</button>` : '' }
       </td>

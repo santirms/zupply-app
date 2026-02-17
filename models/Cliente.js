@@ -7,6 +7,7 @@ const clienteSchema = new mongoose.Schema({
   codigo_cliente:  { type: String, unique: true },
   sender_id:       { type: [String], default: [] },
   user_id:         { type: String },              // user_id de ML
+  tn_store_id:     { type: String, default: null }, // store_id de Tienda Nube
   auto_ingesta:    { type: Boolean, default: false },
   lista_precios:   {
     type: mongoose.Schema.Types.ObjectId,

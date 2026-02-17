@@ -211,6 +211,7 @@ function configurarModal() {
   });
 
   qs('#formCliente')?.addEventListener('submit', guardarCliente);
+  configurarTN();
 
   const chkAI = qs('#chkAutoIngesta');
   if (chkAI) {
@@ -324,6 +325,9 @@ async function abrirModal(id=null) {
       if (sel_tp) sel_tp.value = f.tipo_periodo || 'semanal';
       if (txt_nf && f.notas_facturacion) txt_nf.value = f.notas_facturacion;
     }
+
+    // Cargar estado de Tienda Nube
+    cargarTNStatus();
   } catch (e) {
     console.error('Error al obtener cliente:', e);
   }
@@ -453,5 +457,72 @@ function ocultarModalLoading() {
   const modal = document.getElementById('modalLoadingEliminar');
   if (modal) {
     modal.classList.add('hidden');
+  }
+}
+
+// --------- Tienda Nube ---------
+function configurarTN() {
+  qs('#btnConectarTN')?.addEventListener('click', async () => {
+    try {
+      const { url } = await fetchJSON(`${apiURL('/auth/tn')}/connect`);
+      // Redirect directly — the connect endpoint returns a redirect, but via
+      // the tn-link endpoint it returns JSON with url.
+      window.location.href = `${apiURL('/auth/tn')}/connect`;
+    } catch (e) {
+      console.error('Error conectando TN:', e);
+      alert('No se pudo iniciar la conexion con Tienda Nube');
+    }
+  });
+
+  qs('#btnDesconectarTN')?.addEventListener('click', async () => {
+    if (!confirm('Desconectar Tienda Nube?')) return;
+    try {
+      await fetchJSON(`${apiURL('/auth/tn')}/disconnect`, { method: 'POST' });
+      cargarTNStatus();
+    } catch (e) {
+      console.error('Error desconectando TN:', e);
+      alert('No se pudo desconectar: ' + e.message);
+    }
+  });
+
+  qs('#btnPingTN')?.addEventListener('click', async () => {
+    const statusSpan = qs('#tnPingStatus');
+    if (statusSpan) statusSpan.textContent = 'Probando...';
+    try {
+      const res = await fetchJSON(`${apiURL('/auth/tn')}/ping`);
+      const msg = 'OK: ' + (res.store_name || res.store_id || 'conectado');
+      if (statusSpan) statusSpan.textContent = msg;
+      setTimeout(() => { if (statusSpan) statusSpan.textContent = ''; }, 5000);
+    } catch (e) {
+      const msg = 'Error: ' + e.message;
+      if (statusSpan) statusSpan.textContent = msg;
+    }
+  });
+}
+
+async function cargarTNStatus() {
+  try {
+    const data = await fetchJSON(`${apiURL('/auth/tn')}/status`);
+    const connected = qs('#tnConnected');
+    const disconnected = qs('#tnDisconnected');
+    if (!connected || !disconnected) return;
+
+    if (data.connected) {
+      connected.classList.remove('hidden');
+      disconnected.classList.add('hidden');
+      const nameEl = qs('#tnStoreName');
+      const idEl = qs('#tnStoreId');
+      const dateEl = qs('#tnConnectedAt');
+      if (nameEl) nameEl.textContent = data.storeName || '';
+      if (idEl) idEl.textContent = data.storeId || '';
+      if (dateEl && data.connectedAt) {
+        dateEl.textContent = '| Conectado: ' + new Date(data.connectedAt).toLocaleDateString();
+      }
+    } else {
+      connected.classList.add('hidden');
+      disconnected.classList.remove('hidden');
+    }
+  } catch (e) {
+    console.error('Error cargando TN status:', e);
   }
 }
