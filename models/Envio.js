@@ -197,6 +197,7 @@ const envioSchema = new Schema({
     largo:   { type: Number, default: null },
     peso:    { type: Number, default: null },
     volumen: { type: Number, default: null },
+    items_count: { type: Number, default: null },
     source:  { type: String, default: 'meli' }
   },
 

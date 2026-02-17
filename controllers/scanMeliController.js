@@ -473,15 +473,29 @@ exports.scanAndUpsert = async (req, res) => {
           }
         }
 
-        // Extraer dimensiones del paquete
-        if (meliShipment.dimensions) {
-          const dim = meliShipment.dimensions;
+        // Extraer dimensiones de shipping_items
+        if (meliShipment.shipping_items && meliShipment.shipping_items.length > 0) {
+          const items = meliShipment.shipping_items;
+          let pesoTotal = 0, maxAlto = 0, maxAncho = 0, maxLargo = 0, totalUnidades = 0;
+          for (const item of items) {
+            const dim = item.dimensions;
+            const qty = item.quantity || 1;
+            totalUnidades += qty;
+            if (dim) {
+              pesoTotal += (dim.weight || 0) * qty;
+              if (dim.height > maxAlto) maxAlto = dim.height;
+              if (dim.width > maxAncho) maxAncho = dim.width;
+              if (dim.length > maxLargo) maxLargo = dim.length;
+            }
+          }
+          const volumen = (maxAlto && maxAncho && maxLargo) ? Math.round(maxAlto * maxAncho * maxLargo) : null;
           envioData.dimensiones = {
-            alto: dim.height || null,
-            ancho: dim.width || null,
-            largo: dim.length || null,
-            peso: dim.weight || null,
-            volumen: (dim.height && dim.width && dim.length) ? Math.round(dim.height * dim.width * dim.length) : null,
+            alto: maxAlto || null,
+            ancho: maxAncho || null,
+            largo: maxLargo || null,
+            peso: pesoTotal || null,
+            volumen: volumen,
+            items_count: totalUnidades,
             source: 'meli'
           };
         }
@@ -540,7 +554,8 @@ exports.scanAndUpsert = async (req, res) => {
     } else {
       // --- si ya existía el envío, solo actualizamos meta QR ---
       const needsCoords = (!envio.latitud || !envio.longitud || envio.geocode_source !== 'mercadolibre');
-      if (needsCoords && (meli_id || idVentaFromQr) && auth?.user_id) {
+      const needsDims = (!envio.dimensiones || (!envio.dimensiones.alto && !envio.dimensiones.peso)) && envio.dimensiones?.source !== 'manual';
+      if ((needsCoords || needsDims) && (meli_id || idVentaFromQr) && auth?.user_id) {
         try {
           const meliShipment = await withTimeout(
             fetchShipmentFromMeli({ tracking: meli_id, id_venta: idVentaFromQr, user_id: auth.user_id }),
@@ -548,7 +563,9 @@ exports.scanAndUpsert = async (req, res) => {
             'meli_timeout'
           );
 
-          if (meliShipment?.receiver_address) {
+          const updateFields = {};
+
+          if (needsCoords && meliShipment?.receiver_address) {
             const addr = meliShipment.receiver_address;
             const lat = addr.latitude || addr.lat || addr.geolocation?.latitude || null;
             const lon = addr.longitude || addr.lon || addr.lng || addr.geolocation?.longitude || null;
@@ -564,16 +581,9 @@ exports.scanAndUpsert = async (req, res) => {
                 lonNum >= -73.6 && lonNum <= -53.5
               ) {
                 console.log(`📍 Coords de MeLi (scan): ${meliShipment?.id || meli_id}`, { latitud: latNum, longitud: lonNum });
-                await Envio.updateOne(
-                  { _id: envio._id },
-                  {
-                    $set: {
-                      latitud: latNum,
-                      longitud: lonNum,
-                      geocode_source: 'mercadolibre'
-                    }
-                  }
-                );
+                updateFields.latitud = latNum;
+                updateFields.longitud = lonNum;
+                updateFields.geocode_source = 'mercadolibre';
                 envio.latitud = latNum;
                 envio.longitud = lonNum;
                 envio.geocode_source = 'mercadolibre';
@@ -582,8 +592,39 @@ exports.scanAndUpsert = async (req, res) => {
               }
             }
           }
+
+          // Extraer dimensiones de shipping_items
+          if (needsDims && meliShipment?.shipping_items && meliShipment.shipping_items.length > 0) {
+            const items = meliShipment.shipping_items;
+            let pesoTotal = 0, maxAlto = 0, maxAncho = 0, maxLargo = 0, totalUnidades = 0;
+            for (const item of items) {
+              const dim = item.dimensions;
+              const qty = item.quantity || 1;
+              totalUnidades += qty;
+              if (dim) {
+                pesoTotal += (dim.weight || 0) * qty;
+                if (dim.height > maxAlto) maxAlto = dim.height;
+                if (dim.width > maxAncho) maxAncho = dim.width;
+                if (dim.length > maxLargo) maxLargo = dim.length;
+              }
+            }
+            const volumen = (maxAlto && maxAncho && maxLargo) ? Math.round(maxAlto * maxAncho * maxLargo) : null;
+            updateFields.dimensiones = {
+              alto: maxAlto || null,
+              ancho: maxAncho || null,
+              largo: maxLargo || null,
+              peso: pesoTotal || null,
+              volumen: volumen,
+              items_count: totalUnidades,
+              source: 'meli'
+            };
+          }
+
+          if (Object.keys(updateFields).length > 0) {
+            await Envio.updateOne({ _id: envio._id }, { $set: updateFields });
+          }
         } catch (coordsErr) {
-          console.warn('scanAndUpsert: no se pudieron refrescar coords de MeLi:', coordsErr.message);
+          console.warn('scanAndUpsert: no se pudieron refrescar datos de MeLi:', coordsErr.message);
         }
       }
 

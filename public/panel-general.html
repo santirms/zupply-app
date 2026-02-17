@@ -1197,8 +1197,9 @@ async function mostrarDetalle(envioId){
       if (d.peso) {
         parts.push(d.peso >= 1000 ? `${(d.peso / 1000).toFixed(2)} kg` : `${d.peso} g`);
       }
+      if (d.items_count) parts.push(`${d.items_count} ud.`);
       if (d.volumen) parts.push(`Vol: ${d.volumen.toLocaleString('es-AR')} cm\u00B3`);
-      dimHtml = `<p><strong>Paquete:</strong> ${parts.join(' | ')}</p>`;
+      dimHtml = `<p><strong>\uD83D\uDCE6 Paquete:</strong> ${parts.join(' | ')}</p>`;
     }
 
     cd.innerHTML=`

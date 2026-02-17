@@ -1501,23 +1501,41 @@ try {
     update.$set.comprador_ausente_confirmado = true;
   }
 
-  // Guardar dimensiones del paquete si existen y no fueron cargadas manualmente
-  if (sh && sh.dimensions && (!envio.dimensiones || envio.dimensiones.source !== 'manual')) {
-    const dim = sh.dimensions;
-    const volumen = (dim.height && dim.width && dim.length)
-      ? Math.round(dim.height * dim.width * dim.length)
-      : null;
+  // Extraer dimensiones de shipping_items (más confiable que sh.dimensions)
+  if (sh && sh.shipping_items && sh.shipping_items.length > 0 && (!envio.dimensiones || envio.dimensiones.source !== 'manual')) {
+    const items = sh.shipping_items;
+
+    let pesoTotal = 0;
+    let maxAlto = 0, maxAncho = 0, maxLargo = 0;
+    let totalUnidades = 0;
+
+    for (const item of items) {
+      const dim = item.dimensions;
+      const qty = item.quantity || 1;
+      totalUnidades += qty;
+
+      if (dim) {
+        pesoTotal += (dim.weight || 0) * qty;
+        if (dim.height > maxAlto) maxAlto = dim.height;
+        if (dim.width > maxAncho) maxAncho = dim.width;
+        if (dim.length > maxLargo) maxLargo = dim.length;
+      }
+    }
+
+    const volumen = (maxAlto && maxAncho && maxLargo) ? Math.round(maxAlto * maxAncho * maxLargo) : null;
+
     update.$set.dimensiones = {
-      alto: dim.height || null,
-      ancho: dim.width || null,
-      largo: dim.length || null,
-      peso: dim.weight || null,
+      alto: maxAlto || null,
+      ancho: maxAncho || null,
+      largo: maxLargo || null,
+      peso: pesoTotal || null,
       volumen: volumen,
+      items_count: totalUnidades,
       source: 'meli'
     };
-    dlog('Guardando dimensiones de MeLi', {
+    dlog('Guardando dimensiones de MeLi (shipping_items)', {
       shipment_id: shipmentId,
-      dimensions: { h: dim.height, w: dim.width, l: dim.length, weight: dim.weight, vol: volumen }
+      dimensions: { h: maxAlto, w: maxAncho, l: maxLargo, weight: pesoTotal, vol: volumen, items: totalUnidades }
     });
   }
 
