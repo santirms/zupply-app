@@ -2,7 +2,7 @@
 const axios = require('axios');
 const Envio = require('../models/Envio');
 const Cliente = require('../models/Cliente');
-const { getValidToken } = require('../utils/meliUtils');
+const { getValidToken, parseDimensions } = require('../utils/meliUtils');
 const logger = require('../utils/logger');
 
 const HYDRATE_TTL_MIN = 15;
@@ -1510,7 +1510,7 @@ try {
     let totalUnidades = 0;
 
     for (const item of items) {
-      const dim = item.dimensions;
+      const dim = parseDimensions(item.dimensions);
       const qty = item.quantity || 1;
       totalUnidades += qty;
 

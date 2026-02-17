@@ -5,7 +5,8 @@ const QrScan = require('../models/QrScan');
 const logger = require('../utils/logger');
 const {
   parseQrPayload, extractKeys,
-  getTokenByClienteId, getTokenBySenderId, fetchShipmentFromMeli
+  getTokenByClienteId, getTokenBySenderId, fetchShipmentFromMeli,
+  parseDimensions
 } = require('../utils/meliUtils');
 const { ensureObject, presignGet } = require('../utils/s3');
 const { resolvePartido } = require('../utils/resolvePartido');
@@ -478,7 +479,7 @@ exports.scanAndUpsert = async (req, res) => {
           const items = meliShipment.shipping_items;
           let pesoTotal = 0, maxAlto = 0, maxAncho = 0, maxLargo = 0, totalUnidades = 0;
           for (const item of items) {
-            const dim = item.dimensions;
+            const dim = parseDimensions(item.dimensions);
             const qty = item.quantity || 1;
             totalUnidades += qty;
             if (dim) {
@@ -598,7 +599,7 @@ exports.scanAndUpsert = async (req, res) => {
             const items = meliShipment.shipping_items;
             let pesoTotal = 0, maxAlto = 0, maxAncho = 0, maxLargo = 0, totalUnidades = 0;
             for (const item of items) {
-              const dim = item.dimensions;
+              const dim = parseDimensions(item.dimensions);
               const qty = item.quantity || 1;
               totalUnidades += qty;
               if (dim) {
