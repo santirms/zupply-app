@@ -71,6 +71,7 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/auth')) return next();
   if (req.path.startsWith('/api/auth/meli')) return next();
   if (req.path.startsWith('/auth/meli')) return next();
+  if (req.path.startsWith('/api/auth/tn')) return next();
   // assets públicos necesarios para el login
   if (
     req.path.startsWith('/assets') ||
@@ -218,6 +219,7 @@ app.use('/api/detectar-zona',    require('./routes/detectarZona'));
 app.use('/api/auth',             require('./routes/auth'));
 app.use('/api/auth/meli',        require('./routes/meli'));
 app.use('/auth/meli',            require('./routes/meli'));
+app.use('/api/auth/tn',          require('./routes/tiendanube'));
 
 // Rutas “legacy” sin /api (si tu front las usa así, mantenelas)
 app.use('/zonas',                require('./routes/zonas'));

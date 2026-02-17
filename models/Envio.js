@@ -119,8 +119,12 @@ const envioSchema = new Schema({
   },
   origen: {
     type: String,
-    enum: ['mercadolibre', 'ingreso_manual', 'etiquetas', 'otro'],
+    enum: ['mercadolibre', 'tiendanube', 'ingreso_manual', 'etiquetas', 'otro'],
     default: 'mercadolibre'
+  },
+  tn_order_id: {
+    type: String,
+    default: null
   },
   tipo: {
     type: String,
@@ -277,6 +281,10 @@ envioSchema.add({
 envioSchema.index(
   { meli_id: 1 },
   { unique: true, partialFilterExpression: { meli_id: { $exists: true, $nin: [null, ''] } } }
+);
+envioSchema.index(
+  { tn_order_id: 1 },
+  { unique: true, partialFilterExpression: { tn_order_id: { $exists: true, $nin: [null, ''] } } }
 );
 
 envioSchema.index({ cliente_id: 1, fecha: -1 });

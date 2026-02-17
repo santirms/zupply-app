@@ -35,6 +35,17 @@ const tenantSchema = new mongoose.Schema({
       default: false
     }
   },
+  tnIntegration: {
+    storeId: String,
+    storeName: String,
+    accessToken: String,
+    webhookId: String,
+    connectedAt: Date,
+    connected: {
+      type: Boolean,
+      default: false
+    }
+  },
   plan: {
     type: String,
     enum: ['basic', 'pro', 'enterprise'],
@@ -71,5 +82,6 @@ const tenantSchema = new mongoose.Schema({
 tenantSchema.index({ subdomain: 1 }, { unique: true });
 tenantSchema.index({ isActive: 1 });
 tenantSchema.index({ 'mlIntegration.userId': 1 });
+tenantSchema.index({ 'tnIntegration.storeId': 1 });
 
 module.exports = mongoose.model('Tenant', tenantSchema);

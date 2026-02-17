@@ -152,6 +152,35 @@ router.get('/:id/meli-link', async (req, res) => {
   }
 });
 
+// GET tn-link
+router.get('/:id/tn-link', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const cliente = await Cliente.findOne({ _id: id, tenantId: req.tenantId });
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    const state = String(req.tenantId);
+
+    if (!process.env.TIENDANUBE_CLIENT_ID) {
+      return res.status(500).json({ error: 'TIENDANUBE_CLIENT_ID no seteado' });
+    }
+
+    const url =
+      `https://www.tiendanube.com/apps/authorize/token` +
+      `?client_id=${process.env.TIENDANUBE_CLIENT_ID}` +
+      `&response_type=code` +
+      `&state=${encodeURIComponent(state)}`;
+
+    return res.json({ url });
+  } catch (e) {
+    console.error('Error generando tn-link:', e);
+    res.status(500).json({ error: 'No se pudo generar el link de vinculación TN' });
+  }
+});
+
 // DELETE /:id - Eliminar cliente (solo admin)
 router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {

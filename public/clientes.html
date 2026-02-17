@@ -199,6 +199,44 @@
             Agregar cuenta
           </button>
 
+          <!-- Tienda Nube -->
+          <div class="border-t border-slate-200 dark:border-white/10 pt-6 mt-6">
+            <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+              Tienda Nube
+            </h3>
+            <div id="tnStatusBox" class="p-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 mb-3">
+              <div id="tnDisconnected">
+                <p class="text-sm text-slate-600 dark:text-slate-300 mb-2">No conectado</p>
+                <button type="button" id="btnConectarTN"
+                  class="px-4 py-2 rounded-xl font-semibold shadow-sm text-white"
+                  style="background-color:#7C3AED;">
+                  Conectar Tienda Nube
+                </button>
+              </div>
+              <div id="tnConnected" class="hidden">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300">Conectado</span>
+                  <span id="tnStoreName" class="text-sm font-medium"></span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                  Store ID: <span id="tnStoreId" class="font-mono"></span>
+                  <span id="tnConnectedAt" class="ml-2"></span>
+                </p>
+                <div class="flex items-center gap-2">
+                  <button type="button" id="btnPingTN"
+                    class="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm">
+                    Probar conexion
+                  </button>
+                  <button type="button" id="btnDesconectarTN"
+                    class="px-3 py-1 rounded-xl border border-rose-400/30 text-rose-600 dark:text-rose-300 hover:bg-rose-400/10 text-sm">
+                    Desconectar
+                  </button>
+                  <span id="tnPingStatus" class="text-sm opacity-80"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Configuración de Facturación -->
           <div class="border-t border-slate-200 dark:border-white/10 pt-6 mt-6">
             <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
