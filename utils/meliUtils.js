@@ -238,6 +238,31 @@ async function mlGetWithTenant(url, { tenantId, mlToken }) {
   }
 }
 
+/**
+ * Parsea dimensiones de shipping_items de MercadoLibre.
+ * La API puede devolver un string "WxHxL,Weight" (cm y gramos)
+ * o un objeto {height, width, length, weight}.
+ */
+function parseDimensions(dim) {
+  if (dim && typeof dim === 'object' && !Array.isArray(dim)) {
+    return dim;
+  }
+  if (typeof dim === 'string') {
+    const parts = dim.split(',');
+    const dimParts = parts[0].split('x').map(s => parseFloat(s.trim()));
+    const weight = parts[1] ? parseFloat(parts[1].trim()) : null;
+    if (dimParts.length >= 3) {
+      return {
+        width: dimParts[0] || null,
+        height: dimParts[1] || null,
+        length: dimParts[2] || null,
+        weight: weight
+      };
+    }
+  }
+  return null;
+}
+
 module.exports = {
   getValidToken,
   getTokenBySenderId,
@@ -251,5 +276,6 @@ module.exports = {
   getTokenByClienteId,
   getTokenByTenantId,  // ← NUEVO
   obtenerOrden,
-  fetchShipmentFromMeli
+  fetchShipmentFromMeli,
+  parseDimensions
 };
