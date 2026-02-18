@@ -769,7 +769,11 @@ function estadoBadge(key,label){
     // Estados de recepción
     ready_for_pickup: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800',
     picking: 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800',
-    listo_retiro: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800'
+    listo_retiro: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300 dark:border-teal-800',
+
+    // Estados de substatus ML (ready_to_ship)
+    por_imprimir: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800',
+    por_retirar: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800'
   };
 
   const classes = BADGE_CLASSES[key] || 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900/30 dark:text-gray-300';
@@ -800,8 +804,14 @@ window.getEstadoColorClass = getEstadoColorClass;
 function renderEstadoChip(envio) {
   if (!envio) return '';
 
-  const estado = envio.estado || 'pendiente';
+  let estado = envio.estado || 'pendiente';
   const mlSubstatus = envio.ml_substatus;
+
+  // Refinar pendiente → por_imprimir / por_retirar según substatus ML
+  if (estado === 'pendiente' && mlSubstatus) {
+    if (mlSubstatus === 'ready_to_print') estado = 'por_imprimir';
+    else if (mlSubstatus === 'printed') estado = 'por_retirar';
+  }
 
   const estadosSinSubstatus = ['entregado', 'cancelado'];
   const mostrarSubstatus = !estadosSinSubstatus.includes(estado) && mlSubstatus;
@@ -857,7 +867,9 @@ function getNombreEstado(estado) {
     'not_delivered': 'No entregado',
     'cancelled': 'Cancelado',
     'handling': 'En planta',
-    'ready_to_ship': 'Pendiente'
+    'ready_to_ship': 'Pendiente',
+    'por_imprimir': 'Por imprimir',
+    'por_retirar': 'Por retirar'
   };
 
   if (!estado) return 'Pendiente';
@@ -877,7 +889,14 @@ function uiStatus(envio){
     cancelled: 'cancelado'
   };
 
-  const norm = STATUS_ALIAS[raw] || raw || 'pendiente';
+  let norm = STATUS_ALIAS[raw] || raw || 'pendiente';
+
+  // Refinar pendiente → por_imprimir / por_retirar según substatus ML
+  const mlSubEarly = envio.ml_substatus || envio.substatus || envio.estado_meli?.substatus || '';
+  if (norm === 'pendiente' && mlSubEarly) {
+    if (mlSubEarly === 'ready_to_print') norm = 'por_imprimir';
+    else if (mlSubEarly === 'printed') norm = 'por_retirar';
+  }
 
   const STATUS_LABELS = {
     // Estados manuales
@@ -913,7 +932,11 @@ function uiStatus(envio){
     picking: 'Preparando',
 
     // Estados especiales
-    listo_retiro: 'Listo para retirar'
+    listo_retiro: 'Listo para retirar',
+
+    // Estados de substatus ML (ready_to_ship)
+    por_imprimir: 'Por imprimir',
+    por_retirar: 'Por retirar'
   };
 
   let cardLabel = STATUS_LABELS[norm];
@@ -1566,6 +1589,12 @@ function renderHistorial(histArray=[], envio=null) {
         } else if (mlSub === 'rescheduled_by_meli') {
           key = 'demorado';
           label = 'Demorado';
+        } else if (mlSub === 'ready_to_print') {
+          key = 'por_imprimir';
+          label = 'Por imprimir';
+        } else if (mlSub === 'printed') {
+          key = 'por_retirar';
+          label = 'Por retirar';
         }
       }
       

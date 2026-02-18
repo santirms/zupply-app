@@ -1854,6 +1854,14 @@ function buildTimeline(envio) {
       });
     }
   }
+  // Refinar pendiente → por_imprimir / por_retirar según substatus ML
+  for (const entry of t) {
+    if (entry.estado === 'pendiente' && entry.estado_meli) {
+      if (entry.estado_meli.substatus === 'ready_to_print') entry.estado = 'por_imprimir';
+      else if (entry.estado_meli.substatus === 'printed') entry.estado = 'por_retirar';
+    }
+  }
+
   t.sort((a,b) => new Date(a.at) - new Date(b.at));
 
   // Safety net: si el estado actual del envío es terminal y no está en el timeline, agregarlo
