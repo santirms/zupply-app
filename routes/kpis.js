@@ -71,9 +71,9 @@ router.get('/home', async (req, res) => {
     
     // === Consultas (countDocuments) con tenantId ===
     const [pendientes, en_ruta, entregados, incidencias] = await Promise.all([
-      // pendientes: estado=pendiente, últimas 48h
+      // pendientes: pendiente + por_imprimir + por_retirar, últimos 7d
       Envio.countDocuments({
-        estado: 'pendiente',
+        estado: { $in: ['pendiente', 'por_imprimir', 'por_retirar'] },
         fecha: { $gte: start7d },
         tenantId: req.tenantId
       }),
@@ -85,31 +85,43 @@ router.get('/home', async (req, res) => {
         tenantId: req.tenantId
       }),
       
-      // entregados: con delivered en historial hoy O estado_meli.updatedAt hoy + estado=entregado
+      // entregados: entregados HOY por fecha de entrega (no de venta)
       Envio.countDocuments({
+        estado: 'entregado',
+        tenantId: req.tenantId,
         $or: [
-          // Con historial
+          // Opción 1: tiene evento de entrega en historial hoy
           {
-            estado: 'entregado',
             historial: {
               $elemMatch: {
-                'estado_meli.status': 'delivered',
+                estado: 'entregado',
                 at: { $gte: startDia, $lte: endDia }
               }
             }
           },
-          // Sin historial (fallback)
+          // Opción 2: estado_meli.updatedAt es de hoy (fallback para envíos sin historial detallado)
           {
-            estado: 'entregado',
+            'estado_meli.status': 'delivered',
             'estado_meli.updatedAt': { $gte: startDia, $lte: endDia }
+          },
+          // Opción 3: updatedAt del documento es de hoy y estado es entregado (fallback final)
+          {
+            updatedAt: { $gte: startDia, $lte: endDia }
           }
-        ],
-        tenantId: req.tenantId
+        ]
       }),
       
-      // incidencias: 48h con estados específicos
+      // incidencias: 7d con estados de incidencia operativa
       Envio.countDocuments({
-        estado: { $in: ['reprogramado', 'comprador_ausente', 'demorado'] },
+        estado: { $in: [
+          'reprogramado',
+          'reprogramado_comprador',
+          'comprador_ausente',
+          'demorado',
+          'no_visitado',
+          'direccion_erronea',
+          'rechazado_comprador'
+        ]},
         fecha: { $gte: start7d },
         tenantId: req.tenantId
       })
