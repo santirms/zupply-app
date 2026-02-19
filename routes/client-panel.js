@@ -76,18 +76,18 @@ function getScopedFilter(req, base = {}) {
 
 function parseDateStart(value) {
   if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  date.setHours(0, 0, 0, 0);
-  return date;
+  const parts = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!parts) return null;
+  const [, y, m, d] = parts;
+  return new Date(`${y}-${m}-${d}T00:00:00.000-03:00`);
 }
 
 function parseDateEnd(value) {
   if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  date.setHours(23, 59, 59, 999);
-  return date;
+  const parts = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!parts) return null;
+  const [, y, m, d] = parts;
+  return new Date(`${y}-${m}-${d}T23:59:59.999-03:00`);
 }
 
 function buildFechaRange(query = {}) {
