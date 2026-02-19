@@ -11,7 +11,8 @@ const {
   buildQueryFacturacion,
   filtrarEnviosFacturables,
   calcularRangoFacturacion,
-  getFechaIngresoEnvio
+  getFechaIngresoEnvio,
+  calcularSemanaAnterior
 } = require('../utils/facturacion');
 const PDFDocument = require('pdfkit'); // npm i pdfkit
 const { Readable } = require('stream');
@@ -40,7 +41,7 @@ router.get('/preview', async (req, res) => {
     if (!lista) return res.status(404).json({ error: 'Lista de precios no encontrada' });
 
     // Generar query amplia con nuevas utilidades de facturación
-    const query = buildQueryFacturacion(clienteId, dtFrom, dtTo, cliente);
+    const query = buildQueryFacturacion(clienteId, dtFrom, dtTo);
 
     // Traer envíos candidatos
     const enviosCandidatos = await Envio.find(query)
@@ -49,11 +50,11 @@ router.get('/preview', async (req, res) => {
       .populate('cliente_id', 'nombre codigo_cliente')
       .lean();
 
-    // Filtrar por fecha de ingreso real + horarios de corte
-    const envios = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo, cliente);
+    // Filtrar por scan QR en planta
+    const envios = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo);
 
     // Log para debugging
-    const rango = calcularRangoFacturacion(dtFrom, dtTo, cliente);
+    const rango = calcularRangoFacturacion(dtFrom, dtTo);
     console.log('📊 Facturación/Preview generada:', {
       cliente: cliente.nombre,
       rango_solicitado: { desde, hasta },
@@ -126,18 +127,7 @@ router.get('/resumen', async (req, res) => {
     }
     const clientesMap = new Map(clientesDocs.map(c => [String(c._id), c]));
 
-    // 2) Traer envíos del período para esos clientes
-    // Ampliamos el rango para incluir todos los candidatos posibles
-    const estadosFacturables = [
-      'asignado',
-      'en_camino',
-      'en_planta',
-      'entregado',
-      'comprador_ausente',
-      'inaccesible',
-      'rechazado'
-    ];
-
+    // 2) Traer envíos del período para esos clientes — solo los que tienen scan QR
     const ors = [];
     for (const c of clientesDocs) {
       ors.push({ cliente_id: c._id });
@@ -145,47 +135,20 @@ router.get('/resumen', async (req, res) => {
     }
     if (!ors.length) return res.json({ period: { desde, hasta }, lines: [], totalGeneral: 0, totalesPorCliente: [] });
 
-    // Query amplia que incluye campos necesarios para determinar fecha de ingreso
+    // Query: solo envíos con scan QR en el rango
     const enviosCandidatos = await Envio.find({
       $and: [
         { $or: ors },
-        { estado: { $in: estadosFacturables } },
-        {
-          $or: [
-            { fecha: { $gte: dtFrom, $lte: dtTo } },
-            { createdAt: { $gte: dtFrom, $lte: dtTo } },
-            { 'historial.at': { $gte: dtFrom, $lte: dtTo } }
-          ]
-        }
+        { 'historial.source': { $regex: /^zupply:qr/ } },
+        { 'historial.at': { $gte: dtFrom, $lte: dtTo } }
       ]
     })
     .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado historial origen requiere_sync_meli createdAt updatedAt')
     .sort({ fecha: 1 })
     .lean();
 
-    // Filtrar envíos usando la función centralizada
-    // Si hay múltiples clientes, agrupar por cliente y filtrar cada grupo
-    const envios = [];
-
-    if (clientesDocs.length === 1) {
-      // Un solo cliente: filtrar todos juntos
-      const cliente = clientesDocs[0];
-      const filtrados = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo, cliente);
-      envios.push(...filtrados);
-    } else {
-      // Múltiples clientes: filtrar por cliente
-      for (const envio of enviosCandidatos) {
-        const clienteId = String(envio.cliente_id || '');
-        const cliente = clientesMap.get(clienteId);
-        if (!cliente) continue;
-
-        // Filtrar este envío individual
-        const filtrado = filtrarEnviosFacturables([envio], dtFrom, dtTo, cliente);
-        if (filtrado.length > 0) {
-          envios.push(envio);
-        }
-      }
-    }
+    // Filtrar envíos usando la función centralizada — regla universal, sin parámetro cliente
+    const envios = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo);
 
     // Log para debugging
     console.log('📊 Facturación/Resumen generada:', {
@@ -362,17 +325,7 @@ router.get('/detalle', async (req, res) => {
     }
     const cMap = new Map(clientesDocs.map(c => [String(c._id), c]));
 
-    // Preparar query amplia
-    const estadosFacturables = [
-      'asignado',
-      'en_camino',
-      'en_planta',
-      'entregado',
-      'comprador_ausente',
-      'inaccesible',
-      'rechazado'
-    ];
-
+    // Preparar query — solo envíos con scan QR en el rango
     const ors = [];
     for (const c of clientesDocs) {
       ors.push({ cliente_id: c._id });
@@ -380,18 +333,12 @@ router.get('/detalle', async (req, res) => {
     }
     if (!ors.length) return res.json({ items: [], total: 0 });
 
-    // Query amplia que incluye campos necesarios para determinar fecha de ingreso
+    // Query: solo envíos con scan QR en el rango
     const enviosCandidatos = await Envio.find({
       $and: [
         { $or: ors },
-        { estado: { $in: estadosFacturables } },
-        {
-          $or: [
-            { fecha: { $gte: dtFrom, $lte: dtTo } },
-            { createdAt: { $gte: dtFrom, $lte: dtTo } },
-            { 'historial.at': { $gte: dtFrom, $lte: dtTo } }
-          ]
-        }
+        { 'historial.source': { $regex: /^zupply:qr/ } },
+        { 'historial.at': { $gte: dtFrom, $lte: dtTo } }
       ]
     })
     .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio historial origen requiere_sync_meli createdAt updatedAt')
@@ -399,29 +346,8 @@ router.get('/detalle', async (req, res) => {
     .populate('cliente_id', 'nombre codigo_cliente lista_precios')
     .lean();
 
-    // Filtrar envíos usando la función centralizada
-    // Si hay múltiples clientes, agrupar por cliente y filtrar cada grupo
-    const envios = [];
-
-    if (clientesDocs.length === 1) {
-      // Un solo cliente: filtrar todos juntos
-      const cliente = clientesDocs[0];
-      const filtrados = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo, cliente);
-      envios.push(...filtrados);
-    } else {
-      // Múltiples clientes: filtrar por cliente
-      for (const envio of enviosCandidatos) {
-        const clienteId = String(envio.cliente_id?._id || envio.cliente_id || '');
-        const cliente = cMap.get(clienteId);
-        if (!cliente) continue;
-
-        // Filtrar este envío individual
-        const filtrado = filtrarEnviosFacturables([envio], dtFrom, dtTo, cliente);
-        if (filtrado.length > 0) {
-          envios.push(envio);
-        }
-      }
-    }
+    // Filtrar envíos usando la función centralizada — regla universal, sin parámetro cliente
+    const envios = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo);
 
     // Log para debugging
     console.log('📊 Facturación/Detalle generada:', {
