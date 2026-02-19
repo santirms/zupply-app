@@ -89,14 +89,15 @@ function toNumberOrNull(value) {
 
 function parseDateOnly(value, { endOfDay = false } = {}) {
   if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
+  // Forzar parseo como fecha local Argentina (no UTC)
+  const parts = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!parts) return null;
+  const [, y, m, d] = parts;
   if (endOfDay) {
-    parsed.setHours(23, 59, 59, 999);
+    return new Date(`${y}-${m}-${d}T23:59:59.999-03:00`);
   } else {
-    parsed.setHours(0, 0, 0, 0);
+    return new Date(`${y}-${m}-${d}T00:00:00.000-03:00`);
   }
-  return parsed;
 }
 
 function buildPanelClienteFechaFilter(desde, hasta) {
