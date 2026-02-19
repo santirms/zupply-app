@@ -1,239 +1,163 @@
 const { DateTime } = require('luxon');
 
+const TZ = 'America/Argentina/Buenos_Aires';
+
 /**
- * Determina la fecha de ingreso al sistema según el origen del envío
+ * Obtiene la fecha de ingreso a planta (scan QR) de un envío.
+ * Retorna null si el envío nunca fue escaneado → no es facturable.
  */
 function getFechaIngresoEnvio(envio) {
-  const origen = envio.origen;
+  if (!envio?.historial || !Array.isArray(envio.historial)) return null;
 
-  // 1. AUTO-INGESTA (ML sincronizado automáticamente)
-  // origen: 'mercadolibre' + requiere_sync: true
-  // → Usar campo "fecha" (cuando ML lo creó)
-  if (origen === 'mercadolibre' && envio.requiere_sync_meli === true) {
-    // Pero si NO tiene auto_ingesta (es escaneo manual), usar fecha de escaneo
-    if (envio.historial?.length > 0) {
-      const eventoEscaneo = envio.historial.find(h =>
-        h.source === 'zupply:qr' && h.estado === 'asignado'
-      );
-      if (eventoEscaneo) {
-        return eventoEscaneo.at; // Es escaneo, no auto-ingesta
-      }
-    }
+  // Buscar el PRIMER evento de scan QR (zupply:qr)
+  const scanEvents = envio.historial
+    .filter(h => h.source && h.source.startsWith('zupply:qr'))
+    .sort((a, b) => new Date(a.at) - new Date(b.at));
 
-    // Si no hay escaneo, es auto-ingesta real
-    return envio.fecha;
-  }
+  if (scanEvents.length === 0) return null;
 
-  // 2. ETIQUETAS PDF (subida de archivos)
-  // origen: 'etiquetas'
-  // → Usar campo "fecha" (cuando se subió el PDF)
-  if (origen === 'etiquetas') {
-    return envio.fecha;
-  }
-
-  // 3. INGRESO MANUAL (creado manualmente en el sistema)
-  // origen: 'ingreso_manual'
-  // → Usar fecha del primer evento del historial (cuando se creó/asignó)
-  if (origen === 'ingreso_manual') {
-    if (envio.historial?.length > 0) {
-      return envio.historial[0].at;
-    }
-    return envio.fecha || envio.createdAt;
-  }
-
-  // Fallback: usar fecha o createdAt
-  return envio.fecha || envio.createdAt || envio.updatedAt;
+  return scanEvents[0].at;
 }
 
 /**
- * Calcula el rango de fechas ajustado según horarios de corte del cliente
+ * Calcula el rango semanal de facturación (lunes 00:00 AR → sábado 23:59:59 AR)
+ * a partir de las fechas "desde" y "hasta" recibidas.
+ *
+ * Si no se pasan fechas, calcula la semana anterior automáticamente
+ * (para uso del cron del domingo).
  */
-function calcularRangoFacturacion(desde, hasta, cliente) {
-  // Parsear fechas respetando timezone argentino
-  // Si viene como string "YYYY-MM-DD", parsearlo como fecha local argentina
-  const tz = (cliente?.facturacion?.zona_horaria) || 'America/Argentina/Buenos_Aires';
-
+function calcularRangoFacturacion(desde, hasta) {
   let dtDesde, dtHasta;
 
-  // Parsear fechas como fechas LOCALES en Argentina, no UTC
-  if (typeof desde === 'string') {
-    // Agregar la hora para que sea medianoche LOCAL, no UTC
-    dtDesde = DateTime.fromISO(desde + 'T00:00:00', { zone: tz });
-  } else {
-    // Date object → convertir a DateTime
-    dtDesde = DateTime.fromJSDate(desde, { zone: tz });
-  }
-
-  if (typeof hasta === 'string') {
-    dtHasta = DateTime.fromISO(hasta + 'T23:59:59', { zone: tz });
-  } else {
-    dtHasta = DateTime.fromJSDate(hasta, { zone: tz });
-  }
-
-  // Si el cliente NO tiene configuración de facturación, usar rango exacto
-  if (!cliente || !cliente.facturacion) {
-    // Parsear correctamente respetando timezone
-    const tz = 'America/Argentina/Buenos_Aires';
-
-    let dtDesdeSinConf, dtHastaSinConf;
-
+  if (desde && hasta) {
+    // Parsear fechas como locales Argentina
     if (typeof desde === 'string') {
-      dtDesdeSinConf = DateTime.fromISO(desde + 'T00:00:00', { zone: tz }).startOf('day');
+      dtDesde = DateTime.fromISO(desde, { zone: TZ }).startOf('day');
     } else {
-      dtDesdeSinConf = DateTime.fromJSDate(desde, { zone: tz }).startOf('day');
+      dtDesde = DateTime.fromJSDate(desde, { zone: TZ }).startOf('day');
     }
 
     if (typeof hasta === 'string') {
-      dtHastaSinConf = DateTime.fromISO(hasta + 'T23:59:59', { zone: tz }).endOf('day');
+      dtHasta = DateTime.fromISO(hasta, { zone: TZ }).endOf('day');
     } else {
-      dtHastaSinConf = DateTime.fromJSDate(hasta, { zone: tz }).endOf('day');
+      dtHasta = DateTime.fromJSDate(hasta, { zone: TZ }).endOf('day');
     }
-
-    return {
-      desde: dtDesdeSinConf.toJSDate(),
-      hasta: dtHastaSinConf.toJSDate(),
-      info: {
-        desde_str: dtDesdeSinConf.toISO(),
-        hasta_str: dtHastaSinConf.toISO(),
-        sin_configuracion: true
-      }
-    };
-  }
-
-  // Cliente CON configuración → aplicar horarios de corte
-
-  // ========== AJUSTAR DÍA DESDE (después del corte) ==========
-  const diaSemanaDe = dtDesde.weekday;
-  let horarioCorteDe;
-
-  if (diaSemanaDe === 7) {
-    horarioCorteDe = cliente.facturacion.horario_corte_domingo || '12:00';
-  } else if (diaSemanaDe === 6) {
-    horarioCorteDe = cliente.facturacion.horario_corte_sabado || '12:00';
   } else {
-    horarioCorteDe = cliente.facturacion.horario_corte_lunes_viernes || '13:00';
+    // Sin fechas → calcular semana anterior (lunes a sábado)
+    const ahora = DateTime.now().setZone(TZ);
+    // Retroceder al lunes de la semana pasada
+    const lunesAnterior = ahora.startOf('week').minus({ weeks: 1 });
+    dtDesde = lunesAnterior.startOf('day'); // Lunes 00:00
+    dtHasta = lunesAnterior.plus({ days: 5 }).endOf('day'); // Sábado 23:59:59
   }
 
-  const [horaIni, minIni] = horarioCorteDe.split(':').map(Number);
-
-  // Desde = día inicial, DESPUÉS del corte (HH:MM:01)
-  dtDesde = dtDesde.set({ hour: horaIni, minute: minIni, second: 1, millisecond: 0 });
-
-  // ========== AJUSTAR DÍA HASTA (en el corte) ==========
-  const diaSemanaHasta = dtHasta.weekday;
-  let horarioCorteHasta;
-
-  if (diaSemanaHasta === 7) {
-    horarioCorteHasta = cliente.facturacion.horario_corte_domingo;
-    if (!horarioCorteHasta) {
-      dtHasta = dtHasta.minus({ days: 1 });
-      horarioCorteHasta = cliente.facturacion.horario_corte_sabado || '12:00';
-    }
-  } else if (diaSemanaHasta === 6) {
-    horarioCorteHasta = cliente.facturacion.horario_corte_sabado || '12:00';
-  } else {
-    horarioCorteHasta = cliente.facturacion.horario_corte_lunes_viernes || '13:00';
-  }
-
-  const [horaFin, minFin] = horarioCorteHasta.split(':').map(Number);
-
-  // Hasta = día final, EN el corte (HH:MM:00)
-  dtHasta = dtHasta.set({ hour: horaFin, minute: minFin, second: 0, millisecond: 0 });
-
-  const rangoFinal = {
+  return {
     desde: dtDesde.toJSDate(),
     hasta: dtHasta.toJSDate(),
     info: {
       desde_str: dtDesde.toISO(),
       hasta_str: dtHasta.toISO(),
-      corte_desde: horarioCorteDe,
-      corte_hasta: horarioCorteHasta,
-      dia_desde: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][diaSemanaDe],
-      dia_hasta: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][diaSemanaHasta]
+      desde_display: dtDesde.toFormat('dd/MM/yyyy'),
+      hasta_display: dtHasta.toFormat('dd/MM/yyyy')
     }
   };
-
-  console.log('📊 Rango ajustado:', rangoFinal.info);
-
-  return rangoFinal;
 }
 
 /**
- * Filtra envíos por rango de facturación considerando origen y horarios de corte
+ * Filtra envíos facturables: solo los que tienen scan QR dentro del rango.
+ *
+ * @param {Array} envios - Envíos candidatos (ya traídos de la DB)
+ * @param {Date|string} desde - Inicio del período
+ * @param {Date|string} hasta - Fin del período
+ * @returns {Array} Envíos facturables
  */
-function filtrarEnviosFacturables(envios, desde, hasta, cliente) {
-  const rango = calcularRangoFacturacion(desde, hasta, cliente);
-  
-  let dentroRango = 0;
+function filtrarEnviosFacturables(envios, desde, hasta) {
+  // Nota: ya no recibe 'cliente' como parámetro — la regla es universal
+  const rango = calcularRangoFacturacion(desde, hasta);
+
+  let facturables = 0;
+  let sinScan = 0;
   let fueraRango = 0;
-  let sinFecha = 0;
 
   const resultado = envios.filter(envio => {
     const fechaIngreso = getFechaIngresoEnvio(envio);
+
+    // Sin scan QR → no facturable
     if (!fechaIngreso) {
-      sinFecha++;
+      sinScan++;
       return false;
     }
 
-    const fechaDate = new Date(fechaIngreso);
-    const pasa = fechaDate >= rango.desde && fechaDate <= rango.hasta;
-    
-    if (pasa) {
-      dentroRango++;
+    // Verificar que el scan QR fue dentro del rango
+    const fechaScan = new Date(fechaIngreso);
+    const enRango = fechaScan >= rango.desde && fechaScan <= rango.hasta;
+
+    if (enRango) {
+      facturables++;
     } else {
       fueraRango++;
     }
-    
-    return pasa;
+
+    return enRango;
   });
-  
-  console.log('🔍 Filtrado de envíos:', {
-    total: envios.length,
-    dentro_rango: dentroRango,
+
+  console.log('📊 Filtrado facturación:', {
+    total_candidatos: envios.length,
+    facturables,
+    sin_scan_qr: sinScan,
     fuera_rango: fueraRango,
-    sin_fecha: sinFecha,
-    rango_desde: rango.desde.toISOString(),
-    rango_hasta: rango.hasta.toISOString()
+    rango: rango.info
   });
 
   return resultado;
 }
-/**
- * Genera query de MongoDB para envíos facturables
- * NOTA: La query trae todos los envíos del cliente, luego se filtran en memoria
- */
-function buildQueryFacturacion(clienteId, desde, hasta, cliente) {
-  // Estados válidos para facturación
-  const estadosFacturables = [
-    'asignado',
-    'en_camino',
-    'en_planta',
-    'entregado',
-    'comprador_ausente',
-    'inaccesible',
-    'rechazado'
-  ];
 
-  // Query base: traer envíos del cliente con estados facturables
-  // Ampliamos el rango para incluir todos los posibles
+/**
+ * Genera query de MongoDB para envíos potencialmente facturables.
+ * Trae envíos amplios — el filtrado fino se hace en memoria con filtrarEnviosFacturables.
+ *
+ * @param {string} clienteId - ID del cliente (o null para todos)
+ * @param {Date} desde - Inicio del período
+ * @param {Date} hasta - Fin del período
+ * @returns {Object} Query de MongoDB
+ */
+function buildQueryFacturacion(clienteId, desde, hasta) {
+  const rango = calcularRangoFacturacion(desde, hasta);
+
   const query = {
-    cliente_id: clienteId,
-    estado: { $in: estadosFacturables },
-    $or: [
-      { fecha: { $gte: desde, $lte: hasta } },
-      { createdAt: { $gte: desde, $lte: hasta } },
-      {
-        'historial.at': { $gte: desde, $lte: hasta }
-      }
-    ]
+    // Solo envíos que tienen al menos un evento de scan QR
+    'historial.source': { $regex: /^zupply:qr/ },
+    // Con fecha de scan QR en el rango (aproximado, el filtro fino es en memoria)
+    'historial.at': { $gte: rango.desde, $lte: rango.hasta }
   };
 
+  if (clienteId) {
+    query.cliente_id = clienteId;
+  }
+
   return query;
+}
+
+/**
+ * Calcula automáticamente el rango de la semana pasada (para el cron del domingo).
+ * Retorna { desde: Date, hasta: Date } del lunes 00:00 AR al sábado 23:59 AR.
+ */
+function calcularSemanaAnterior() {
+  const ahora = DateTime.now().setZone(TZ);
+  const lunesAnterior = ahora.startOf('week').minus({ weeks: 1 });
+  const sabadoAnterior = lunesAnterior.plus({ days: 5 });
+
+  return {
+    desde: lunesAnterior.startOf('day').toJSDate(),
+    hasta: sabadoAnterior.endOf('day').toJSDate(),
+    label: `${lunesAnterior.toFormat('dd/MM')} al ${sabadoAnterior.toFormat('dd/MM/yyyy')}`
+  };
 }
 
 module.exports = {
   getFechaIngresoEnvio,
   calcularRangoFacturacion,
   filtrarEnviosFacturables,
-  buildQueryFacturacion
+  buildQueryFacturacion,
+  calcularSemanaAnterior
 };
