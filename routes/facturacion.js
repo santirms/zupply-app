@@ -28,8 +28,8 @@ router.get('/preview', async (req, res) => {
     if (!clienteId || !desde || !hasta)
       return res.status(400).json({ error: 'Parámetros requeridos: clienteId, desde, hasta' });
 
-    const dtFrom = new Date(desde);
-    const dtTo   = new Date(hasta);
+    const dtFrom = new Date(desde + 'T00:00:00-03:00');
+    const dtTo   = new Date(hasta + 'T23:59:59.999-03:00');
     if (isNaN(dtFrom) || isNaN(dtTo))
       return res.status(400).json({ error: 'Fechas inválidas' });
 
@@ -110,14 +110,14 @@ router.get('/preview', async (req, res) => {
 // ---------------------------------------------
 router.get('/resumen', async (req, res) => {
   try {
-    const { desde, hasta, clientes, estados } = req.query;
+    const { desde, hasta, clientes } = req.query;
     if (!desde || !hasta) return res.status(400).json({ error: 'Parámetros requeridos: desde, hasta' });
 
-    const dtFrom = new Date(desde);
-    const dtTo   = new Date(hasta);
+    const dtFrom = new Date(desde + 'T00:00:00-03:00');
+    const dtTo   = new Date(hasta + 'T23:59:59.999-03:00');
     if (isNaN(dtFrom) || isNaN(dtTo)) return res.status(400).json({ error: 'Fechas inválidas' });
 
-    // 1) Determinar universo de clientes - INCLUIR configuración de facturación
+    // 1) Determinar universo de clientes
     let clientesDocs = [];
     if (clientes === 'all' || !clientes) {
       clientesDocs = await Cliente.find({}).lean();
@@ -127,7 +127,7 @@ router.get('/resumen', async (req, res) => {
     }
     const clientesMap = new Map(clientesDocs.map(c => [String(c._id), c]));
 
-    // 2) Traer envíos del período para esos clientes — solo los que tienen scan QR
+    // 2) Traer envíos del período para esos clientes — solo los que pasaron por planta
     const ors = [];
     for (const c of clientesDocs) {
       ors.push({ cliente_id: c._id });
@@ -135,19 +135,20 @@ router.get('/resumen', async (req, res) => {
     }
     if (!ors.length) return res.json({ period: { desde, hasta }, lines: [], totalGeneral: 0, totalesPorCliente: [] });
 
-    // Query: solo envíos con scan QR en el rango
     const enviosCandidatos = await Envio.find({
       $and: [
         { $or: ors },
-        { 'historial.source': { $regex: /^zupply:qr/ } },
+        { $or: [
+          { 'historial.source': 'zupply:qr' },
+          { 'historial.source': 'scanner' }
+        ]},
         { 'historial.at': { $gte: dtFrom, $lte: dtTo } }
       ]
     })
-    .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado historial origen requiere_sync_meli createdAt updatedAt')
+    .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio historial origen createdAt updatedAt')
     .sort({ fecha: 1 })
     .lean();
 
-    // Filtrar envíos usando la función centralizada — regla universal, sin parámetro cliente
     const envios = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo);
 
     // Log para debugging
@@ -308,14 +309,14 @@ router.post('/emitir', async (req, res) => {
 // Devuelve items por envío (tracking, cliente, zona, precio, etc.)
 router.get('/detalle', async (req, res) => {
   try {
-    const { desde, hasta, clientes, estados } = req.query;
+    const { desde, hasta, clientes } = req.query;
     if (!desde || !hasta) return res.status(400).json({ error: 'Parámetros requeridos: desde, hasta' });
 
-    const dtFrom = new Date(desde);
-    const dtTo   = new Date(hasta);
+    const dtFrom = new Date(desde + 'T00:00:00-03:00');
+    const dtTo   = new Date(hasta + 'T23:59:59.999-03:00');
     if (isNaN(dtFrom) || isNaN(dtTo)) return res.status(400).json({ error: 'Fechas inválidas' });
 
-    // clientes a incluir - INCLUIR configuración de facturación
+    // clientes a incluir
     let clientesDocs = [];
     if (clientes === 'all' || !clientes) {
       clientesDocs = await Cliente.find({}).lean();
@@ -325,7 +326,7 @@ router.get('/detalle', async (req, res) => {
     }
     const cMap = new Map(clientesDocs.map(c => [String(c._id), c]));
 
-    // Preparar query — solo envíos con scan QR en el rango
+    // Preparar query — solo envíos que pasaron por planta en el rango
     const ors = [];
     for (const c of clientesDocs) {
       ors.push({ cliente_id: c._id });
@@ -333,20 +334,21 @@ router.get('/detalle', async (req, res) => {
     }
     if (!ors.length) return res.json({ items: [], total: 0 });
 
-    // Query: solo envíos con scan QR en el rango
     const enviosCandidatos = await Envio.find({
       $and: [
         { $or: ors },
-        { 'historial.source': { $regex: /^zupply:qr/ } },
+        { $or: [
+          { 'historial.source': 'zupply:qr' },
+          { 'historial.source': 'scanner' }
+        ]},
         { 'historial.at': { $gte: dtFrom, $lte: dtTo } }
       ]
     })
-    .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio historial origen requiere_sync_meli createdAt updatedAt')
+    .select('id_venta meli_id cliente_id sender_id partido codigo_postal fecha estado precio historial origen createdAt updatedAt')
     .sort({ fecha: 1 })
     .populate('cliente_id', 'nombre codigo_cliente lista_precios')
     .lean();
 
-    // Filtrar envíos usando la función centralizada — regla universal, sin parámetro cliente
     const envios = filtrarEnviosFacturables(enviosCandidatos, dtFrom, dtTo);
 
     // Log para debugging
