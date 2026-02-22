@@ -141,17 +141,6 @@ async function filtrar() {
   const hasta = qs('#hasta').value;
   const clientesParam = getSelectedClientes(); // 'all' o 'id1,id2'
 
-  // NUEVO: Obtener estados seleccionados
-  const selEstados = qs('#filtroEstados');
-  const estadosSeleccionados = Array.from(selEstados.selectedOptions)
-    .map(o => o.value)
-    .filter(Boolean);
-
-  // Si no hay ninguno seleccionado, usar los default
-  const estadosParam = estadosSeleccionados.length > 0
-    ? estadosSeleccionados.join(',')
-    : 'asignado,en_camino,entregado';
-
   if (!desde || !hasta) {
     alert('Seleccioná rango de fechas.');
     return;
@@ -161,7 +150,7 @@ async function filtrar() {
     setBusy(true, 'Generando reporte de facturación…');
 
     // 1) Detalle para la tabla (preview envío x envío)
-    const urlDetalle = `/facturacion/detalle?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}&estados=${encodeURIComponent(estadosParam)}`;
+    const urlDetalle = `/facturacion/detalle?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}`;
     const resDet = await fetch(urlDetalle, { cache:'no-store' });
     if (!resDet.ok) throw new Error('Error generando detalle');
     const det = await resDet.json();
@@ -169,7 +158,7 @@ async function filtrar() {
     pintarTabla();
 
     // 2) Resumen para el modal "Facturación"
-    const urlResumen = `/facturacion/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}&estados=${encodeURIComponent(estadosParam)}`;
+    const urlResumen = `/facturacion/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}`;
     const resRes = await fetch(urlResumen, { cache:'no-store' });
     if (!resRes.ok) throw new Error('Error generando resumen');
     window.__FACT_RESUMEN__ = await resRes.json();
@@ -187,35 +176,72 @@ async function filtrar() {
 }
 window.filtrar = filtrar;
 
+// ====== Semana pasada (lunes a sábado) ======
+function setSemanaAnterior() {
+  const ahora = new Date();
+  const diaSemana = ahora.getDay(); // 0=dom, 1=lun...
+  const diasHastaLunes = diaSemana === 0 ? 6 : diaSemana - 1;
+  const lunesEsta = new Date(ahora);
+  lunesEsta.setDate(ahora.getDate() - diasHastaLunes);
+  const lunesAnterior = new Date(lunesEsta);
+  lunesAnterior.setDate(lunesEsta.getDate() - 7);
+  const sabadoAnterior = new Date(lunesAnterior);
+  sabadoAnterior.setDate(lunesAnterior.getDate() + 5);
+
+  const fmt = d => d.toISOString().split('T')[0];
+  qs('#desde').value = fmt(lunesAnterior);
+  qs('#hasta').value = fmt(sabadoAnterior);
+}
+window.setSemanaAnterior = setSemanaAnterior;
+
 // ====== Render tabla + totales ======
 function pintarTabla() {
   const tbody = qs('#tabla-body');
   tbody.innerHTML = '';
 
   let total = 0;
+  let sinPrecio = 0;
+  const clientesUnicos = new Set();
+
   envios.forEach(e => {
     const fecha = e.fecha ? new Date(e.fecha).toLocaleDateString('es-AR') : '-';
+    const fechaIngreso = e.fecha_ingreso ? new Date(e.fecha_ingreso).toLocaleDateString('es-AR') : '-';
     const precioNum = typeof e.precio === 'number' ? e.precio : 0;
     total += precioNum;
-    
+    if (precioNum === 0) sinPrecio++;
+    if (e.cliente) clientesUnicos.add(e.cliente);
+
     const tr = document.createElement('tr');
-    const isZero = !precioNum || Number(precioNum) === 0;
-    tr.className = 'hover:bg-slate-50 dark:hover:bg-white/10 ' + (isZero ? 'bg-red-50/60 dark:bg-red-900/20' : '');
-    tr.className = 'hover:bg-slate-50 dark:hover:bg-white/10';
+    const isZero = precioNum === 0;
+    tr.className = 'hover:bg-slate-50 dark:hover:bg-white/10' + (isZero ? ' bg-red-50/60 dark:bg-red-900/20' : '');
     tr.innerHTML = `
       <td class="px-4 py-2">${e.tracking || ''}</td>
       <td class="px-4 py-2">${e.cliente || ''}</td>
       <td class="px-4 py-2">${e.codigo_interno || ''}</td>
       <td class="px-4 py-2">${e.sender_id || ''}</td>
       <td class="px-4 py-2">${e.partido || ''}</td>
-      <td class="px-4 py-2 text-right">$${precioNum.toFixed(2)}</td>
+      <td class="px-4 py-2">${e.zona || '-'}</td>
+      <td class="px-4 py-2 text-right">${isZero ? '⚠️ ' : ''}$${precioNum.toFixed(2)}</td>
       <td class="px-4 py-2">${fecha}</td>
+      <td class="px-4 py-2">${fechaIngreso}</td>
     `;
     tbody.appendChild(tr);
   });
 
-  const info = qs('#total-info');
+  // Actualizar KPIs
   const nf = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const kpisDiv = qs('#kpis-facturacion');
+  if (kpisDiv) {
+    kpisDiv.classList.remove('hidden');
+    const el = id => document.getElementById(id);
+    el('kpi-total-envios').textContent = envios.length;
+    el('kpi-total-clientes').textContent = clientesUnicos.size;
+    el('kpi-sin-precio').textContent = sinPrecio;
+    el('kpi-total-facturado').textContent = '$ ' + nf.format(total);
+  }
+
+  // Total al pie
+  const info = qs('#total-info');
   info.textContent = `Registros: ${envios.length} · Total facturado: $ ${nf.format(total)}`;
 }
 
@@ -234,12 +260,13 @@ function exportarExcel() {
       Partido:       e.partido || '',
       Zona:          e.zona || '',
       Precio:        typeof e.precio === 'number' ? e.precio : 0,
-      Fecha:         e.fecha ? new Date(e.fecha).toLocaleDateString('es-AR') : ''
+      Fecha:         e.fecha ? new Date(e.fecha).toLocaleDateString('es-AR') : '',
+      IngresoPlanta: e.fecha_ingreso ? new Date(e.fecha_ingreso).toLocaleDateString('es-AR') : ''
     }));
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows, { header: ['Tracking','Cliente','CodigoInterno','SenderID','Partido','Zona','Precio','Fecha'] });
-    ws['!autofilter'] = { ref: `A1:H${rows.length + 1}` };
-    ws['!cols'] = [{wch:16},{wch:24},{wch:14},{wch:14},{wch:18},{wch:14},{wch:12},{wch:14}];
+    const ws = XLSX.utils.json_to_sheet(rows, { header: ['Tracking','Cliente','CodigoInterno','SenderID','Partido','Zona','Precio','Fecha','IngresoPlanta'] });
+    ws['!autofilter'] = { ref: `A1:I${rows.length + 1}` };
+    ws['!cols'] = [{wch:16},{wch:24},{wch:14},{wch:14},{wch:18},{wch:14},{wch:12},{wch:14},{wch:16}];
     XLSX.utils.book_append_sheet(wb, ws, 'Detalle');
     XLSX.writeFile(wb, `facturacion_detalle_${Date.now()}.xlsx`);
     return;
