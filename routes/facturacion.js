@@ -394,6 +394,8 @@ router.get('/detalle', async (req, res) => {
         }
       }
 
+      const fechaIngreso = getFechaIngresoEnvio(e);
+
       items.push({
         tracking: e.id_venta || e.meli_id || '',
         cliente:  cliente?.nombre || '',
@@ -403,6 +405,7 @@ router.get('/detalle', async (req, res) => {
         zona: zonaNombre,
         precio,
         fecha: e.fecha,
+        fecha_ingreso: fechaIngreso,
         estado: e.estado
       });
       total += precio;
