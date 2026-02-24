@@ -370,10 +370,7 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
     // PÁGINA 1: PRESUPUESTO RESUMEN
     // ══════════════════════════════════════════════
 
-    // --- HEADER con fondo ---
-    doc.save();
-    doc.rect(marginLeft, 40, pageWidth, 90).fill('#FFF7ED');
-    doc.restore();
+    // --- HEADER ---
 
     // Logo
     let headerTextX = marginLeft + 15;
@@ -387,21 +384,13 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
     }
 
     // Datos emisor
-    const fiscal = tenant?.fiscal || {};
+    const info = tenant?.settings?.companyInfo || {};
     doc.font('Helvetica-Bold').fontSize(11).fillColor('#1F2937');
-    doc.text(fiscal.razon_social || tenant?.companyName || '', headerTextX, 50);
+    doc.text(tenant?.companyName || '', headerTextX, 50);
     doc.font('Helvetica').fontSize(8).fillColor('#374151');
-    if (fiscal.cuit) doc.text(`CUIT: ${fiscal.cuit}`, headerTextX, doc.y + 2);
-    if (fiscal.domicilio_fiscal) doc.text(fiscal.domicilio_fiscal, headerTextX, doc.y + 1);
-    if (fiscal.condicion_iva) {
-      const condLabels = {
-        responsable_inscripto: 'Responsable Inscripto',
-        monotributista: 'Monotributista',
-        exento: 'Exento',
-        consumidor_final: 'Consumidor Final'
-      };
-      doc.text(`${condLabels[fiscal.condicion_iva] || fiscal.condicion_iva}`, headerTextX, doc.y + 1);
-    }
+    if (info.address) doc.text(info.address, headerTextX, doc.y + 2);
+    if (info.email) doc.text(info.email, headerTextX, doc.y + 2);
+    if (info.phone) doc.text(`Tel: ${info.phone}`, headerTextX, doc.y + 2);
 
     // Título derecha
     doc.font('Helvetica-Bold').fontSize(16).fillColor('#92400E');
