@@ -595,14 +595,33 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
     // ══════════════════════════════════════════════
     // FOOTER en todas las páginas
     // ══════════════════════════════════════════════
-    const totalPages = doc.bufferedPageRange().count;
+    const range = doc.bufferedPageRange();
+    const totalPages = range.count;
     for (let i = 0; i < totalPages; i++) {
       doc.switchToPage(i);
       const footerY = doc.page.height - 40;
-      doc.moveTo(marginLeft, footerY - 5).lineTo(marginRight, footerY - 5).lineWidth(0.3).strokeColor('#E5E7EB').stroke();
+
+      // Línea separadora
+      doc.save();
+      doc.moveTo(marginLeft, footerY - 5)
+        .lineTo(marginRight, footerY - 5)
+        .lineWidth(0.3)
+        .strokeColor('#E5E7EB')
+        .stroke();
+      doc.restore();
+
+      // Texto del footer — lineBreak: false para no generar overflow
       doc.font('Helvetica').fontSize(7).fillColor('#9CA3AF');
-      doc.text('Documento no válido como factura — Presupuesto generado por Zupply', marginLeft, footerY, { width: pageWidth - 60, align: 'left' });
-      doc.text(`Pág ${i + 1}/${totalPages}`, marginRight - 60, footerY, { width: 55, align: 'right' });
+      doc.text(
+        'Documento no válido como factura — Presupuesto generado por Zupply',
+        marginLeft, footerY,
+        { width: pageWidth - 70, align: 'left', lineBreak: false }
+      );
+      doc.text(
+        `Pág ${i + 1}/${totalPages}`,
+        marginRight - 55, footerY,
+        { width: 50, align: 'right', lineBreak: false }
+      );
     }
 
     doc.end();
