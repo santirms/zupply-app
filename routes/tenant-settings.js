@@ -4,32 +4,30 @@ const Tenant = require('../models/Tenant');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const identifyTenant = require('../middlewares/identifyTenant');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { presignGet } = require('../utils/s3');
 
-// Multer para upload de logo (guardar en /public/uploads/logos/)
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, '..', 'public', 'uploads', 'logos');
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `logo-${req.tenantId}${ext}`);
-  }
-});
-
+// Multer en memoria (no guarda a disco)
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB max
   fileFilter: (req, file, cb) => {
-    const allowed = ['.png', '.jpg', '.jpeg', '.svg', '.webp'];
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) cb(null, true);
+    const allowed = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
     else cb(new Error('Formato no soportado. Usar PNG, JPG, SVG o WebP.'));
   }
 });
+
+const s3 = new S3Client({
+  region: process.env.S3_REGION,
+  endpoint: process.env.S3_ENDPOINT,
+  forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY
+  }
+});
+const BUCKET = process.env.S3_BUCKET;
 
 router.use(requireAuth);
 router.use(identifyTenant);
@@ -41,6 +39,12 @@ router.get('/', requireRole('admin'), async (req, res) => {
       .select('companyName settings fiscal subdomain')
       .lean();
     if (!tenant) return res.status(404).json({ error: 'Tenant no encontrado' });
+
+    // Si hay logo, generar URL presignada
+    if (tenant.settings?.logo) {
+      tenant.settings.logoUrl = await presignGet(tenant.settings.logo, 3600);
+    }
+
     res.json(tenant);
   } catch (err) {
     console.error('[tenant-settings] GET error:', err);
@@ -89,33 +93,55 @@ router.put('/', requireRole('admin'), async (req, res) => {
   }
 });
 
-// POST /api/tenant/settings/logo — Subir logo
+// POST /api/tenant/settings/logo — Subir logo a S3
 router.post('/logo', requireRole('admin'), upload.single('logo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' });
 
-    const logoUrl = `/uploads/logos/${req.file.filename}`;
+    const ext = req.file.originalname.split('.').pop().toLowerCase();
+    const key = `tenants/${req.tenantId}/logo.${ext}`;
 
+    await s3.send(new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      Body: req.file.buffer,
+      ContentType: req.file.mimetype,
+      Metadata: {
+        'tenant-id': String(req.tenantId),
+        'tipo': 'logo',
+        'fecha-subida': new Date().toISOString()
+      }
+    }));
+
+    // Guardar la key de S3 en el tenant (no la URL, porque es presignada y expira)
     await Tenant.findByIdAndUpdate(req.tenantId, {
-      $set: { 'settings.logo': logoUrl }
+      $set: { 'settings.logo': key }
     });
 
-    res.json({ logo: logoUrl, message: 'Logo actualizado correctamente' });
+    // Devolver URL presignada para preview inmediato
+    const url = await presignGet(key, 3600);
+
+    res.json({ logo: key, logoUrl: url, message: 'Logo actualizado correctamente' });
   } catch (err) {
     console.error('[tenant-settings] POST logo error:', err);
     res.status(500).json({ error: 'Error subiendo logo' });
   }
 });
 
-// DELETE /api/tenant/settings/logo — Eliminar logo
+// DELETE /api/tenant/settings/logo — Eliminar logo de S3
 router.delete('/logo', requireRole('admin'), async (req, res) => {
   try {
     const tenant = await Tenant.findById(req.tenantId).select('settings.logo').lean();
 
     if (tenant?.settings?.logo) {
-      // Intentar borrar archivo físico
-      const filepath = path.join(__dirname, '..', 'public', tenant.settings.logo);
-      try { fs.unlinkSync(filepath); } catch {}
+      try {
+        await s3.send(new DeleteObjectCommand({
+          Bucket: BUCKET,
+          Key: tenant.settings.logo
+        }));
+      } catch (e) {
+        console.warn('No se pudo borrar logo de S3:', e.message);
+      }
     }
 
     await Tenant.findByIdAndUpdate(req.tenantId, {
