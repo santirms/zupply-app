@@ -1,0 +1,217 @@
+<!-- public/configuracion.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Zupply | Configuración</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/icon-zupply.svg">
+
+  <!-- Tailwind: dark por clase -->
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: "class" };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Tema inicial: por defecto "system" -->
+  <script>
+    (function () {
+      try {
+        const saved = localStorage.getItem('zpl_theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark = (saved === 'dark') || (!saved || saved === 'system') && prefersDark;
+        document.documentElement.classList.toggle('dark', wantDark);
+        if (!saved) localStorage.setItem('zpl_theme','system');
+      } catch {}
+    })();
+  </script>
+
+  <style>
+    :root{
+      --z-primary:#F59E0B;
+      --z-primary-dark:#D97706;
+      --z-primary-fg:#111827;
+    }
+
+    html.dark select,
+    html.dark select option {
+      background-color:#0B1020;
+      color:#e5e7eb;
+      border-color:rgba(255,255,255,0.1);
+    }
+    html.dark input[type="date"] {
+      background-color:#0B1020;
+      color:#e5e7eb;
+      border-color:rgba(255,255,255,0.1);
+    }
+    html.dark input[type="date"]::-webkit-calendar-picker-indicator {
+      filter:invert(1) opacity(0.7);
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+  <div class="max-w-7xl mx-auto p-4 md:p-6">
+
+    <!-- TOPBAR (sticky, siempre visible) -->
+    <header class="sticky top-0 z-40 mb-4">
+      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
+        <!-- Home / Logo -->
+        <a href="#" id="logoLink" class="flex items-center gap-3" title="Inicio">
+          <img src="/assets/icon-zupply.svg" alt="Z" class="h-8 w-8 sm:hidden">
+          <img src="/assets/logo-zupply.svg" alt="Zupply" class="h-5 hidden sm:block" onerror="this.remove()">
+        </a>
+
+        <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
+        <span class="text-sm opacity-80">Configuración</span>
+
+        <div class="ml-auto flex items-center gap-2">
+          <!-- Usuario -->
+          <div class="relative" id="userMenuWrap">
+            <button id="userBtn"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">👤</span>
+              <span id="username" class="max-w-[160px] truncate">Usuario</span>
+              <span class="opacity-70">▾</span>
+            </button>
+            <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg">
+              <a href="#" id="homeLink" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">🏠 Volver al inicio</a>
+              <div id="menuDivider" class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">⎋ Cerrar sesión</button>
+            </div>
+          </div>
+
+          <!-- Tema -->
+          <button id="themeBtn"
+            class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 text-slate-700 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100">
+            Tema: auto
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- CONTENIDO -->
+    <div class="space-y-6">
+
+      <!-- Sección 1: Información de la Empresa -->
+      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-4 md:p-6 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Información de la Empresa</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="companyName" class="block text-sm font-medium mb-1">Nombre de la empresa</label>
+            <input type="text" id="companyName"
+              class="w-full p-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent text-slate-900 dark:text-slate-100"
+              placeholder="Mi Empresa SRL">
+          </div>
+          <div>
+            <label for="email" class="block text-sm font-medium mb-1">Email</label>
+            <input type="email" id="email"
+              class="w-full p-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent text-slate-900 dark:text-slate-100"
+              placeholder="contacto@empresa.com">
+          </div>
+          <div>
+            <label for="phone" class="block text-sm font-medium mb-1">Teléfono</label>
+            <input type="text" id="phone"
+              class="w-full p-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent text-slate-900 dark:text-slate-100"
+              placeholder="+54 11 1234-5678">
+          </div>
+          <div>
+            <label for="address" class="block text-sm font-medium mb-1">Dirección</label>
+            <input type="text" id="address"
+              class="w-full p-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent text-slate-900 dark:text-slate-100"
+              placeholder="Av. Corrientes 1234, CABA">
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección 2: Logo -->
+      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-4 md:p-6 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Logo</h2>
+        <div class="flex flex-col sm:flex-row items-start gap-4">
+          <!-- Preview -->
+          <div class="w-32 h-32 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/20 flex items-center justify-center bg-slate-50 dark:bg-white/5 overflow-hidden">
+            <img id="logoPreview" src="" alt="Logo" class="hidden max-w-full max-h-full object-contain">
+            <span id="logoPlaceholder" class="text-3xl opacity-30">🖼️</span>
+          </div>
+          <div class="flex flex-col gap-2">
+            <label class="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)] text-sm">
+              📤 Cambiar logo
+              <input type="file" id="logoInput" accept=".png,.jpg,.jpeg,.svg,.webp" class="hidden">
+            </label>
+            <button id="btnEliminarLogo"
+              class="hidden inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm border border-red-300 dark:border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
+              🗑️ Eliminar logo
+            </button>
+            <p class="text-xs opacity-60 mt-1">Formatos: PNG, JPG, SVG, WebP. Máximo 2MB.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección 3: Datos Fiscales -->
+      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-4 md:p-6 shadow-sm">
+        <h2 class="text-lg font-semibold mb-4">Datos Fiscales</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="cuit" class="block text-sm font-medium mb-1">CUIT</label>
+            <input type="text" id="cuit"
+              class="w-full p-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent text-slate-900 dark:text-slate-100"
+              placeholder="30-12345678-9">
+          </div>
+          <div>
+            <label for="razonSocial" class="block text-sm font-medium mb-1">Razón Social</label>
+            <input type="text" id="razonSocial"
+              class="w-full p-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent text-slate-900 dark:text-slate-100"
+              placeholder="Mi Empresa SRL">
+          </div>
+          <div>
+            <label for="domicilioFiscal" class="block text-sm font-medium mb-1">Domicilio Fiscal</label>
+            <input type="text" id="domicilioFiscal"
+              class="w-full p-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent text-slate-900 dark:text-slate-100"
+              placeholder="Av. Corrientes 1234, CABA">
+          </div>
+          <div>
+            <label for="condicionIva" class="block text-sm font-medium mb-1">Condición IVA</label>
+            <select id="condicionIva"
+              class="w-full p-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent text-slate-900 dark:text-slate-100">
+              <option value="responsable_inscripto">Responsable Inscripto</option>
+              <option value="monotributista">Monotributista</option>
+              <option value="exento">Exento</option>
+              <option value="consumidor_final">Consumidor Final</option>
+            </select>
+          </div>
+          <div>
+            <label for="ingresosBrutos" class="block text-sm font-medium mb-1">Ingresos Brutos <span class="opacity-60">(opcional)</span></label>
+            <input type="text" id="ingresosBrutos"
+              class="w-full p-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent text-slate-900 dark:text-slate-100"
+              placeholder="Nro. IIBB">
+          </div>
+          <div>
+            <label for="inicioActividades" class="block text-sm font-medium mb-1">Inicio de Actividades <span class="opacity-60">(opcional)</span></label>
+            <input type="date" id="inicioActividades"
+              class="w-full p-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent text-slate-900 dark:text-slate-100">
+          </div>
+        </div>
+      </div>
+
+      <!-- Botón Guardar -->
+      <div class="flex justify-end">
+        <button id="btnGuardar"
+          class="px-6 py-2.5 rounded-xl font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)] text-sm">
+          💾 Guardar cambios
+        </button>
+      </div>
+    </div>
+
+    <footer class="py-6 text-center text-xs opacity-60">© <span id="anio"></span> Zupply</footer>
+  </div>
+
+  <!-- Toast de notificación -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 hidden">
+    <div id="toastContent" class="px-4 py-3 rounded-xl shadow-lg border text-sm flex items-center gap-2"></div>
+  </div>
+
+  <!-- JS de la pantalla -->
+  <script src="/js/configuracion.js" defer></script>
+</body>
+</html>

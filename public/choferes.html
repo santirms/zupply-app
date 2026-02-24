@@ -95,6 +95,9 @@
             <a href="/index.html" class="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-sm">
               🏠 Inicio
             </a>
+            <a href="/configuracion.html" id="configLink" class="hidden flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-sm">
+              ⚙️ Configuración
+            </a>
             <button onclick="cerrarSesion()" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-sm text-left">
              ⎋  Cerrar sesión
             </button>
@@ -1136,6 +1139,11 @@ async function asignarMapa() {
             console.log('Username actualizado a:', usernameSpan.textContent); // DEBUG
           } else {
             console.error('No se encontró el elemento #username');
+          }
+          // Mostrar link de configuración si es admin
+          if (user.role === 'admin') {
+            const configLink = document.getElementById('configLink');
+            if (configLink) configLink.classList.remove('hidden');
           }
         } else {
           console.error('Error en /api/me:', res.status);

@@ -107,7 +107,8 @@ const pagesAdminOnly = [
   '/panel-usuarios.html',
   '/clientes.html',
   '/facturacion-general.html',
-  '/panel-zonas-listas.html'
+  '/panel-zonas-listas.html',
+  '/configuracion.html'
 ];
 
 const pagesAdminCoord = [
@@ -199,6 +200,7 @@ app.use('/api/users',            require('./routes/users'));
 app.use('/api/kpis',             require('./routes/kpis'));
 app.use('/api/reportes',         require('./routes/reportes'));
 app.use('/api/client-panel',     require('./routes/client-panel'));
+app.use('/api/tenant/settings',  require('./routes/tenant-settings'));
 
 // PANEL GENERAL DE ENVÍOS (coordinador solo lectura; ver routes/envios.js)
 app.use('/api/envios',           require('./routes/envios'));
