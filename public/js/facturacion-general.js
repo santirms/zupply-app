@@ -162,6 +162,7 @@ async function filtrar() {
     const det = await resDet.json();
     envios = det.items || [];
     pintarTabla();
+    initPrecioEditing();
 
     // 2) Resumen para el modal "Facturación"
     const urlResumen = `/facturacion/resumen?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}&clientes=${encodeURIComponent(clientesParam)}`;
@@ -209,7 +210,7 @@ function pintarTabla() {
   let sinPrecio = 0;
   const clientesUnicos = new Set();
 
-  envios.forEach(e => {
+  envios.forEach((e, idx) => {
     const fecha = e.fecha ? new Date(e.fecha).toLocaleDateString('es-AR') : '-';
     const fechaIngreso = e.fecha_ingreso ? new Date(e.fecha_ingreso).toLocaleDateString('es-AR') : '-';
     const precioNum = typeof e.precio === 'number' ? e.precio : 0;
@@ -227,7 +228,11 @@ function pintarTabla() {
       <td class="px-4 py-2">${e.sender_id || ''}</td>
       <td class="px-4 py-2">${e.partido || ''}</td>
       <td class="px-4 py-2">${e.zona || '-'}</td>
-      <td class="px-4 py-2 text-right">${isZero ? '⚠️ ' : ''}$${precioNum.toFixed(2)}</td>
+      <td class="px-4 py-2 text-right precio-cell cursor-pointer ${isZero ? 'text-rose-600 font-medium' : ''}"
+          data-idx="${idx}"
+          title="Click para editar precio">
+        ${isZero ? '⚠️ ' : ''}$${precioNum.toFixed(2)}
+      </td>
       <td class="px-4 py-2">${fecha}</td>
       <td class="px-4 py-2">${fechaIngreso}</td>
     `;
@@ -251,6 +256,68 @@ function pintarTabla() {
   info.textContent = `Registros: ${envios.length} · Total facturado: $ ${nf.format(total)}`;
 }
 
+
+// ====== Edición inline de precios ======
+let _precioEditingBound = false;
+function initPrecioEditing() {
+  if (_precioEditingBound) return;
+  const tbody = qs('#tabla-body');
+  if (!tbody) return;
+  _precioEditingBound = true;
+
+  tbody.addEventListener('click', (e) => {
+    const cell = e.target.closest('.precio-cell');
+    if (!cell || cell.querySelector('input')) return; // ya está en modo edición
+
+    const idx = parseInt(cell.dataset.idx, 10);
+    if (isNaN(idx) || idx < 0 || idx >= envios.length) return;
+
+    const envio = envios[idx];
+    const precioActual = typeof envio.precio === 'number' ? envio.precio : 0;
+
+    // Guardar contenido original para cancelar
+    const originalHTML = cell.innerHTML;
+    cell.innerHTML = '';
+    cell.classList.remove('cursor-pointer');
+
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.step = '0.01';
+    input.min = '0';
+    input.value = precioActual;
+    input.className = 'w-24 px-2 py-1 text-right text-sm rounded border border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white dark:bg-slate-800 dark:text-white';
+
+    cell.appendChild(input);
+    input.focus();
+    input.select();
+
+    function confirmar() {
+      const nuevo = parseFloat(input.value);
+      if (!isNaN(nuevo) && nuevo >= 0) {
+        envio.precio = nuevo;
+      }
+      // Re-pintar toda la tabla para actualizar totales y KPIs
+      pintarTabla();
+    }
+
+    function cancelar() {
+      cell.innerHTML = originalHTML;
+      cell.classList.add('cursor-pointer');
+    }
+
+    input.addEventListener('blur', confirmar);
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        input.blur(); // triggerea confirmar via blur
+      }
+      if (ev.key === 'Escape') {
+        input.removeEventListener('blur', confirmar);
+        cancelar();
+      }
+    });
+  });
+}
 
 // ====== Exportar a Excel (.xlsx) con autofiltros ======
 function exportarExcel() {
