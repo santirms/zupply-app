@@ -289,6 +289,12 @@ function initTopbar(){
         if (homeLink) {
           homeLink.href = homeRoute;
         }
+
+        // Mostrar link de configuración si es admin
+        if (me.role === 'admin') {
+          const configLink = document.getElementById('configLink');
+          if (configLink) configLink.classList.remove('hidden');
+        }
       })
       .catch(()=> location.href='/auth/login');
   })();

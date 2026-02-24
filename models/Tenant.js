@@ -67,6 +67,18 @@ const tenantSchema = new mongoose.Schema({
       address: String
     }
   },
+  fiscal: {
+    cuit: { type: String, trim: true },
+    razon_social: { type: String, trim: true },
+    domicilio_fiscal: { type: String, trim: true },
+    condicion_iva: {
+      type: String,
+      enum: ['responsable_inscripto', 'monotributista', 'exento', 'consumidor_final'],
+      default: 'responsable_inscripto'
+    },
+    ingresos_brutos: { type: String, trim: true },
+    inicio_actividades: { type: Date }
+  },
   config: {
     autoIngesta: {
       type: Boolean,
