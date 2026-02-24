@@ -298,7 +298,7 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
     const nroPresupuesto = String(Date.now()).slice(-8).padStart(8, '0');
 
     // 5. Generar PDF
-    const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
+    const doc = new PDFDocument({ size: 'A4', margin: 40 });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="presupuesto-${nroPresupuesto}.pdf"`);
@@ -307,6 +307,45 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
     const marginLeft = 40;
     const marginRight = doc.page.width - 40;
     const pageWidth = marginRight - marginLeft;
+
+    // Contador de páginas y helper de footer
+    let pageNum = 1;
+
+    function drawFooter() {
+      const footerY = doc.page.height - 40;
+      doc.save();
+
+      // Línea separadora
+      doc.moveTo(marginLeft, footerY - 5)
+        .lineTo(marginRight, footerY - 5)
+        .lineWidth(0.3)
+        .strokeColor('#E5E7EB')
+        .stroke();
+
+      // Texto footer
+      doc.font('Helvetica').fontSize(7).fillColor('#9CA3AF');
+      doc.text(
+        'Documento no válido como factura — Presupuesto generado por Zupply',
+        marginLeft, footerY,
+        { lineBreak: false }
+      );
+      doc.text(
+        `Pág ${pageNum}`,
+        marginRight - 50, footerY,
+        { lineBreak: false }
+      );
+
+      doc.restore();
+    }
+
+    // Dibujar footer en la primera página
+    drawFooter();
+
+    // Auto-dibujar footer cada vez que se agrega una página
+    doc.on('pageAdded', () => {
+      pageNum++;
+      drawFooter();
+    });
 
     const fmtARS = (n) => {
       return new Intl.NumberFormat('es-AR', {
@@ -589,38 +628,6 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
       doc.text(
         `TOTAL: ${fmtARS(totalPrecioDetalle)}  (${totalEnvios} envíos)`,
         marginLeft + 10, y, { width: pageWidth - 20, align: 'right' }
-      );
-    }
-
-    // ══════════════════════════════════════════════
-    // FOOTER en todas las páginas
-    // ══════════════════════════════════════════════
-    const range = doc.bufferedPageRange();
-    const totalPages = range.count;
-    for (let i = 0; i < totalPages; i++) {
-      doc.switchToPage(i);
-      const footerY = doc.page.height - 40;
-
-      // Línea separadora
-      doc.save();
-      doc.moveTo(marginLeft, footerY - 5)
-        .lineTo(marginRight, footerY - 5)
-        .lineWidth(0.3)
-        .strokeColor('#E5E7EB')
-        .stroke();
-      doc.restore();
-
-      // Texto del footer — lineBreak: false para no generar overflow
-      doc.font('Helvetica').fontSize(7).fillColor('#9CA3AF');
-      doc.text(
-        'Documento no válido como factura — Presupuesto generado por Zupply',
-        marginLeft, footerY,
-        { width: pageWidth - 70, align: 'left', lineBreak: false }
-      );
-      doc.text(
-        `Pág ${i + 1}/${totalPages}`,
-        marginRight - 55, footerY,
-        { width: 50, align: 'right', lineBreak: false }
       );
     }
 
