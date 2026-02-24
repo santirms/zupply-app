@@ -247,30 +247,28 @@ router.get('/resumen', async (req, res) => {
 // ---------------------------------------------
 router.post('/presupuesto', requireAuth, async (req, res) => {
   try {
-    const { periodo, lines = [], totalGeneral = 0, clienteId } = req.body || {};
+    const { periodo, lines = [], totalGeneral = 0, clienteId, envios: enviosDetalle = [] } = req.body || {};
 
-    // 1. Cargar datos del tenant (emisor)
+    // 1. Cargar tenant (emisor)
     const tenantId = req.session?.user?.tenantId || req.tenantId;
-    const tenant = await Tenant.findById(tenantId)
-      .select('companyName settings fiscal')
-      .lean();
+    const tenant = await Tenant.findById(tenantId).select('companyName settings fiscal').lean();
 
-    // 2. Si es presupuesto para un solo cliente, cargar sus datos
+    // 2. Cargar cliente (receptor) si aplica
     let clienteData = null;
     if (clienteId) {
       clienteData = await Cliente.findById(clienteId)
         .select('nombre razon_social cuit condicion_iva codigo_cliente')
         .lean();
     } else if (lines.length > 0) {
-      const clienteIds = [...new Set(lines.map(l => l.cliente_id).filter(Boolean))];
-      if (clienteIds.length === 1) {
-        clienteData = await Cliente.findById(clienteIds[0])
+      const cids = [...new Set(lines.map(l => l.cliente_id).filter(Boolean))];
+      if (cids.length === 1) {
+        clienteData = await Cliente.findById(cids[0])
           .select('nombre razon_social cuit condicion_iva codigo_cliente')
           .lean();
       }
     }
 
-    // 3. Si el tenant tiene logo en S3, descargarlo para el PDF
+    // 3. Descargar logo de S3 si existe
     let logoBuffer = null;
     if (tenant?.settings?.logo) {
       try {
@@ -292,58 +290,68 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
         for await (const chunk of result.Body) chunks.push(chunk);
         logoBuffer = Buffer.concat(chunks);
       } catch (e) {
-        console.warn('No se pudo cargar logo de S3:', e.message);
+        console.warn('No se pudo cargar logo:', e.message);
       }
     }
 
-    // 4. Generar número de presupuesto
+    // 4. Número de presupuesto
     const nroPresupuesto = String(Date.now()).slice(-8).padStart(8, '0');
 
-    // 5. Generar PDF con PDFKit
-    const doc = new PDFDocument({ size: 'A4', margin: 40 });
+    // 5. Generar PDF
+    const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="presupuesto-${nroPresupuesto}.pdf"`);
     doc.pipe(res);
 
-    const pageWidth = doc.page.width - 80; // margin * 2
     const marginLeft = 40;
     const marginRight = doc.page.width - 40;
+    const pageWidth = marginRight - marginLeft;
 
-    // Formato moneda argentina
     const fmtARS = (n) => {
       return new Intl.NumberFormat('es-AR', {
-        style: 'currency',
-        currency: 'ARS',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        style: 'currency', currency: 'ARS',
+        minimumFractionDigits: 2, maximumFractionDigits: 2
       }).format(n || 0).replace('ARS', '$').trim();
     };
 
-    // ====== HEADER ======
+    const fmtFecha = (f) => {
+      if (!f) return '-';
+      const d = new Date(f);
+      return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
 
-    // Fondo suave del header
+    const fmtFechaCorta = (f) => {
+      if (!f) return '-';
+      const d = new Date(f);
+      return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
+    // ══════════════════════════════════════════════
+    // PÁGINA 1: PRESUPUESTO RESUMEN
+    // ══════════════════════════════════════════════
+
+    // --- HEADER con fondo ---
     doc.save();
     doc.rect(marginLeft, 40, pageWidth, 90).fill('#FFF7ED');
     doc.restore();
 
-    // Logo (si existe)
+    // Logo
     let headerTextX = marginLeft + 15;
     if (logoBuffer) {
       try {
-        doc.image(logoBuffer, marginLeft + 10, 48, { height: 45 });
-        headerTextX = marginLeft + 150;
+        doc.image(logoBuffer, marginLeft + 10, 48, { height: 50, width: 120, fit: [120, 50] });
+        headerTextX = marginLeft + 145;
       } catch (e) {
-        console.warn('Error insertando logo en PDF:', e.message);
+        console.warn('Error insertando logo:', e.message);
       }
     }
 
-    // Datos del emisor (izquierda)
-    doc.fontSize(9).fillColor('#374151');
+    // Datos emisor
     const fiscal = tenant?.fiscal || {};
-    const emisorNombre = fiscal.razon_social || tenant?.companyName || 'Empresa';
-    doc.font('Helvetica-Bold').fontSize(11).text(emisorNombre, headerTextX, 50);
-    doc.font('Helvetica').fontSize(8);
+    doc.font('Helvetica-Bold').fontSize(11).fillColor('#1F2937');
+    doc.text(fiscal.razon_social || tenant?.companyName || '', headerTextX, 50);
+    doc.font('Helvetica').fontSize(8).fillColor('#374151');
     if (fiscal.cuit) doc.text(`CUIT: ${fiscal.cuit}`, headerTextX, doc.y + 2);
     if (fiscal.domicilio_fiscal) doc.text(fiscal.domicilio_fiscal, headerTextX, doc.y + 1);
     if (fiscal.condicion_iva) {
@@ -353,148 +361,249 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
         exento: 'Exento',
         consumidor_final: 'Consumidor Final'
       };
-      doc.text(`Condición IVA: ${condLabels[fiscal.condicion_iva] || fiscal.condicion_iva}`, headerTextX, doc.y + 1);
+      doc.text(`${condLabels[fiscal.condicion_iva] || fiscal.condicion_iva}`, headerTextX, doc.y + 1);
     }
 
-    // Título PRESUPUESTO (derecha)
+    // Título derecha
     doc.font('Helvetica-Bold').fontSize(16).fillColor('#92400E');
-    doc.text('PRESUPUESTO', marginRight - 200, 50, { width: 200, align: 'right' });
+    doc.text('PRESUPUESTO', marginRight - 200, 48, { width: 195, align: 'right' });
     doc.font('Helvetica').fontSize(9).fillColor('#374151');
-    doc.text(`Nº ${nroPresupuesto}`, marginRight - 200, doc.y + 2, { width: 200, align: 'right' });
-    doc.text(`Fecha: ${new Date().toLocaleDateString('es-AR')}`, marginRight - 200, doc.y + 2, { width: 200, align: 'right' });
+    doc.text(`Nº ${nroPresupuesto}`, marginRight - 200, 68, { width: 195, align: 'right' });
+    doc.text(`Fecha: ${fmtFecha(new Date())}`, marginRight - 200, 80, { width: 195, align: 'right' });
 
-    // ====== PERÍODO ======
-    let currentY = 145;
-    doc.moveTo(marginLeft, currentY).lineTo(marginRight, currentY).lineWidth(0.5).strokeColor('#D1D5DB').stroke();
-    currentY += 8;
-    doc.font('Helvetica').fontSize(9).fillColor('#374151');
-    doc.text(`Período: ${periodo?.desde || '-'} al ${periodo?.hasta || '-'}`, marginLeft + 10, currentY);
-    currentY += 20;
-    doc.moveTo(marginLeft, currentY).lineTo(marginRight, currentY).lineWidth(0.5).strokeColor('#D1D5DB').stroke();
+    // --- Período ---
+    let y = 145;
+    doc.moveTo(marginLeft, y).lineTo(marginRight, y).lineWidth(0.5).strokeColor('#D1D5DB').stroke();
+    y += 8;
+    doc.font('Helvetica-Bold').fontSize(9).fillColor('#374151');
+    doc.text(`Período: ${fmtFecha(periodo?.desde)} al ${fmtFecha(periodo?.hasta)}`, marginLeft + 10, y);
+    y += 20;
+    doc.moveTo(marginLeft, y).lineTo(marginRight, y).lineWidth(0.5).strokeColor('#D1D5DB').stroke();
 
-    // ====== DATOS DEL CLIENTE ======
-    currentY += 8;
+    // --- Cliente ---
+    y += 8;
     if (clienteData) {
+      // Columna izquierda
       doc.font('Helvetica-Bold').fontSize(9).fillColor('#1F2937');
-      doc.text('CLIENTE', marginLeft + 10, currentY);
+      doc.text('CLIENTE', marginLeft + 10, y);
+      y += 14;
       doc.font('Helvetica').fontSize(8.5).fillColor('#374151');
-      currentY += 14;
-      doc.text(`Nombre: ${clienteData.nombre || '-'}`, marginLeft + 10, currentY);
+      doc.text(`Nombre: ${clienteData.nombre || '-'}`, marginLeft + 10, y);
       if (clienteData.codigo_cliente) doc.text(`Código: ${clienteData.codigo_cliente}`, marginLeft + 10, doc.y + 2);
       if (clienteData.razon_social) doc.text(`Razón Social: ${clienteData.razon_social}`, marginLeft + 10, doc.y + 2);
 
-      // Datos fiscales del cliente (derecha)
-      const clienteFiscalX = marginLeft + 300;
-      doc.text(`CUIT: ${clienteData.cuit || '-'}`, clienteFiscalX, currentY);
-      doc.text(`Cond. IVA: ${clienteData.condicion_iva || '-'}`, clienteFiscalX, doc.y + 2);
+      // Columna derecha
+      const rxCol = marginLeft + 300;
+      doc.text(`CUIT: ${clienteData.cuit || '-'}`, rxCol, y);
+      doc.text(`Cond. IVA: ${clienteData.condicion_iva || '-'}`, rxCol, doc.y + 2);
     } else {
       doc.font('Helvetica').fontSize(9).fillColor('#6B7280');
-      doc.text('Presupuesto general — múltiples clientes', marginLeft + 10, currentY);
+      doc.text('Presupuesto general — múltiples clientes', marginLeft + 10, y);
     }
 
-    currentY = doc.y + 15;
-    doc.moveTo(marginLeft, currentY).lineTo(marginRight, currentY).lineWidth(0.5).strokeColor('#D1D5DB').stroke();
+    y = Math.max(doc.y + 12, y + 40);
+    doc.moveTo(marginLeft, y).lineTo(marginRight, y).lineWidth(0.5).strokeColor('#D1D5DB').stroke();
 
-    // ====== TABLA DE LÍNEAS ======
-    currentY += 10;
+    // --- Tabla resumen ---
+    y += 10;
+    const col = { desc: 200, cant: 60, pu: 120, sub: 120 };
 
-    // Header de tabla
-    const colWidths = {
-      desc: 200,
-      cant: 60,
-      precioUnit: 110,
-      subtotal: 110
-    };
-
-    // Fondo del header de tabla
-    doc.save();
-    doc.rect(marginLeft, currentY - 3, pageWidth, 18).fill('#F3F4F6');
-    doc.restore();
-
+    // Header tabla
+    doc.save().rect(marginLeft, y - 3, pageWidth, 18).fill('#F3F4F6').restore();
     doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#374151');
-    let colX = marginLeft + 10;
-    doc.text('Descripción', colX, currentY);
-    colX += colWidths.desc;
-    doc.text('Cant.', colX, currentY, { width: colWidths.cant, align: 'right' });
-    colX += colWidths.cant;
-    doc.text('Precio Unit.', colX, currentY, { width: colWidths.precioUnit, align: 'right' });
-    colX += colWidths.precioUnit;
-    doc.text('Subtotal', colX, currentY, { width: colWidths.subtotal, align: 'right' });
+    let cx = marginLeft + 10;
+    doc.text('Descripción', cx, y); cx += col.desc;
+    doc.text('Cant.', cx, y, { width: col.cant, align: 'right' }); cx += col.cant;
+    doc.text('Precio Unit.', cx, y, { width: col.pu, align: 'right' }); cx += col.pu;
+    doc.text('Subtotal', cx, y, { width: col.sub, align: 'right' });
 
-    currentY += 20;
-    doc.moveTo(marginLeft, currentY).lineTo(marginRight, currentY).lineWidth(0.3).strokeColor('#E5E7EB').stroke();
+    y += 20;
+    doc.moveTo(marginLeft, y).lineTo(marginRight, y).lineWidth(0.3).strokeColor('#E5E7EB').stroke();
 
-    // Filas
+    // Filas resumen
     doc.font('Helvetica').fontSize(8.5).fillColor('#1F2937');
+    const sorted = [...lines].sort((a, b) =>
+      (a.cliente_nombre || '').localeCompare(b.cliente_nombre || '') ||
+      (a.zona_nombre || '').localeCompare(b.zona_nombre || '')
+    );
 
-    // Ordenar líneas por cliente y zona
-    const sortedLines = [...lines].sort((a, b) => {
-      const cmp = (a.cliente_nombre || '').localeCompare(b.cliente_nombre || '');
-      if (cmp !== 0) return cmp;
-      return (a.zona_nombre || '').localeCompare(b.zona_nombre || '');
-    });
-
-    sortedLines.forEach((line, idx) => {
-      currentY += 4;
-
-      // Fondo alternado
+    sorted.forEach((line, idx) => {
+      y += 4;
       if (idx % 2 === 0) {
-        doc.save();
-        doc.rect(marginLeft, currentY - 2, pageWidth, 16).fill('#FAFAFA');
-        doc.restore();
+        doc.save().rect(marginLeft, y - 2, pageWidth, 16).fill('#FAFAFA').restore();
         doc.fillColor('#1F2937');
       }
 
-      // Descripción: incluir nombre del cliente si es multi-cliente
       let desc = line.zona_nombre || '-';
-      if (!clienteData && line.cliente_nombre) {
-        desc = `${line.cliente_nombre} — ${desc}`;
-      }
+      if (!clienteData && line.cliente_nombre) desc = `${line.cliente_nombre} — ${desc}`;
 
-      colX = marginLeft + 10;
-      doc.text(desc, colX, currentY, { width: colWidths.desc - 10 });
-      colX += colWidths.desc;
-      doc.text(String(line.cantidad || 0), colX, currentY, { width: colWidths.cant, align: 'right' });
-      colX += colWidths.cant;
-      doc.text(fmtARS(line.precio_unit), colX, currentY, { width: colWidths.precioUnit, align: 'right' });
-      colX += colWidths.precioUnit;
-      doc.text(fmtARS(line.subtotal), colX, currentY, { width: colWidths.subtotal, align: 'right' });
-
-      currentY += 14;
-
-      // Si se va de página, crear nueva
-      if (currentY > doc.page.height - 120) {
-        doc.addPage();
-        currentY = 40;
-      }
+      cx = marginLeft + 10;
+      doc.text(desc, cx, y, { width: col.desc - 10 }); cx += col.desc;
+      doc.text(String(line.cantidad || 0), cx, y, { width: col.cant, align: 'right' }); cx += col.cant;
+      doc.text(fmtARS(line.precio_unit), cx, y, { width: col.pu, align: 'right' }); cx += col.pu;
+      doc.text(fmtARS(line.subtotal), cx, y, { width: col.sub, align: 'right' });
+      y += 14;
     });
 
-    // ====== TOTALES ======
-    currentY += 10;
-    doc.moveTo(marginLeft + pageWidth * 0.5, currentY).lineTo(marginRight, currentY).lineWidth(0.5).strokeColor('#D1D5DB').stroke();
-    currentY += 8;
-
-    const totalX = marginRight - 230;
-    const totalValX = marginRight - 120;
-
+    // Totales
+    y += 10;
+    doc.moveTo(marginLeft + pageWidth * 0.5, y).lineTo(marginRight, y).lineWidth(0.5).strokeColor('#D1D5DB').stroke();
+    y += 8;
+    const tLabelX = marginRight - 250;
+    const tValX = marginRight - 120;
     doc.font('Helvetica').fontSize(9).fillColor('#374151');
-    doc.text('Importe Neto No Gravado:', totalX, currentY, { width: 120, align: 'right' });
-    doc.text(fmtARS(totalGeneral), totalValX, currentY, { width: 120, align: 'right' });
+    doc.text('Importe Neto No Gravado:', tLabelX, y, { width: 130, align: 'right' });
+    doc.text(fmtARS(totalGeneral), tValX, y, { width: 120, align: 'right' });
 
-    currentY += 16;
-    doc.moveTo(marginLeft + pageWidth * 0.5, currentY).lineTo(marginRight, currentY).lineWidth(0.5).strokeColor('#D1D5DB').stroke();
-    currentY += 8;
-
+    y += 18;
+    doc.moveTo(marginLeft + pageWidth * 0.5, y).lineTo(marginRight, y).lineWidth(0.5).strokeColor('#D1D5DB').stroke();
+    y += 8;
     doc.font('Helvetica-Bold').fontSize(11).fillColor('#92400E');
-    doc.text('TOTAL:', totalX, currentY, { width: 120, align: 'right' });
-    doc.text(fmtARS(totalGeneral), totalValX, currentY, { width: 120, align: 'right' });
+    doc.text('TOTAL:', tLabelX, y, { width: 130, align: 'right' });
+    doc.text(fmtARS(totalGeneral), tValX, y, { width: 120, align: 'right' });
 
-    // ====== FOOTER ======
-    const footerY = doc.page.height - 50;
-    doc.moveTo(marginLeft, footerY - 10).lineTo(marginRight, footerY - 10).lineWidth(0.3).strokeColor('#E5E7EB').stroke();
-    doc.font('Helvetica').fontSize(7).fillColor('#9CA3AF');
-    doc.text('Documento no válido como factura. Presupuesto generado por Zupply.', marginLeft, footerY, { align: 'center', width: pageWidth });
-    doc.text(`Pág 1/1`, marginRight - 50, footerY);
+    // ══════════════════════════════════════════════
+    // PÁGINAS 2+: DETALLE POR FECHA
+    // ══════════════════════════════════════════════
+
+    if (enviosDetalle.length > 0) {
+      doc.addPage();
+
+      // Agrupar envíos por fecha de ingreso a planta
+      const porFecha = {};
+      enviosDetalle.forEach(e => {
+        const fechaRaw = e.fecha_ingreso || e.fecha;
+        const fechaKey = fechaRaw ? new Date(fechaRaw).toISOString().split('T')[0] : 'sin-fecha';
+        if (!porFecha[fechaKey]) porFecha[fechaKey] = [];
+        porFecha[fechaKey].push(e);
+      });
+
+      // Ordenar fechas cronológicamente
+      const fechasOrdenadas = Object.keys(porFecha).sort();
+
+      // Header del detalle
+      y = 40;
+      doc.save().rect(marginLeft, y, pageWidth, 35).fill('#FFF7ED').restore();
+      doc.font('Helvetica-Bold').fontSize(13).fillColor('#92400E');
+      doc.text('DETALLE DE ENVÍOS', marginLeft + 15, y + 5);
+      doc.font('Helvetica').fontSize(9).fillColor('#374151');
+      doc.text(`Período: ${fmtFecha(periodo?.desde)} al ${fmtFecha(periodo?.hasta)}`, marginLeft + 15, y + 22);
+      if (clienteData) {
+        doc.text(`Cliente: ${clienteData.nombre || ''} (${clienteData.codigo_cliente || ''})`, marginLeft + 250, y + 22);
+      }
+
+      y = 90;
+
+      // Columnas del detalle
+      const dCol = { tracking: 180, zona: 180, precio: 120 };
+
+      // Header de columnas
+      doc.save().rect(marginLeft, y - 3, pageWidth, 16).fill('#F3F4F6').restore();
+      doc.font('Helvetica-Bold').fontSize(8).fillColor('#374151');
+      cx = marginLeft + 10;
+      doc.text('Tracking / ID', cx, y); cx += dCol.tracking;
+      doc.text('Zona', cx, y); cx += dCol.zona;
+      doc.text('Precio', cx, y, { width: dCol.precio, align: 'right' });
+      y += 16;
+
+      let totalEnvios = 0;
+      let totalPrecioDetalle = 0;
+
+      fechasOrdenadas.forEach(fechaKey => {
+        const enviosDelDia = porFecha[fechaKey];
+
+        // Check si necesitamos nueva página
+        if (y > doc.page.height - 120) {
+          doc.addPage();
+          y = 40;
+          // Re-dibujar header columnas
+          doc.save().rect(marginLeft, y - 3, pageWidth, 16).fill('#F3F4F6').restore();
+          doc.font('Helvetica-Bold').fontSize(8).fillColor('#374151');
+          cx = marginLeft + 10;
+          doc.text('Tracking / ID', cx, y); cx += dCol.tracking;
+          doc.text('Zona', cx, y); cx += dCol.zona;
+          doc.text('Precio', cx, y, { width: dCol.precio, align: 'right' });
+          y += 16;
+        }
+
+        // Separator de fecha
+        y += 4;
+        doc.save().rect(marginLeft, y - 2, pageWidth, 15).fill('#E5E7EB').restore();
+        doc.font('Helvetica-Bold').fontSize(8.5).fillColor('#1F2937');
+        const fechaDisplay = fechaKey === 'sin-fecha' ? 'Sin fecha' : fmtFechaCorta(fechaKey + 'T12:00:00');
+        doc.text(fechaDisplay, marginLeft + 10, y);
+        y += 17;
+
+        let subtotalDia = 0;
+
+        enviosDelDia.forEach((env, idx) => {
+          // Nueva página si no hay espacio
+          if (y > doc.page.height - 60) {
+            doc.addPage();
+            y = 40;
+            doc.save().rect(marginLeft, y - 3, pageWidth, 16).fill('#F3F4F6').restore();
+            doc.font('Helvetica-Bold').fontSize(8).fillColor('#374151');
+            cx = marginLeft + 10;
+            doc.text('Tracking / ID', cx, y); cx += dCol.tracking;
+            doc.text('Zona', cx, y); cx += dCol.zona;
+            doc.text('Precio', cx, y, { width: dCol.precio, align: 'right' });
+            y += 16;
+          }
+
+          // Fondo alternado
+          if (idx % 2 === 0) {
+            doc.save().rect(marginLeft, y - 1, pageWidth, 13).fill('#FAFAFA').restore();
+          }
+
+          const precio = typeof env.precio === 'number' ? env.precio : 0;
+          subtotalDia += precio;
+          totalPrecioDetalle += precio;
+          totalEnvios++;
+
+          doc.font('Helvetica').fontSize(7.5).fillColor('#374151');
+          cx = marginLeft + 10;
+          doc.text(env.tracking || '-', cx, y, { width: dCol.tracking - 10 }); cx += dCol.tracking;
+          doc.text(env.zona || '-', cx, y, { width: dCol.zona - 10 }); cx += dCol.zona;
+          doc.text(fmtARS(precio), cx, y, { width: dCol.precio, align: 'right' });
+          y += 13;
+        });
+
+        // Subtotal del día
+        y += 2;
+        doc.font('Helvetica-Oblique').fontSize(7.5).fillColor('#6B7280');
+        doc.text(
+          `Subtotal: ${fmtARS(subtotalDia)}  (${enviosDelDia.length} envío${enviosDelDia.length !== 1 ? 's' : ''})`,
+          marginLeft + 10, y, { width: pageWidth - 20, align: 'right' }
+        );
+        y += 15;
+      });
+
+      // Total general del detalle
+      y += 5;
+      if (y > doc.page.height - 60) {
+        doc.addPage();
+        y = 40;
+      }
+      doc.save().rect(marginLeft, y - 3, pageWidth, 22).fill('#FFF7ED').restore();
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#92400E');
+      doc.text(
+        `TOTAL: ${fmtARS(totalPrecioDetalle)}  (${totalEnvios} envíos)`,
+        marginLeft + 10, y, { width: pageWidth - 20, align: 'right' }
+      );
+    }
+
+    // ══════════════════════════════════════════════
+    // FOOTER en todas las páginas
+    // ══════════════════════════════════════════════
+    const totalPages = doc.bufferedPageRange().count;
+    for (let i = 0; i < totalPages; i++) {
+      doc.switchToPage(i);
+      const footerY = doc.page.height - 40;
+      doc.moveTo(marginLeft, footerY - 5).lineTo(marginRight, footerY - 5).lineWidth(0.3).strokeColor('#E5E7EB').stroke();
+      doc.font('Helvetica').fontSize(7).fillColor('#9CA3AF');
+      doc.text('Documento no válido como factura — Presupuesto generado por Zupply', marginLeft, footerY, { width: pageWidth - 60, align: 'left' });
+      doc.text(`Pág ${i + 1}/${totalPages}`, marginRight - 60, footerY, { width: 55, align: 'right' });
+    }
 
     doc.end();
   } catch (err) {

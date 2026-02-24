@@ -98,6 +98,21 @@ router.post('/logo', requireRole('admin'), upload.single('logo'), async (req, re
   try {
     if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' });
 
+    // Intentar redimensionar con sharp si está disponible
+    try {
+      const sharp = require('sharp');
+      const metadata = await sharp(req.file.buffer).metadata();
+
+      if (metadata.width > 400 || metadata.height > 200) {
+        const resized = await sharp(req.file.buffer)
+          .resize(400, 200, { fit: 'inside', withoutEnlargement: true })
+          .toBuffer();
+        req.file.buffer = resized;
+      }
+    } catch (e) {
+      console.warn('sharp no disponible, subiendo logo sin redimensionar');
+    }
+
     const ext = req.file.originalname.split('.').pop().toLowerCase();
     const key = `tenants/${req.tenantId}/logo.${ext}`;
 

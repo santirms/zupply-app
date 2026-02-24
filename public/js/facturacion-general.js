@@ -372,7 +372,8 @@ qs('#btnPresupuesto')?.addEventListener('click', async () => {
     const body = {
       periodo: window.__FACT_RESUMEN__.period,
       lines: window.__FACT_RESUMEN__.lines,
-      totalGeneral: window.__FACT_RESUMEN__.totalGeneral
+      totalGeneral: window.__FACT_RESUMEN__.totalGeneral,
+      envios: envios || []
     };
     // Si hay un solo cliente en las líneas, pasarlo
     const clienteIds = [...new Set((window.__FACT_RESUMEN__.lines || []).map(l => l.cliente_id).filter(Boolean))];
