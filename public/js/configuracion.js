@@ -113,12 +113,12 @@ async function cargarConfiguracion() {
       ? new Date(data.fiscal.inicio_actividades).toISOString().split('T')[0]
       : '';
 
-    // Logo
+    // Logo preview
     const logoPreview = document.getElementById('logoPreview');
     const logoPlaceholder = document.getElementById('logoPlaceholder');
     const btnEliminarLogo = document.getElementById('btnEliminarLogo');
-    if (data.settings?.logo) {
-      logoPreview.src = data.settings.logo;
+    if (data.settings?.logoUrl) {
+      logoPreview.src = data.settings.logoUrl;  // URL presignada
       logoPreview.classList.remove('hidden');
       logoPlaceholder.classList.add('hidden');
       btnEliminarLogo.classList.remove('hidden');
@@ -191,10 +191,10 @@ async function subirLogo(file) {
     if (!res.ok) throw new Error('Error subiendo logo');
     const data = await res.json();
 
-    // Actualizar preview
+    // Actualizar preview con URL presignada
     const logoPreview = document.getElementById('logoPreview');
     const logoPlaceholder = document.getElementById('logoPlaceholder');
-    logoPreview.src = data.logo + '?t=' + Date.now(); // cache bust
+    logoPreview.src = data.logoUrl;  // URL presignada de S3
     logoPreview.classList.remove('hidden');
     logoPlaceholder.classList.add('hidden');
     document.getElementById('btnEliminarLogo').classList.remove('hidden');
