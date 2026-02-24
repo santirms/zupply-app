@@ -369,14 +369,20 @@ qs('#btnPresupuesto')?.addEventListener('click', async () => {
   if (!window.__FACT_RESUMEN__) return;
   try {
     setBusy(true, 'Generando PDF de presupuesto…');
+    const body = {
+      periodo: window.__FACT_RESUMEN__.period,
+      lines: window.__FACT_RESUMEN__.lines,
+      totalGeneral: window.__FACT_RESUMEN__.totalGeneral
+    };
+    // Si hay un solo cliente en las líneas, pasarlo
+    const clienteIds = [...new Set((window.__FACT_RESUMEN__.lines || []).map(l => l.cliente_id).filter(Boolean))];
+    if (clienteIds.length === 1) {
+      body.clienteId = clienteIds[0];
+    }
     const res = await fetch('/facturacion/presupuesto', {
       method: 'POST',
       headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        periodo: window.__FACT_RESUMEN__.period,
-        lines: window.__FACT_RESUMEN__.lines,
-        totalGeneral: window.__FACT_RESUMEN__.totalGeneral
-      })
+      body: JSON.stringify(body)
     });
     if (!res.ok) throw new Error('Error generando PDF');
     // Abrimos el PDF en una pestaña
