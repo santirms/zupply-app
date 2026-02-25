@@ -41,16 +41,22 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// Editar zona (solo nombre en este caso)
+// Editar zona (nombre + partidos)
 router.put('/:id', async (req, res) => {
   try {
-    await Zona.findOneAndUpdate(
+    const update = {};
+    if (req.body.nombre) update.nombre = req.body.nombre;
+    if (req.body.partidos) update.partidos = req.body.partidos;
+
+    const zona = await Zona.findOneAndUpdate(
       { _id: req.params.id, tenantId: req.tenantId },
-      { nombre: req.body.nombre }
+      update,
+      { new: true }
     );
-    res.status(200).json({ message: 'Zona actualizada' });
+    if (!zona) return res.status(404).json({ error: 'Zona no encontrada' });
+    res.json(zona);
   } catch (err) {
-    res.status(500).json({ error: 'Error al editar zona' });
+    res.status(400).json({ error: err.message });
   }
 });
 

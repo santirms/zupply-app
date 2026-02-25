@@ -15,6 +15,8 @@ const zonasPrecios  = () => qs('#zonasPrecios');
 const listasPrecios = () => qs('#listasPrecios');
 
 let zonas = [];
+let modalMode = null;   // 'zona' | 'lista'
+let modalItemId = null; // _id del item editándose
 
 // ===== Tabs (estilo ámbar suave) =====
 function activarBtnTab(btn, active) {
@@ -134,18 +136,77 @@ function eliminarZona(id) {
 }
 window.eliminarZona = eliminarZona;
 
-// ===== Editar zona (solo nombre) =====
-function editarZona(id) {
-  const nuevo = prompt('Nuevo nombre de zona:');
-  if (!nuevo) return;
-  fetch(`${ZONA_API}/${id}`, {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ nombre: nuevo })
-  })
-  .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); })
-  .then(() => cargarZonas())
-  .catch(err => console.error('Error editando zona:', err));
+// ===== Modal helpers =====
+function abrirModal(titulo) {
+  qs('#modalTitulo').textContent = titulo;
+  qs('#modalEditar').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function cerrarModal() {
+  qs('#modalEditar').classList.add('hidden');
+  document.body.style.overflow = '';
+  modalMode = null;
+  modalItemId = null;
+}
+window.cerrarModal = cerrarModal;
+
+// Cerrar con Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !qs('#modalEditar').classList.contains('hidden')) cerrarModal();
+});
+
+// ===== Editar zona (nombre + partidos) =====
+async function editarZona(id) {
+  modalMode = 'zona';
+  modalItemId = id;
+
+  const zona = zonas.find(z => z._id === id);
+  if (!zona) return;
+
+  let todosPartidos = [];
+  try {
+    const res = await fetch(PARTIDOS_API, { cache: 'no-store' });
+    if (res.ok) todosPartidos = await res.json();
+  } catch {}
+
+  const partidosActuales = new Set(zona.partidos || []);
+
+  const body = qs('#modalBody');
+  body.innerHTML = `
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Nombre de la zona</label>
+        <input type="text" id="editZonaNombre" value="${zona.nombre.replace(/"/g, '&quot;')}"
+          class="w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Partidos asignados</label>
+        <div class="text-xs opacity-60 mb-2">Seleccioná los partidos que pertenecen a esta zona</div>
+        <div class="max-h-60 overflow-y-auto border border-slate-200 dark:border-white/10 rounded-xl p-2 space-y-1">
+          ${todosPartidos.map(p => {
+            const checked = partidosActuales.has(p.nombre) ? 'checked' : '';
+            return `<label class="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer text-sm">
+              <input type="checkbox" class="edit-partido-chk accent-amber-600" value="${p.nombre}" ${checked} />
+              ${p.nombre}
+            </label>`;
+          }).join('')}
+        </div>
+        <div class="mt-2 flex gap-2">
+          <button type="button" onclick="document.querySelectorAll('.edit-partido-chk').forEach(c=>c.checked=true)"
+            class="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">
+            Seleccionar todos
+          </button>
+          <button type="button" onclick="document.querySelectorAll('.edit-partido-chk').forEach(c=>c.checked=false)"
+            class="text-xs px-2 py-1 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">
+            Deseleccionar todos
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  abrirModal(`Editar zona: ${zona.nombre}`);
 }
 window.editarZona = editarZona;
 
@@ -185,7 +246,8 @@ function cargarListas() {
         const precios = (lista.zonas||[])
           .map(zp => {
             const nom = typeof zp.zona === 'object' ? (zp.zona.nombre || '—') : '—';
-            return `<div class="flex items-center justify-between gap-2"><span>${nom}</span><span class="font-medium">$ ${zp.precio}</span></div>`;
+            const fmt = new Intl.NumberFormat('es-AR').format(zp.precio);
+            return `<div class="flex items-center justify-between gap-2"><span>${nom}</span><span class="font-medium">$ ${fmt}</span></div>`;
           })
           .join('');
         const div = document.createElement('div');
@@ -197,7 +259,7 @@ function cargarListas() {
               <div class="mt-2 grid gap-1 text-sm">${precios || '<span class="opacity-70">— sin precios —</span>'}</div>
             </div>
             <div class="flex items-center gap-3 text-sm">
-              <button onclick="editarLista('${lista._id}', '${lista.nombre.replace(/'/g, "\\'")}')" class="px-3 py-1 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">Editar</button>
+              <button onclick="editarLista('${lista._id}')" class="px-3 py-1 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">Editar</button>
               <button onclick="eliminarLista('${lista._id}')" class="px-3 py-1 rounded-lg border border-rose-400/30 text-rose-600 dark:text-rose-300 hover:bg-rose-400/10">Eliminar</button>
             </div>
           </div>
@@ -208,20 +270,129 @@ function cargarListas() {
     .catch(err => console.error('Error al cargar listas:', err));
 }
 
-// ===== Editar lista (solo nombre) =====
-function editarLista(id, actual) {
-  const nuevo = prompt('Nuevo nombre de la lista:', actual || '');
-  if (!nuevo) return;
-  fetch(`${LISTA_API}/${id}`, {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ nombre: nuevo })
-  })
-  .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); })
-  .then(() => cargarListas())
-  .catch(err => console.error('Error editando lista:', err));
+// ===== Editar lista (nombre + zonas con precios) =====
+async function editarLista(id) {
+  modalMode = 'lista';
+  modalItemId = id;
+
+  let lista = null;
+  try {
+    const res = await fetch(LISTA_API, { cache: 'no-store' });
+    if (res.ok) {
+      const todas = await res.json();
+      lista = todas.find(l => l._id === id);
+    }
+  } catch {}
+  if (!lista) return;
+
+  // Mapear precios actuales: zonaId → precio
+  const preciosActuales = {};
+  (lista.zonas || []).forEach(zp => {
+    const zid = typeof zp.zona === 'object' ? zp.zona._id : zp.zona;
+    preciosActuales[zid] = zp.precio;
+  });
+
+  const body = qs('#modalBody');
+  body.innerHTML = `
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Nombre de la lista</label>
+        <input type="text" id="editListaNombre" value="${lista.nombre.replace(/"/g, '&quot;')}"
+          class="w-full p-2 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Zonas y precios</label>
+        <div class="text-xs opacity-60 mb-2">Activá las zonas que incluye esta lista y asigná el precio</div>
+        <div class="space-y-2">
+          ${zonas.map(z => {
+            const tieneP = preciosActuales[z._id] !== undefined;
+            const precio = tieneP ? preciosActuales[z._id] : '';
+            return `<div class="flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-white/5">
+              <input type="checkbox" class="edit-lista-chk accent-amber-600" data-zona="${z._id}" ${tieneP ? 'checked' : ''} />
+              <span class="w-32 text-sm font-medium">${z.nombre}</span>
+              <div class="flex-1">
+                <input type="number" class="edit-lista-precio w-full p-1.5 rounded-lg border border-slate-300 dark:border-white/10 bg-white dark:bg-transparent text-sm text-right"
+                  data-zona="${z._id}" value="${precio}" placeholder="Precio" ${tieneP ? '' : 'disabled'} min="0" step="1" />
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Bind checkboxes → habilitar/deshabilitar inputs
+  body.querySelectorAll('.edit-lista-chk').forEach(chk => {
+    const inp = body.querySelector(`.edit-lista-precio[data-zona="${chk.dataset.zona}"]`);
+    chk.addEventListener('change', () => {
+      inp.disabled = !chk.checked;
+      if (!chk.checked) inp.value = '';
+    });
+  });
+
+  abrirModal(`Editar lista: ${lista.nombre}`);
 }
 window.editarLista = editarLista;
+
+// ===== Guardar modal (zona o lista) =====
+async function guardarModal() {
+  const btn = qs('#modalGuardar');
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+
+  try {
+    if (modalMode === 'zona') {
+      const nombre = qs('#editZonaNombre').value.trim();
+      const partidos = Array.from(document.querySelectorAll('.edit-partido-chk:checked')).map(c => c.value);
+
+      if (!nombre) { alert('El nombre es obligatorio'); return; }
+      if (partidos.length === 0) { alert('Seleccioná al menos un partido'); return; }
+
+      const res = await fetch(`${ZONA_API}/${modalItemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, partidos })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      cargarZonas();
+
+    } else if (modalMode === 'lista') {
+      const nombre = qs('#editListaNombre').value.trim();
+      if (!nombre) { alert('El nombre es obligatorio'); return; }
+
+      const zonasArr = [];
+      document.querySelectorAll('.edit-lista-chk:checked').forEach(chk => {
+        const zonaId = chk.dataset.zona;
+        const inp = document.querySelector(`.edit-lista-precio[data-zona="${zonaId}"]`);
+        const precio = parseFloat(inp.value);
+        if (!isNaN(precio) && precio > 0) {
+          zonasArr.push({ zona: zonaId, precio });
+        }
+      });
+
+      if (zonasArr.length === 0) { alert('Agregá al menos una zona con precio'); return; }
+
+      const res = await fetch(`${LISTA_API}/${modalItemId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, zonas: zonasArr })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      cargarListas();
+    }
+
+    cerrarModal();
+  } catch (err) {
+    console.error('Error guardando:', err);
+    alert('Error al guardar los cambios');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar';
+  }
+}
+window.guardarModal = guardarModal;
 
 // ===== Eliminar lista =====
 function eliminarLista(id) {
