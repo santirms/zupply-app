@@ -319,6 +319,46 @@ function initPrecioEditing() {
   });
 }
 
+// ====== Recalcular resumen desde envíos en memoria ======
+/**
+ * Recalcula las líneas de resumen (por cliente+zona) y el total general
+ * a partir del array de envíos en memoria (que puede tener precios editados).
+ */
+function recalcularResumenDesdeEnvios() {
+  const linesMap = new Map();
+  let totalGeneral = 0;
+
+  envios.forEach(e => {
+    const precio = typeof e.precio === 'number' ? e.precio : 0;
+    const key = `${e.cliente || ''}__${(e.zona || 'Sin zona').toLowerCase()}`;
+
+    const prev = linesMap.get(key) || {
+      cliente_id: e.cliente_id || '',
+      cliente_nombre: e.cliente || '',
+      codigo_interno: e.codigo_interno || '',
+      zona_nombre: e.zona || 'Sin zona',
+      precio_unit: precio,
+      cantidad: 0,
+      subtotal: 0
+    };
+
+    prev.cantidad += 1;
+    prev.subtotal += precio;
+    // Precio unitario: promedio (por si hay precios mixtos en la misma zona)
+    prev.precio_unit = prev.cantidad > 0 ? Math.round(prev.subtotal / prev.cantidad * 100) / 100 : 0;
+    linesMap.set(key, prev);
+
+    totalGeneral += precio;
+  });
+
+  const lines = Array.from(linesMap.values()).sort((a, b) =>
+    (a.cliente_nombre || '').localeCompare(b.cliente_nombre || '') ||
+    (a.zona_nombre || '').localeCompare(b.zona_nombre || '')
+  );
+
+  return { lines, totalGeneral };
+}
+
 // ====== Exportar a Excel (.xlsx) con autofiltros ======
 function exportarExcel() {
   const nf = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -399,11 +439,15 @@ function openFactModal() {
   const body  = qs('#mf-body');
   const tot   = qs('#mf-total');
   const per   = qs('#mf-periodo');
-  if (!window.__FACT_RESUMEN__) {
+  if (!window.__FACT_RESUMEN__ && (!envios || envios.length === 0)) {
     alert('Primero generá el reporte con "Filtrar".');
     return;
   }
-  const { period, lines = [], totalGeneral = 0 } = window.__FACT_RESUMEN__;
+
+  // Recalcular con precios editados
+  const resumenActualizado = recalcularResumenDesdeEnvios();
+  const period = window.__FACT_RESUMEN__?.period || { desde: qs('#desde').value, hasta: qs('#hasta').value };
+  const { lines, totalGeneral } = resumenActualizado;
 
   per.textContent = `Período: ${period.desde} a ${period.hasta}`;
   body.innerHTML = '';
@@ -433,17 +477,19 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // presupuesto (PDF)
 qs('#btnPresupuesto')?.addEventListener('click', async () => {
-  if (!window.__FACT_RESUMEN__) return;
+  if (!window.__FACT_RESUMEN__ && (!envios || envios.length === 0)) return;
   try {
     setBusy(true, 'Generando PDF de presupuesto…');
+    // Recalcular resumen con precios posiblemente editados
+    const resumenActualizado = recalcularResumenDesdeEnvios();
     const body = {
-      periodo: window.__FACT_RESUMEN__.period,
-      lines: window.__FACT_RESUMEN__.lines,
-      totalGeneral: window.__FACT_RESUMEN__.totalGeneral,
+      periodo: window.__FACT_RESUMEN__?.period || { desde: qs('#desde').value, hasta: qs('#hasta').value },
+      lines: resumenActualizado.lines,
+      totalGeneral: resumenActualizado.totalGeneral,
       envios: envios || []
     };
     // Si hay un solo cliente en las líneas, pasarlo
-    const clienteIds = [...new Set((window.__FACT_RESUMEN__.lines || []).map(l => l.cliente_id).filter(Boolean))];
+    const clienteIds = [...new Set((resumenActualizado.lines || []).map(l => l.cliente_id).filter(Boolean))];
     if (clienteIds.length === 1) {
       body.clienteId = clienteIds[0];
     }
