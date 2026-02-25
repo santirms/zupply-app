@@ -85,30 +85,16 @@ router.get('/home', async (req, res) => {
         tenantId: req.tenantId
       }),
       
-      // entregados: entregados HOY por fecha de entrega (no de venta)
+      // entregados: tiene evento 'entregado' en historial HOY
       Envio.countDocuments({
         estado: 'entregado',
         tenantId: req.tenantId,
-        $or: [
-          // Opción 1: tiene evento de entrega en historial hoy
-          {
-            historial: {
-              $elemMatch: {
-                estado: 'entregado',
-                at: { $gte: startDia, $lte: endDia }
-              }
-            }
-          },
-          // Opción 2: estado_meli.updatedAt es de hoy (fallback para envíos sin historial detallado)
-          {
-            'estado_meli.status': 'delivered',
-            'estado_meli.updatedAt': { $gte: startDia, $lte: endDia }
-          },
-          // Opción 3: updatedAt del documento es de hoy y estado es entregado (fallback final)
-          {
-            updatedAt: { $gte: startDia, $lte: endDia }
+        historial: {
+          $elemMatch: {
+            estado: 'entregado',
+            at: { $gte: startDia, $lte: endDia }
           }
-        ]
+        }
       }),
       
       // incidencias: 7d con estados de incidencia operativa
