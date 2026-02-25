@@ -1122,9 +1122,9 @@ function renderPaqueteCell(envio) {
     return `${emojiVehiculo} <span class="text-slate-400 dark:text-slate-500 text-xs">${pesoTexto}</span>`;
   }
   if (pesoG <= 10000) {
-    return `${emojiVehiculo} <span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">\u2696\uFE0F ${pesoTexto}</span>`;
+    return `${emojiVehiculo} <span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">${pesoTexto}</span>`;
   }
-  return `${emojiVehiculo} <span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800">\u2696\uFE0F ${pesoTexto}</span>`;
+  return `${emojiVehiculo} <span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800">${pesoTexto}</span>`;
 }
 
 function filtrarPorDimensiones(lista) {
@@ -1285,7 +1285,7 @@ async function mostrarDetalle(envioId){
       if (d.peso) {
         const pesoTexto = d.peso >= 1000 ? `${(d.peso / 1000).toFixed(2)} kg` : `${d.peso} g`;
         if (d.peso > 10000) {
-          parts.push(`<span class="text-rose-600 dark:text-rose-400 font-semibold">${pesoTexto} \u2696\uFE0F</span>`);
+          parts.push(`<span class="text-rose-600 dark:text-rose-400 font-semibold">${pesoTexto}</span>`);
         } else {
           parts.push(pesoTexto);
         }
