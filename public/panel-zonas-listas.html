@@ -139,6 +139,37 @@
     </div>
   </div>
 
+  <!-- Modal de edición (zonas y listas) -->
+  <div id="modalEditar" class="fixed inset-0 z-50 hidden">
+    <!-- Overlay -->
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="cerrarModal()"></div>
+    <!-- Contenido -->
+    <div class="relative z-10 flex items-center justify-center min-h-screen p-4">
+      <div class="bg-white dark:bg-[#0B1020] border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-white/10">
+          <h3 id="modalTitulo" class="text-lg font-semibold">Editar</h3>
+          <button onclick="cerrarModal()" class="text-xl opacity-60 hover:opacity-100">&times;</button>
+        </div>
+        <!-- Body -->
+        <div id="modalBody" class="px-5 py-4">
+          <!-- contenido dinámico -->
+        </div>
+        <!-- Footer -->
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-white/10">
+          <button onclick="cerrarModal()"
+            class="px-4 py-2 rounded-xl text-sm border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">
+            Cancelar
+          </button>
+          <button id="modalGuardar" onclick="guardarModal()"
+            class="px-4 py-2 rounded-xl text-sm font-semibold shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- JS de la pantalla -->
   <script src="/js/zonas-listas.js" defer></script>
 </body>
