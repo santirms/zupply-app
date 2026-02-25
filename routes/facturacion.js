@@ -731,6 +731,7 @@ router.get('/detalle', async (req, res) => {
 
       items.push({
         tracking: e.id_venta || e.meli_id || '',
+        cliente_id: String(cliente?._id || e.cliente_id || ''),
         cliente:  cliente?.nombre || '',
         codigo_interno: cliente?.codigo_cliente || '',
         sender_id: e.sender_id || '',
