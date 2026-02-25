@@ -1072,18 +1072,59 @@ function formatPeso(pesoGramos) {
   return `${pesoGramos} g`;
 }
 
+/**
+ * Determina el vehículo sugerido según peso y volumen del paquete.
+ * @param {number|null} pesoGramos - Peso en gramos
+ * @param {number|null} volumenCm3 - Volumen en cm³
+ * @returns {{ emoji: string, nombre: string, nivel: number }}
+ */
+function getVehiculo(pesoGramos, volumenCm3) {
+  const pesoKg = (pesoGramos || 0) / 1000;
+  const vol = volumenCm3 || 0;
+
+  // Nivel por peso
+  let nivelPeso = 1; // moto
+  if (pesoKg > 25) nivelPeso = 3;       // utilitario
+  else if (pesoKg > 10) nivelPeso = 2;  // auto
+
+  // Nivel por volumen
+  let nivelVol = 1; // moto
+  if (vol > 252000) nivelVol = 3;       // utilitario
+  else if (vol > 45000) nivelVol = 2;   // auto
+
+  const nivel = Math.max(nivelPeso, nivelVol);
+
+  const vehiculos = {
+    1: { emoji: '\uD83C\uDFCD\uFE0F', nombre: 'Moto' },
+    2: { emoji: '\uD83D\uDE97', nombre: 'Auto' },
+    3: { emoji: '\uD83D\uDE9B', nombre: 'Utilitario' }
+  };
+
+  return { ...vehiculos[nivel], nivel };
+}
+
 function renderPaqueteCell(envio) {
   const d = envio.dimensiones;
-  if (!d || !d.peso) return '-';
-  const peso = d.peso;
-  const pesoTexto = formatPeso(peso);
-  if (peso < 3000) {
-    return `<span class="text-slate-400 dark:text-slate-500 text-xs">${pesoTexto}</span>`;
+  const pesoG = d?.peso || null;
+  const volumen = d?.volumen || null;
+
+  if (!pesoG && !volumen) return '-';
+
+  const vehiculo = getVehiculo(pesoG, volumen);
+  const emojiVehiculo = `<span title="${vehiculo.nombre}">${vehiculo.emoji}</span>`;
+
+  if (!pesoG) {
+    return `${emojiVehiculo} <span class="text-slate-400 dark:text-slate-500 text-xs">-</span>`;
   }
-  if (peso <= 10000) {
-    return `<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">\u2696\uFE0F ${pesoTexto}</span>`;
+
+  const pesoTexto = formatPeso(pesoG);
+  if (pesoG < 3000) {
+    return `${emojiVehiculo} <span class="text-slate-400 dark:text-slate-500 text-xs">${pesoTexto}</span>`;
   }
-  return `<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800">\u2696\uFE0F ${pesoTexto}</span>`;
+  if (pesoG <= 10000) {
+    return `${emojiVehiculo} <span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">\u2696\uFE0F ${pesoTexto}</span>`;
+  }
+  return `${emojiVehiculo} <span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-full border bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800">\u2696\uFE0F ${pesoTexto}</span>`;
 }
 
 function filtrarPorDimensiones(lista) {
@@ -1251,6 +1292,8 @@ async function mostrarDetalle(envioId){
       }
       if (d.items_count) parts.push(`${d.items_count} ud.`);
       if (d.volumen) parts.push(`Vol: ${d.volumen.toLocaleString('es-AR')} cm\u00B3`);
+      const vehiculoModal = getVehiculo(d.peso, d.volumen);
+      parts.push(`${vehiculoModal.emoji} ${vehiculoModal.nombre}`);
       dimHtml = `<p><strong>\uD83D\uDCE6 Paquete:</strong> ${parts.join(' | ')}</p>`;
     }
 
