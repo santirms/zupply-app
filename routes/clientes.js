@@ -126,13 +126,13 @@ router.get('/:id/meli-link', async (req, res) => {
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
 
-    // ✅ FORMATO MULTI-TENANT - Solo usa tenantId
-    const state     = String(req.tenantId);
+    // ✅ FORMATO: tenantId|clienteId — el callback necesita ambos
+    const state     = `${req.tenantId}|${id}`;
     const redirect  = process.env.MERCADOLIBRE_REDIRECT_URI;
 
     console.log('ML LINK -> redirect_uri:', redirect);
-    console.log('ML LINK -> state (tenantId):', state);
-    console.log('ML LINK -> tenant:', req.tenant?.companyName);
+    console.log('ML LINK -> state (tenantId|clienteId):', state);
+    console.log('ML LINK -> cliente:', cliente.nombre);
 
     if (!redirect) {
       return res.status(500).json({ error: 'MERCADOLIBRE_REDIRECT_URI no seteado' });
