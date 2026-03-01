@@ -23,38 +23,14 @@ const REDIRECT_URI  = process.env.MERCADOLIBRE_REDIRECT_URI;
 
 
 /* -------------------------------------------
- * OAuth connect (iniciar vinculación ML)
+ * OAuth connect - DEPRECATED (usar meli-link del cliente)
  * GET /api/auth/meli/connect
  * ----------------------------------------- */
 router.get('/connect', identifyTenant, (req, res) => {
-  try {
-    const tenantId = req.tenantId;
-
-    // URL de autorización de MercadoLibre
-    const authUrl = new URL('https://auth.mercadolibre.com.ar/authorization');
-    authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('client_id', CLIENT_ID);
-    authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
-    authUrl.searchParams.set('state', String(tenantId)); // Pasar tenantId en state
-
-    logger.info('OAuth connect initiated', {
-      tenantId,
-      tenant_name: req.tenant.nombre,
-      request_id: req.requestId
-    });
-
-    return res.redirect(302, authUrl.toString());
-  } catch (err) {
-    logger.error('Error en OAuth connect', {
-      error: err.message,
-      stack: err.stack,
-      request_id: req.requestId
-    });
-    return res.status(500).json({
-      error: 'Error al iniciar vinculación OAuth',
-      message: err.message
-    });
-  }
+  return res.status(400).json({
+    error: 'Este endpoint está deprecado',
+    message: 'Use GET /api/clientes/:id/meli-link?sender_id=XXX para vincular un cliente específico'
+  });
 });
 
 /* -------------------------------------------
@@ -68,21 +44,6 @@ router.get('/callback', async (req, res) => {
       u.searchParams.set('ok', '0');
       u.searchParams.set('msg', 'Faltan parámetros en callback');
       return res.redirect(302, u.toString());
-    }
-
-    // Extraer tenantId desde el state
-    // Para compatibilidad, soportamos dos formatos:
-    // - Nuevo: state = tenantId (multi-tenancy)
-    // - Antiguo: state = "clienteId|senderId" (legacy)
-    let tenantId = null;
-    let isLegacyFormat = false;
-
-    if (state.includes('|')) {
-      // Formato legacy: clienteId|senderId
-      isLegacyFormat = true;
-    } else {
-      // Formato nuevo: tenantId
-      tenantId = state;
     }
 
     // 1) Intercambio de código por tokens
@@ -102,7 +63,7 @@ router.get('/callback', async (req, res) => {
 
     const { access_token, refresh_token, user_id, expires_in } = tokenRes.data;
 
-    // Obtener nickname para mostrar en la landing
+    // Obtener nickname
     let nickname = '';
     try {
       const me = await axios.get('https://api.mercadolibre.com/users/me', {
@@ -111,91 +72,75 @@ router.get('/callback', async (req, res) => {
       nickname = me.data?.nickname || '';
     } catch (_) { /* ignoro si falla */ }
 
-    if (isLegacyFormat) {
-      // 2a) Flujo legacy: guardar en Token y Cliente
-      await Token.findOneAndUpdate(
-        { user_id },
-        {
-          access_token,
-          refresh_token,
-          expires_in,
-          fecha_creacion: new Date(),
-          updatedAt: new Date(),
-        },
-        { upsert: true }
-      );
+    // 2) Guardar token en colección Token (siempre, para cualquier formato)
+    await Token.findOneAndUpdate(
+      { user_id },
+      {
+        access_token,
+        refresh_token,
+        expires_in,
+        fecha_creacion: new Date(),
+        updatedAt: new Date(),
+      },
+      { upsert: true }
+    );
 
-      const [clienteId, senderId] = String(state).split('|');
-      await Cliente.findByIdAndUpdate(clienteId, {
-        user_id,
-        $addToSet: { sender_id: senderId },
-      });
+    // 3) Parsear state para determinar el flujo
+    const parts = String(state).split('|');
 
-      const clienteDoc = await Cliente.findById(clienteId).select('nombre').lean();
-      const nombre = clienteDoc?.nombre || '';
+    if (parts.length === 2) {
+      // Formato nuevo: tenantId|clienteId
+      const [tenantId, clienteId] = parts;
 
-      const url = new URL('https://linked.zupply.tech/');
-      if (nombre)   url.searchParams.set('cliente', nombre);
-      if (senderId) url.searchParams.set('sender',  senderId);
-      if (nickname) url.searchParams.set('nickname', nickname);
-
-      logger.info('OAuth callback (legacy)', {
-        clienteId,
-        user_id,
-        nickname,
-        request_id: req.requestId
-      });
-
-      return res.redirect(303, url.toString());
-    } else {
-      // 2b) Flujo multi-tenancy: guardar tokens EN EL TENANT
-      const tenant = await Tenant.findByIdAndUpdate(
-        tenantId,
-        {
-          'mlIntegration.accessToken': access_token,
-          'mlIntegration.refreshToken': refresh_token,
-          'mlIntegration.userId': user_id,
-          'mlIntegration.nickname': nickname,
-          'mlIntegration.expiresIn': expires_in,
-          'mlIntegration.tokenUpdatedAt': new Date(),
-          'mlIntegration.connected': true
-        },
+      // Actualizar user_id en el Cliente
+      const cliente = await Cliente.findOneAndUpdate(
+        { _id: clienteId, tenantId },
+        { user_id: String(user_id) },
         { new: true }
       );
 
-      if (!tenant) {
+      if (!cliente) {
         const u = new URL('https://linked.zupply.tech/');
         u.searchParams.set('ok', '0');
-        u.searchParams.set('msg', 'Tenant no encontrado');
+        u.searchParams.set('msg', 'Cliente no encontrado');
         return res.redirect(302, u.toString());
       }
 
-      // También guardar en Token para compatibilidad con código legacy
-      await Token.findOneAndUpdate(
-        { user_id },
-        {
-          access_token,
-          refresh_token,
-          expires_in,
-          fecha_creacion: new Date(),
-          updatedAt: new Date(),
-        },
-        { upsert: true }
-      );
-
-      logger.info('OAuth callback (multi-tenant)', {
+      logger.info('OAuth callback (cliente)', {
         tenantId,
-        tenant_name: tenant.nombre,
+        clienteId,
         user_id,
         nickname,
+        cliente_nombre: cliente.nombre,
         request_id: req.requestId
       });
 
       // Redirección a landing
       const url = new URL('https://linked.zupply.tech/');
-      url.searchParams.set('tenant', tenant.nombre);
+      url.searchParams.set('cliente', cliente.nombre);
       url.searchParams.set('nickname', nickname);
       url.searchParams.set('ok', '1');
+
+      return res.redirect(303, url.toString());
+
+    } else {
+      // Formato legacy: podría ser solo tenantId (viejo) o algo inesperado
+      // Intentar buscar como tenantId para compatibilidad temporal
+      const tenantId = parts[0];
+
+      // NO guardar en tenant.mlIntegration — solo logear warning
+      logger.warn('OAuth callback con state sin clienteId (legacy/deprecated)', {
+        state,
+        tenantId,
+        user_id,
+        nickname,
+        request_id: req.requestId
+      });
+
+      const url = new URL('https://linked.zupply.tech/');
+      url.searchParams.set('nickname', nickname);
+      url.searchParams.set('ok', '1');
+      url.searchParams.set('msg', 'Vinculado (formato legacy - regenerar link)');
 
       return res.redirect(303, url.toString());
     }
@@ -217,23 +162,30 @@ router.get('/callback', async (req, res) => {
    
   
 /* -------------------------------------------
- * Probar token (users/me)
+ * Probar token del tenant (busca clientes vinculados)
  * GET /api/auth/meli/ping
  * ----------------------------------------- */
 router.get('/ping', identifyTenant, async (req, res) => {
   try {
-    const tenant = req.tenant;
+    const tenantId = req.tenantId;
 
-    if (!tenant.mlIntegration?.accessToken) {
+    // Buscar clientes del tenant que tengan user_id (vinculados a ML)
+    const clientesVinculados = await Cliente.find({
+      tenantId,
+      user_id: { $exists: true, $ne: null }
+    }).select('nombre user_id').lean();
+
+    if (clientesVinculados.length === 0) {
       return res.status(400).json({
         ok: false,
-        error: 'Tenant no vinculado a MercadoLibre',
-        message: 'Primero debe conectar la cuenta de ML usando /connect'
+        error: 'No hay clientes vinculados a MercadoLibre en este tenant',
+        message: 'Primero vincule al menos un cliente usando el link de ML'
       });
     }
 
-    // Usar el token del tenant
-    const access_token = tenant.mlIntegration.accessToken;
+    // Probar el token del primer cliente vinculado
+    const primerCliente = clientesVinculados[0];
+    const access_token = await getValidToken(primerCliente.user_id);
 
     const r = await axios.get('https://api.mercadolibre.com/users/me', {
       headers: { Authorization: `Bearer ${access_token}` }
@@ -243,11 +195,13 @@ router.get('/ping', identifyTenant, async (req, res) => {
       ok: true,
       user_id: r.data.id,
       nickname: r.data.nickname,
+      cliente: primerCliente.nombre,
       tenant: {
-        id: tenant._id,
-        nombre: tenant.nombre,
-        slug: tenant.slug
-      }
+        id: req.tenant._id,
+        nombre: req.tenant.nombre,
+        slug: req.tenant.slug
+      },
+      total_vinculados: clientesVinculados.length
     });
   } catch (err) {
     logger.error('Ping token error', {
@@ -296,109 +250,56 @@ router.options('/webhook', cors());
 router.post('/webhook', cors(), async (req, res) => {
   const startTime = Date.now();
   try {
-    logger.info('[ML Webhook DEBUG] Headers', {
-      headers: req.headers,
-      hasAuth: !!req.headers?.authorization,
-      path: req.path,
-      baseUrl: req.baseUrl
-    });
-
     const { user_id, resource, topic } = req.body || {};
     res.status(200).json({ ok: true });           // respondé rápido
 
     if (topic !== 'shipments' || !resource || !user_id) return;
 
-    // Buscar el tenant por user_id
-    const tenant = await Tenant.findOne({
-      'mlIntegration.userId': user_id,
-      activo: true
-    });
+    // Buscar cliente por user_id (fuente de verdad para tokens ML)
+    const cliente = await Cliente.findOne({ user_id: String(user_id) }).populate('lista_precios');
 
-    if (!tenant) {
-      logger.warn('Webhook: Tenant not found for user_id', {
-        user_id,
-        request_id: req.requestId
-      });
-      // Intentar flujo legacy
-      const cliente = await Cliente.findOne({ user_id }).populate('lista_precios');
-      if (!cliente) return;
-
-      const shipmentId = String(resource.split('/').pop());
-
-      // Si tiene auto_ingesta, hacer ingesta completa (crear/actualizar envío)
-      if (cliente.auto_ingesta) {
-        logger.ml('Webhook received (legacy, auto_ingesta)', shipmentId, {
-          topic, resource, user_id, request_id: req.requestId
-        });
-        await ingestShipment({ shipmentId, cliente });
-        if (cliente.tenantId) {
-          await Envio.updateOne(
-            { meli_id: shipmentId },
-            { $set: { tenantId: cliente.tenantId } }
-          );
-        }
-      }
-
-      // Para TODOS los clientes (scan + auto_ingesta): hidratar historial
-      // si el envío ya existe en la DB (creado por scan o por ingesta)
-      const token = await getValidToken(cliente.user_id);
-      const envio = await Envio.findOne({ meli_id: shipmentId }).lean();
-      if (envio) {
-        logger.ml('Webhook: hydrating history (legacy)', shipmentId, {
-          auto_ingesta: !!cliente.auto_ingesta,
-          request_id: req.requestId
-        });
-        await ensureMeliHistory(envio._id, { token, force: true });
-      }
-
-      logger.ml('Webhook processed (legacy)', shipmentId, {
-        result: 'success',
-        auto_ingesta: !!cliente.auto_ingesta,
-        had_envio: !!envio,
-        duration_ms: Date.now() - startTime,
-        request_id: req.requestId
-      });
-      return;
-    }
-
-    // Flujo multi-tenant
-    if (!tenant.config?.autoIngesta) {
-      logger.info('Webhook: Auto-ingesta disabled for tenant', {
-        tenantId: tenant._id,
+    if (!cliente) {
+      logger.warn('Webhook: Cliente not found for user_id', {
         user_id,
         request_id: req.requestId
       });
       return;
     }
 
+    const tenantId = cliente.tenantId;
     const shipmentId = String(resource.split('/').pop());
-    logger.ml('Webhook received (multi-tenant)', shipmentId, {
-      topic,
-      resource,
-      user_id,
-      tenantId: tenant._id,
-      tenant_name: tenant.nombre,
-      request_id: req.requestId
-    });
 
-    // Procesar el webhook con el tenantId
-    // Buscar cliente asociado al tenant (por ahora mantener compatibilidad)
-    const cliente = await Cliente.findOne({ user_id }).populate('lista_precios');
-    if (cliente) {
-      await ingestShipment({ shipmentId, cliente, tenantId: tenant._id });
-
-      // Hidratar historial con el token del tenant
-      const token = tenant.mlIntegration.accessToken;
-      const envio = await Envio.findOne({ meli_id: shipmentId }).lean();
-      if (envio) await ensureMeliHistory(envio._id, { token, force: true });
+    // Si tiene auto_ingesta, hacer ingesta completa
+    if (cliente.auto_ingesta) {
+      logger.ml('Webhook received (auto_ingesta)', shipmentId, {
+        topic, resource, user_id, tenantId,
+        cliente_nombre: cliente.nombre,
+        request_id: req.requestId
+      });
+      await ingestShipment({ shipmentId, cliente, tenantId });
     }
 
-    logger.ml('Webhook processed (multi-tenant)', shipmentId, {
+    // Hidratar historial si el envío existe
+    const token = await getValidToken(String(user_id));
+    const envio = await Envio.findOne({ meli_id: shipmentId }).lean();
+    if (envio) {
+      logger.ml('Webhook: hydrating history', shipmentId, {
+        auto_ingesta: !!cliente.auto_ingesta,
+        request_id: req.requestId
+      });
+      await ensureMeliHistory(envio._id, { token, force: true });
+    }
+
+    logger.ml('Webhook processed', shipmentId, {
       result: 'success',
-      tenantId: tenant._id,
+      tenantId,
+      cliente_nombre: cliente.nombre,
+      auto_ingesta: !!cliente.auto_ingesta,
+      had_envio: !!envio,
       duration_ms: Date.now() - startTime,
       request_id: req.requestId
     });
+
   } catch (err) {
     logger.error('Webhook ML error', {
       error: err?.response?.data || err.message,
@@ -694,80 +595,77 @@ router.post('/backfill-all', async (req, res) => {
 });
 
 /* -------------------------------------------
- * Refresh token
+ * Refresh token de un cliente
  * POST /api/auth/meli/refresh-token
+ * Body: { clienteId: "..." } (opcional, si no se envía refresca todos)
  * ----------------------------------------- */
 router.post('/refresh-token', identifyTenant, async (req, res) => {
   try {
-    const tenant = req.tenant;
+    const { clienteId } = req.body;
+    const tenantId = req.tenantId;
 
-    if (!tenant.mlIntegration?.refreshToken) {
-      return res.status(400).json({
-        error: 'No hay refresh token disponible',
-        message: 'Primero debe conectar la cuenta de ML'
-      });
+    let clientes;
+    if (clienteId) {
+      const c = await Cliente.findOne({ _id: clienteId, tenantId, user_id: { $exists: true, $ne: null } });
+      if (!c) return res.status(404).json({ error: 'Cliente no encontrado o no vinculado' });
+      clientes = [c];
+    } else {
+      clientes = await Cliente.find({ tenantId, user_id: { $exists: true, $ne: null } });
     }
 
-    // Intercambiar refresh token por nuevos tokens
-    const body = new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      refresh_token: tenant.mlIntegration.refreshToken
-    });
-
-    const tokenRes = await axios.post(
-      'https://api.mercadolibre.com/oauth/token',
-      body.toString(),
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-    );
-
-    const { access_token, refresh_token, expires_in } = tokenRes.data;
-
-    // Actualizar los tokens en el tenant
-    await Tenant.findByIdAndUpdate(tenant._id, {
-      'mlIntegration.accessToken': access_token,
-      'mlIntegration.refreshToken': refresh_token,
-      'mlIntegration.expiresIn': expires_in,
-      'mlIntegration.tokenUpdatedAt': new Date()
-    });
-
-    // También actualizar Token para compatibilidad
-    if (tenant.mlIntegration.userId) {
-      await Token.findOneAndUpdate(
-        { user_id: tenant.mlIntegration.userId },
-        {
-          access_token,
-          refresh_token,
-          expires_in,
-          updatedAt: new Date()
-        },
-        { upsert: true }
-      );
+    if (clientes.length === 0) {
+      return res.status(400).json({ error: 'No hay clientes vinculados a ML' });
     }
 
-    logger.info('Token refreshed successfully', {
-      tenantId: tenant._id,
-      tenant_name: tenant.nombre,
-      request_id: req.requestId
-    });
+    const results = [];
+    for (const cliente of clientes) {
+      try {
+        const tokenDoc = await Token.findOne({ user_id: cliente.user_id });
+        if (!tokenDoc?.refresh_token) {
+          results.push({ cliente: cliente.nombre, ok: false, error: 'Sin refresh token' });
+          continue;
+        }
 
-    return res.json({
-      ok: true,
-      message: 'Token actualizado correctamente',
-      expiresIn: expires_in
-    });
+        const body = new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: CLIENT_ID,
+          client_secret: CLIENT_SECRET,
+          refresh_token: tokenDoc.refresh_token
+        });
+
+        const tokenRes = await axios.post(
+          'https://api.mercadolibre.com/oauth/token',
+          body.toString(),
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+        );
+
+        const { access_token, refresh_token, expires_in } = tokenRes.data;
+
+        await Token.findOneAndUpdate(
+          { user_id: cliente.user_id },
+          { access_token, refresh_token, expires_in, updatedAt: new Date() },
+          { upsert: true }
+        );
+
+        results.push({ cliente: cliente.nombre, ok: true, expiresIn: expires_in });
+
+        logger.info('Token refreshed for cliente', {
+          tenantId, clienteId: cliente._id, cliente_nombre: cliente.nombre,
+          request_id: req.requestId
+        });
+      } catch (err) {
+        results.push({ cliente: cliente.nombre, ok: false, error: err.response?.data?.message || err.message });
+      }
+    }
+
+    return res.json({ ok: true, results });
   } catch (err) {
     logger.error('Refresh token error', {
       error: err.response?.data || err.message,
       stack: err.stack,
       request_id: req.requestId
     });
-    return res.status(500).json({
-      ok: false,
-      error: 'Error al refrescar token',
-      message: err.response?.data?.message || err.message
-    });
+    return res.status(500).json({ ok: false, error: err.response?.data?.message || err.message });
   }
 });
 
