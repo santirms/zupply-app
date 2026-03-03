@@ -7,5 +7,12 @@ const identifyTenant = require('../middlewares/identifyTenant');
 router.post('/login', identifyTenant, ctrl.login);
 router.post('/logout', ctrl.logout);
 router.get('/me', autenticarToken, ctrl.me);
+// Verificar tenant para app móvil
+router.get('/tenant-info', identifyTenant, (req, res) => {
+  res.json({ 
+    ok: true,
+    name: req.tenantId
+  });
+});
 
 module.exports = router;
