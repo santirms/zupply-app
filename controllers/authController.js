@@ -45,7 +45,22 @@ async function login(req, res, next) {
 
     // al final del login, antes de responder:
     const map = { chofer: '/mis-envios.html', coordinador: '/index.html', admin: '/index.html', cliente: '/client-panel.html' };
-    return res.json({ ok: true, role: user.role, redirectTo: map[user.role] || '/index.html' });
+
+    return res.json({ 
+    ok: true, 
+    role: user.role, 
+    redirectTo: map[user.role] || '/index.html',
+    // Campos adicionales para app móvil:
+    user: {
+    _id: user._id,
+    username: user.username,
+    name: user.username,
+    email: user.email,
+    role: user.role,
+    driver_id: user.driver_id || null
+  },
+  sessionId: req.sessionID
+});
     } catch (e) { next(e); }
 }
 
