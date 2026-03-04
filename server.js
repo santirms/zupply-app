@@ -51,6 +51,7 @@ app.get('/auth/login', (_req, res) => {
 
 // Auth público (login/logout)
 app.use('/auth', require('./routes/auth'));
+app.use('/api/auth', require('./routes/auth'));
 app.use('/api/tracking', trackingRoutes);
 
 const trackHtmlPath = path.join(__dirname, 'public', 'track.html');
