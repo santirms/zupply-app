@@ -276,6 +276,7 @@ router.post('/webhook', cors(), async (req, res) => {
         cliente_nombre: cliente.nombre,
         request_id: req.requestId
       });
+      const mlToken = await getValidToken(String(user_id));
       await ingestShipment({ shipmentId, cliente, tenantId });
     }
 
