@@ -70,6 +70,7 @@ app.get('/track/:tracking?', (_req, res) => {
 app.use((req, res, next) => {
   // Permitir auth y archivos públicos
   if (req.path.startsWith('/auth')) return next();
+  if (req.path.startsWith('/api/auth')) return next();
   if (req.path.startsWith('/api/auth/meli')) return next();
   if (req.path.startsWith('/auth/meli')) return next();
   if (req.path.startsWith('/api/auth/tn')) return next();
@@ -82,6 +83,29 @@ app.use((req, res, next) => {
     req.path === '/js/track.js'
   ) return next();
   if (req.session?.user) return next();
+
+  // NUEVO: Soporte para app móvil - recuperar sesión desde header Authorization
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const sessionId = authHeader.substring(7);
+    // Intentar cargar la sesión desde MongoDB
+    try {
+      const MongoStore = require('connect-mongo');
+      const sessionStore = req.sessionStore;
+      const sessionData = await new Promise((resolve, reject) => {
+        sessionStore.get(sessionId, (err, session) => {
+          if (err) reject(err);
+          else resolve(session);
+        });
+      });
+      if (sessionData?.user) {
+        req.session.user = sessionData.user;
+        return next();
+      }
+    } catch (e) {
+      console.log('Error recuperando sesión móvil:', e.message);
+    }
+  }
 
   // HTML → redirige a login, API → 401 JSON
   if (req.accepts('html')) return res.redirect('/auth/login');
