@@ -277,7 +277,7 @@ router.post('/webhook', cors(), async (req, res) => {
         request_id: req.requestId
       });
       const mlToken = await getValidToken(String(user_id));
-      await ingestShipment({ shipmentId, cliente, tenantId });
+      await ingestShipment({ shipmentId, cliente, tenantId, mlToken });
     }
 
     // Hidratar historial si el envío existe
