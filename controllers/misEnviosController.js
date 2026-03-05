@@ -242,7 +242,7 @@ exports.getEnviosActivos = async (req, res) => {
         { chofer_id: choferId },
         { driver_id: choferId }
       ],
-      meli_id: { $in: [null, ''] },
+     
       estado: {
         $nin: ['entregado', 'cancelado', 'devolucion']
       }
@@ -277,7 +277,7 @@ exports.getEnviosActivos = async (req, res) => {
     const envios = await Envio.find(query)
       .populate('cliente_id', 'nombre razon_social telefono')
       .populate('chofer', 'nombre email')
-      .select('id_venta destinatario direccion piso_dpto partido codigo_postal cp estado fecha referencia precio telefono requiereFirma cobroEnDestino latitud longitud destino _id')
+      .select('id_venta destinatario direccion piso_dpto partido codigo_postal cp estado fecha referencia precio telefono requiereFirma cobroEnDestino latitud longitud destino meli_id tn_order_id _id')
       .sort({ fecha: -1 })
       .lean();
 
