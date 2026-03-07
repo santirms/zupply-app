@@ -523,13 +523,14 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
       y = 90;
 
       // Columnas del detalle
-      const dCol = { tracking: 180, zona: 180, precio: 120 };
+      const dCol = { tracking: 150, fecha: 80, zona: 150, precio: 100 };
 
       // Header de columnas
       doc.save().rect(marginLeft, y - 3, pageWidth, 16).fill('#F3F4F6').restore();
       doc.font('Helvetica-Bold').fontSize(8).fillColor('#374151');
       cx = marginLeft + 10;
       doc.text('Tracking / ID', cx, y); cx += dCol.tracking;
+      doc.text('Fecha', cx, y); cx += dCol.fecha;
       doc.text('Zona', cx, y); cx += dCol.zona;
       doc.text('Precio', cx, y, { width: dCol.precio, align: 'right' });
       y += 16;
@@ -549,6 +550,7 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
           doc.font('Helvetica-Bold').fontSize(8).fillColor('#374151');
           cx = marginLeft + 10;
           doc.text('Tracking / ID', cx, y); cx += dCol.tracking;
+          doc.text('Fecha', cx, y); cx += dCol.fecha;
           doc.text('Zona', cx, y); cx += dCol.zona;
           doc.text('Precio', cx, y, { width: dCol.precio, align: 'right' });
           y += 16;
@@ -573,6 +575,7 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
             doc.font('Helvetica-Bold').fontSize(8).fillColor('#374151');
             cx = marginLeft + 10;
             doc.text('Tracking / ID', cx, y); cx += dCol.tracking;
+            doc.text('Fecha', cx, y); cx += dCol.fecha;
             doc.text('Zona', cx, y); cx += dCol.zona;
             doc.text('Precio', cx, y, { width: dCol.precio, align: 'right' });
             y += 16;
@@ -591,6 +594,7 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
           doc.font('Helvetica').fontSize(7.5).fillColor('#374151');
           cx = marginLeft + 10;
           doc.text(env.tracking || '-', cx, y, { width: dCol.tracking - 10 }); cx += dCol.tracking;
+          doc.text(env.fecha ? fmtFechaCorta(env.fecha) : '-', cx, y, { width: dCol.fecha - 5 }); cx += dCol.fecha;
           doc.text(env.zona || '-', cx, y, { width: dCol.zona - 10 }); cx += dCol.zona;
           doc.text(fmtARS(precio), cx, y, { width: dCol.precio, align: 'right' });
           y += 13;
