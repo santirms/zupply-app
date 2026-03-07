@@ -193,7 +193,7 @@ function setSemanaAnterior() {
   const lunesAnterior = new Date(lunesEsta);
   lunesAnterior.setDate(lunesEsta.getDate() - 7);
   const sabadoAnterior = new Date(lunesAnterior);
-  sabadoAnterior.setDate(lunesAnterior.getDate() + 5);
+  sabadoAnterior.setDate(lunesAnterior.getDate() + 6);
 
   const fmt = d => d.toISOString().split('T')[0];
   qs('#desde').value = fmt(lunesAnterior);
