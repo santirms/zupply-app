@@ -355,16 +355,16 @@ router.post('/presupuesto', requireAuth, async (req, res) => {
     };
 
     const fmtFecha = (f) => {
-      if (!f) return '-';
-      const d = new Date(f);
-      return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    };
-
-    const fmtFechaCorta = (f) => {
-      if (!f) return '-';
-      const d = new Date(f);
-      return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    };
+  if (!f) return '-';
+  const d = new Date(f);
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' });
+};
+const fmtFechaCorta = (f) => {
+  if (!f) return '-';
+  const d = new Date(f);
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' });
+};
+;
 
     // ══════════════════════════════════════════════
     // PÁGINA 1: PRESUPUESTO RESUMEN
