@@ -248,7 +248,7 @@ router.get('/resumen', async (req, res) => {
 router.post('/presupuesto', requireAuth, async (req, res) => {
   try {
     const { periodo, lines = [], totalGeneral = 0, clienteId, envios: enviosDetalle = [] } = req.body || {};
-
+    console.log('PDF periodo recibido:', JSON.stringify(periodo));
     // 1. Cargar tenant (emisor)
     const tenantId = req.session?.user?.tenantId || req.tenantId;
     const tenant = await Tenant.findById(tenantId).select('companyName settings fiscal').lean();
