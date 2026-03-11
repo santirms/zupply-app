@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Zupply | Devoluciones a Clientes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/svg+xml" href="/assets/icon-zupply.svg">
+
+  <script>window.tailwind=window.tailwind||{};window.tailwind.config={darkMode:"class"};</script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+    (function(){
+      try{
+        const saved=localStorage.getItem('zpl_theme');
+        const prefersDark=matchMedia('(prefers-color-scheme: dark)').matches;
+        const wantDark=(saved==='dark')||((!saved||saved==='system')&&prefersDark);
+        document.documentElement.classList.toggle('dark',wantDark);
+        if(!saved) localStorage.setItem('zpl_theme','system');
+      }catch{}
+    })();
+  </script>
+
+  <style>
+    :root{ --z-primary:#F59E0B; --z-primary-dark:#D97706; --z-primary-fg:#111827; }
+    #reader{position:relative}
+    .scan-overlay{position:absolute;inset:0;pointer-events:none;display:grid;place-items:center;z-index:50}
+    .reticle{width:280px;height:280px;border:2px solid rgba(255,255,255,.7);border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.35);position:relative;overflow:hidden}
+    .scanline{position:absolute;left:0;right:0;height:2px;top:0;background:linear-gradient(to right,transparent,rgba(0,255,128,.9),transparent);animation:scan 2.4s linear infinite}
+    @keyframes scan{0%{transform:translateY(8px);opacity:.9}50%{transform:translateY(270px);opacity:.6}100%{transform:translateY(8px);opacity:.9}}
+  </style>
+
+  <!-- html5-qrcode -->
+  <script>
+    (function(){
+      const urls=['/libs/html5-qrcode.min.js',
+        'https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js',
+        'https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js'];
+      (function next(i){
+        if(i>=urls.length) return console.warn('html5-qrcode NO disp.');
+        const s=document.createElement('script'); s.src=urls[i]; s.defer=true; s.crossOrigin='anonymous';
+        s.onload=()=>console.log('html5-qrcode OK ->',urls[i]);
+        s.onerror=()=>{console.warn('falló',urls[i]);next(i+1);};
+        document.head.appendChild(s);
+      })(0);
+    })();
+  </script>
+</head>
+
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0A1324] dark:text-slate-100 font-sans min-h-screen">
+  <div class="max-w-7xl mx-auto p-4 md:p-6">
+
+    <!-- TOPBAR -->
+    <header class="sticky top-0 z-40 mb-4">
+      <div class="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0B1020]/70 backdrop-blur px-4 py-3 flex items-center gap-3">
+        <a href="#" id="logoLink" class="flex items-center gap-3" title="Inicio">
+          <img src="/assets/icon-zupply.svg" alt="Z" class="h-8 w-8 sm:hidden">
+          <img src="/assets/logo-zupply.svg" class="h-5 hidden sm:block" onerror="this.remove()">
+        </a>
+        <div class="ml-2 h-6 w-px bg-slate-300/70 dark:bg-white/10"></div>
+        <span class="text-sm opacity-80">Devoluciones a Clientes</span>
+
+        <div class="ml-auto flex items-center gap-2">
+          <div class="relative" id="userMenuWrap">
+            <button id="userBtn" class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-200/60 dark:bg-white/10">&#x1F464;</span>
+              <span id="username" class="max-w-[160px] truncate">Usuario</span>
+              <span class="opacity-70">&#9662;</span>
+            </button>
+            <div id="userMenu" class="hidden absolute right-0 mt-2 w-56 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1020]/90 backdrop-blur p-1 shadow-lg z-50">
+              <a href="#" id="homeLink" class="block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">Volver al inicio</a>
+              <a href="/configuracion.html" id="configLink" class="hidden block w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">Configuracion</a>
+              <div id="menuDivider" class="my-1 h-px bg-slate-200 dark:bg-white/10"></div>
+              <button id="logoutBtn" class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-white/10 text-sm">Cerrar sesion</button>
+            </div>
+          </div>
+          <button id="themeBtn" class="px-3 py-1.5 rounded-xl text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 text-slate-700 dark:bg-white/10 dark:hover:bg-white/15 dark:text-slate-100">Tema: auto</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- CONTENIDO -->
+    <main class="space-y-6">
+
+      <!-- Selección de cliente y chofer -->
+      <section class="rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium mb-1">Cliente</label>
+            <select id="clienteSelect" class="w-full border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 rounded-xl px-3 py-2 text-sm">
+              <option value="">Seleccionar cliente...</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Chofer / Transportista</label>
+            <select id="choferSelect" class="w-full border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 rounded-xl px-3 py-2 text-sm">
+              <option value="">Seleccionar chofer...</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- Paquetes disponibles para devolución -->
+      <section class="rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4">
+        <h2 class="text-base font-semibold mb-3">Paquetes disponibles para devolucion</h2>
+        <p id="pendientesInfo" class="text-sm opacity-70 mb-3">Selecciona un cliente para ver sus paquetes devolvibles.</p>
+        <div id="pendientesList" class="max-h-64 overflow-y-auto space-y-1"></div>
+        <div class="mt-3 flex gap-2">
+          <button id="selectAllBtn" class="hidden px-3 py-1.5 rounded-xl text-xs border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15">Seleccionar todos</button>
+          <button id="addSelectedBtn" class="hidden px-3 py-1.5 rounded-xl text-xs font-medium bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">Agregar seleccionados a devolucion</button>
+        </div>
+      </section>
+
+      <!-- Escáner QR -->
+      <section class="rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4">
+        <h2 class="text-base font-semibold mb-3">Escanear paquete</h2>
+        <div class="flex flex-wrap items-center gap-4 mb-3">
+          <label class="inline-flex items-center gap-2 text-sm">
+            <input type="radio" name="modoScan" value="camara" checked />
+            <span>Camara</span>
+          </label>
+          <label class="inline-flex items-center gap-2 text-sm">
+            <input type="radio" name="modoScan" value="teclado" />
+            <span>Lector USB / teclado</span>
+          </label>
+        </div>
+
+        <!-- Cámara -->
+        <div id="camaraContainer">
+          <div class="flex items-center gap-2 mb-3">
+            <button id="startBtn" class="px-4 py-2 rounded-xl font-medium shadow-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)] text-sm">Iniciar camara</button>
+            <button id="stopBtn" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 dark:border-white/10 dark:text-slate-100 dark:bg-white/10 dark:hover:bg-white/15 text-sm" disabled>Detener</button>
+          </div>
+          <div id="reader" class="rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 relative" style="max-width:400px"></div>
+        </div>
+
+        <!-- Teclado/Manual -->
+        <div id="tecladoContainer" class="hidden">
+          <p class="text-sm opacity-80 mb-2">Escaneá con tu lector o escribí el tracking manualmente.</p>
+          <div class="flex gap-2">
+            <input id="manualInput" class="flex-1 border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 rounded-xl px-3 py-2 text-sm" placeholder="Tracking ID o JSON del QR" />
+            <button id="manualAddBtn" class="px-4 py-2 rounded-xl font-medium text-sm bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)]">Agregar</button>
+          </div>
+        </div>
+        <p id="scanStatus" class="text-sm opacity-70 mt-2"></p>
+      </section>
+
+      <!-- Lista de devolución (escaneados) -->
+      <section class="rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4">
+        <h2 class="text-base font-semibold mb-3">Lista de devolucion</h2>
+        <div id="devolucionList" class="space-y-1"></div>
+        <p id="devolucionEmpty" class="text-sm opacity-60">No hay paquetes en la lista de devolucion.</p>
+        <div id="devolucionTotal" class="hidden mt-3 text-sm font-semibold">Total: <span id="totalCount">0</span> paquetes</div>
+      </section>
+
+      <!-- Acciones -->
+      <section class="rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-4 flex flex-wrap gap-3">
+        <button id="generarRemitoBtn" disabled class="px-5 py-2.5 rounded-xl font-medium text-sm border border-slate-300 dark:border-white/10 bg-white hover:bg-slate-50 dark:bg-white/10 dark:hover:bg-white/15 disabled:opacity-40 disabled:cursor-not-allowed">Generar Remito PDF</button>
+        <button id="confirmarBtn" disabled class="px-5 py-2.5 rounded-xl font-medium text-sm bg-green-600 hover:bg-green-700 text-white disabled:opacity-40 disabled:cursor-not-allowed">Confirmar Devolucion</button>
+      </section>
+
+    </main>
+
+    <footer class="py-6 text-center text-xs opacity-60">&copy; <span id="anio"></span> Zupply</footer>
+  </div>
+
+  <script>
+  (function(){
+    // ===== Estado global =====
+    let clientes = [];
+    let choferes = [];
+    let pendientes = []; // envíos disponibles para devolución
+    let devolucion = []; // envíos seleccionados para devolver
+    let html5QrCode = null;
+    let scanning = false;
+    let nroRemitoGenerado = null;
+
+    const $  = id => document.getElementById(id);
+    const clienteSelect   = $('clienteSelect');
+    const choferSelect    = $('choferSelect');
+    const pendientesList  = $('pendientesList');
+    const pendientesInfo  = $('pendientesInfo');
+    const selectAllBtn    = $('selectAllBtn');
+    const addSelectedBtn  = $('addSelectedBtn');
+    const devolucionList  = $('devolucionList');
+    const devolucionEmpty = $('devolucionEmpty');
+    const devolucionTotal = $('devolucionTotal');
+    const totalCount      = $('totalCount');
+    const generarRemitoBtn = $('generarRemitoBtn');
+    const confirmarBtn    = $('confirmarBtn');
+    const scanStatus      = $('scanStatus');
+    const manualInput     = $('manualInput');
+    const startBtn        = $('startBtn');
+    const stopBtn         = $('stopBtn');
+
+    // ===== Inicialización =====
+    document.getElementById('anio').textContent = new Date().getFullYear();
+
+    // User menu
+    (function(){
+      const btn=$('userBtn'), menu=$('userMenu'), wrap=$('userMenuWrap');
+      btn.addEventListener('click',()=>menu.classList.toggle('hidden'));
+      document.addEventListener('click',e=>{if(!wrap.contains(e.target))menu.classList.add('hidden');});
+      $('logoutBtn').addEventListener('click',async()=>{try{await fetch('/auth/logout',{method:'POST'})}catch{};localStorage.removeItem('zpl_auth');location.href='/auth/login';});
+
+      function getHomeRoute(role){
+        switch(role){
+          case 'cliente': return '/client-panel.html';
+          case 'admin': case 'coordinador': return '/index.html';
+          case 'chofer': return '/mis-envios.html';
+          default: return '/';
+        }
+      }
+
+      fetch('/api/auth/me',{credentials:'include'}).then(r=>r.json()).then(u=>{
+        if(!u||!u.email){location.href='/auth/login';return;}
+        $('username').textContent=u.nombre||u.email;
+        const home=getHomeRoute(u.role||u.tipo);
+        $('logoLink').href=home;
+        $('homeLink').href=home;
+        if(u.role==='admin') $('configLink').classList.remove('hidden');
+      }).catch(()=>{location.href='/auth/login';});
+    })();
+
+    // Tema
+    (function(){
+      const btn=$('themeBtn');
+      const modes=['system','light','dark'];
+      let idx=modes.indexOf(localStorage.getItem('zpl_theme')||'system');
+      function apply(){
+        const m=modes[idx];
+        localStorage.setItem('zpl_theme',m);
+        const prefersDark=matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark',m==='dark'||(m==='system'&&prefersDark));
+        btn.textContent='Tema: '+m;
+      }
+      apply();
+      btn.addEventListener('click',()=>{idx=(idx+1)%modes.length;apply();});
+    })();
+
+    // ===== Cargar datos iniciales =====
+    async function loadClientes(){
+      try{
+        const r=await fetch('/api/clientes',{credentials:'include'});
+        clientes=await r.json();
+        clienteSelect.innerHTML='<option value="">Seleccionar cliente...</option>';
+        clientes.forEach(c=>{
+          const opt=document.createElement('option');
+          opt.value=c._id;
+          opt.textContent=`${c.nombre}${c.codigo_cliente?' ('+c.codigo_cliente+')':''}`;
+          clienteSelect.appendChild(opt);
+        });
+      }catch(e){console.error('Error cargando clientes:',e);}
+    }
+
+    async function loadChoferes(){
+      try{
+        const r=await fetch('/api/choferes',{credentials:'include'});
+        choferes=await r.json();
+        choferSelect.innerHTML='<option value="">Seleccionar chofer...</option>';
+        choferes.forEach(c=>{
+          const opt=document.createElement('option');
+          opt.value=c._id;
+          opt.textContent=c.nombre;
+          choferSelect.appendChild(opt);
+        });
+      }catch(e){console.error('Error cargando choferes:',e);}
+    }
+
+    loadClientes();
+    loadChoferes();
+
+    // ===== Cargar pendientes al seleccionar cliente =====
+    clienteSelect.addEventListener('change', async()=>{
+      const clienteId = clienteSelect.value;
+      pendientes = [];
+      devolucion = [];
+      nroRemitoGenerado = null;
+      renderPendientes();
+      renderDevolucion();
+
+      if(!clienteId){
+        pendientesInfo.textContent='Selecciona un cliente para ver sus paquetes devolvibles.';
+        return;
+      }
+
+      pendientesInfo.textContent='Cargando...';
+      try{
+        const r=await fetch(`/api/devoluciones/pendientes?clienteId=${clienteId}`,{credentials:'include'});
+        const data=await r.json();
+        if(!r.ok) throw new Error(data.error||'Error');
+        pendientes=data.items||[];
+        if(!pendientes.length){
+          pendientesInfo.textContent='No hay paquetes devolvibles para este cliente.';
+        } else {
+          pendientesInfo.textContent=`${pendientes.length} paquete(s) disponible(s) para devolucion.`;
+        }
+        renderPendientes();
+      }catch(e){
+        pendientesInfo.textContent='Error al cargar paquetes: '+e.message;
+      }
+    });
+
+    // ===== Renderizar lista de pendientes =====
+    function renderPendientes(){
+      pendientesList.innerHTML='';
+      const devIds = new Set(devolucion.map(e=>e._id));
+
+      // Filtrar los que ya están en la lista de devolución
+      const available = pendientes.filter(e=>!devIds.has(e._id));
+
+      if(!available.length){
+        selectAllBtn.classList.add('hidden');
+        addSelectedBtn.classList.add('hidden');
+        return;
+      }
+
+      selectAllBtn.classList.remove('hidden');
+      addSelectedBtn.classList.remove('hidden');
+
+      available.forEach(e=>{
+        const row = document.createElement('label');
+        row.className='flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer text-sm';
+        row.innerHTML=`
+          <input type="checkbox" class="pendiente-cb" data-id="${e._id}" />
+          <span class="font-mono text-xs">${e.id_venta||e.meli_id||'-'}</span>
+          <span class="opacity-70">|</span>
+          <span class="capitalize">${e.estado.replace(/_/g,' ')}</span>
+          <span class="opacity-70">|</span>
+          <span>${e.destinatario||'-'}</span>
+          <span class="opacity-70">|</span>
+          <span class="text-xs opacity-60">${e.partido||''}</span>
+        `;
+        pendientesList.appendChild(row);
+      });
+    }
+
+    // Seleccionar todos
+    selectAllBtn.addEventListener('click',()=>{
+      document.querySelectorAll('.pendiente-cb').forEach(cb=>cb.checked=true);
+    });
+
+    // Agregar seleccionados
+    addSelectedBtn.addEventListener('click',()=>{
+      const checked = document.querySelectorAll('.pendiente-cb:checked');
+      const ids = new Set([...checked].map(cb=>cb.dataset.id));
+      const devIds = new Set(devolucion.map(e=>e._id));
+
+      pendientes.forEach(e=>{
+        if(ids.has(e._id) && !devIds.has(e._id)){
+          devolucion.push(e);
+        }
+      });
+
+      renderPendientes();
+      renderDevolucion();
+    });
+
+    // ===== Renderizar lista de devolución =====
+    function renderDevolucion(){
+      devolucionList.innerHTML='';
+      nroRemitoGenerado = null; // reset al cambiar la lista
+
+      if(!devolucion.length){
+        devolucionEmpty.classList.remove('hidden');
+        devolucionTotal.classList.add('hidden');
+        generarRemitoBtn.disabled=true;
+        confirmarBtn.disabled=true;
+        return;
+      }
+
+      devolucionEmpty.classList.add('hidden');
+      devolucionTotal.classList.remove('hidden');
+      totalCount.textContent=devolucion.length;
+      generarRemitoBtn.disabled=false;
+      confirmarBtn.disabled=false;
+
+      devolucion.forEach((e,idx)=>{
+        const row = document.createElement('div');
+        row.className='flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 dark:bg-white/5 text-sm';
+        row.innerHTML=`
+          <span class="font-mono text-xs w-6 text-right opacity-60">${idx+1}</span>
+          <span class="font-mono text-xs">${e.id_venta||e.meli_id||'-'}</span>
+          <span class="opacity-70">|</span>
+          <span>${e.destinatario||'-'}</span>
+          <span class="opacity-70">|</span>
+          <span class="capitalize text-xs">${e.estado.replace(/_/g,' ')}</span>
+          <button class="ml-auto text-red-500 hover:text-red-700 text-xs font-bold px-2" data-rm="${e._id}" title="Quitar">&times;</button>
+        `;
+        row.querySelector('[data-rm]').addEventListener('click',()=>{
+          devolucion = devolucion.filter(d=>d._id!==e._id);
+          renderPendientes();
+          renderDevolucion();
+        });
+        devolucionList.appendChild(row);
+      });
+    }
+
+    // ===== Escáner QR =====
+    // Modo cámara / teclado
+    document.querySelectorAll('[name="modoScan"]').forEach(r=>{
+      r.addEventListener('change',()=>{
+        const cam = r.value==='camara';
+        $('camaraContainer').classList.toggle('hidden',!cam);
+        $('tecladoContainer').classList.toggle('hidden',cam);
+        if(!cam && scanning) stopScanner();
+      });
+    });
+
+    function parseQR(text){
+      // Intentar parsear JSON: {"tracking_id":"...","sender_id":"..."}
+      try{
+        const obj=JSON.parse(text);
+        return obj.tracking_id || obj.id_venta || obj.meli_id || text;
+      }catch{
+        return text.trim();
+      }
+    }
+
+    function addByTracking(trackingRaw){
+      const tracking = parseQR(trackingRaw);
+      if(!tracking){
+        scanStatus.textContent='Codigo vacio';
+        return;
+      }
+
+      // Buscar en pendientes
+      const found = pendientes.find(e =>
+        (e.id_venta && e.id_venta === tracking) ||
+        (e.meli_id && e.meli_id === tracking)
+      );
+
+      if(!found){
+        scanStatus.textContent=`No encontrado entre los paquetes del cliente: ${tracking}`;
+        return;
+      }
+
+      // Ya en la lista?
+      if(devolucion.some(d=>d._id===found._id)){
+        scanStatus.textContent=`Ya esta en la lista: ${tracking}`;
+        return;
+      }
+
+      devolucion.push(found);
+      scanStatus.textContent=`Agregado: ${tracking} - ${found.destinatario||''}`;
+      renderPendientes();
+      renderDevolucion();
+    }
+
+    // Cámara
+    startBtn.addEventListener('click', async ()=>{
+      if(!clienteSelect.value){
+        alert('Primero selecciona un cliente');
+        return;
+      }
+      if(typeof Html5Qrcode==='undefined'){
+        alert('Libreria QR no disponible');
+        return;
+      }
+      try{
+        html5QrCode = new Html5Qrcode('reader');
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          { fps:10, qrbox:{ width:280, height:280 }, aspectRatio:1 },
+          (decoded)=>{
+            addByTracking(decoded);
+          },
+          ()=>{}
+        );
+        scanning=true;
+        startBtn.disabled=true;
+        stopBtn.disabled=false;
+
+        // Agregar overlay
+        const overlay = document.createElement('div');
+        overlay.className='scan-overlay';
+        overlay.innerHTML='<div class="reticle"><div class="scanline"></div></div>';
+        $('reader').appendChild(overlay);
+      }catch(e){
+        console.error('Error cámara:',e);
+        scanStatus.textContent='Error al iniciar cámara: '+e;
+      }
+    });
+
+    stopBtn.addEventListener('click', stopScanner);
+
+    async function stopScanner(){
+      if(html5QrCode && scanning){
+        try{ await html5QrCode.stop(); }catch{}
+        scanning=false;
+        startBtn.disabled=false;
+        stopBtn.disabled=true;
+        const overlay = $('reader').querySelector('.scan-overlay');
+        if(overlay) overlay.remove();
+      }
+    }
+
+    // Modo manual / teclado
+    manualInput.addEventListener('keydown', e=>{
+      if(e.key==='Enter'){
+        e.preventDefault();
+        if(!clienteSelect.value){
+          alert('Primero selecciona un cliente');
+          return;
+        }
+        addByTracking(manualInput.value);
+        manualInput.value='';
+      }
+    });
+    $('manualAddBtn').addEventListener('click',()=>{
+      if(!clienteSelect.value){
+        alert('Primero selecciona un cliente');
+        return;
+      }
+      addByTracking(manualInput.value);
+      manualInput.value='';
+    });
+
+    // ===== Generar Remito PDF =====
+    generarRemitoBtn.addEventListener('click', async()=>{
+      if(!devolucion.length) return;
+      const clienteId = clienteSelect.value;
+      const choferId = choferSelect.value || null;
+
+      generarRemitoBtn.disabled=true;
+      generarRemitoBtn.textContent='Generando...';
+
+      try{
+        const r = await fetch('/api/devoluciones/remito',{
+          method:'POST',
+          credentials:'include',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            clienteId,
+            choferId,
+            envioIds: devolucion.map(e=>e._id)
+          })
+        });
+
+        if(!r.ok){
+          const err = await r.json().catch(()=>({}));
+          throw new Error(err.error||'Error al generar remito');
+        }
+
+        // Abrir PDF en nueva pestaña
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        window.open(url,'_blank');
+
+        // Guardar nro remito (timestamp-based)
+        nroRemitoGenerado = String(Date.now()).slice(-8);
+        scanStatus.textContent=`Remito #${nroRemitoGenerado} generado correctamente.`;
+      }catch(e){
+        alert('Error: '+e.message);
+      }finally{
+        generarRemitoBtn.disabled=false;
+        generarRemitoBtn.textContent='Generar Remito PDF';
+      }
+    });
+
+    // ===== Confirmar Devolución =====
+    confirmarBtn.addEventListener('click', async()=>{
+      if(!devolucion.length) return;
+      const clienteId = clienteSelect.value;
+      const choferId = choferSelect.value || null;
+
+      if(!confirm(`Se marcaran ${devolucion.length} paquete(s) como "devuelto a cliente". Esta accion no se puede deshacer. Continuar?`)) return;
+
+      confirmarBtn.disabled=true;
+      confirmarBtn.textContent='Procesando...';
+
+      try{
+        const r = await fetch('/api/devoluciones/confirmar',{
+          method:'POST',
+          credentials:'include',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            clienteId,
+            choferId,
+            envioIds: devolucion.map(e=>e._id),
+            nroRemito: nroRemitoGenerado || null
+          })
+        });
+
+        const data = await r.json();
+        if(!r.ok) throw new Error(data.error||'Error al confirmar');
+
+        alert(`Devolucion confirmada. ${data.updated} paquete(s) actualizado(s). Remito #${data.nroRemito}`);
+
+        // Limpiar lista
+        devolucion = [];
+        nroRemitoGenerado = null;
+        // Recargar pendientes
+        clienteSelect.dispatchEvent(new Event('change'));
+      }catch(e){
+        alert('Error: '+e.message);
+      }finally{
+        confirmarBtn.disabled=false;
+        confirmarBtn.textContent='Confirmar Devolucion';
+      }
+    });
+
+  })();
+  </script>
+</body>
+</html>

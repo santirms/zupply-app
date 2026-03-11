@@ -89,7 +89,7 @@ const envioSchema = new Schema({
     enum: [
       'pendiente','asignado','en_planta','en_camino','demorado',
       'reprogramado','no_entregado','comprador_ausente','inaccesible','direccion_erronea',
-      'entregado','rechazado','cancelado','llega_pronto','devolucion'
+      'entregado','rechazado','cancelado','llega_pronto','devolucion','devuelto_a_cliente'
     ],
     default: 'pendiente'
   },
