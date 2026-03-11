@@ -1,7 +1,9 @@
 // routes/clientes.js
 const express = require('express');
 const router  = express.Router();
+const crypto  = require('crypto');
 const Cliente = require('../models/Cliente');
+const PkceStore = require('../models/Pkce');
 const { requireAuth, requireRole } = require('../middlewares/auth');
 const identifyTenant = require('../middlewares/identifyTenant');
 
@@ -138,12 +140,28 @@ router.get('/:id/meli-link', async (req, res) => {
       return res.status(500).json({ error: 'MERCADOLIBRE_REDIRECT_URI no seteado' });
     }
 
+    // Generar PKCE
+    const code_verifier = crypto.randomBytes(32).toString('base64url');
+    const code_challenge = crypto
+      .createHash('sha256')
+      .update(code_verifier)
+      .digest('base64url');
+
+    // Guardar code_verifier asociado al state (TTL 10 min)
+    await PkceStore.create({
+      state: `${req.tenantId}|${id}`,
+      code_verifier,
+      createdAt: new Date()
+    });
+
     const url =
       `https://auth.mercadolibre.com.ar/authorization` +
       `?response_type=code` +
       `&client_id=${process.env.MERCADOLIBRE_CLIENT_ID}` +
       `&redirect_uri=${encodeURIComponent(redirect)}` +
-      `&state=${encodeURIComponent(state)}`;
+      `&state=${encodeURIComponent(state)}` +
+      `&code_challenge=${code_challenge}` +
+      `&code_challenge_method=S256`;
 
     return res.json({ url });
   } catch (e) {

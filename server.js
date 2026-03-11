@@ -142,6 +142,7 @@ const pagesAdminCoord = [
   '/subir-etiquetas.html',
   '/ingreso-manual.html',
   '/choferes.html',
+  '/devoluciones.html',
   '/index.html',           // panel principal
   '/index'                 // alias si lo usás
 ];
@@ -239,6 +240,9 @@ app.use('/api/choferes',         require('./routes/choferes'));    // asignació
 
 // Chofer: sus envíos del día + marcar entregado
 app.use('/api/mis-envios',       require('./routes/mis-envios'));
+
+// Devoluciones a clientes
+app.use('/api/devoluciones',     require('./routes/devoluciones'));
 
 // Otros módulos que ya tenías (si deben estar protegidos, dejalos después del guard)
 app.use('/api/asignaciones',     require('./routes/asignaciones'));

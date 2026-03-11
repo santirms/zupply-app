@@ -6,6 +6,7 @@ const cors    = require('cors');
 
 const Token   = require('../models/Token');
 const Cliente = require('../models/Cliente');
+const PkceStore = require('../models/Pkce');
 const Envio   = require('../models/Envio');
 const Tenant  = require('../models/Tenant');
 
@@ -46,7 +47,10 @@ router.get('/callback', async (req, res) => {
       return res.redirect(302, u.toString());
     }
 
-    // 1) Intercambio de código por tokens
+    // 1) Recuperar code_verifier del PKCE store (si existe)
+    const pkceDoc = await PkceStore.findOneAndDelete({ state });
+
+    // 2) Intercambio de código por tokens
     const body = new URLSearchParams({
       grant_type:    'authorization_code',
       client_id:     CLIENT_ID,
@@ -54,6 +58,11 @@ router.get('/callback', async (req, res) => {
       code,
       redirect_uri:  REDIRECT_URI,
     });
+
+    // Agregar code_verifier si existe (backward compatible)
+    if (pkceDoc?.code_verifier) {
+      body.append('code_verifier', pkceDoc.code_verifier);
+    }
 
     const tokenRes = await axios.post(
       'https://api.mercadolibre.com/oauth/token',
