@@ -156,7 +156,6 @@ async function cargarClientes() {
         <td class="px-4 py-2">${c.cuit||''}</td>
         <td class="px-4 py-2">${c.razon_social||''}</td>
         <td class="px-4 py-2">${c.condicion_iva||''}</td>
-        <td class="px-4 py-2">${c.horario_de_corte||''}</td>
         <td class="px-4 py-2">${c.lista_precios?.nombre||''}</td>
         <td class="px-4 py-2 space-x-2">
           <button onclick="abrirModal('${c._id}')" class="px-2 py-1 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10">✏️</button>
@@ -315,24 +314,8 @@ async function abrirModal(id=null) {
       // Si no tiene cuentas, mostrar un campo vacío para que pueda agregar
       agregarSenderInput();
     }
-
-    // Cargar configuración de facturación
-    if (data.facturacion) {
-      const f = data.facturacion;
-      const inp_lv = form.querySelector('[name="horario_corte_lunes_viernes"]');
-      const inp_s  = form.querySelector('[name="horario_corte_sabado"]');
-      const inp_d  = form.querySelector('[name="horario_corte_domingo"]');
-      const sel_tp = form.querySelector('[name="tipo_periodo"]');
-      const txt_nf = form.querySelector('[name="notas_facturacion"]');
-
-      if (inp_lv) inp_lv.value = f.horario_corte_lunes_viernes || '13:00';
-      if (inp_s)  inp_s.value  = f.horario_corte_sabado || '12:00';
-      if (inp_d && f.horario_corte_domingo) inp_d.value = f.horario_corte_domingo;
-      if (sel_tp) sel_tp.value = f.tipo_periodo || 'semanal';
-      if (txt_nf && f.notas_facturacion) txt_nf.value = f.notas_facturacion;
-    }
-
-    // Cargar estado de Tienda Nube
+  
+   // Cargar estado de Tienda Nube
     cargarTNStatus();
   } catch (e) {
     console.error('Error al obtener cliente:', e);
@@ -364,14 +347,6 @@ async function guardarCliente(ev) {
     permisos: {
       puedeRequerirFirma: chkFirma ? chkFirma.checked : false
     },
-    // Configuración de facturación
-    facturacion: {
-      horario_corte_lunes_viernes: form.querySelector('[name="horario_corte_lunes_viernes"]').value || '13:00',
-      horario_corte_sabado: form.querySelector('[name="horario_corte_sabado"]').value || '12:00',
-      horario_corte_domingo: form.querySelector('[name="horario_corte_domingo"]').value || null,
-      tipo_periodo: form.querySelector('[name="tipo_periodo"]').value || 'semanal',
-      notas_facturacion: form.querySelector('[name="notas_facturacion"]').value || ''
-    }
   };
   const chkAI = qs('#chkAutoIngesta');
   if (chkAI) body.auto_ingesta = chkAI.checked;
