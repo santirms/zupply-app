@@ -119,7 +119,7 @@ function buildPanelClienteFechaFilter(desde, hasta) {
 
 exports.obtenerShipmentsPanelCliente = async (req, res) => {
   try {
-    const { page = 1, limit = 50, estado, desde, hasta } = req.query;
+    const { page = 1, limit = 50, estado, desde, hasta, destinatario, direccion } = req.query;
 
     const senderIdsRaw = req.user?.sender_ids || [];
     const senderIds = Array.isArray(senderIdsRaw)
@@ -149,6 +149,12 @@ exports.obtenerShipmentsPanelCliente = async (req, res) => {
 
     if (estado && estado !== 'todos') {
       query.estado = estado;
+    }
+    if (destinatario) {
+      query.destinatario = { $regex: destinatario, $options: 'i' };
+    }
+    if (direccion) {
+      query.direccion = { $regex: direccion, $options: 'i' };
     }
 
     const [envios, total] = await Promise.all([

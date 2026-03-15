@@ -442,6 +442,10 @@
           <div class="flex flex-wrap gap-2 justify-end mb-3">
             <input id="fDesde" type="date" class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm">
             <input id="fHasta" type="date" class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm">
+            <input id="fDestinatario" type="text" placeholder="🔍 Destinatario"
+              class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm w-40">
+            <input id="fDireccion" type="text" placeholder="🔍 Dirección"
+              class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm w-40">
             <select id="fEstado" class="px-2 py-1 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/10 text-sm">
               <option value="">📦 Todos los estados</option>
 
@@ -474,6 +478,10 @@
               </optgroup>
             </select>
             <button id="btnFiltrar" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-white/10">Filtrar</button>
+            <button id="btnExportExcel" type="button"
+              class="px-3 py-1 rounded-xl border border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-sm font-medium">
+              📥 Excel
+            </button>
           </div>
 
           <section id="vistaTabla" class="rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 p-3">
@@ -1039,6 +1047,26 @@
       if (btnFiltrar) {
         btnFiltrar.addEventListener('click', triggerReload);
       }
+      document.getElementById('fDestinatario')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); triggerReload(); }
+      });
+      document.getElementById('fDireccion')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); triggerReload(); }
+      });
+      document.getElementById('btnExportExcel')?.addEventListener('click', () => {
+        const params = new URLSearchParams();
+        const estadoValue = document.getElementById('fEstado')?.value;
+        const desdeValue = document.getElementById('fDesde')?.value;
+        const hastaValue = document.getElementById('fHasta')?.value;
+        const destinatarioValue = document.getElementById('fDestinatario')?.value?.trim();
+        const direccionValue = document.getElementById('fDireccion')?.value?.trim();
+        if (estadoValue) params.set('estado', estadoValue);
+        if (desdeValue) params.set('desde', desdeValue);
+        if (hastaValue) params.set('hasta', hastaValue);
+        if (destinatarioValue) params.set('destinatario', destinatarioValue);
+        if (direccionValue) params.set('direccion', direccionValue);
+        window.location.href = `/api/client-panel/shipments/export?${params.toString()}`;
+      });
 
       let page = 1;
       let limit = 50;
@@ -1077,6 +1105,11 @@
         const hastaValue = fHasta?.value;
         if (desdeValue) searchParams.set('desde', desdeValue);
         if (hastaValue) searchParams.set('hasta', hastaValue);
+
+        const destinatarioValue = document.getElementById('fDestinatario')?.value?.trim();
+        const direccionValue = document.getElementById('fDireccion')?.value?.trim();
+        if (destinatarioValue) searchParams.set('destinatario', destinatarioValue);
+        if (direccionValue) searchParams.set('direccion', direccionValue);
 
         return `/api/client-panel/shipments?${searchParams.toString()}`;
       }
