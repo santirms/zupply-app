@@ -199,4 +199,92 @@ router.get('/_debug/senders/list', requireRole('admin','coordinador'), async (re
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Excel export endpoint
+const ExcelJS = require('exceljs');
+
+router.get('/shipments/export', requireAuth, requireRole('cliente','admin','coordinador'), async (req, res) => {
+  try {
+    const { estado, desde, hasta, destinatario, direccion } = req.query;
+
+    const u = req.session?.user;
+    const senderIdsRaw = u?.sender_ids || [];
+    const senderIds = Array.isArray(senderIdsRaw)
+      ? senderIdsRaw.filter(Boolean).map((id) => String(id))
+      : typeof senderIdsRaw === 'string' ? [senderIdsRaw] : [];
+
+    if (!senderIds.length) {
+      return res.status(400).json({ error: 'Sin sender_ids configurados' });
+    }
+
+    const query = {
+      sender_id: { $in: senderIds }
+    };
+
+    const start = desde ? new Date(desde + 'T00:00:00.000-03:00') : null;
+    const end = hasta ? new Date(hasta + 'T23:59:59.999-03:00') : null;
+    if (start || end) {
+      query.fecha = {};
+      if (start) query.fecha.$gte = start;
+      if (end) query.fecha.$lte = end;
+    } else {
+      const hace2Semanas = new Date();
+      hace2Semanas.setDate(hace2Semanas.getDate() - 14);
+      hace2Semanas.setHours(0, 0, 0, 0);
+      query.fecha = { $gte: hace2Semanas };
+    }
+
+    if (estado && estado !== 'todos') query.estado = estado;
+    if (destinatario) query.destinatario = { $regex: destinatario, $options: 'i' };
+    if (direccion) query.direccion = { $regex: direccion, $options: 'i' };
+
+    const envios = await Envio.find(query)
+      .select('id_venta tracking meli_id destinatario direccion partido codigo_postal estado fecha sender_id')
+      .sort({ fecha: -1 })
+      .limit(5000)
+      .lean();
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Envíos');
+
+    sheet.columns = [
+      { header: 'ID / Tracking', key: 'tracking', width: 22 },
+      { header: 'Fecha', key: 'fecha', width: 18 },
+      { header: 'Destinatario', key: 'destinatario', width: 28 },
+      { header: 'Dirección', key: 'direccion', width: 35 },
+      { header: 'Partido', key: 'partido', width: 18 },
+      { header: 'CP', key: 'cp', width: 8 },
+      { header: 'Estado', key: 'estado', width: 18 },
+    ];
+
+    sheet.getRow(1).eachCell(cell => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF374151' } };
+      cell.alignment = { horizontal: 'center' };
+    });
+
+    for (const e of envios) {
+      const fechaStr = e.fecha
+        ? new Date(e.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Argentina/Buenos_Aires' })
+        : '-';
+      sheet.addRow({
+        tracking: e.id_venta || e.tracking || e.meli_id || '-',
+        fecha: fechaStr,
+        destinatario: e.destinatario || '-',
+        direccion: e.direccion || '-',
+        partido: e.partido || '-',
+        cp: e.codigo_postal || '-',
+        estado: e.estado || '-',
+      });
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="envios-${new Date().toISOString().split('T')[0]}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('[client-panel/export] error:', err);
+    res.status(500).json({ error: 'Error generando Excel' });
+  }
+});
+
 module.exports = router;
