@@ -113,7 +113,14 @@
 
     <footer class="py-6 text-center text-xs opacity-60">© <span id="anio"></span> Zupply</footer>
   </div>
-
+  
+ <!-- Botón flotante + Agregar cliente -->
+  <button id="btnNuevoFloat"
+    class="fixed bottom-6 right-6 z-[9999] w-14 h-14 rounded-full shadow-lg bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)] text-2xl font-bold flex items-center justify-center transition-transform hover:scale-105"
+    title="Agregar cliente">
+    +
+  </button>
+  
   <!-- Modal -->
   <div id="modalOverlay" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
     <div class="bg-white dark:bg-[#0B1020] rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
@@ -248,12 +255,7 @@
     </div>
   </div>
 
-  <!-- Botón flotante + Agregar cliente -->
-  <button id="btnNuevoFloat"
-    class="fixed bottom-6 right-6 z-[9999] w-14 h-14 rounded-full shadow-lg bg-[var(--z-primary)] hover:bg-[var(--z-primary-dark)] text-[var(--z-primary-fg)] text-2xl font-bold flex items-center justify-center transition-transform hover:scale-105"
-    title="Agregar cliente">
-    +
-  </button>
+ 
 
   <script src="/js/clientes.js" defer></script>
 </body>
