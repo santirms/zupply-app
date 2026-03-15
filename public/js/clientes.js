@@ -237,7 +237,7 @@ function configurarModal() {
   }
 }
 
-function cerrarModal() { qs('#modalOverlay')?.classList.add('hidden'); }
+function cerrarModal() { qs('#modalOverlay')?.classList.add('hidden'); qs('#modalOverlay')?.classList.remove('flex'); }
 
 function agregarSenderInput(value='') {
   const cont = qs('#cuentasContainer'); if (!cont) return;
@@ -294,6 +294,7 @@ async function abrirModal(id=null) {
 
   qs('#cuentasContainer').innerHTML = '';
   qs('#modalOverlay')?.classList.remove('hidden');
+  qs('#modalOverlay')?.classList.add('flex');
 
   if (!id) { agregarSenderInput(); return; }
 
@@ -480,6 +481,11 @@ function configurarTN() {
     }
   });
 }
+
+// --------- Botón flotante ---------
+document.getElementById('btnNuevoFloat')?.addEventListener('click', () => {
+  document.getElementById('btnNuevo').click();
+});
 
 async function cargarTNStatus() {
   try {
